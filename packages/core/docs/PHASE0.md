@@ -134,6 +134,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - `rowShingles: false` applies to row hiding and row-level write decisions (`factHidesRow` and `factBlocksIncoming` on stored rows and `DuplicateQuery`). Fact mode, `rowShingles`, and missing row shingles are forbidden as independent filters on capture snapshots.
    - Core supplies candidate `passages` before embedding and at finish. At capture admission and Raw import, Core omits `passages`, so only owner and namespace scope the returned text facts. Client, session and time candidates govern `blockedSession` and `blockedMessages`.
    - When neither side has a key or shingle evidence, capture matching is exact-only. This is the weaker protection available without a key.
+15. **Keyless forget.** Core follows `FORGET_POLICY.withoutKey` when the fingerprint capability is off, the provider is absent, or the selected lookup returns `null`. Lookup failures still surface for an existing row.
+   - The text fact uses `mode: "exact"`, `keyId: null` and canonical unkeyed digests. Core skips HMAC, shingles, vector evidence and vector neighbours in `removedSimilar`. Exact matches still count, and all enabled lineage and erasure steps keep their order in the same transaction.
+   - For a row that held a secret, Core hashes only redacted spellings. It applies redaction across normalization and masks the whole text if it cannot safely project the redaction. Keyless forget offers weaker protection because it cannot retain exact evidence of an unredacted spelling that still contains a secret.
 
 ### Topics addendum 4 — Cards in topics
 

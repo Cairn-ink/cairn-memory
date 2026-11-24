@@ -6,6 +6,7 @@ import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMe
 import { PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { redactAmendmentText } from "../routing/redaction.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
@@ -68,13 +69,23 @@ export async function prepareWriteText(raw, text, key, sha256Hex, digesters) {
   return { query, passages };
 }
 
-/** @param {Scope} scope @param {MemoryRow} row @param {FingerprintKey} key
- * @param {ClockAndHash} clock @param {"edit" | "forget"} origin
+/** @param {MemoryRow} row @param {FingerprintKey | null} key @param {"edit" | "forget"} origin
+ * @returns {Promise<TextFact["text"]>}
  */
-export async function predecessorFact({ owner, namespace }, row, key, clock, origin) {
+async function predecessorText(row, key, origin) {
   const oldText = prepareCoreText(row.text);
-  const heldSecret = [row.text, cleanContent(row.text).normalize("NFKC")].some(text =>
+  const cleaned = cleanContent(row.text);
+  const heldSecret = [row.text, cleaned.normalize("NFKC")].some(text =>
     redactCore(text) !== text || redactV1(text) !== text || redactHostedCurrent(text) !== text);
+  if (key === null) {
+    // Weaker without a key: hash only redacted spellings for a secret-bearing row.
+    // Redaction checks both sides of normalization. Use a full mask if projection is unsafe.
+    let text = row.text;
+    if (heldSecret || redactCore(cleaned) !== cleaned) {
+      text = (cleaned === row.text ? redactAmendmentText(row.text) : null) ?? "[REDACTED]";
+    }
+    return { digests: await allDigests(text, null), keyId: null };
+  }
   const [digests, legacyMac, shingles] = await Promise.all([
     heldSecret ? coreDigest(row.text, key).then(digest => [digest]) : allDigests(row.text, key),
     legacyExactMac(row.text, key, coreFingerprintLabels),
@@ -103,13 +114,20 @@ export async function predecessorFact({ owner, namespace }, row, key, clock, ori
       })));
     for (const digest of keyedVariants) addDigest(digests, digest);
   }
+  return {
+    digests, shingles, keyId: key.id,
+    ...(origin === "forget" && row.embedding && { embedding: Array.from(row.embedding.vector) }),
+  };
+}
+
+/** @param {Scope} scope @param {MemoryRow} row @param {FingerprintKey | null} key
+ * @param {ClockAndHash} clock @param {"edit" | "forget"} origin
+ */
+export async function predecessorFact({ owner, namespace }, row, key, clock, origin) {
   const fact = /** @satisfies {TextFact} */ ({
-    owner, namespace, kind: "text", mode: "full", origin, actionId: "",
+    owner, namespace, kind: "text", mode: key === null ? "exact" : "full", origin, actionId: "",
     sourceMemory: { id: row.id, createdAtMs: row.createdAtMs },
-    text: {
-      digests, shingles, keyId: key.id,
-      ...(origin === "forget" && row.embedding && { embedding: Array.from(row.embedding.vector) }),
-    },
+    text: await predecessorText(row, key, origin),
   });
   const incarnation = await clock.sha256Hex(factIncarnationBody(fact));
   fact.actionId = origin === "edit" ? "edit:" + row.revision + ":" + incarnation : "forget:" + incarnation;

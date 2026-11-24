@@ -21,10 +21,13 @@ function sourceId(value) {
   return isWellFormedText(value) && value.length > 0 && !value.includes("\0");
 }
 
-/** @param {Pick<StorageAdapter, "memories" | "capabilities">} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
-async function similarCount({ memories, capabilities }, tx, scope, row) {
+/** @param {Pick<StorageAdapter, "memories" | "capabilities">} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row
+ * @param {boolean} withKey
+ */
+async function similarCount({ memories, capabilities }, tx, scope, row, withKey) {
   if (typeof memories.findDuplicates !== "function") return 0;
-  const embedding = capabilities.vectorSuppression && capabilities.nearDuplicate ? row.embedding?.vector : undefined;
+  const embedding = withKey && capabilities.vectorSuppression && capabilities.nearDuplicate
+    ? row.embedding?.vector : undefined;
   const [matches] = await memories.findDuplicates(tx, scope, [{ textHash: row.textHash, embedding }],
     { nearDistance: SUPPRESSION_DISTANCE, excludeId: row.id });
   const ids = new Set();
@@ -91,21 +94,21 @@ export function forgetMethod({ storage, clock }) {
     // Only the adapter's configured key provider can use its transaction.
     const userKeyForWrite = capabilities.fingerprintKey === true ? keys?.userKeyForWrite?.bind(keys) : undefined;
     // Resolve external keys before the lock, but surface failures only for an existing row.
-    const keyResult = userKeyForWrite ? null : await Promise.resolve().then(() => keys?.userKey(owner)).then(
-      key => ({ key, error: null }), error => ({ key: null, error: entryError(error) }),
-    );
+    const keyResult = capabilities.fingerprintKey === false || userKeyForWrite || !keys ? null
+      : await Promise.resolve().then(() => keys.userKey(owner)).then(
+        key => ({ key, error: null }), error => ({ key: null, error: entryError(error) }),
+      );
 
     return uow.run(owner, { pauseLock: true }, async tx => {
       // resolve
       const row = await scopedRow(memories, scope, id, tx);
       if (!row) return { status: "not_found" };
       if (keyResult?.error) throw keyResult.error;
-      const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult?.key;
-      if (!key) throw new CoreError("fingerprint_unavailable");
+      const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {
         throw new CoreError("capability_unavailable");
       }
-      const removedSimilar = await similarCount(storage, tx, scope, row);
+      const removedSimilar = await similarCount(storage, tx, scope, row, key !== null);
 
       // lineage.resolve
       const spans = enabled(capabilities, "lineage.resolve", "spanLineage")
