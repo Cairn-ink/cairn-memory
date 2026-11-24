@@ -27,8 +27,7 @@ const contextReadTokens = coreSource + 'service/context-read-tokens.mjs';
 const webCryptoMembers = new Map([
   [coreSource + 'privacy/fingerprint.mjs', new Set(['digest', 'importKey', 'sign'])],
   [coreSource + 'routing/card.mjs', new Set(['digest'])],
-  [contextReadTokens, new Set(['importKey', 'sign', 'verify'])],
-  [coreSource + 'service/inspect-cursor.mjs', new Set(['generateKey', 'importKey', 'sign', 'verify'])],
+  [coreSource + 'service/signed-read-token.mjs', new Set(['generateKey', 'importKey', 'sign', 'verify'])],
 ]);
 const functionTypes = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const scopeTypes = new Set([

@@ -71,4 +71,4 @@ export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
 
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
 export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
-export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner & ContextReadMemoryService;
+export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner & InspectMemoryService;

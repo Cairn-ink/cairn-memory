@@ -1,7 +1,7 @@
 import { allDigests, canonicalKey, compareUtf8, CoreError, coreDigest, createBM25 } from "@cairn-ink/core";
 
 /** @import { ContextEvidenceRow, ContextIndexObservation, ContextReadSelection, ContextReadSet, ContextReadStore,
-  Counters, InspectReceipt, Receipt, ReadTokenIdentity, Scope, Tx } from "@cairn-ink/core/ports" */
+  Counters, InspectReceipt, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @typedef {{ binding: string, index: ReturnType<typeof createBM25<ReturnType<typeof documentsFor>[number]>>,
  * ids: ReadonlySet<string>, observation: ContextIndexObservation }} Publication */
@@ -56,12 +56,8 @@ function projectionKey(readSet, { types, intent }) {
  * @param {import("./privacy.mjs").RingKeys} ringKeys
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible]
  * @returns {ContextReadStore} */
-export function createContextReadStore({ port, uow, enableContextEpochs }, matchFacts, ringKeys, rawSourceVisible) {
+export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, rawSourceVisible) {
   enableContextEpochs();
-  const storeId = crypto.randomUUID();
-  const cursorKey = crypto.getRandomValues(new Uint8Array(32));
-  /** @type {Promise<CryptoKey> | undefined} */
-  let signingKey;
   /** @type {Map<string, Publication>} */
   const projections = new Map();
   /** @type {WeakMap<Tx, Map<string, Publication | undefined>>} */
@@ -113,12 +109,7 @@ export function createContextReadStore({ port, uow, enableContextEpochs }, match
 
   return {
     maintenanceAvailable: true,
-    async identity(tx) {
-      return port(tx, { owner: tx?.owner }, false, async () => {
-        signingKey ??= crypto.subtle.importKey("raw", cursorKey, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
-        return /** @type {ReadTokenIdentity} */ ({ storeId, cursorKey: await signingKey });
-      });
-    },
+    identity: readTokenIdentity,
     async prepareLexical(readSet, selection, { signal }) {
       return uow.run(readSet.owner, { readOnly: true }, tx => port(tx, readSet, false, state => {
         if (signal?.aborted) throw new CoreError("index_unavailable");

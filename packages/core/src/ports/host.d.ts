@@ -425,7 +425,7 @@ export interface ContextReadTokenCounter {
   count(text: string): number;
 }
 
-/** All Context Read signing uses this store identity and key, independent of model and fingerprint keys. */
+/** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */
 export interface ReadTokenIdentity {
   storeId: string;
   /** Raw HMAC-SHA256 bytes or an HMAC-SHA256 CryptoKey with sign and verify usages. */

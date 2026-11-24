@@ -157,6 +157,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
+  /** @type {{storeId: string, cursorKey: Promise<CryptoKey>} | undefined} */
+  let readIdentity;
   /** @param {string} owner */
   function ownerState(owner) {
     let state = owners.get(owner);
@@ -236,6 +238,18 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   function port(tx, scope, write, body, pauseLock = false) {
     if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
     return readPort(tx, scope, (getState) => body(getState()), pauseLock);
+  }
+
+  /** @param {Tx} tx @returns {Promise<import("@cairn-ink/core/ports").ReadTokenIdentity>} */
+  async function readTokenIdentity(tx) {
+    return port(tx, { owner: tx?.owner }, false, async () => {
+      readIdentity ??= {
+        storeId: crypto.randomUUID(),
+        cursorKey: crypto.subtle.importKey("raw", crypto.getRandomValues(new Uint8Array(32)),
+          { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]),
+      };
+      return { storeId: readIdentity.storeId, cursorKey: await readIdentity.cursorKey };
+    });
   }
 
   /** @template T
@@ -543,5 +557,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   }
 
   return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner,
+    readTokenIdentity,
     enableContextEpochs() { trackContextEpochs = true; } };
 }

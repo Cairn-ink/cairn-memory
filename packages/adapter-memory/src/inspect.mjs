@@ -13,10 +13,7 @@ const encoder = new TextEncoder();
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  */
-export function createInspectStore(related, { port, runSeed }, matchFacts) {
-  const storeId = crypto.randomUUID();
-  const cursorKey = crypto.getRandomValues(new Uint8Array(32));
-
+export function createInspectStore(related, { port, runSeed, readTokenIdentity }, matchFacts) {
   /** @param {State} state @param {Scope} scope @param {number} [expectedEpoch] */
   function epochOf(state, scope, expectedEpoch) {
     const epoch = state.inspectEpochs.get(scope.namespace) ?? 1;
@@ -63,9 +60,7 @@ export function createInspectStore(related, { port, runSeed }, matchFacts) {
 
   /** @type {InspectStore} */
   const inspect = {
-    async identity(tx) {
-      return port(tx, { owner: tx.owner }, false, () => ({ storeId, cursorKey: cursorKey.slice() }));
-    },
+    identity: readTokenIdentity,
 
     async list(tx, scope, { states, limit, after, expectedEpoch }) {
       return port(tx, scope, false, state => {
