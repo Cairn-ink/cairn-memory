@@ -13,6 +13,6 @@ export interface CaptureOptions {
 
 export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter & CaptureFinish;
 
-export function abandonDirectClaims(
-  query: Connection["query"], owner: string, source: { client: string; sessionId: string }, now: number,
+export function terminateDirectClaims(
+  query: Connection["query"], owner: string, source: { client: string; sessionId: string },
 ): Promise<boolean>;

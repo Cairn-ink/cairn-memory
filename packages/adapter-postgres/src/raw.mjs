@@ -5,7 +5,7 @@ import {
 import { refreshFinishRevisions } from "./capture-finish.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
-import { abandonDirectClaims } from "./capture.mjs";
+import { terminateDirectClaims } from "./capture.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
@@ -146,7 +146,7 @@ async function archiveRecords(tx, query, run, { scope, client, sessionId }, reco
 
 /** @param {RawOptions} options @returns {{ raw: PostgresRaw, sessionLineage: SessionLineageStore }} */
 export function createPostgresRawPorts(options) {
-  const { lineageSecret, hashSessionKey, fingerprintKeys, now = Date.now } = options ?? {};
+  const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
   /** @type {WeakMap<ProvenClosure, {tx: Tx, sessions: readonly Session[]}>} */
   const proven = new WeakMap();
@@ -320,10 +320,10 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
         return async (query, run) => {
-          const leasesAbandoned = await abandonDirectClaims(query, target.owner, ref, now());
+          const claimsTerminated = await terminateDirectClaims(query, target.owner, ref);
           const rawDeleted = await changeSessions(query, target, [ref], DELETE);
           const { ledgerChanged } = await scrubLedger(query, target, [ref]);
-          if (leasesAbandoned || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
+          if (claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });

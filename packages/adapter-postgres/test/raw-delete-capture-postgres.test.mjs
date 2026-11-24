@@ -37,7 +37,7 @@ async function fixture(t, { archiveFirst = true, batch = messages, now, onStage,
   const write = (operation) => uow.run(owner, { pauseLock: true }, operation);
   const lineageSecret = randomBytes(32).toString("hex");
   const capture = createPostgresCapturePorts({ lineageSecret, nearDuplicate: false, now });
-  const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret, now });
+  const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret });
   const fingerprintSecret = randomBytes(32).toString("hex");
   const keys = createPostgresFingerprintKeyProvider(fingerprintSecret, { uow });
   const fingerprintKey = await userFingerprintKey(fingerprintSecret, owner, HOSTED_FINGERPRINT_LABELS);
@@ -218,7 +218,7 @@ test("a ledger-only conversation delete advances the index once and leaves unrel
   assert.equal(await db.revision(), revision + 1n);
 });
 
-test("conversation delete abandons a direct claim and allows a fresh claim of the same event", migrationDbTest, async (t) => {
+test("conversation delete makes direct replay terminal and allows a new event", migrationDbTest, async (t) => {
   const [message] = messages;
   const batch = [message];
   const db = await fixture(t, { archiveFirst: false, batch });
@@ -229,17 +229,17 @@ test("conversation delete abandons a direct claim and allows a fresh claim of th
   assert.deepEqual((await db.rawRows()).map(({ message_id }) => message_id), [message.id]);
 
   const direct = { ...key, scope, eventId: randomUUID(), payloadDigest: sha256Hex("direct claim") };
-  const claim = () => write((tx) => capture.claim(tx, direct, batch, { leaseMs: 60_000 }));
-  const finish = (token) => write(async (tx) => {
+  const claim = (event) => write((tx) => capture.claim(tx, event, batch, { leaseMs: 60_000 }));
+  const finish = (event, token) => write(async (tx) => {
     const result = await capture.finish(tx, token, [{
       content: memoryText, kind: "fact", confidence: 0.9, textHash: `sha256:${sha256Hex(memoryText)}`,
       embedding: { model: "fixture", vector },
       receipts: [{ client, sessionId, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }],
     }]);
-    const { archived } = await raw.archive(tx, direct, batch);
+    const { archived } = await raw.archive(tx, event, batch);
     return { result, archived };
   });
-  const first = await claim();
+  const first = await claim(direct);
   assert.equal(first.status, "claimed");
   assert.deepEqual((await db.ledger(direct)).messages, []);
 
@@ -247,14 +247,19 @@ test("conversation delete abandons a direct claim and allows a fresh claim of th
   assert.deepEqual(await db.remove(), { rawDeleted: 1 });
   assert.equal(await db.revision(), revision + 1n);
   assert.deepEqual((await db.ledger()).messages.map(({ content }) => content), [""]);
-  await assert.rejects(finish(first.token), { code: "stale_admission", kind: "conflict", retryable: false });
+  await assert.rejects(finish(direct, first.token), { code: "stale_admission", kind: "conflict", retryable: false });
   assert.deepEqual(await db.savedMemory(), []);
   assert.deepEqual(await db.rawRows(), []);
 
-  const fresh = await claim();
+  assert.deepEqual(await claim(direct), { status: "duplicate" });
+  assert.deepEqual(await db.savedMemory(), []);
+  assert.deepEqual(await db.rawRows(), []);
+
+  const newEvent = { ...direct, eventId: randomUUID() };
+  const fresh = await claim(newEvent);
   assert.equal(fresh.status, "claimed");
   assert.notEqual(fresh.token, first.token);
-  const { result, archived } = await finish(fresh.token);
+  const { result, archived } = await finish(newEvent, fresh.token);
   assert.deepEqual(result.memories.map(({ outcome }) => outcome), ["inserted"]);
   assert.equal(archived, 1);
   assert.deepEqual(await db.savedMemory(), [{ text: memoryText }]);
@@ -281,32 +286,40 @@ test("a marker-only conversation delete advances the index once", migrationDbTes
   assert.equal(await db.revision(), revision + 1n);
 });
 
-test("a lease-only conversation delete advances once and abandons only live claims for its source", migrationDbTest, async (t) => {
+test("a claim-only conversation delete advances once and terminates direct claims for its source", migrationDbTest, async (t) => {
   let time = 100;
   const db = await fixture(t, { archiveFirst: false, now: () => time });
   const { scope, capture, write } = db;
   const source = { client: db.key.client, sessionId: randomUUID() };
-  const claim = (ref, leaseMs) => write(async (tx) => {
+  const claim = (key, leaseMs = 100) => write((tx) => capture.claim(tx, key, messages, { leaseMs }));
+  const start = async (ref, leaseMs) => {
     const eventId = randomUUID();
     const key = { ...ref, scope, eventId, payloadDigest: sha256Hex(eventId) };
-    const result = await capture.claim(tx, key, messages, { leaseMs });
-    assert.equal(result.status, "claimed");
-    return result.token;
-  });
-  const expired = await claim(source, 1);
+    const { status, token } = await claim(key, leaseMs);
+    assert.equal(status, "claimed");
+    return { key, token };
+  };
+  const expired = await start(source, 1);
   time++;
-  const live = await claim(source, 100);
-  const otherClient = await claim({ ...source, client: "other-client" }, 100);
-  const otherSession = await claim({ ...source, sessionId: randomUUID() }, 100);
+  const live = await start(source);
+  const abandoned = await start(source);
+  const otherClient = await start({ ...source, client: "other-client" });
+  const otherSession = await start({ ...source, sessionId: randomUUID() });
+  const abandon = (token) => write((tx) => capture.abandon(tx, token, { code: "storage_busy", retryable: true }));
+  const dispatch = (token) => write((tx) => capture.beginDispatch(tx, token));
+  await abandon(abandoned.token);
+  await assert.rejects(abandon(expired.token), { code: "stale_admission" });
   const revision = await db.revision();
 
   assert.deepEqual(await db.remove(source), { rawDeleted: 0 });
   assert.equal(await db.revision(), revision + 1n);
-  const abandon = (token) => write((tx) => capture.abandon(tx, token, { code: "stale_admission", retryable: false }));
-  await abandon(live);
-  await assert.rejects(abandon(expired), { code: "stale_admission" });
-  for (const token of [otherClient, otherSession]) {
-    assert.deepEqual(await write((tx) => capture.beginDispatch(tx, token)), { token });
+  for (const { key, token } of [live, expired, abandoned]) {
+    await assert.rejects(dispatch(token), { code: "stale_admission" });
+    await abandon(token);
+    assert.deepEqual(await claim(key), { status: "duplicate" });
+  }
+  for (const { token } of [otherClient, otherSession]) {
+    assert.deepEqual(await dispatch(token), { token });
   }
   assert.deepEqual(await db.remove(source), { rawDeleted: 0 });
   assert.equal(await db.revision(), revision + 1n);
