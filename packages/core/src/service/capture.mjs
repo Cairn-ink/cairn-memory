@@ -494,17 +494,21 @@ export function captureMethods(deps) {
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
         };
+        /** @param {Tx} tx @param {number[]} positions */
+        async function screenSourcePositions(tx, positions) {
+          const passages = await readSourcePassages(tx, positions);
+          const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
+          if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) return null;
+          const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
+          await capture.assertEligible(tx, key, allowed);
+          return allowed;
+        }
         /** @type {{request: ModelRequest, messages: CaptureMessage[], policy: {sourceCount: number, itemLimit: number}} | undefined} */
         let extraction;
         for (;;) {
           const dispatch = await runAtGeneration(async tx => {
-            const passages = await readSourcePassages(tx, positions);
-            const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
-            if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
-              return abandonKeyMismatch(tx);
-            }
-            const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
-            await capture.assertEligible(tx, key, allowed);
+            const allowed = await screenSourcePositions(tx, positions);
+            if (allowed === null) return abandonKeyMismatch(tx);
             if (!allowed.length) return { result: await finish(tx, []) };
             if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
             return { allowed };
@@ -542,6 +546,23 @@ export function captureMethods(deps) {
         };
         await assertSendGeneration();
         await gate.assertOpen(owner, "dispatch");
+        // Recheck the positions in the built request after the last gate. The run must
+        // finish before sending, and a retry must rebuild if any position was withheld.
+        transport.check();
+        try {
+          await untilAborted(transport.signal, uow.run(owner, lock, async tx => {
+            if (await pauseChanged(tx)) throw new CoreError("capture_paused");
+            const allowed = await screenSourcePositions(tx, positions);
+            if (allowed?.length !== positions.length) throw new CoreError("ingest_inputs_changed");
+          }));
+        } catch (error) {
+          transport.check();
+          const failure = entryError(error);
+          if (failure.code === "suppressed" || failure.code === "lineage_fenced") {
+            throw new CoreError("ingest_inputs_changed");
+          }
+          throw failure;
+        }
         let output;
         try {
           transport.check();
