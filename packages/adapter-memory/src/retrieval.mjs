@@ -1,9 +1,9 @@
 import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies,
-  tokenizeT1, withholdsAnyPassage } from "@cairn-ink/core";
+  tokenizeT1 } from "@cairn-ink/core";
 import { DOCUMENT_CARD_SEARCH_TEXT_VERSION, documentCardSearchText, documentCardVisible } from "@cairn-ink/core/routing";
 import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
 import { prepareCoreText } from "../../core/src/privacy/text.mjs";
-import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
+import { passageWithholding, requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -187,11 +187,15 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible, ra
           if (projected === true) sourceWithheld = true;
           else if (projected === "ineligible") sourceWithheld = definiteOnly ? null : true;
         }
-        if (!definiteOnly && !sourceWithheld && textFacts.length) {
+        if (sourceWithheld !== true && textFacts.length) {
           const texts = title == null ? [body] : [title, body];
           const fingerprints = await Promise.all(texts.map(text =>
             fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
-          sourceWithheld = textFacts.some(requiresLegacyMacDomain) || withholdsAnyPassage(fingerprints.flat(), textFacts);
+          const match = passageWithholding(fingerprints.flat(), textFacts);
+          if (match === true) sourceWithheld = true;
+          else if (match === "ineligible" || textFacts.some(requiresLegacyMacDomain)) {
+            sourceWithheld = definiteOnly ? null : true;
+          }
         }
       }
     } catch {

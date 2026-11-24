@@ -305,3 +305,59 @@ test("forget reuses its previously stored text fact when no spans resolve", asyn
   }
   assert.deepEqual(payloads, [undefined, undefined]);
 });
+
+test("forget preserves a sentence-bound card when a different ledger body at the same address is erased", async () => {
+  const { capture, cards, fence, service, read, write, snapshot } = fixture();
+  const survivor = message("ledger-address", "The blue gauge measures the outlet.");
+  const erased = message(survivor.id, "The spare lens is in the equipment cabinet.");
+  const survivingKey = { ...captureKey(survivor), eventId: "first-copy" };
+  const erasedKey = { ...captureKey(erased), eventId: "second-copy" };
+  const card = authored("surviving-ledger-card", survivor.content, [
+    { start: 0, end: survivor.content.length, source: binding(survivor) },
+  ]);
+  const erasedCard = authored("erased-ledger-card", `Inventory. ${erased.content}`, [
+    { start: "Inventory. ".length, end: "Inventory. ".length + erased.content.length, source: binding(erased) },
+  ]);
+  const saved = await service.save(scope, erased.content, source, "fact");
+  assert.equal(saved.status, "saved");
+  await write(async tx => {
+    assert.equal((await capture.admit(tx, survivingKey, [survivor])).status, "admitted");
+    assert.equal((await capture.admit(tx, erasedKey, [erased])).status, "admitted");
+    for (const candidate of [card, erasedCard]) assert.equal((await cards.put(tx, scope, candidate)).status, "inserted");
+  });
+  assert.deepEqual((await snapshot()).rawRows, []);
+  const refs = [cardRef(card)];
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+  assert.equal((await read(tx => capture.load(tx, survivingKey))).messages[0].content, survivor.content);
+  assert.equal((await read(tx => capture.load(tx, erasedKey))).messages[0].content, "");
+  assert.equal((await read(tx => cards.get(tx, scope, card.id)))?.body, survivor.content);
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assertTombstoned(await snapshot(), erasedCard, erased.content);
+});
+
+test("forget tombstones an archived router card on a definite keyed containment match", async () => {
+  const { raw, cards, fence, service, read, write, snapshot } = fixture(undefined, { fingerprintKey: true });
+  const passage = "The brass compass was calibrated beside the north entrance on Tuesday.";
+  const item = message("longer-message", `A note for the inventory team. ${passage} The inspection is complete.`);
+  const { card: routed } = await buildDocumentCard(item, { scope, client: session.client, canonicalSessionKey: session.sessionId });
+  const card = { ...authored(routed.id, routed.body), origin: "router", title: routed.title, sourceMessage: binding(item) };
+  const saved = await service.save(scope, passage, source, "fact");
+  assert.equal(saved.status, "saved");
+  await write(async tx => {
+    assert.equal((await raw.archive(tx, captureKey(item), [item])).archived, 1);
+    assert.equal((await cards.put(tx, scope, card)).status, "inserted");
+  });
+  const refs = [cardRef(card)];
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), []);
+  const stored = await snapshot();
+  assert.ok(stored.facts.some(({ fact }) => fact.kind === "text" && fact.mode === "full" &&
+    fact.text.keyId && fact.text.shingles.length > 0));
+  assert.deepEqual(stored.rawRows.map(row => row.content), [item.content]);
+  const entry = stored.documentCards[0].cards.find(([id]) => id === card.id)[1];
+  assert.equal(entry.card, null);
+  assert.equal(entry.hiddenReason, "source_withheld");
+  assert.equal(JSON.stringify(entry).includes(card.body), false);
+});

@@ -2,6 +2,7 @@ import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHides
   legacyExactMac, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
 import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
+import { redactDocumentText } from "../../core/src/routing/redaction.mjs";
 import { prepareMessageContent } from "../../core/src/service/capture.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { purgeDeletedDocumentSources } from "./document-cards.mjs";
@@ -47,7 +48,7 @@ function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
 
 /** @param {State} state @param {Namespace} namespace
  * @param {(key: CaptureKey, message: CaptureMessage) => boolean | Promise<boolean>} matches
- * @param {(source: DocumentCardSourceMessage) => void} [onBlank]
+ * @param {(source: DocumentCardSourceMessage, content: string) => void} [onBlank]
  */
 async function blankCaptureMessages(state, namespace, matches, onBlank) {
   let blanked = 0;
@@ -55,9 +56,9 @@ async function blankCaptureMessages(state, namespace, matches, onBlank) {
     if (key.scope.namespace !== namespace || !messages) continue;
     for (const message of messages) {
       if (message.content !== "" && await matches(key, message)) {
+        onBlank?.({ client: key.client, sessionId: key.sessionId, messageId: message.id }, message.content);
         message.content = "";
         blanked++;
-        onBlank?.({ client: key.client, sessionId: key.sessionId, messageId: message.id });
       }
     }
   }
@@ -682,16 +683,39 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             return candidates.some((stored) => factHidesRow(stored, candidate, policy) === true);
           }
           await invalidateRationaleSources(state, target.namespace, deleted);
+          /** @type {Map<string, {erased: string[], retained: string[]}>} */
+          const ledgerCopies = new Map();
           const ledgerBlanked = await blankCaptureMessages(state, target.namespace,
             ({ client, sessionId }, { id: messageId, content, occurredAtMs }) =>
-              matches({ client, sessionId, messageId, content, occurredAtMs }), source => {
+              matches({ client, sessionId, messageId, content, occurredAtMs }), (source, content) => {
               const id = rawId(target, source, source.messageId);
-              // A conflicting ledger copy can be erased while the archived source survives.
-              if (!state.rawRows.has(id)) deletedSources.add(id);
+              if (state.rawRows.has(id) || deletedSources.has(id)) return;
+              const copies = ledgerCopies.get(id) ?? { erased: [], retained: [] };
+              copies.erased.push(content);
+              ledgerCopies.set(id, copies);
             });
-          if (deletedSources.size) {
-            const { hidden, changed } = purgeDeletedDocumentSources(state, target.namespace,
-              source => deletedSources.has(rawId(target, source, source.messageId)));
+          if (ledgerCopies.size) {
+            for (const { key, messages } of state.claims.values()) {
+              if (key.scope.namespace !== target.namespace) continue;
+              for (const { id, content } of messages ?? []) {
+                if (content) ledgerCopies.get(rawId(target, key, id))?.retained.push(content);
+              }
+            }
+          }
+          if (deletedSources.size || ledgerCopies.size) {
+            const { hidden, changed } = purgeDeletedDocumentSources(state, target.namespace, (source, text, wholeMessage) => {
+              const id = rawId(target, source, source.messageId);
+              if (deletedSources.has(id)) return true;
+              const copies = ledgerCopies.get(id);
+              if (!copies) return false;
+              if (!copies.retained.length) return true;
+              // With competing copies, the binding must identify text found only in the erased copies.
+              const matchesText = (/** @type {string} */ content) => {
+                const body = redactDocumentText(content, true) ?? content;
+                return wholeMessage ? body === text : body.includes(text);
+              };
+              return !!text && !copies.retained.some(matchesText) && copies.erased.some(matchesText);
+            });
             if (hidden) run.cardWrites++;
             else if (changed) run.stateWritten = true;
           }

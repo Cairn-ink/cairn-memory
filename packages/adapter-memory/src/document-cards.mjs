@@ -112,14 +112,15 @@ function hideMatching(state, namespace, match, reason, { purge = false, retainTe
 }
 
 /** @param {State} state @param {Scope["namespace"]} namespace
- * @param {(source: DocumentCardSourceMessage) => boolean} isDeleted */
+ * @param {(source: DocumentCardSourceMessage, text: string, wholeMessage: boolean) => boolean} isDeleted */
 export function purgeDeletedDocumentSources(state, namespace, isDeleted) {
-  /** @param {DocumentCardSourceMessage | null} source */
-  const matches = source => source != null && isDeleted(source);
+  /** @param {DocumentCardSourceMessage | null} source @param {string} text @param {boolean} [wholeMessage] */
+  const matches = (source, text, wholeMessage = false) => source != null && isDeleted(source, text, wholeMessage);
   return hideMatching(state, namespace, {
-    card: ({ sourceMessage, sentences }) => matches(sourceMessage) ||
-      (Array.isArray(sentences) && sentences.some(sentence => matches(sentence?.source))),
-    amendment: ({ sourceMessage }) => matches(sourceMessage),
+    card: ({ sourceMessage, body, sentences }) => matches(sourceMessage, body, true) ||
+      (Array.isArray(sentences) && sentences.some(sentence => sentence?.source != null &&
+        matches(sentence.source, typeof body === "string" ? body.slice(sentence.start, sentence.end) : ""))),
+    amendment: ({ sourceMessage, quote }) => matches(sourceMessage, quote),
   }, "raw_deleted", { purge: true });
 }
 
