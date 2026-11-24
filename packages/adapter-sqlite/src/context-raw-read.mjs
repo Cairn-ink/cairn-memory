@@ -98,8 +98,10 @@ export function exactReceiptTurn(db, scope, memoryId, receipt, row) {
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey @param {RawLineage} lineage
  * @param {ReceiptReadSafety} receiptReadSafety @param {() => number} monotonicMs
- * @param {MigratedRawPolicy} [migratedRaw] @returns {ContextRawReadStore} */
-export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw) {
+ * @param {MigratedRawPolicy} [migratedRaw]
+ * @param {import("./migrate/capture-controls.mjs").MigratedCaptureControls} [controls]
+ * @returns {ContextRawReadStore} */
+export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, controls) {
   const secret = Buffer.from(storeKey, "hex");
 
   /** @param {Scope} scope @param {RawRow} row @param {string} fence @returns {ContextRawTurn} */
@@ -134,7 +136,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     function directlyVisible(scope, row) {
       const { message } = row, policy = policyFor(scope);
       const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
-      return !stopped() && Boolean(message.content) &&
+      return !stopped() && (!controls || controls.rawReadable(scope)) && Boolean(message.content) &&
         !hasRawFence(db, scope, rawPolicy.sessionKeyHash) &&
         !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }) &&
         !rawPolicy.hides(message) && !importTextBlocked([], message.content, policy.legacy) &&

@@ -60,9 +60,9 @@ export function finishCapture(db, { scope, client, sessionId }, batch, nowMs, ha
         const existing = readEntry(db, scope, id);
         if (!existing) throw new CoreError("internal_error");
         const { merge } = planDuplicateMerge(existing.row, content.body);
-        const touched = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        const { outcome, revision } = touchDuplicate(db, scope, id, receipts, merge, nowMs);
         progress.writeTimes.set(id, updatedAtUs);
-        memories.push({ id, ...touched });
+        memories.push({ id, outcome, revision });
         duplicateCount++;
         break;
       }

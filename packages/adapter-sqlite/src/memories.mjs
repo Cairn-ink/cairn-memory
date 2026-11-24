@@ -1,5 +1,6 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
 import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
+import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import {
   copyReceipts, encodeContent, invalidInput, scopeKey, validateBatch, validateId, validateMerge, validateSource, writeTime,
@@ -144,13 +145,12 @@ export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts
     VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
     .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
   if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-  attachReceipts(db, scope, inserted.id, receipts, nowMs);
-  return { id: inserted.id, revision: 1, createdAtMs, ...time };
+  const { receiptIds } = attachReceipts(db, scope, inserted.id, receipts, nowMs);
+  return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
  * @param {DuplicateMerge} merge @param {number} nowMs
- * @returns {{outcome: "changed" | "touched", revision: number}}
  */
 export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   validateId(id);
@@ -163,19 +163,22 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   const confidence = row.historical ? row.confidence : merge.confidence;
   const kind = row.historical ? row.kind : merge.kind ?? row.kind;
   const origin = row.historical ? row.origin : merge.origin ?? row.origin;
-  const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+  const { receiptIds, added } = attachReceipts(db, scope, id, evidence, nowMs);
+  const changed = added !== 0 || confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
   const revision = row.revision + Number(changed);
   db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
     body = json_set(body, '$.confidence', ?, '$.kind', ?, '$.origin', ?) WHERE ${LIVE_SCOPE} AND id = ?`)
     .run(revision, updatedAtUs, confidence, kind, origin, ...scopeKey(scope), id);
-  attachReceipts(db, scope, id, evidence, nowMs);
-  return { outcome: changed ? "changed" : "touched", revision };
+  return /** @satisfies {Awaited<ReturnType<MemoryStore["touchDuplicate"]>>} */ ({
+    outcome: changed ? "changed" : "touched", revision, receiptIds,
+  });
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession
- * @param {(db: Connection, tx: Tx) => void} [markDirty] @returns {MemoryStore}
+ * @param {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} index
+ * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, markDirty) {
+export function createMemoryStore(port, hashSession, index) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -185,6 +188,9 @@ export function createMemoryStore(port, hashSession, markDirty) {
   }
 
   return {
+    indexRevision: index.indexRevision,
+    committedIndexRevision: index.committedIndexRevision,
+
     findDuplicates(tx, scope, input, options) {
       return port(tx, scope?.owner, {}, db => {
         if (!options || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
@@ -206,16 +212,16 @@ export function createMemoryStore(port, hashSession, markDirty) {
           throw new CoreError("suppressed");
         }
         const inserted = insertMemory(db, scope, content, evidence, nowMs, row.createdAtMs ?? nowMs);
-        markDirty?.(db, tx);
+        index.markDirty(db, tx);
         return inserted;
       });
     },
 
     touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        const touched = touchDuplicate(db, scope, id, receipts, merge, nowMs);
-        markDirty?.(db, tx);
-        return touched;
+        const result = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        index.markDirty(db, tx);
+        return result;
       });
     },
 
@@ -248,11 +254,12 @@ export function createMemoryStore(port, hashSession, markDirty) {
         db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?, text_hash = ?, legacy_hash = ?, body = ?
           WHERE ${LIVE_SCOPE} AND id = ?`)
           .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify(body), ...scopeKey(scope), id);
+        clearProceduralTag(db, scope, id);
         if (evidence !== null) {
           clearReceipts(db, scope, id);
           attachReceipts(db, scope, id, evidence, nowMs);
         }
-        markDirty?.(db, tx);
+        index.markDirty(db, tx);
         return { outcome: "changed", revision };
       });
     },
@@ -266,8 +273,9 @@ export function createMemoryStore(port, hashSession, markDirty) {
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
         suppressReceiptSources(db, scope, id, entry.row.text);
+        deleteProceduralTag(db, scope, id);
         clearReceipts(db, scope, id);
-        markDirty?.(db, tx);
+        index.markDirty(db, tx);
         return true;
       });
     },

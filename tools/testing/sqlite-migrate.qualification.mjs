@@ -6,6 +6,7 @@ import { openSqliteAdapter } from "../../packages/adapter-sqlite/src/index.mjs";
 import { migrateLegacyStore } from "../../packages/adapter-sqlite/src/migrate/index.mjs";
 import { createLegacyBackup, fileDigest, legacyVisible, migratedVisible, seededStore } from "../../packages/adapter-sqlite/test/migration-fixtures.mjs";
 import { legacyRawVisible, migratedRawVisible, seedRawDeletion } from "../../packages/adapter-sqlite/test/raw-migration-fixtures.mjs";
+import { qualifyLiveMigration } from "../../packages/adapter-sqlite/test/migration-live-fixtures.mjs";
 
 const directory = mkdtempSync(join(tmpdir(), "sqlite-migrate-qualification-"));
 try {
@@ -48,6 +49,11 @@ try {
   for (const item of [raw.deleted, raw.spanned, raw.unknown]) assert.equal(bytes.includes(item.raw), false);
   console.log(JSON.stringify({ sourceLayout: rawMigration.sourceLayout, visibleMemories: memoryExpected.length,
     visibleRaw: rawExpected.length, deletedRawSentinels: 3, migratedRawFences: rawMigration.rawFences }));
+  for (const layout of [29, 48, 53]) {
+    const liveDirectory = join(directory, "live-" + layout);
+    mkdirSync(liveDirectory, { mode: 0o700 });
+    console.log(JSON.stringify(await qualifyLiveMigration(liveDirectory, layout)));
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }

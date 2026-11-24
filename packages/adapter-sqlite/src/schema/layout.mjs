@@ -1,8 +1,9 @@
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
-// separate schema version sequence from the legacy engine. Version 4 adds the
-// inspect and Context Read tables, all created with the store.
+// separate schema version sequence from the legacy engine. Version 5 adds
+// migration compatibility tables to the inspect and Context Read layout.
+// Version 6 adds procedural tags.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 4;
+export const SQLITE_PHYSICAL_VERSION = 6;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -49,6 +50,20 @@ export const STORAGE_SCHEMA = `
     UNIQUE (owner_id, namespace_key, memory_id, source_key),
     FOREIGN KEY (owner_id, namespace_key, memory_id)
       REFERENCES cairn_memories (owner_id, namespace_key, id)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_procedural_tags (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    tag_revision INTEGER NOT NULL CHECK (tag_revision > 0),
+    positive INTEGER NOT NULL CHECK (positive IN (0, 1)),
+    origin TEXT CHECK (origin IN ('explicit', 'inferred')),
+    anchors TEXT,
+    PRIMARY KEY (owner_id, namespace_key, memory_id),
+    FOREIGN KEY (owner_id, namespace_key, memory_id)
+      REFERENCES cairn_memories (owner_id, namespace_key, id) ON DELETE CASCADE,
+    CHECK ((positive = 1 AND anchors IS NOT NULL) OR (positive = 0 AND origin IS NULL AND anchors IS NULL))
   ) STRICT, WITHOUT ROWID;
 
   CREATE TABLE cairn_suppression_facts (
@@ -167,6 +182,45 @@ export const STORAGE_SCHEMA = `
     session_hash TEXT NOT NULL,
     proof TEXT NOT NULL,
     PRIMARY KEY (owner_id, client_key, message_tag, namespace_key, session_tag, proof)
+  ) STRICT, WITHOUT ROWID;
+  CREATE TABLE cairn_migrated_raw_privacy (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('uuid', 'window', 'range', 'span', 'event', 'admission', 'reservation')),
+    selector TEXT NOT NULL,
+    body TEXT NOT NULL,
+    PRIMARY KEY (owner_id, namespace_key, client_key, kind, selector, body)
+  ) STRICT, WITHOUT ROWID;
+  CREATE TABLE cairn_migrated_safety (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('fact', 'reservation')),
+    identity TEXT NOT NULL,
+    epoch TEXT,
+    reason TEXT,
+    origin TEXT NOT NULL,
+    body TEXT NOT NULL,
+    PRIMARY KEY (owner_id, namespace_key, kind, identity)
+  ) STRICT, WITHOUT ROWID;
+  CREATE TRIGGER cairn_migrated_memory_reservation BEFORE INSERT ON cairn_memories
+  WHEN EXISTS (SELECT 1 FROM cairn_migrated_safety
+    WHERE owner_id=NEW.owner_id AND namespace_key=NEW.namespace_key AND kind='reservation'
+      AND identity=json_array('memory',NEW.id))
+  BEGIN SELECT RAISE(ABORT, 'reserved_memory_identity'); END;
+  CREATE TABLE cairn_migrated_raw_maps (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    session_key TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    start_utf16 INTEGER NOT NULL,
+    end_utf16 INTEGER NOT NULL,
+    precision TEXT NOT NULL,
+    PRIMARY KEY (owner_id, namespace_key, client_key, session_key, message_key, source_key, start_utf16, end_utf16),
+    FOREIGN KEY (owner_id, namespace_key, client_key, session_key, message_key)
+      REFERENCES cairn_raw_messages ON DELETE CASCADE
   ) STRICT, WITHOUT ROWID;
 `;
 
