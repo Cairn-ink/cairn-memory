@@ -11,5 +11,6 @@
     "skipLibCheck": false,
     "types": ["node"]
   },
-  "include": ["src/**/*.mjs"]
+  "include": ["src/**/*.mjs"],
+  "exclude": ["src/legacy/**"]
 }
