@@ -82,9 +82,13 @@ interface CorrectOptions {
   receipt?: ExplicitWriteReceipt;
 }
 
+type ForgetResult =
+  { status: "forgotten"; removedSimilar: number; indexRevision?: number } |
+  { status: "not_found"; indexRevision?: number };
+
 /**
  * The facade used by the MCP host, plugin, web client and the hosted service.
- * On write results, indexRevision is the revision as it will commit. Older implementations may omit it.
+ * On write results, indexRevision reflects changes committed by that run. Older implementations may omit it.
  */
 export interface MemoryService {
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
@@ -97,11 +101,11 @@ export interface MemoryService {
     { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |
     { status: "suppressed" | "paused" | "not_found" | "conflict"; indexRevision?: number }
   >;
-  forget(scope: Scope, id: string, source: SourceRef, options?: { expectedRevision?: Revision }): Promise<
-    { status: "forgotten"; removedSimilar: number; indexRevision?: number } |
-    { status: "not_found"; indexRevision?: number } |
-    { status: "conflict"; indexRevision?: number }
+  /** The optional guard compares the memory row revision. */
+  forget(scope: Scope, id: string, source: SourceRef, options: { expectedRevision?: Revision }): Promise<
+    ForgetResult | { status: "conflict"; indexRevision?: number }
   >;
+  forget(scope: Scope, id: string, source: SourceRef): Promise<ForgetResult>;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   /** A null query leaves the raw layer empty. */
   find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "raw"> & { raw: [] }>;
