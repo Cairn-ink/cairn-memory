@@ -319,7 +319,8 @@ export function createPostgresRawPorts(options) {
         const ref = copySession(session);
         return async (query, run) => {
           const rawDeleted = await changeSessions(query, target, [ref], DELETE);
-          if (rawDeleted) await advanceIndex(query, target.owner, run);
+          const ledgerBlanked = await scrubLedger(query, target, [ref]);
+          if (rawDeleted || ledgerBlanked) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });
