@@ -207,10 +207,15 @@ function run(executable, args, cwd, env, kind, onChild, timeoutMs, input) {
   });
 }
 
-// The staging candidate exposes initialize/ping as its config probe. Block
-// SQLite and accidental storage/provider imports along that startup path.
+// The staging candidate exposes initialize/ping as its config probe. This guard
+// catches accidental storage/provider access in trusted builds. It is not a sandbox.
 const candidateProbeGuard = 'data:text/javascript,' + encodeURIComponent(String.raw`
   import { registerHooks } from 'node:module';
+  for (const [target, names] of [[globalThis, ['fetch', 'WebSocket', 'XMLHttpRequest', 'EventSource']],
+    [process, ['binding', 'dlopen']]]) {
+    for (const name of names) Object.defineProperty(target, name, { configurable: false,
+      get() { throw new Error('candidate_probe_startup_denied'); } });
+  }
   const banned = /^(?:node:)?(?:sqlite|fs|net|http|https|http2|tls|dns|dgram|child_process|worker_threads)(?:\/|$)/u;
   registerHooks({ resolve(specifier, context, next) {
     const resolved = next(specifier, context);
