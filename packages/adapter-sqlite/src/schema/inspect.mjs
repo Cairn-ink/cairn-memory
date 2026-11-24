@@ -4,6 +4,7 @@ import { decodeJson } from "../memory-rows.mjs";
 import { receiptIdentityKey } from "../receipt-identity.mjs";
 import { scopeKey } from "../storage-values.mjs";
 
+/** @import { InspectItemEvidence } from "@cairn-ink/core/ports" */
 /** @import { Connection } from "../storage-values.mjs" */
 /** @import { LegacyInput } from "../legacy/migration-input.mjs" */
 /** @import { StoredReceipt } from "../receipt-identity.mjs" */
@@ -152,9 +153,17 @@ export function installInspectSchema(db, source) {
 
   if (source) {
     const evidence = db.prepare("INSERT INTO cairn_inspect_evidence VALUES (?, ?, ?, ?, ?, ?, ?)");
+    const procedural = db.prepare(`INSERT INTO cairn_procedural_tags
+      (owner_id, namespace_key, memory_id, tag_revision, positive, origin, anchors) VALUES (?, ?, ?, ?, ?, ?, ?)`);
     const epoch = db.prepare("INSERT INTO cairn_inspect_epochs VALUES (?, ?, ?)");
     for (const item of source.evidence) {
-      evidence.run(...scopeKey(item.scope), item.id, item.filing, item.qualification, item.procedural, item.supersession);
+      const coordinates = [...scopeKey(item.scope), item.id];
+      const tag = /** @type {InspectItemEvidence["procedural"]} */ (decodeJson(item.procedural));
+      if (tag) {
+        const { tagRevision, procedural: positive, origin, anchors } = tag;
+        procedural.run(...coordinates, tagRevision, Number(positive), origin, positive ? JSON.stringify(anchors) : null);
+      }
+      evidence.run(...coordinates, item.filing, item.qualification, null, item.supersession);
     }
     for (const { scope, value } of source.epochs) epoch.run(...scopeKey(scope), value);
   }

@@ -1,5 +1,6 @@
 import { CoreError } from "@cairn-ink/core";
 import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
+import { readProceduralTag } from "./procedural-tags.mjs";
 import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
@@ -195,7 +196,10 @@ export function createInspectStore(port, hashSession, receiptReadSafety) {
         const stored = storedEvidence(db, scope, memoryId);
         const qualification = includeQualification && stored?.qualification
           ? /** @type {ContextReadFields} */ (decodeJson(stored.qualification)) : null;
-        const procedural = stored?.procedural ? /** @type {Procedural} */ (decodeJson(stored.procedural)) : undefined;
+        const tag = readProceduralTag(db, scope, memoryId);
+        const procedural = tag
+          ? { procedural: tag.positive, tagRevision: tag.tagRevision, origin: tag.origin, anchors: tag.anchors }
+          : stored?.procedural ? /** @type {Procedural} */ (decodeJson(stored.procedural)) : undefined;
         const proceduralSafety = procedural ? anchorsVisible(db, scope, memoryId, project, procedural.anchors) : undefined;
         const memory = { ...metadata(db, entry.row, project, stored?.filing), text: entry.row.text };
         return {
