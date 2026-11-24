@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { legacyRawHash } from "./migrate/raw-privacy.mjs";
+import { receiptAddressDenial, receiptIdentityDenial } from "./receipt-identity.mjs";
 import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
@@ -210,6 +211,21 @@ export function scopedSuppression(db, scope, hashSession) {
 
     blocksSession,
     blocksReceipts,
+
+    facts,
+    legacy,
+
+    /** @param {Receipt} receipt @param {string} [key] @param {string} [legacyKey] */
+    withholdsReceipt(receipt, key, legacyKey) {
+      const { client, sessionId, messageId, occurredAtMs } = receipt;
+      const sessionKeyHash = hashSession(scope, client, sessionId);
+      return legacy.has(receiptAddressDenial(receipt)) ||
+        (key !== undefined && (legacy.has(receiptIdentityDenial(key)) || legacy.has("rs1:i:" + key))) ||
+        blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]) || blocksSession(client, sessionId) ||
+        facts.some(({ fact }) => fact.kind === "rawSpan" && fact.messageKey === messageId && fact.sessionKeyHash === sessionKeyHash) ||
+        windows.some(stored => factBlocksIncoming(stored,
+          { scope, passages: [], session: { client, sessionId }, occurredAtMs }, capture) !== false);
+    },
 
     /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
     snapshot({ client, sessionId, occurredAtMs, passages }) {

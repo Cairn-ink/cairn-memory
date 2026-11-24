@@ -72,13 +72,13 @@ export interface MemoryRow {
 
 /** Evidence link from a memory to its source. */
 export interface Receipt {
-  /** Stored receipt ID, when available. */
-  id?: string;
   client: string;
   sessionId: string;
   messageId: string;
   role: Role;
   occurredAtMs: number | null;
+  /** Stored receipt ID, when available. */
+  id?: string;
   /** For explicit writes, the saved text. */
   excerpt?: string;
 }

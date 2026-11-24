@@ -108,8 +108,7 @@ export interface MemoryStore {
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;
   /**
    * Throws revision_conflict, memory_historical, or memory_conflict (the new text collides with
-   * another visible memory). A kind change or a replacement receipt counts as a change even
-   * with identical text. An unchanged correction leaves the revision as-is.
+   * another visible memory). Identical text → "unchanged", no revision bump.
    */
   replaceContent(tx: Tx, scope: Scope, id: string, expectedRevision: Revision, next: InsertRow, receipts: readonly Receipt[] | null, nowMs: number): Promise<{ outcome: "changed" | "unchanged"; revision: Revision }>;
   get(tx: Tx, scope: Scope, id: string): Promise<MemoryRow | null>;

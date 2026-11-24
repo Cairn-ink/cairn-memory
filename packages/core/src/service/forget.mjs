@@ -8,8 +8,10 @@ import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
-/** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, ProvenClosure, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
+/** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
 /** @import {RawSpanFact} from "../suppression-fact.mjs" */
+
+/** @typedef {MemoryService["forget"]} Forget */
 
 /** @param {Capabilities} flags @param {ForgetStep} step @param {Capability} capability */
 function enabled(flags, step, capability) {
@@ -81,13 +83,15 @@ async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
 
 /**
  * @param {import("./index.d.mts").MemoryServiceDeps} deps
- * @returns {import("../ports/host.d.ts").MemoryService["forget"]}
+ * @returns {Forget}
  */
 export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
     conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
 
-  return entry(async (input, id, inputSource, options) => {
+  /** @type {(...args: [...Parameters<Forget>, options?: { expectedRevision?: Revision }]) =>
+   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict" }>} */
+  const forget = entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
     if (!isWellFormedText(id) || !id || id.length > 512 ||
@@ -224,4 +228,6 @@ export function forgetMethod({ storage, clock }) {
       return { status: "forgotten", removedSimilar, ...(indexRevision === undefined ? {} : { indexRevision }) };
     });
   });
+  // Only calls that supply an expected revision can return a conflict.
+  return /** @type {Forget} */ (forget);
 }

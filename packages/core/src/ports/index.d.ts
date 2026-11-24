@@ -31,7 +31,10 @@ export type * from "./quantity-ledger.d.ts";
  */
 export interface StorageAdapter<Card extends StoredDocumentCardRecord = DocumentCardRecord> {
   readonly name: string;
-  readonly capabilities: Capabilities;
+  readonly capabilities: Capabilities & Readonly<{
+    proceduralTags?: boolean;
+    receiptAttachAdvancesRevision?: boolean;
+  }>;
   readonly uow: UnitOfWork;
   readonly capture: CaptureClaim & CaptureFinish & SourceFilter;
   readonly memories: MemoryStore;
@@ -59,5 +62,6 @@ export interface StorageAdapter<Card extends StoredDocumentCardRecord = Document
   readonly documentCards?: DocumentCardStore<Card>; // documentCards
   readonly documentCardCandidates?: DocumentCardCandidates; // documentCardSearch
   readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
+  readonly inspect?: import("./host.d.ts").InspectStore; // inspect
   readonly proceduralTags?: ProceduralTagStore; // proceduralTags
 }

@@ -1,5 +1,6 @@
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
 import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
+import { advanceContextEpochs } from "./context-read-state.mjs";
 import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
@@ -10,7 +11,11 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
  *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string,
  *   digests: import("@cairn-ink/core").TextDigest[]
  * }} Row */
-/** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
+/** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
+/** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
+/** @typedef {{row: Row, receipts: StoredReceipt[], inspectReceiptPositions?: Map<Receipt, number>,
+ * receiptKeys?: Map<Receipt, string>,
+ * inspectEvidence?: import("./inspect.mjs").StoredInspectEvidence}} Entry */
 /** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
@@ -22,7 +27,9 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * documentCards: Map<Namespace, Map<string, CardEntry>>,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>, contextEpochs: Map<Namespace, number>,
+ * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
+ * receiptDenials: Set<string>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
@@ -43,6 +50,19 @@ export function indexRevisionAfterRun(run) {
 /** @param {Row} row */
 export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
+}
+
+/** @param {State} state @param {Namespace} namespace */
+export function advanceInspectEpoch({ inspectEpochs }, namespace) {
+  const next = (inspectEpochs.get(namespace) ?? 1) + 1;
+  if (!Number.isSafeInteger(next)) throw new CoreError("internal_error");
+  inspectEpochs.set(namespace, next);
+}
+
+/** @param {State} state */
+export function advanceRawInspectEpoch(state) {
+  // A Raw source can back receipts in forked sessions in other namespaces.
+  state.rawInspectEpoch++;
 }
 
 /** @param {TopicState | undefined} scoped @param {string} memoryId @param {{erase?: boolean}} [options] */
@@ -111,7 +131,9 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), documentCards: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
+    pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
+    nextInspectReceiptPosition: 1, receiptDenials: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
     rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
@@ -140,10 +162,13 @@ function jsonSafe(value) {
 
 /** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] @param {boolean} [includeTopics] */
 export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics = false) {
+  let trackContextEpochs = false;
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
+  /** @type {{storeId: string, cursorKey: Promise<CryptoKey>} | undefined} */
+  let readIdentity;
   /** @param {string} owner */
   function ownerState(owner) {
     let state = owners.get(owner);
@@ -200,6 +225,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
             finish.indexRevision = revision;
           }
           state.indexRevision = revision;
+          if (trackContextEpochs && revision !== current.committed.indexRevision) advanceContextEpochs(current.committed, state);
           current.committed = state;
         }
         return result;
@@ -222,6 +248,18 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   function port(tx, scope, write, body, pauseLock = false) {
     if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
     return readPort(tx, scope, (getState) => body(getState()), pauseLock);
+  }
+
+  /** @param {Tx} tx @returns {Promise<import("@cairn-ink/core/ports").ReadTokenIdentity>} */
+  async function readTokenIdentity(tx) {
+    return port(tx, { owner: tx?.owner }, false, async () => {
+      readIdentity ??= {
+        storeId: crypto.randomUUID(),
+        cursorKey: crypto.subtle.importKey("raw", crypto.getRandomValues(new Uint8Array(32)),
+          { name: "HMAC", hash: "SHA-256" }, false, ["sign"]),
+      };
+      return { storeId: readIdentity.storeId, cursorKey: await readIdentity.cursorKey };
+    });
   }
 
   /** @template T
@@ -343,6 +381,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       .map(([owner, { committed }]) => ({
         owner,
         rows: [...committed.rows.values()].flatMap((namespace) => [...namespace.values()])
+          .map(entry => ({
+            ...entry,
+            receipts: entry.receipts.map(({ captureEventId: _captureEventId, ...receipt }) => receipt),
+          }))
           .sort(({ row: a }, { row: b }) => {
             const x = a.scope.namespace;
             const y = b.scope.namespace;
@@ -432,7 +474,12 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       const updated = new Map(entries);
       updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
       rows.set(namespace, updated);
-      current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
+      const previous = current.committed;
+      const next = { ...previous, rows, contextEpochs: new Map(previous.contextEpochs),
+        inspectEpochs: new Map(previous.inspectEpochs), indexRevision: previous.indexRevision + 1 };
+      if (trackContextEpochs) advanceContextEpochs(previous, next);
+      advanceInspectEpoch(next, namespace);
+      current.committed = next;
     } finally {
       release();
     }
@@ -528,5 +575,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner,
+    readTokenIdentity,
+    enableContextEpochs() { trackContextEpochs = true; } };
 }
