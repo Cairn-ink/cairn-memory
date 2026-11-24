@@ -335,18 +335,22 @@ export function copyReceipts(receipts) {
   });
 }
 
-/** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts */
-export function attachReceipts(previous, receipts) {
+/** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts @param {boolean} [storeIds] */
+export function attachReceipts(previous, receipts, storeIds = false) {
   /** @param {Receipt} receipt */
   const key = (receipt) => JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]);
-  const seen = new Set(previous.map(key));
-  const result = [...previous];
+  const byKey = new Map(previous.map(receipt => [key(receipt), receipt]));
+  /** @type {string[]} */
+  const receiptIds = [];
   for (const receipt of receipts) {
-    const id = key(receipt);
-    if (!seen.has(id)) {
-      seen.add(id);
-      result.push(receipt);
+    const identity = key(receipt);
+    let retained = byKey.get(identity) ?? receipt;
+    if (storeIds) {
+      const id = retained.id ?? crypto.randomUUID();
+      if (retained.id === undefined) retained = { ...retained, id };
+      receiptIds.push(id);
     }
+    byKey.set(identity, retained);
   }
-  return result;
+  return { evidence: [...byKey.values()], ...(receiptIds.length && { receiptIds }) };
 }

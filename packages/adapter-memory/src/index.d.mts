@@ -7,6 +7,8 @@ export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResu
 
 export interface MemoryAdapterOptions {
   capabilities?: Partial<Record<Capability, boolean>>;
+  receiptAttachAdvancesRevision?: boolean;
+  proceduralTags?: boolean;
   newId?: () => string;
   now?: () => number;
   topicRetryAfterMs?: number;
@@ -20,7 +22,7 @@ type CapturePorts = StorageAdapter["capture"];
 
 export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
-  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText"> & {
+  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText" | "proceduralTags"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

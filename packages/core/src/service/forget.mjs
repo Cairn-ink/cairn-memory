@@ -85,7 +85,7 @@ async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
  */
 export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
-    conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
+    conflicts, rationale, documentCards, quantityLedger, forgetLog, proceduralTags } = storage;
 
   return entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
@@ -206,6 +206,10 @@ export function forgetMethod({ storage, clock }) {
       if (enabled(capabilities, "dependents.invalidate", "quantityLedger")) {
         if (!quantityLedger) throw new CoreError("capability_unavailable");
         await quantityLedger.dropWhere(tx, scope, { by: "memoryId", id });
+      }
+      if (capabilities.proceduralTags === true) {
+        if (!proceduralTags) throw new CoreError("capability_unavailable");
+        await proceduralTags.clear(tx, scope, id);
       }
       if (enabled(capabilities, "dependents.invalidate", "cards") ||
           enabled(capabilities, "dependents.invalidate", "stagedEvidence")) {

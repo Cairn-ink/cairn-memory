@@ -10,7 +10,8 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
  *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string,
  *   digests: import("@cairn-ink/core").TextDigest[]
  * }} Row */
-/** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
+/** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[],
+ * proceduralTag?: import("@cairn-ink/core/ports").ProceduralTag}} Entry */
 /** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */

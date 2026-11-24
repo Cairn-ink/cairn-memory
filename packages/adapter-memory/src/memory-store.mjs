@@ -105,15 +105,16 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
    * @template {InsertRow} T
    * @param {typeof port.writeFromFinish} write
    * @param {(row: T) => CopiedContent} prepareContent
+   * @param {boolean} [storeReceiptIds]
    * @returns {{insert: (tx: Tx, scope: Scope, row: T, receipts: readonly Receipt[], nowMs: number) =>
    *   ReturnType<MemoryStore["insert"]>, touchDuplicate: MemoryStore["touchDuplicate"]}}
    */
-  function memoryWrites(write, prepareContent) {
+  function memoryWrites(write, prepareContent, storeReceiptIds = false) {
     return {
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
           const content = prepareContent(row);
-          const evidence = attachReceipts([], copyReceipts(receipts));
+          const { evidence, receiptIds } = attachReceipts([], copyReceipts(receipts), storeReceiptIds);
           validateTime(nowMs);
           const suppliedCreationTime = row.createdAtMs;
           const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
@@ -133,7 +134,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               receipts: evidence,
             });
             markDirty();
-            return created;
+            return { ...created, ...(receiptIds && { receiptIds }) };
           };
         });
       },
@@ -149,19 +150,20 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const state = getState();
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
-            const evidence = attachReceipts(entry.receipts, incoming);
+            const { evidence, receiptIds } = attachReceipts(entry.receipts, incoming, storeReceiptIds);
             const { row } = entry;
-            let changed = false;
+            let changed = capabilities.receiptAttachAdvancesRevision === true && evidence.length > entry.receipts.length;
             if (!row.historical) {
               const { confidence, kind = row.kind, origin = row.origin } = copy;
-              changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
-              Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
+              changed ||= confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+              Object.assign(row, { confidence, kind, origin });
             }
+            row.revision += Number(changed);
             Object.assign(row, writeTime(nowMs));
             entry.receipts = evidence;
             if (changed || incoming.length) invalidateRationale(state, namespace, id);
             markDirty();
-            return { outcome: changed ? "changed" : "touched", revision: row.revision };
+            return { outcome: changed ? "changed" : "touched", revision: row.revision, ...(receiptIds && { receiptIds }) };
           };
         });
       },
@@ -210,7 +212,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @type {MemoryStore} */
   const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, "conditional", prepare), prepareContent),
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, "conditional", prepare), prepareContent, true),
 
     async findDuplicates(tx, scope, queries, options) {
       return port.read(tx, scope, (getState) => {
@@ -249,7 +251,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         const content = prepareContent(next);
         validateTime(nowMs);
-        const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts));
+        const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts)).evidence;
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);

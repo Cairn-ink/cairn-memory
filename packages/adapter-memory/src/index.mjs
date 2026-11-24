@@ -5,6 +5,7 @@ import { createFactMatcher } from "./fact-match.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
+import { createProceduralTagStore } from "./procedural-tags.mjs";
 import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
@@ -22,7 +23,10 @@ const nativeErrorMap = Object.freeze({});
  * @returns {import("./index.d.mts").MemoryAdapter}
  */
 export function createMemoryAdapter(options = {}) {
-  const flags = capabilities(options.capabilities ?? {});
+  const flags = Object.freeze({ ...capabilities(options.capabilities ?? {}),
+    ...(options.receiptAttachAdvancesRevision === true && { receiptAttachAdvancesRevision: true }),
+    ...(options.proceduralTags === true && { proceduralTags: true }),
+  });
   const sessionRefs = options.sessionRefs ?? "plain";
   if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
   const newId = options.newId ?? (() => crypto.randomUUID());
@@ -58,6 +62,8 @@ export function createMemoryAdapter(options = {}) {
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
     ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
+    ...(flags.proceduralTags === true && { proceduralTags: handleWriteRejections(
+      createProceduralTagStore(port, matchFacts), ["write", "clear"]) }),
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(
       createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),

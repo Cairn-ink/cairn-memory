@@ -1,4 +1,4 @@
-import { identifier, isWellFormedText, revision, validateObject } from "../capture/validate.mjs";
+import { identifier, isWellFormedText, revision, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
@@ -18,6 +18,34 @@ import { pauseResult } from "./pause.mjs";
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
+
+/** @param {number | undefined} indexRevision */
+function reportedIndex(indexRevision) {
+  return indexRevision === undefined ? {} : { indexRevision };
+}
+
+/** @param {import("../ports/host.d.ts").ExplicitWriteReceipt | undefined} receipt
+ * @param {string} text @returns {Receipt[]}
+ */
+function explicitReceipts(receipt, text) {
+  return receipt ? [{
+    client: receipt.client, sessionId: receipt.sessionId, messageId: receipt.eventId ?? receipt.messageId,
+    role: receipt.role, occurredAtMs: receipt.occurredAtMs, excerpt: text,
+  }] : [];
+}
+
+/** @param {unknown} value @param {string} excerpt */
+function proceduralSpans(value, excerpt) {
+  const { anchors } = validateObject(value, ["anchors"]);
+  const boundary = (/** @type {number} */ offset) => !/[\uDC00-\uDFFF]/u.test(excerpt.charAt(offset));
+  return validateDenseArray(anchors, 1, 4).map(anchor => {
+    const { receiptIndex, start, end } = validateObject(anchor, ["receiptIndex", "start", "end"]);
+    if (receiptIndex !== 0 || typeof start !== "number" || typeof end !== "number" ||
+        !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end ||
+        end > excerpt.length || !boundary(start) || !boundary(end)) throw new CoreError("invalid_input");
+    return { start, end };
+  });
+}
 
 /** @template {string} T @param {unknown} value @param {readonly T[]} choices */
 function enumValue(value, choices) {
@@ -282,7 +310,7 @@ export async function fullWriteWithholds(suppressions, tx, scope, source, batch)
  */
 export function writeMethods(deps) {
   const { storage, gate, clock, embedder } = deps;
-  const { uow, pause, memories, suppressions, keys, fence, capabilities } = storage;
+  const { uow, pause, memories, suppressions, keys, fence, capabilities, proceduralTags } = storage;
   const { embed } = writeEmbedding(deps);
   /** @param {string} text */
   const sha256Hex = (text) => clock.sha256Hex(text);
@@ -304,7 +332,7 @@ export function writeMethods(deps) {
   }
 
   return {
-    save: entry(async (input, raw, inputSource, inputKind = "fact") => {
+    save: entry(async (input, raw, inputSource, inputKind = "fact", options) => {
       let scope, source, kind;
       try {
         scope = scopeOf(input);
@@ -315,18 +343,36 @@ export function writeMethods(deps) {
         return invalid();
       }
 
-      if (embedder === null) throw new CoreError("capability_unavailable");
+      if (embedder === null && capabilities.embeddingRequiredOnInsert === true) {
+        throw new CoreError("capability_unavailable");
+      }
+      const procedural = options?.procedural;
+      if (procedural !== undefined && (capabilities.proceduralTags !== true || !proceduralTags)) {
+        throw new CoreError("capability_unavailable");
+      }
+      const text = prepareCoreText(raw);
+      const receipts = explicitReceipts(options?.receipt, text);
+      if (options?.receipt !== undefined && receipts[0]?.role !== "user") return invalid();
+      let spans;
+      if (procedural !== undefined) {
+        if (receipts.length === 0 || (kind !== "instruction" && kind !== "preference")) return invalid();
+        try {
+          spans = proceduralSpans(procedural, text);
+        } catch {
+          return invalid();
+        }
+      }
       const { owner } = scope;
       const preflight = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
       if (preflight.paused) return { status: "paused" };
       await gate.assertOpen(owner, "pre-send");
-      const text = prepareCoreText(raw);
       if (!text) return invalid();
-      const key = await keys.userKey(owner);
-      const digesters = await keys.retainedDigesters?.(owner);
+      const key = await keys?.userKey?.(owner) ?? null;
+      const digesters = await keys?.retainedDigesters?.(owner);
       const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex, digesters);
-      const embedding = await embed(owner, text, key);
-      query.embedding = embedding.vector;
+      const embedding = embedder === null ? null : await embed(owner, text, key);
+      if (embedding) query.embedding = embedding.vector;
+      const tag = spans && { spans, digest: await sha256Hex(text) };
       const explicit = source.kind === "mcp" || source.kind === "web";
       const mode = explicit ? "hash" : "full";
       const row = /** @type {InsertRow} */ ({
@@ -337,34 +383,48 @@ export function writeMethods(deps) {
 
       await gate.assertOpen(owner, "post-send");
       const result = await uow.run(owner, { pauseLock: true }, async tx => {
+        const suppressed = async () => /** @type {const} */ ({
+          status: "suppressed", ...reportedIndex(await memories.indexRevision?.(tx)),
+        });
         const state = pauseResult(await pause.get(tx, owner));
         if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
-        if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+        if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
-        if (await withheld(suppressions, tx, scope, source, passages, key)) return /** @type {const} */ ({ status: "suppressed" });
+        if (await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
-        const decision = decide(policy, capabilities.nearDuplicate === true);
-        if (decision.status === "suppressed") return decision;
+        const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
+        if (decision.status === "suppressed") return suppressed();
+        let id, written;
         if (decision.status === "saved") {
-          const { id, revision } = await memories.insert(tx, scope, row, [], clock.nowMs());
-          return { status: decision.status, id, revision };
+          written = await memories.insert(tx, scope, row, receipts, clock.nowMs());
+          id = written.id;
+        } else {
+          const duplicateId = decision.id;
+          id = duplicateId;
+          const current = await scopedRow(memories, scope, duplicateId, tx);
+          const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === duplicateId &&
+            match.revision === current?.revision);
+          if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed();
+          const { merge } = planDuplicateMerge(current, current);
+          written = await memories.touchDuplicate(tx, scope, duplicateId, receipts, merge, clock.nowMs());
         }
-        const { id } = decision;
-        const current = await scopedRow(memories, scope, id, tx);
-        const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === id &&
-          match.revision === current?.revision);
-        if (current === null || !matched || !await visible(scope, id, tx)) {
-          return /** @type {const} */ ({ status: "suppressed" });
+        if (tag && proceduralTags) {
+          const receiptId = written.receiptIds?.[0];
+          if (!receiptId) throw new CoreError("internal_error");
+          await proceduralTags.write(tx, scope, id, {
+            positive: true, origin: "explicit",
+            anchors: tag.spans.map(span => ({ receiptId, digest: tag.digest, ...span })),
+          });
         }
-        const { merge } = planDuplicateMerge(current, current);
-        const { revision } = await memories.touchDuplicate(tx, scope, id, [], merge, clock.nowMs());
-        return { status: decision.status, id, revision };
+        return { status: decision.status, id, revision: written.revision,
+          ...reportedIndex(await memories.committedIndexRevision?.(tx)) };
       });
 
       if (result.status === "paused" || result.status === "suppressed") return result;
       const item = await deliver(scope, result.id, result.revision);
-      return item ? { status: result.status, item } : { status: "suppressed" };
+      const index = reportedIndex(result.indexRevision);
+      return item ? { status: result.status, item, ...index } : { status: "suppressed", ...index };
     }, invalid),
 
     correct: entry(async (input, inputId, inputRevision, raw, inputSource, options) => {
@@ -432,18 +492,18 @@ export function writeMethods(deps) {
           if (plan.outcome === "unchanged") return /** @type {const} */ ({ status: "unchanged", revision: plan.revision });
           if (!predecessor) throw new CoreError("internal_error");
           const { kind, origin, confidence, textHash } = plan;
-          const receipt = options?.receipt;
-          /** @type {Receipt[] | null} */
-          const receipts = receipt ? [{
-            client: receipt.client, sessionId: receipt.sessionId, messageId: receipt.eventId ?? receipt.messageId,
-            role: receipt.role, occurredAtMs: receipt.occurredAtMs, excerpt: text,
-          }] : null;
+          const receipts = options?.receipt ? explicitReceipts(options.receipt, text) : null;
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
             { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, receipts, now);
           if (replaced.outcome !== "changed") throw new CoreError("internal_error");
-          return /** @type {const} */ ({ status: "saved", revision: replaced.revision });
+          if (capabilities.proceduralTags === true) {
+            if (!proceduralTags) throw new CoreError("capability_unavailable");
+            await proceduralTags.clear(tx, scope, id);
+          }
+          return /** @type {const} */ ({ status: "saved", revision: replaced.revision,
+            ...reportedIndex(await memories.committedIndexRevision?.(tx)) });
         });
       } catch (error) {
         const failure = entryError(error);
@@ -453,7 +513,7 @@ export function writeMethods(deps) {
         return { status, ...(start === undefined ? {} : { indexRevision: start }) };
       }
 
-      const index = start === undefined ? {} : { indexRevision: result.status === "saved" ? start + 1 : start };
+      const index = reportedIndex(result.status === "saved" ? result.indexRevision : start);
       if (result.status !== "saved" && result.status !== "unchanged") return { ...result, ...index };
       const item = await deliver(scope, id, result.revision);
       return item ? { status: result.status, item, ...index } : { status: "not_found", ...index };
