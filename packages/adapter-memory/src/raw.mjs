@@ -406,8 +406,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [eraseLedger] */
-  function deleteSessions(tx, scope, prepare, eraseLedger = false) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [purgeCards] */
+  function deleteSessions(tx, scope, prepare, purgeCards = false) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -423,13 +423,13 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        if (!eraseLedger && deleted.length && state.documentCards.has(namespace)) {
+        if (purgeCards && deleted.length && state.documentCards.has(namespace)) {
           const { hidden, changed } = purgeDeletedDocumentSources(state, namespace, deleted);
           if (hidden) run.cardWrites++;
           else if (changed) run.stateWritten = true;
         }
-        const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key))) : 0;
+        const ledgerBlanked = await blankCaptureMessages(state, namespace,
+          (key) => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
         if (ledgerBlanked) run.stateWritten = true;
@@ -617,11 +617,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       });
     },
     async deleteConversation(tx, scope, session) {
-      const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)]);
+      const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)], true);
       return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
-      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), true);
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
     },
     async purgeWithheld(tx, scope, facts, { onDelete } = {}) {
       return port.write(tx, scope, "conditional", () => {

@@ -139,7 +139,10 @@ async function captureRace({ keyed = false, timing, kind = "text", mutate = adap
   if (timing === "before dispatch") assert.ok(!JSON.stringify(modelRequests).includes(messages[0].content));
   if (timing === "during embedding") {
     assert.deepEqual(embeddingInputs, outputs.map(text => text.toLowerCase()), "Both outputs must reach the embedder before the forget");
-    assert.deepEqual(finalChecks, [{ positions: [0, 1], outcome: kind === "window" ? "suppressed" : "eligible" }],
+    // A keyed forget purges the exact source from the stored outbox, so core withdraws that blanked slot
+    // before the final eligibility check.
+    assert.deepEqual(finalChecks, [{ positions: keyed && kind === "text" ? [1] : [0, 1],
+      outcome: kind === "window" ? "suppressed" : "eligible" }],
       "The final eligibility check must see the committed source policy");
   }
 
@@ -251,16 +254,19 @@ async function createKeyedDispatchMutant() {
   }
 }
 
-test("the loaded outbox regression detects a bypass of the keyed pre-dispatch filter", async () => {
+test("a bypass of the keyed pre-dispatch filter still cannot send a purged source", async () => {
+  // The keyed forget purges the exact source from the stored outbox. The send refresh compares the
+  // current outbox content, so the forgotten text never reaches the model even without the keyed filter.
+  // The mutant builds a request with both sources; the send refresh sees the purged slot and ends the
+  // attempt retryably before dispatch, so the model receives no request at all.
   const createService = await createKeyedDispatchMutant();
   await assert.rejects(captureRace({ keyed: true, timing: "before dispatch", afterClaim: true, createService }), {
     message: /^Unexpected source text reached the model\b/,
-    actual: [messages.map(({ content }) => content)],
-    expected: [[messages[1].content]],
+    actual: [],
   });
 });
 
-test("the final text check detects stale source passages", async () => {
-  await assert.rejects(captureRace({ keyed: true, timing: "during embedding", mutate: reuseAdmissionPassages }),
-    /Only surviving receipts and their memories may be stored/);
+test("stale source passages still cannot store a purged source", async () => {
+  // The finish re-check reads the current outbox, so a purged source is withdrawn even with stale passages.
+  await captureRace({ keyed: true, timing: "during embedding", mutate: reuseAdmissionPassages });
 });
