@@ -146,6 +146,13 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /** @param {{body: string, sentences: readonly {start: number, end: number}[]}} card */
   const sentenceTexts = ({ body, sentences }) => sentences.map(({ start, end }) => body.slice(start, end));
 
+  /** @param {import("../routing/index.mjs").DocumentCard} card */
+  function cardPassageTexts(card) {
+    const texts = sentenceTexts(card);
+    if (card.title) texts.push(card.title);
+    return texts;
+  }
+
   /**
    * @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages
    * @param {readonly FinishItem[]} items @param {FinishResult} result @param {CardVectors | undefined} vectors
@@ -176,9 +183,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         const message = cardSources[position];
         const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card) continue;
-        // Whole-source and extracted-memory checks can miss an exact forget of one card sentence.
+        // Whole-source and extracted-memory checks can miss an exact forget of the title or a sentence.
         const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
-        if (await withholds(sentenceTexts(card))) continue;
+        if (await withholds(cardPassageTexts(card))) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         // A card that passes the stored-state checks can still have its embedding withheld.
@@ -536,8 +543,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         for (const { message, card } of candidates) {
           if (!allowed.has(message)) continue;
           const text = documentCardSearchText(card);
-          const payload = [text, card.body, ...sentenceTexts(card)];
-          if (card.title) payload.push(card.title);
+          const payload = [text, card.body, ...cardPassageTexts(card)];
           if (!await withholds(payload)) survivors.push({ message, text });
         }
         return survivors;

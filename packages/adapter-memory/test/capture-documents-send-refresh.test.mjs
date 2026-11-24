@@ -103,6 +103,27 @@ test("an exact forget in the card pre-send gate preserves the routing limit", as
     plans.slice(1, 4).map(({ id }) => id).sort());
 });
 
+test("an exact forget of a truncated title in the card pre-send gate prevents embedding and storage", async () => {
+  const f = fixture();
+  const capture = event("long-heading");
+  const heading = "Remember this maintenance plan for the community workshop covering inspections, " +
+    "tool storage, cleanup, ventilation, supply inventory, access for volunteers, and coordination " +
+    "with the building supervisor before the workshop opens for the season";
+  const title = heading.slice(0, 200);
+  const source = { ...plan, content: plan.content.replace(plan.content.split("\n")[0], heading) };
+  const saved = await f.service.save(scope, title, actor);
+  assert.equal(saved.status, "saved");
+  f.embeddings.length = 0;
+  await f.enqueue(capture, [source]);
+  await f.run(capture, { phase: "pre-send", async commit() {
+    assert.equal((await f.service.forget(scope, saved.item.id, actor)).status, "forgotten");
+  } });
+
+  assert.deepEqual(f.embeddings, []);
+  const cards = await f.read(tx => f.storage.documentCards.list(tx, scope));
+  assert.equal(cards.some(card => card.title === title), false, "The forgotten title must not be stored");
+});
+
 for (const forgotten of ["bound memory", "unrelated memory", "new value"]) {
   test(`Forgetting the ${forgotten} in the verify dispatch gate ${forgotten === "unrelated memory" ? "preserves" : "withdraws"} the verify payload`, async () => {
     let cardId;
