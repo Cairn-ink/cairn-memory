@@ -264,7 +264,7 @@ export function captureMethods(deps) {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
       const admit = capture?.admit;
-      if (embedder === null || typeof admit !== "function") throw new CoreError("capability_unavailable");
+      if (model === null || embedder === null || typeof admit !== "function") throw new CoreError("capability_unavailable");
       const { client: inputClient, sessionId: inputSession, eventId: inputEvent, messages } =
         validateObject(input, ["client", "sessionId", "eventId", "messages"]);
       const client = identifier(inputClient);
@@ -351,7 +351,7 @@ export function captureMethods(deps) {
       const load = capture?.load;
       const readStatus = capture?.status;
       const archive = capabilities.rawArchive ? raw : undefined;
-      if (embedder === null || typeof load !== "function" || typeof readStatus !== "function" ||
+      if (model === null || embedder === null || typeof load !== "function" || typeof readStatus !== "function" ||
           [capture.claim, capture.beginDispatch, capture.finish, capture.abandon, capture.eligible, capture.assertEligible,
             suppressions?.snapshot, storage.keys?.userKey].some(method => typeof method !== "function") ||
           (capabilities.rawArchive && (typeof archive?.archiveAllowed !== "function" || typeof archive.archive !== "function"))) {

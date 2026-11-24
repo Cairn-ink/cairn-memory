@@ -87,7 +87,7 @@ function validateReadRegistration(storage) {
 /** @param {import("./index.d.mts").MemoryServiceRegistrationDeps} input */
 function freezeDeps(input) {
   const deps = { ...input };
-  const { storage, model, embedder: configuredEmbedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
+  const { storage, model: configuredModel, embedder: configuredEmbedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
   identifier(storage?.name);
   validateReadRegistration(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
@@ -98,10 +98,13 @@ function freezeDeps(input) {
   requireMethods(storage.recent, "recent");
   requireMethods(storage.memories, "exportPage");
 
-  requireMethods(model, "call", "countTokens");
-  if (typeof model.model !== "string" || !model.model ||
-      (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
-  positiveInteger(model.contextWindow);
+  const model = configuredModel ?? null;
+  if (model !== null) {
+    requireMethods(model, "call", "countTokens");
+    if (typeof model.model !== "string" || !model.model ||
+        (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
+    positiveInteger(model.contextWindow);
+  }
   if (configuredEmbedder === undefined && storage.capabilities.embeddingRequiredOnInsert !== false) {
     throw new CoreError("invalid_input");
   }
@@ -117,7 +120,7 @@ function freezeDeps(input) {
   if (embedQuery !== undefined) requireMethods(embedQuery, "embedQuery");
   if (diagnostics !== undefined && typeof diagnostics !== "function") throw new CoreError("invalid_input");
 
-  return Object.freeze({ ...deps, embedder, config: freezeConfig(deps.config) });
+  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config) });
 }
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage

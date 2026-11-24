@@ -1,0 +1,99 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { registerHooks } from "node:module";
+import { test } from "node:test";
+import { createMemoryService } from "@cairn-ink/core/service";
+import { admission, captureTrace, selection } from "./helpers/service-capture-trace.mjs";
+import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
+
+// The core job installs the sibling adapter after it runs these tests.
+const adapterImports = new Map([
+  ["@cairn-ink/core", new URL("../src/index.mjs", import.meta.url).href],
+  ["@cairn-ink/core/routing", new URL("../src/routing/index.mjs", import.meta.url).href],
+]);
+const resolver = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(adapterImports.get(specifier) ?? specifier, context);
+  },
+});
+let createMemoryAdapter;
+try {
+  ({ createMemoryAdapter } = await import("../../adapter-memory/src/index.mjs"));
+} finally {
+  resolver.deregister();
+}
+
+test("registration accepts a model that is omitted, undefined, or null", () => {
+  const { deps: { model: _model, ...deps } } = serviceFake();
+  for (const input of [deps, { ...deps, model: undefined }, { ...deps, model: null }]) {
+    assert.equal(typeof createMemoryService(input).runCapture, "function");
+  }
+});
+
+test("registration still validates every supplied model field", () => {
+  const { deps } = serviceFake();
+  const { model } = deps;
+  for (const invalid of [false, {}, { ...model, call: null }, { ...model, countTokens: null },
+    { ...model, model: "" }, { ...model, contextWindow: 0 }, { ...model, fits: false }]) {
+    assert.throws(() => createMemoryService({ ...deps, model: invalid }), { code: "invalid_input" });
+  }
+});
+
+test("model-free capture admission refuses before touching any port", async () => {
+  const { deps, calls, mutations } = serviceFake({ writes: true, capture: true, rawArchive: true });
+  const service = createMemoryService({ ...deps, model: null });
+  await assert.rejects(service.enqueueCapture(scope, admission), { code: "capability_unavailable" });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(mutations, []);
+  assert.deepEqual(await service.captureStatus(scope, selection.eventId), { status: "unknown" });
+});
+
+test("model-free capture run refuses before claiming a pending admission", async () => {
+  const { deps, calls, mutations } = serviceFake({ writes: true, capture: true, rawArchive: true });
+  const hosted = createMemoryService(deps);
+  assert.deepEqual(await hosted.enqueueCapture(scope, admission), { status: "accepted" });
+  calls.length = 0;
+  mutations.length = 0;
+
+  const service = createMemoryService({ ...deps, model: null });
+  await assert.rejects(service.runCapture(scope, selection), { code: "capability_unavailable" });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(mutations, []);
+  assert.deepEqual(await service.captureStatus(scope, selection.eventId), { status: "pending" });
+});
+
+test("the keyless reference adapter saves, recalls, reads, finds, inspects, exports, corrects and forgets", async () => {
+  const { deps, calls } = serviceFake({ writes: true });
+  const storage = createMemoryAdapter({ capabilities: { inspect: true } });
+  const service = createMemoryService({ ...deps, storage, model: null, embedder: null });
+  const source = { kind: "mcp", client: null, sessionId: null };
+  const original = "The spare lens is in the cabinet.";
+  const updated = "The spare lens is in the drawer.";
+  const page = { limit: 10, cursor: null };
+  const search = { ...page, mode: "search" };
+
+  const saved = await service.save(scope, original, source);
+  assert.equal(saved.status, "saved");
+  assert.equal(saved.item.embedding, null);
+  const { id, revision } = saved.item;
+  assert.deepEqual((await service.recall(scope, "lens", search)).items.map(item => item.id), [id]);
+  assert.deepEqual((await service.find(scope, "lens", { kinds: ["memory"] })).memories.map(item => item.id), [id]);
+  assert.equal((await service.inspect(scope, { memoryId: id })).memory.text, original);
+  assert.deepEqual((await service.exportMemories(scope, page)).items.map(item => item.id), [id]);
+
+  const corrected = await service.correct(scope, id, revision, updated, source);
+  assert.equal(corrected.status, "saved");
+  assert.equal(corrected.item.embedding, null);
+  assert.equal((await service.read(scope, { type: "memory", id })).item.text, updated);
+  assert.equal((await service.forget(scope, id, source)).status, "forgotten");
+  assert.deepEqual((await service.recall(scope, "lens", search)).items, []);
+  assert.deepEqual((await service.exportMemories(scope, page)).items, []);
+  assert.ok(calls.every(([port, , phase]) => port === "gate" && phase !== "dispatch"));
+});
+
+test("a supplied model keeps the qualified hosted capture trace", async () => {
+  const trace = await captureTrace(createMemoryService);
+  // Captured from the core-next base with tools/testing/service-optional-model.qualification.mjs.
+  const digest = createHash("sha256").update(JSON.stringify(trace)).digest("hex");
+  assert.equal(digest, "8e94eba398154d64eddfb2bcc4704cda4f32fd6b49fc28f24d0a6a9f5dfff1d8");
+});

@@ -26,7 +26,7 @@ export interface MemoryServiceConfig {
 
 export interface MemoryServiceDeps {
   readonly storage: ReadContractStorage<StoredDocumentCardRecord>;
-  readonly model: ModelPort;
+  readonly model: ModelPort | null;
   readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;
   readonly clock: ClockAndHash;
@@ -68,7 +68,11 @@ export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "cloc
 }
 
 export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
-export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "embedder"> & Partial<Pick<MemoryServiceDeps, "embedder">>;
+export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "embedder">
+  & Partial<Pick<MemoryServiceDeps, "embedder">> & {
+    /** Capture admission and execution require a model. */
+    readonly model?: MemoryServiceDeps["model"] | undefined;
+  };
 
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
 export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
