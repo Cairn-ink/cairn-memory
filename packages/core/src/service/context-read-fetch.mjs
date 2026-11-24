@@ -14,7 +14,7 @@ import { isReadMac, readTokenSigner } from "./context-read-tokens.mjs";
 const snapshotFields = ["v", "scope", "intent", "refs", "generations", "access", "fences"];
 
 /** @param {ContextReadSet} readSet @param {readonly ContextReadRef[]} refs */
-function snapshotRefs(readSet, refs) {
+export function snapshotRefs(readSet, refs) {
   return refs.map(ref => [namespaceSlot(readSet, ref.scope), ref.type, ref.id, ref.revision,
     ...(ref.type === "card" ? [ref.bodyRevision] : [])]);
 }
@@ -44,7 +44,7 @@ function snapshotPayload(readSet, value, scope) {
 }
 
 /** @param {Generations} state @param {boolean} cards */
-function canonicalGenerations(state, cards) {
+export function canonicalGenerations(state, cards) {
   return state.map(({ memory, card, lineage }) => {
     if (!Number.isSafeInteger(memory) || memory < 0 ||
         (cards && (card === undefined || !Number.isSafeInteger(card) || card < 0))) throw new CoreError("internal_error");
@@ -53,7 +53,7 @@ function canonicalGenerations(state, cards) {
 }
 
 /** @param {ContextReadRef} requested @param {ContextEvidenceRow | null | undefined} row */
-function checkRow(requested, row) {
+export function checkRow(requested, row) {
   if (!row) return "evidence_unavailable";
   const actual = row.type === "memory" ? row.ref : row.item.ref;
   if (actual.type !== requested.type || actual.id !== requested.id ||
@@ -68,7 +68,7 @@ function checkRow(requested, row) {
 
 /** @param {Signer} signer @param {FetchEvidenceResult["items"][number]} item @param {ContextEvidenceRow} row
  * @param {boolean} lineageEnabled */
-function evidenceFence(signer, item, row, lineageEnabled) {
+export function evidenceFence(signer, item, row, lineageEnabled) {
   const legacy = legacyEvidence(item);
   const value = row.type === "card" && (lineageEnabled || row.lineageStamp !== null) ? [legacy, row.lineageStamp] : legacy;
   return signer.bind("snapshot-item", value);

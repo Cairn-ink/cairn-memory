@@ -1,5 +1,6 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
+import { withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -26,7 +27,9 @@ const nativeErrorMap = Object.freeze({});
  */
 export function createMemoryAdapter(options = {}) {
   const flags = capabilities(options.capabilities ?? {});
-  if (flags.contextRead && flags.cards) throw new CoreError("capability_unavailable");
+  if ((flags.contextRead && flags.cards) || (flags.contextRawRead && (!flags.contextRead || !flags.rawArchive))) {
+    throw new CoreError("capability_unavailable");
+  }
   const sessionRefs = options.sessionRefs ?? "plain";
   if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
   const newId = options.newId ?? (() => crypto.randomUUID());
@@ -41,6 +44,7 @@ export function createMemoryAdapter(options = {}) {
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
   const receiptReadSafety = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
+  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
@@ -65,7 +69,7 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
-    ...(flags.contextRead && { contextRead: createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) }),
+    ...(contextRead && { contextRead: flags.contextRawRead && archive ? withContextRawRead(work, archive, contextRead) : contextRead }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),

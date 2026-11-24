@@ -1,5 +1,5 @@
 import type {
-  ClockAndHash, ContextAssemblyValue, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
+  ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
   EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
@@ -8,7 +8,7 @@ export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
   ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextMemoryEvidence,
-  ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
+  ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
   FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
   InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
@@ -33,6 +33,8 @@ export interface MemoryServiceDeps {
   readonly tokens: TokenCounter;
   readonly embedQuery?: EmbedQuery;
   readonly config: MemoryServiceConfig;
+  readonly contextReadCounter?: ContextReadTokenCounter;
+  readonly contextReadFormat?: ContextReadBlockFormatter;
   /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
@@ -49,7 +51,8 @@ export interface CaptureRunner {
 /** The Addendum 17 read entries for the explicit keyless-local composition. */
 export type ContextReadMemoryService = Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
 
-export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock" | "diagnostics"> {
+export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps,
+  "clock" | "diagnostics" | "contextReadCounter" | "contextReadFormat"> {
   readonly profile: "keyless-local";
   readonly storage: Pick<ReadContractStorage, "capabilities" | "uow" | "fence" | "contextRead" | "inspect"> & {
     readonly capabilities: { readonly contextRead: true; readonly inspect: true };
@@ -57,9 +60,6 @@ export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock
     readonly inspect: InspectStore;
   };
   readonly config?: MemoryServiceConfig;
-  readonly contextReadCounter?: ContextReadTokenCounter;
-  /** Pure deterministic formatter. The host sends the same bytes core counts. */
-  readonly contextReadFormat?: (value: ContextAssemblyValue) => string;
 }
 
 export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "clock"> {

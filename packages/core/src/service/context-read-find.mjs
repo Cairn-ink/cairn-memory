@@ -97,7 +97,7 @@ async function page({ items, diagnostics, token }, position, limit, signer) {
 
 /** @param {{storage: Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities">,
  * clock: ClockAndHash}} deps
- * @returns {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
+ */
 export function findCandidatesMethod({ storage, clock }) {
   const { contextRead: store, fence, uow } = storage;
   /** @type {Map<string, Ranking>} */
@@ -107,7 +107,7 @@ export function findCandidatesMethod({ storage, clock }) {
     for (const [id, { token }] of rankings) if (now >= token.e) rankings.delete(id);
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {FindCandidatesInput} */ args,
-    /** @type {CallOptions} */ options) => {
+    /** @type {CallOptions} */ options, /** @type {boolean} */ forAssembly) => {
     const readSet = contextReadSet(value);
     const input = findCandidatesInput(args);
     if (!store || storage.capabilities.contextRead !== true) throw new CoreError("capability_unavailable");
@@ -157,7 +157,7 @@ export function findCandidatesMethod({ storage, clock }) {
         if (!current.ready || await signer.bind("index", current.indexState) !== token.g) throw new CoreError("cursor_stale");
         const result = await page(ranking, token.p, limit, signer);
         await assertContextVisible(fence, tx, readSet, result.items.map(item => item.ref), intent, "cursor_stale");
-        return result;
+        return { result };
       }
 
       const observed = await store.observeIndex(tx, readSet, selection);
@@ -186,6 +186,16 @@ export function findCandidatesMethod({ storage, clock }) {
       diagnostics.trace.timings.fusionMs = clock.monotonicMs() - fusionStarted;
       completeCoverage(diagnostics, types, observed, lexical.matched);
 
+      // Assembly consumes the qualified horizon and its namespace fence in
+      // the search snapshot (legacy context-read-facade.mjs:773–796).
+      if (forAssembly) {
+        const generations = await store.snapshotState(tx, readSet, types);
+        await assertContextVisible(fence, tx, readSet, items.map(item => item.ref), intent, "evidence_unavailable");
+        /** @type {FindCandidatesResult} */
+        const result = { ...diagnostics, items, version: CONTEXT_VERSION, nextCursor: null };
+        return { result, generations: structuredClone(generations) };
+      }
+
       const ranking = structuredClone(/** @type {Ranking} */ ({
         items, diagnostics, token: { v: 1, r: newRankingId(), b: request, c: configuration, a: access,
           g: await signer.bind("index", observed.indexState), e: clock.nowMs() + RANKING_TTL_MS, p: 0 },
@@ -198,13 +208,27 @@ export function findCandidatesMethod({ storage, clock }) {
         if (rankings.size >= RANKING_LIMIT && oldest !== undefined) rankings.delete(oldest);
         rankings.set(ranking.token.r, ranking);
       }
-      return result;
+      return { result };
     });
-  }, undefined, snapshotContextCall);
+  }, undefined, ([readSet, input, options, forAssembly]) => {
+    const [set, request, call] = snapshotContextCall([readSet, input, options]);
+    return /** @type {[ContextReadSet, FindCandidatesInput, CallOptions, boolean]} */ ([set, request, call, forAssembly]);
+  });
 
-  return async (readSet, input, options = {}) => {
-    const result = await run(readSet, input, options);
+  /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options @param {boolean} forAssembly */
+  async function search(readSet, input, options, forAssembly) {
+    const result = await run(readSet, input, options, forAssembly);
     if ("code" in result) throw Object.assign(new CoreError(result.code), { diagnostics: result.diagnostics });
     return result;
+  }
+  return {
+    /** @type {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
+    findCandidates: async (readSet, input, options = {}) => (await search(readSet, input, options, false)).result,
+    /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options */
+    async findForAssembly(readSet, input, options) {
+      const { result, generations } = await search(readSet, input, options, true);
+      if (generations === undefined) throw new CoreError("internal_error");
+      return { result, generations };
+    },
   };
 }

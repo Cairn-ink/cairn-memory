@@ -3,8 +3,10 @@ import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { captureMethods } from "./capture.mjs";
+import { fetchForAssembly } from "./context-read-assembly-evidence.mjs";
 import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
+import { readContextMethod } from "./context-read.mjs";
 import { entryError } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
@@ -108,13 +110,16 @@ function freezeDeps(input) {
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
  * @param {import("../ports/index.d.ts").ClockAndHash} clock
+ * @param {Pick<import("./index.d.mts").MemoryServiceDeps, "contextReadCounter" | "contextReadFormat">} host
  * @returns {import("./index.d.mts").ContextReadMemoryService}
  */
-function readContractMethods(storage, clock) {
+function readContractMethods(storage, clock, host) {
+  const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock });
   return {
-    findCandidates: findCandidatesMethod({ storage, clock }),
+    findCandidates,
     fetchEvidence: fetchEvidenceMethod(storage),
-    async readContext() { throw new CoreError("capability_unavailable"); },
+    readContext: readContextMethod({ storage, clock, find: findForAssembly, fetch: fetchForAssembly(storage),
+      counter: host.contextReadCounter, format: host.contextReadFormat }),
     inspect: inspectMethod(storage, clock),
   };
 }
@@ -135,7 +140,7 @@ export function createMemoryService(input) {
         if (!("fence" in storage)) throw new CoreError("invalid_input");
         requireMethods(storage.fence, "assertVisible");
         requireMethods(clock, "nowMs", "monotonicMs");
-        return readContractMethods(storage, clock);
+        return readContractMethods(storage, clock, "contextReadCounter" in input || "contextReadFormat" in input ? input : {});
       }
       return { inspect: inspectMethod(storage, clock) };
     }
@@ -145,7 +150,7 @@ export function createMemoryService(input) {
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
       ...captureMethods(deps),
-      ...readContractMethods(deps.storage, deps.clock),
+      ...readContractMethods(deps.storage, deps.clock, deps),
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
       find: findMethod(deps),
