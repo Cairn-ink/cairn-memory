@@ -88,8 +88,9 @@ export interface MemoryStore {
     editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
   /**
-   * Attaches receipts and applies the merge verbatim. A new receipt or a change to the row
-   * bumps its revision once. Stores must be able to persist kind, origin and confidence.
+   * Attaches receipts and applies the merge verbatim; bumps the revision only when something
+   * changed. No exemption: a store that cannot persist kind/origin/confidence does not conform.
+   * Whether a receipt-only attachment counts as a change is pending (PHASE0 addendum 17).
    */
   touchDuplicate(tx: Tx, scope: Scope, id: string, receipts: readonly Receipt[], merge: DuplicateMerge, nowMs: number): Promise<{ outcome: "touched" | "changed"; revision: Revision }>;
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;

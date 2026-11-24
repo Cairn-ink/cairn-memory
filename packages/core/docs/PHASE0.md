@@ -304,13 +304,21 @@ transaction before archiving. Omitting the field preserves existing behavior.
   or `messageId`, `role: "user"`, and `occurredAtMs`. The host supplies the identity. Core uses
   the supplied event or message ID as `Receipt.messageId`. The excerpt is the normalized,
   redacted text from the write. `Receipt.id` and `Receipt.excerpt` are optional. A new save inserts
-  that one receipt. A duplicate attaches it, and a new attachment counts as a change under
-  `touchDuplicate` and advances the memory revision once.
+  that one receipt. A duplicate attaches it. The local installer also advances the memory
+  revision for a newly attached receipt.
+- **Pending: receipt-only attachment and the memory revision.** Whether a newly attached receipt
+  counts as a change under `touchDuplicate` for every store (it also affects capture duplicates on
+  the hosted service) or only for stores that declare it needs a port decision.
+- **Pending: reading the final index revision.** Core needs one port read that returns the owner's
+  index revision as it will be after the run commits, including for a run that wrote nothing
+  (a repeated forget). The seam and its name need a port decision.
 - **Pending: procedural anchor storage needs a port decision.** The local installer accepts
   `options.procedural = { anchors: [{ receiptIndex, start, end }] }` for `instruction` and
   `preference`. It requires one to four anchors on the explicit receipt at index zero, with
   integer UTF-16 offsets satisfying `0 ≤ start < end ≤ excerpt.length` on code-point boundaries.
-  Invalid input returns `invalid` and writes nothing.
+  Invalid input returns `invalid` and writes nothing. The local installer's procedural save also
+  advances the index a second time for the tag write; whether that second advance is kept is part
+  of the same decision.
 - **Optional embedding.** Save and correct can write `embedding: null` when
   `capabilities.embeddingRequiredOnInsert` is false and the embedder is absent or null.
   Stores that require an embedding and failures from a configured embedder keep their current rules.
