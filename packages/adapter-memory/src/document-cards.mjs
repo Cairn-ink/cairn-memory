@@ -253,7 +253,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             const card = cards?.get(ref.id)?.card;
             if (!card || card.scope.owner !== requestedScope.owner ||
                 card.scope.namespace !== requestedScope.namespace) return null;
-            return structuredClone(await buildVisibilityInput(state, requestedScope, card, true));
+            return structuredClone(await buildVisibilityInput(tx, state, requestedScope, card, true));
           } catch {
             return null;
           }

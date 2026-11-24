@@ -16,7 +16,7 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { FingerprintKeyProvider, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
@@ -119,9 +119,11 @@ function sourceDates(receipts) {
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
 export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
-  /** @param {State} state @param {Scope} scope @param {CardWrite} card
+  /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
+  const fingerprintKeys = new WeakMap();
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card
    * @param {boolean} [requireRaw] @returns {Promise<DocumentCardVisibilityInput | null>} */
-  return async function cardVisibilityInput(state, scope, card, requireRaw = false) {
+  return async function cardVisibilityInput(tx, state, scope, card, requireRaw = false) {
     const policy = matchFacts(state.facts, scope);
     const rows = state.rows.get(scope.namespace);
     /** @type {Map<string, DocumentCardMemoryState>} */
@@ -141,7 +143,14 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
     let fingerprintKey = null;
     const { textFacts } = policy;
     try {
-      if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
+      if (textFacts.length) {
+        let key = fingerprintKeys.get(tx);
+        if (!key) {
+          key = keys.userKey(tx.owner);
+          fingerprintKeys.set(tx, key);
+        }
+        fingerprintKey = await key;
+      }
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
         if (requireRaw && (!rawSourceVisible || !canonicalSessionKey)) return null;
@@ -170,9 +179,9 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
 
 /** @param {ReturnType<typeof createCardVisibilityInput>} buildInput */
 export function createCardVisibility(buildInput) {
-  /** @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [requireRaw] */
-  return async (state, scope, card, requireRaw) => {
-    const input = await buildInput(state, scope, card, requireRaw);
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [requireRaw] */
+  return async (tx, state, scope, card, requireRaw) => {
+    const input = await buildInput(tx, state, scope, card, requireRaw);
     return input !== null && (await documentCardVisible(input)).visible;
   };
 }
@@ -182,15 +191,15 @@ export function createCardVisibility(buildInput) {
  * @returns {NonNullable<StorageAdapter["documentCardCandidates"]>}
  */
 export function createDocumentCardCandidates(port, cardVisible) {
-  /** @param {State} state @param {RetrievalScope} selection */
-  async function visibleCards(state, { owner, namespaces, clients, window }) {
+  /** @param {Tx} tx @param {State} state @param {RetrievalScope} selection */
+  async function visibleCards(tx, state, { owner, namespaces, clients, window }) {
     const rows = [];
     for (const namespace of namespaces) {
       const scope = { owner, namespace };
       for (const [id, { card, embedding, createdAtMs, updatedAtUs }] of state.documentCards.get(namespace) ?? []) {
         if (!card || !withinWindow(window, card.date) ||
             (clients && (!card.sourceMessage || !clients.includes(card.sourceMessage.client))) ||
-            !await cardVisible(state, scope, card, true)) continue;
+            !await cardVisible(tx, state, scope, card, true)) continue;
         /** @type {ItemRef} */
         const ref = { type: "card", id, namespace };
         rows.push({ ref, card, embedding, updatedAtUs: updatedAtUs ?? BigInt(createdAtMs) * 1000n });
@@ -213,7 +222,7 @@ export function createDocumentCardCandidates(port, cardVisible) {
         const terms = tokenizeT1(query);
         if (terms.length === 0) return { rows: [], matched: false };
 
-        const visible = await visibleCards(getState(), selection);
+        const visible = await visibleCards(tx, getState(), selection);
         const documents = visible.map(({ ref, card, updatedAtUs }) => ({
           ref, updatedAtUs, text: documentCardSearchText(card),
         }));
@@ -229,7 +238,7 @@ export function createDocumentCardCandidates(port, cardVisible) {
         const queryVector = readEmbedding(query);
         if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
 
-        const visible = await visibleCards(getState(), selection);
+        const visible = await visibleCards(tx, getState(), selection);
         const rows = [];
         for (const { ref, embedding, updatedAtUs } of visible) {
           if (embedding?.model !== model || embedding.textVersion !== DOCUMENT_CARD_SEARCH_TEXT_VERSION ||
@@ -389,7 +398,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
                 const { namespace, id } = ref;
                 if (!byNamespace.get(namespace)) continue;
                 const card = state.documentCards.get(namespace)?.get(id)?.card;
-                if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
+                if (card && await cardVisible(tx, state, { owner: tx.owner, namespace }, card)) visible.push(ref);
               }
             }
             if (!rawFence) return visible;

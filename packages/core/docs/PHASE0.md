@@ -808,7 +808,7 @@ The MCP host uses these status mappings.
   memory query embedding when available and uses lexical alone without complete
   vector coverage. A failed card operation affects only the card layer. Blank
   queries skip card search.
-- **Read.** A card read uses the store and visibility inputs in one read-only
+- **Read.** `readCard(scope, id)` uses the store and visibility inputs in one read-only
   transaction. It returns the ID, title, body, date, origin, source client, and
   IDs of visible or historical linked memories. Missing or withheld cards
   return `not_found`. A missing store or method returns `capability_unavailable`.
