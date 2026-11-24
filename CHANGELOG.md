@@ -3,11 +3,13 @@
 ## 0.6.12 — 2026-11-24
 
 - **Local recall, memory details and related views hide evidence that shares a forgotten source.** Evidence from independent sources can still appear.
-- **The bundled cloud client accepts capture requests that include transcript boundaries, a final-part marker and a parser version.** It rejects empty or reversed ranges before sending them.
+- In cloud mode, the bundled client's capture-request schema accepts optional transcript boundaries, a final-part marker and a parser version, and its validator rejects a range whose end is not after its start.
 - Engine features that local setup does not turn on by default also changed:
   - Forgetting a memory can finish when a topic title came from an earlier source you already forgot.
   - Pausing stops new model requests from background Card updates. Saved conversation searches that match only on words skip the embedding service.
-  - Session Start Next Steps and Episode Keep leave out sources that share a message with something you forgot, and Next Steps withdraws an item whose text exactly matches a forgotten memory. Reopening a saved Episode or retrying a Keep also leaves out those shared sources when their identity can be checked. Known limits: the same text repeated in a different conversation is not detected unless it exactly matches the forgotten memory; a forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet; and a Keep saved before 0.6.12 can still list a forgotten source's ID if that source had already been removed from its draft.
+  - Session Start Next Steps withdraws an item whose sources share a message with something you forgot, whose text exactly matches a forgotten memory, or whose text exactly matches a forgotten message among its Episode's sources.
+  - Episode Keep, including reopening a saved Episode or retrying a Keep, leaves out sources that share a forgotten message's identity or address.
+  - Known limits: Keep does not detect the same text saved under a different message; a forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet; and a Keep saved before 0.6.12 can still list a forgotten source's ID if that source had already been removed from its draft.
 
 ## 0.3.11 — 2026-11-23: turn off capture for one session or project
 
