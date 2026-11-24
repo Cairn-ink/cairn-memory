@@ -102,6 +102,7 @@ function matchReader() {
         fact: (value) => record(value, [
           "kind", "origin", "owner", "namespace", "actionId", "memoryId", "throughRevision", "mode", "client",
           "unknownTime", "anchor", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16", "contentDigest",
+          "explicitSaveExemptAfterUs",
         ], {
           text: (value) => record(value, ["keyId"], { ...passageLists, embedding: (value) => list(value, scalar) }),
           sourceMemory: incarnation,
@@ -117,10 +118,11 @@ function matchReader() {
       return !(fact.kind === "text" && fact.mode === "full" && policy && typeof policy === "object" &&
         !Array.isArray(policy) && field(policy, "rowShingles") === false);
     },
-    /** @param {FactMatchRow} row @param {boolean} useShingles */
-    row(row, useShingles) {
+    /** @param {FactMatchRow} row @param {boolean} useShingles @param {boolean} usePhysicalSource */
+    row(row, useShingles, usePhysicalSource) {
       return /** @type {FactMatchRow} */ (/** @type {unknown} */ (record(row, [
         "type", "memoryId", "revision", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16",
+        ...(usePhysicalSource ? ["sourceKind", "createdAtUs"] : []),
         ...(useShingles ? ["keyId"] : []),
       ], { scope, source, ...(useShingles ? fingerprintLists : fingerprintDigests), embedding: candidateEmbedding })));
     },
@@ -209,9 +211,10 @@ function checksExplicitPassages(fact, edit, passages) {
  * precedence over unavailable evidence from another comparison.
  * @param {readonly TextCandidate[]} passages @param {TextFact} fact @param {FactMatchPolicy} policy
  * @param {IncomingFactMatchPolicy} [explicit] @param {FactMatchIncoming["sourceMemory"]} [edit]
+ * @param {boolean} [digestOnly]
  * @returns {FactMatchResult}
  */
-function matchPassages(passages, fact, policy, explicit, edit) {
+function matchPassages(passages, fact, policy, explicit, edit, digestOnly = false) {
   const threshold = policy.containmentThreshold === undefined ? CONTAINMENT_THRESHOLD : policy.containmentThreshold;
   if (!Array.isArray(passages) || !isValidFingerprint(fact.text) || !isValidThreshold(threshold)) return "ineligible";
   if (explicit && ((explicit.key != null && !nonempty(explicit.key.id)) ||
@@ -231,7 +234,7 @@ function matchPassages(passages, fact, policy, explicit, edit) {
     if (digest === "ineligible") result = "ineligible";
     candidates.push(passage);
   }
-  if (fact.mode === "exact") return result;
+  if (fact.mode === "exact" || digestOnly) return result;
 
   const useShingles = policy.rowShingles !== false;
   const checkContainment = useShingles && (!explicit || checksExplicitPassages(fact, edit, passages));
@@ -294,8 +297,13 @@ function hidesRow(fact, row, policy) {
       if (fact.memoryId !== row.memoryId) return false;
       if (fact.throughRevision === undefined) return true;
       return natural(row.revision) ? row.revision <= fact.throughRevision : "ineligible";
-    case "text":
-      return matchPassages([row], fact, policy);
+    case "text": {
+      const cutoff = fact.explicitSaveExemptAfterUs;
+      const exempt = cutoff !== undefined && row.type !== "raw" &&
+        (row.sourceKind === "mcp" || row.sourceKind === "web") &&
+        (row.createdAtUs === "Infinity" || typeof row.createdAtUs === "bigint" && row.createdAtUs > BigInt(cutoff));
+      return matchPassages([row], fact, policy, undefined, undefined, exempt);
+    }
     case "session":
       return sessionMatches(fact.session, row.source, policy);
     case "window":
@@ -338,7 +346,8 @@ export function factHidesRow(storedFact, row, policy = {}) {
   try {
     const snapshot = matchReader();
     const fact = validateSuppressionFact(snapshot.fact(storedFact));
-    const candidate = snapshot.row(row, snapshot.useCandidateShingles(fact, policy));
+    const candidate = snapshot.row(row, snapshot.useCandidateShingles(fact, policy),
+      fact.kind === "text" && fact.explicitSaveExemptAfterUs !== undefined);
     const rules = snapshot.policy(policy);
     if (!isValidPolicy(rules)) return "ineligible";
     return hidesRow(fact, candidate, rules);

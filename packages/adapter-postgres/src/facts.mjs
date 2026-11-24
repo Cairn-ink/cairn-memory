@@ -132,6 +132,7 @@ const factFields = {
   identity: { ...baseFields, memoryId: copyString, throughRevision: optional(copyNumber) },
   text: {
     ...baseFields, mode: copyString,
+    explicitSaveExemptAfterUs: optional(copyString),
     text: (/** @type {unknown} */ value) => copyObject(value, textFields),
     sourceMemory: optional(nullable((value) => copyObject(value, sourceMemoryFields))),
   },

@@ -2,12 +2,13 @@ import {
   allDigests, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, validateSuppressionFact,
 } from "../../core/src/index.mjs";
 import { matchesFactSlot } from "./facts.mjs";
-import { CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
+import { CREATED_AT_US, CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
 /** @import { IncomingFactMatchPolicy } from "../../core/src/privacy/fact-match.d.mts" */
 /** @import { CaptureKey, DuplicateQuery, Receipt, Scope, SourceRef } from "../../core/src/ports/index.d.ts" */
 /** @import { CandidateEntry, MemoryEntry, Query } from "./memory-rows.mjs" */
+/** @import { LegacySuppressionRow } from "./index.mjs" */
 
 const SHA256 = /^(?:sha256:)?[0-9a-f]{64}$/u;
 
@@ -31,26 +32,35 @@ function digestAliases({ textHash, legacyHash, digests = [] }) {
   return result;
 }
 
-/** @param {any} row @param {string} owner @returns {StoredFact} */
-function legacyFact(row, owner) {
-  const { id, kind, origin, client, session_id, start_ms, end_ms, text_hash, text_hmac, key_id, shingles, embedding, redaction_version } = row;
+/** @param {LegacySuppressionRow} row @param {string} owner */
+export function legacySuppressionToFact(row, owner) {
+  const { kind, origin } = row;
   const base = { owner, kind, origin: origin ?? "backfill", actionId: "legacy" };
   let body;
   if (kind === "session") {
-    body = { ...base, session: { client, sessionId: session_id } };
+    body = { ...base, session: { client: row.client, sessionId: row.session_id } };
   } else if (kind === "window") {
-    body = { ...base, client, window: { startMs: Number(start_ms), endMs: Number(end_ms) } };
+    body = { ...base, client: row.client, window: { startMs: Number(row.start_ms), endMs: Number(row.end_ms) } };
   } else {
+    const { text_hash, text_hmac, key_id, shingles, embedding, redaction_version, created_at_us } = row;
     /** @type {TextDigest[]} */
     const digests = [];
     const sha = digestValue(text_hash);
-    const hmacs = new Set([text_hash.startsWith("hmac:") ? text_hash.slice(5) : null, text_hmac].filter(Boolean));
+    const hmacs = new Set([text_hash.startsWith("hmac:") ? text_hash.slice(5) : null, text_hmac]);
     const domain = /** @type {const} */ ({ pipeline: "hosted-v1", redactionVersion: redaction_version });
     if (sha) digests.push({ ...domain, alg: "sha256", value: sha, keyId: null });
-    for (const value of hmacs) digests.push({ ...domain, alg: "hmac", label: "hosted-v1", value, keyId: key_id });
-    body = { ...base, mode: "full", text: { digests, embedding: JSON.parse(embedding), shingles, keyId: key_id } };
+    for (const value of hmacs) {
+      if (value) digests.push({ ...domain, alg: "hmac", label: "hosted-v1", value, keyId: key_id });
+    }
+    if (origin === "edit") {
+      body = { ...base, mode: "exact", text: { digests } };
+    } else {
+      body = { ...base, mode: "full", text: { digests, embedding: JSON.parse(embedding), shingles, keyId: key_id },
+        ...(origin === "forget" || origin === "correct" || origin === "backfill"
+          ? { explicitSaveExemptAfterUs: created_at_us } : {}) };
+    }
   }
-  return { fact: validateSuppressionFact(body), factId: id, incarnation: "", epoch: 0n, createdAtMs: 0 };
+  return validateSuppressionFact(body);
 }
 
 /** @param {unknown} value @param {bigint} minimum */
@@ -99,8 +109,11 @@ const ROW_EVIDENCE = {
     columns: { source_client: "source_client", source_session_id: "source_session_id" } },
   needs_window: { when: `${FACT_KIND} = 'window'`,
     columns: { created_ms: `${CREATED_MS}::text` } },
-  needs_vector: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN body->>'embedding' IS NOT NULL
+  needs_vector: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN (body->>'origin') IS DISTINCT FROM 'edit' AND body->>'embedding' IS NOT NULL
     ELSE mode = 'full' AND body #>> '{text,embedding}' IS NOT NULL END`, columns: { embedding: "embedding::text" } },
+  needs_physical_source: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN body->>'origin' IN ('forget', 'correct', 'backfill')
+    ELSE body->>'explicitSaveExemptAfterUs' IS NOT NULL END`,
+    columns: { source_kind: "source_kind", created_at_us: `${CREATED_AT_US}::text` } },
 };
 
 const evidence = Object.entries(ROW_EVIDENCE);
@@ -129,7 +142,7 @@ export function visibilityFactsSql({
   hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL", rowEvidence = false,
 } = {}) {
   const liveFacts = `SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
-    trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us, kind, origin, mode, slot
+    ${CREATED_AT_US}::text AS created_at_us, kind, origin, mode, slot
     FROM core_suppression_facts WHERE user_id = $1
       AND (kind IN ('identity', 'text', 'session', 'window') OR (${rawSpans} AND kind = 'rawSpan'))
       AND (NOT ${textOnly} OR kind = 'text') AND NOT ${legacyOnly}
@@ -145,7 +158,8 @@ export function visibilityFactsSql({
       'start_ms', floor(EXTRACT(EPOCH FROM window_start) * 1000),
       'end_ms', ceil(EXTRACT(EPOCH FROM window_end) * 1000),
       'text_hash', text_hash, 'text_hmac', text_hmac, 'key_id', key_id,
-      'embedding', embedding::text, 'redaction_version', redaction_version, 'shingles', shingles), NULL, NULL, NULL, NULL, NULL
+      'embedding', embedding::text, 'redaction_version', redaction_version, 'shingles', shingles),
+    ${CREATED_AT_US}::text, NULL, NULL, NULL, NULL
     FROM suppressions WHERE user_id = $1
       AND (NOT ${textOnly} OR kind = 'text' OR (NOT ${allowPendingLegacy} AND NOT COALESCE((SELECT ready FROM owner_state), false)))
       AND NOT COALESCE((SELECT ready AND reconciled FROM owner_state), false)
@@ -166,7 +180,10 @@ export function visibilityFactsSql({
 /** @param {any[]} rows @param {string} owner @param {boolean} [allowPendingLegacy] */
 export function decodeVisibilityFacts(rows, owner, allowPendingLegacy = false) {
   if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
-  return rows.map(row => row.legacy ? legacyFact(row.body, owner) : decodeCoreFact(row, owner));
+  return rows.map(row => row.legacy ? {
+    fact: legacySuppressionToFact({ ...row.body, created_at_us: row.created_at_us }, owner),
+    factId: row.fact_id, incarnation: "", epoch: 0n, createdAtMs: readCreatedAtMs(row.created_at_us),
+  } : decodeCoreFact(row, owner));
 }
 
 const filteredVisibilityFactsSql = visibilityFactsSql({
@@ -187,10 +204,10 @@ export async function readVisibilityFacts(query, owner, {
 }
 
 /** @param {MemoryEntry | CandidateEntry} entry @param {readonly StoredFact[]} facts @returns {Promise<FactMatchRow>} */
-export async function rowFactCandidate({ memory, digests }, facts) {
+export async function rowFactCandidate({ memory, digests, sourceKind, createdAtUs }, facts) {
   const { scope, id, revision, text, textHash, embedding } = memory;
   /** @type {FactMatchRow} */
-  const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector };
+  const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector, sourceKind, createdAtUs };
   if (facts.some(({ fact }) => fact.kind === "text")) {
     const aliases = text !== undefined &&
       facts.some(({ fact }) => fact.kind === "text" && fact.text.digests.some(d => d.alg === "sha256"));

@@ -80,6 +80,27 @@ receipts, raw data, lineage, or facts. This is the value returned as
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
 reference can be indexed together.
 
+Use `legacySuppressionToFact(row, owner)` to convert legacy suppressions before
+copying them into `core_suppression_facts`. The live read union uses the same
+converter. This query projects the row shape the converter expects.
+
+```sql
+SELECT kind, origin, client, session_id, text_hash, text_hmac, key_id,
+  redaction_version, embedding::text AS embedding, shingles,
+  floor(EXTRACT(EPOCH FROM window_start) * 1000) AS start_ms,
+  ceil(EXTRACT(EPOCH FROM window_end) * 1000) AS end_ms,
+  trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us
+FROM suppressions WHERE user_id = $1
+```
+
+The helper returns a validated fact with the supplied owner and `actionId: "legacy"`.
+The copy still supplies storage IDs and epochs. Text rows with `origin = 'edit'`
+use exact mode with their stored digest aliases. Text rows with origin `forget`,
+`correct`, or `backfill` use full mode and exempt physical `mcp` or `web` memories
+created strictly after the suppression from vector and shingle matching. Exact
+matches still hide those memories. Text rows with a null origin use full mode
+without a timestamp exemption.
+
 The slot helper and insert builder in `src/facts.mjs` snapshot the fact before
 running core validation and the adapter's storage checks. They derive all
 stored values from that snapshot. The adapter requires plain records with only

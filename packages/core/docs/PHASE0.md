@@ -794,3 +794,12 @@ The MCP host uses these status mappings.
 | `conflict` | `revision_conflict` |
 | `suppressed` | `memory_suppressed` |
 | `invalid` | `invalid_input` |
+
+## Addendum 19 — Legacy explicit-save parity
+
+A full text suppression fact may persist `explicitSaveExemptAfterUs` as a
+canonical integer string of microseconds since the Unix epoch. The matcher
+skips vector and shingle matching for a memory with physical source kind `mcp`
+or `web` and a physical creation time strictly later than that timestamp.
+Exact digests still apply. When the field is absent, full text matching uses
+the existing policy. The exemption applies to memory visibility.
