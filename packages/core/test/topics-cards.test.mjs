@@ -21,15 +21,16 @@ function fixture({ cards = [record], memoryStates = new Map(), excluded = [], be
   const writes = [];
   const receipts = [];
   let activeTx;
-  let readRuns = 0;
   const options = {
     scope, gate: open,
     uow: {
       async run(owner, { readOnly = false }, fn) {
         assert.equal(owner, scope.owner);
         assert.equal(activeTx, undefined);
-        if (readOnly) readRuns++;
-        else if (readRuns === 3) beforeApply?.(records);
+        if (!readOnly && beforeApply) {
+          beforeApply(records);
+          beforeApply = undefined;
+        }
         activeTx = { readOnly };
         try {
           return await fn(activeTx);

@@ -1,5 +1,6 @@
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
-import { addKeyedDigest, createFactStore } from "./privacy.mjs";
+import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
+import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -466,11 +467,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         try {
           const base = current.committed;
           if (staged.get(current)?.base === base) continue;
-          const keyedFacts = [...base.facts.values()].flatMap(({ fact }) =>
-            fact.kind === "text" && fact.text.digests.every(({ alg }) => alg === "hmac") ? fact.text.digests : []);
-          if (keyedFacts.length > 0) {
+          const domains = liveKeyedDomains(base.facts.values());
+          if (domains.size > 0) {
             const olderIds = await retainedKeyIds(owner);
-            if (keyedFacts.some(({ keyId }) => keyId !== null && olderIds.has(keyId))) {
+            if ([...domains.values()].some(({ alg, keyId }) => alg === "hmac" && keyId !== null && olderIds.has(keyId))) {
               throw new CoreError("fingerprint_key_mismatch");
             }
           }
@@ -491,19 +491,37 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     publish();
   }
 
+  /** @param {Tx} tx */
+  function writeOwner(tx) {
+    if (!issued.has(tx) || tx.readOnly) throw new CoreError("internal_error");
+    return tx.owner;
+  }
+
+  /** @param {string} owner @param {boolean} [includeShingles] */
+  function keyedDomains(owner, includeShingles) {
+    return liveKeyedDomains(owners.get(owner)?.committed.facts.values() ?? [], includeShingles);
+  }
+
   /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */
   async function rowsMissingKeyedDigest(owner, ringKeys) {
     const rows = owners.get(owner)?.committed.rows;
     if (!rows) return 0;
+    const domains = keyedDomains(owner);
     const keys = await ringKeys(owner);
+    if (keys.length === 0) return 0;
+    const current = await coreDigest("", keys[0]);
+    const currentDomain = digestDomain(current);
+    if (!domains.has(currentDomain)) domains.set(currentDomain, current);
     let count = 0;
     for (const entries of rows.values()) {
       for (const { row: { digests } } of entries.values()) {
-        if (keys.some((key) => !digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id))) count++;
+        for (const digest of domains.values()) {
+          if (compareValidatedDigests(digests ?? [], [digest]) === "ineligible") count++;
+        }
       }
     }
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner };
 }

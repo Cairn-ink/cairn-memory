@@ -7,6 +7,13 @@ export interface PassageFingerprint {
   digests: readonly TextDigest[];
   shingles: string[] | null;
   keyId: string | null;
+  /** Shingles signed by retained Core HMAC keys, scoped to the spelling of this passage. */
+  retainedShingles?: readonly RetainedShingles[];
+}
+
+export interface RetainedShingles {
+  keyId: string;
+  shingles: readonly string[];
 }
 
 export interface SuppressionSnapshot {
@@ -86,6 +93,16 @@ export interface FingerprintKeyProvider {
   userKey(owner: OwnerId): Promise<{ id: string; signingKey: CryptoKey } | null>;
   /** Select the active key in a write transaction that serializes with publication. */
   userKeyForWrite?(tx: Tx): ReturnType<FingerprintKeyProvider["userKey"]>;
+  /** Signers for non-current domains with live HMAC-only facts or retained Core shingle evidence for this owner. */
+  retainedDigesters?(owner: OwnerId): Promise<ReadonlyArray<RetainedDigester>>;
+}
+
+export interface RetainedDigester {
+  alg: string;
+  keyId: string;
+  label: string;
+  /** Signs the supplied spelling or shingle locally. Never persists, logs or transmits the input. */
+  mac(text: string): Promise<string>;
 }
 
 /** Cutover-only (capability forgetLog). Removed after the hosted cutover is final. */

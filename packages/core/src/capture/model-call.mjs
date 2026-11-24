@@ -16,6 +16,7 @@ import { buildModelRequest, decodeModelOutput } from './wire.mjs';
  *   beforeDispatch?: () => void, gate?: ModelGate, owner?: OwnerId,
  *   signal?: AbortSignal, onDiagnostic?: CallOptions['onDiagnostic'], qualificationInputMode?: InputMode,
  * }} ModelCallOptions */
+/** @typedef {ModelCallOptions & { refresh?: () => Promise<void> }} BuiltModelCallOptions */
 /** The guarded call uses its method as the diagnostic stage. */
 /** @typedef {(stage: string, layer: string, reason: string) => void} DiagnosticReport */
 /**
@@ -139,14 +140,14 @@ export async function callModel(model, method, request, options = {}) {
  * @param {ModelPort | null | undefined} model
  * @param {string} method
  * @param {BuiltModelRequest<Output>} built
- * @param {ModelCallOptions} [options]
+ * @param {BuiltModelCallOptions} [options]
  * @returns {Promise<Output>}
  */
 /**
  * @param {ModelPort | null | undefined} model
  * @param {string} method
  * @param {BuiltModelRequest<unknown>} built
- * @param {ModelCallOptions} [options]
+ * @param {BuiltModelCallOptions} [options]
  */
 export async function callBuiltModel(model, method, built, options = {}) {
   try { return await call(model, method, built, options, false); }
@@ -157,7 +158,7 @@ export async function callBuiltModel(model, method, built, options = {}) {
  * @param {ModelPort | null | undefined} model
  * @param {string} method
  * @param {BuiltModelRequest<unknown> | Request} request
- * @param {ModelCallOptions} options
+ * @param {BuiltModelCallOptions} options
  * @param {boolean} capture
  */
 async function call(model, method, request, options, capture) {
@@ -269,6 +270,15 @@ async function call(model, method, request, options, capture) {
   runDispatchHook(validateFresh);
   checkDispatch();
   runDispatchHook(beforeDispatch);
+
+  const refresh = capture ? undefined : options.refresh;
+  if (refresh) {
+    checkAbort();
+    try { await untilAborted(signal, refresh()); }
+    catch (error) { checkAbort(); throw modelError(error); }
+    checkAbort();
+    checkDispatch();
+  }
 
   let output;
   let providerError;

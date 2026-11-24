@@ -60,7 +60,7 @@ export async function classifyPlacement({
 
   await validateFresh();
   const output = await callBuiltModel(model, 'classify', built, {
-    failureCode: 'classification_failed', deadline, gate, owner, signal, onDiagnostic,
+    failureCode: 'classification_failed', refresh: validateFresh, deadline, gate, owner, signal, onDiagnostic,
   });
   await validateFresh();
 

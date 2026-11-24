@@ -2,15 +2,15 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
+import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants } from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
-import { blocksMemoryPassage, requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 
-/** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
+/** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
 /** @import {TextDigest, TextFact} from "../suppression-fact.mjs" */
 
@@ -42,39 +42,30 @@ export function sourceOf(value) {
   return { kind: enumValue(kind, sourceKinds), client: sourceText(client), sessionId: sourceText(sessionId) };
 }
 
-/** @param {string} raw @param {string} text @param {FingerprintKey | null} key @returns {Promise<DuplicateQuery>} */
-export async function hashesOf(raw, text, key) {
-  const [[core, ...aliases], digests] = await Promise.all([
+/** @param {string} raw @param {string} text @param {FingerprintKey | null} key
+ * @returns {Promise<DuplicateQuery>}
+ */
+async function hashesOf(raw, text, key) {
+  const [[core, ...aliases], current] = await Promise.all([
     allDigests(raw, null), key && allDigests(text, key),
   ]);
   const legacy = aliases.at(-1);
   return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }),
-    ...(digests && { digests }) };
+    ...(current && { digests: current }) };
 }
 
 /** @param {string} raw @param {string} text @param {FingerprintKey | null} key
  * @param {(text: string) => Promise<string>} sha256Hex
+ * @param {readonly RetainedDigester[]} [digesters]
  */
-export async function prepareWriteText(raw, text, key, sha256Hex) {
-  const query = await hashesOf(raw, text, key);
-  const passages = await fingerprintMemoryPassages(raw, text, key, sha256Hex);
+export async function prepareWriteText(raw, text, key, sha256Hex, digesters) {
+  const [query, passages] = await Promise.all([
+    hashesOf(raw, text, key),
+    fingerprintMemoryPassages(raw, text, key, sha256Hex, digesters),
+  ]);
+  const retained = passages[0].digests.filter(digest => digest.label !== undefined);
+  if (retained.length) query.digests = [...(query.digests ?? []), ...retained];
   return { query, passages };
-}
-
-/** @param {string} raw @param {string} text */
-function textVariants(raw, text) {
-  const original = cleanContent(raw);
-  const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
-  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
-  const variants = [
-    [original, "hosted-v1", v1],
-    [redactV1(original), "hosted-v1", v1],
-    [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
-    [text, "core", core],
-    // Hosted capture derives its stored V1 evidence after capture normalization.
-    [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
-  ];
-  return variants;
 }
 
 /** @param {Scope} scope @param {MemoryRow} row @param {FingerprintKey} key
@@ -169,8 +160,7 @@ function writeSnapshot(suppressions, tx, scope, source, candidates) {
 /** @param {Scope} scope @param {readonly TextFact[]} facts */
 function scopedPassageFacts(scope, facts) {
   if (facts.some(fact => typeof fact?.owner !== "string")) return null;
-  const scoped = facts.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-  return scoped.some(requiresLegacyMacDomain) ? null : scoped;
+  return facts.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps */
@@ -296,7 +286,8 @@ export function writeMethods(deps) {
       const text = prepareCoreText(raw);
       if (!text) return invalid();
       const key = await keys.userKey(owner);
-      const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex);
+      const digesters = await keys.retainedDigesters?.(owner);
+      const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex, digesters);
       const embedding = await embed(owner, text, key);
       query.embedding = embedding.vector;
       const explicit = source.kind === "mcp" || source.kind === "web";
@@ -361,7 +352,8 @@ export function writeMethods(deps) {
       if (!text) throw new CoreError("invalid_text");
       const key = await keys.userKey(owner);
       if (key === null) throw new CoreError("fingerprint_unavailable");
-      const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex);
+      const digesters = await keys.retainedDigesters?.(owner);
+      const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex, digesters);
       const unchanged = sameText(previous, query, text);
       const embedding = unchanged ? null : await embed(owner, text, key);
       query.embedding = embedding?.vector;
