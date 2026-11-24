@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { receiptAddressDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
+import { receiptExcerpt } from "@cairn-ink/core";
+import { receiptAddressDenial, receiptExcerptDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 
 /** @import { TextDigest } from "@cairn-ink/core" */
@@ -63,8 +64,8 @@ export function clearReceipts(db, scope, id) {
     .run(...scopeKey(scope), id);
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id */
-export function suppressReceiptSources(db, scope, id) {
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {string} text */
+export function suppressReceiptSources(db, scope, id, text) {
   const rows = db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
     WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?`).all(...scopeKey(scope), id);
   const insert = db.prepare(`INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING`);
@@ -73,6 +74,11 @@ export function suppressReceiptSources(db, scope, id) {
     const key = receipt.receiptKey ?? legacy_receipt_key;
     insert.run(...scopeKey(scope), receiptAddressDenial(receipt));
     if (typeof key === "string") insert.run(...scopeKey(scope), receiptIdentityDenial(key));
+  }
+  // A full source turn can be saved without a linked receipt or archive.
+  if (text.length > 800) {
+    const excerpt = receiptExcerpt(text);
+    if (excerpt.length >= 799) insert.run(...scopeKey(scope), receiptExcerptDenial(excerpt));
   }
 }
 

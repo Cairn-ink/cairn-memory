@@ -260,11 +260,12 @@ export function createMemoryStore(port, hashSession, markDirty) {
     erase(tx, scope, id) {
       return port(tx, scope?.owner, { write: true }, db => {
         validateId(id);
-        const { changes } = db.prepare(`UPDATE cairn_memories
+        const entry = readEntry(db, scope, id);
+        if (!entry) return false;
+        db.prepare(`UPDATE cairn_memories
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
-        if (changes === 0) return false;
-      suppressReceiptSources(db, scope, id);
+        suppressReceiptSources(db, scope, id, entry.row.text);
         clearReceipts(db, scope, id);
         markDirty?.(db, tx);
         return true;

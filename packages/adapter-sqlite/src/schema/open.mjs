@@ -4,7 +4,7 @@ import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
-import { INSPECT_TABLES, installInspectSchema, upgradeInspectEpochTriggers } from "./inspect.mjs";
+import { INSPECT_TABLES, installInspectSchema, upgradeInspectSchema } from "./inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
 /** @typedef {Pick<DatabaseSync, "prepare">} Reader */
@@ -101,10 +101,10 @@ export async function openStorage(filename) {
     const identity = await connection.uow.run(owner, {}, (tx) =>
       connection.port(tx, owner, { write: true }, (db) => {
         const existingKey = classifyStore(db);
+        db.exec("PRAGMA secure_delete = ON");
         if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
         if (!existingKey?.inspectInstalled) installInspectSchema(db);
-        else upgradeInspectEpochTriggers(db);
-        db.exec("PRAGMA secure_delete = ON");
+        else upgradeInspectSchema(db);
         return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
       }));
     return { ...connection, ...identity };

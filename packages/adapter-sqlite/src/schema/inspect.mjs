@@ -107,8 +107,39 @@ const rawTriggers = ["cairn_raw_fences", "cairn_raw_messages", "cairn_raw_anchor
   ["cairn_suppression_facts", "cairn_legacy_denials"].map(table => rawEpochTriggers(table, true)).join("");
 
 /** @param {Connection} db */
-export function upgradeInspectEpochTriggers(db) {
+function backfillReceiptIdentities(db) {
+  const receipts = db.prepare(`SELECT r.owner_id, r.namespace_key, r.memory_id, r.ordinal, r.source_key,
+      r.body, r.legacy_receipt_key, i.position, i.excerpt
+    FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
+    WHERE i.excerpt IS NOT NULL AND json_type(r.body, '$.receiptKey') IS NULL`);
+  const updateReceipt = db.prepare(`UPDATE cairn_receipts SET body = ?
+    WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? AND ordinal = ?`);
+  const updateExcerpt = db.prepare("UPDATE cairn_inspect_receipts SET excerpt = ? WHERE position = ?");
+  for (const row of receipts.all()) {
+    const body = /** @type {StoredReceipt} */ (decodeJson(row.body));
+    const { client, sessionId, messageId, role } = body;
+    const original = String(row.excerpt);
+    if (typeof client !== "string" || !client || typeof sessionId !== "string" || !sessionId ||
+        typeof messageId !== "string" || !messageId || (role !== "user" && role !== "assistant")) continue;
+    if (row.legacy_receipt_key === null) {
+      if (body.legacy || row.source_key !== JSON.stringify([client, sessionId, messageId])) continue;
+    } else if (body.legacy?.excerpt !== original ||
+        row.legacy_receipt_key !== receiptIdentityKey({ ...body, excerpt: original })) continue;
+
+    const excerpt = receiptExcerpt(original);
+    if (row.legacy_receipt_key !== null && excerpt === original) continue;
+    body.receiptKey = receiptIdentityKey({ ...body, excerpt });
+    if (body.legacy) body.legacy.excerpt = excerpt;
+    updateReceipt.run(JSON.stringify(body), row.owner_id, row.namespace_key, row.memory_id, row.ordinal);
+    if (excerpt !== original) updateExcerpt.run(excerpt, row.position);
+  }
+}
+
+/** @param {Connection} db */
+export function upgradeInspectSchema(db) {
+  // Raw epoch triggers arrived with receipt identities. Only pre-identity stores may mint missing keys.
   if (db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' AND name = 'cairn_raw_fences_inspect_raw_insert'").get()) return;
+  backfillReceiptIdentities(db);
   db.exec(rawTriggers);
   db.prepare(`INSERT INTO cairn_inspect_epochs
     SELECT DISTINCT owner_id, ?, 1 FROM cairn_inspect_epochs WHERE true ON CONFLICT DO NOTHING`).run(RAW_INSPECT_EPOCH_KEY);

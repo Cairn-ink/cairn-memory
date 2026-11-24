@@ -2,7 +2,7 @@ import { receiptExcerpt } from "@cairn-ink/core";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
 import { readRawRow } from "./raw-rows.mjs";
-import { receiptIdentityKey } from "./receipt-identity.mjs";
+import { receiptExcerptDenial, receiptIdentityKey } from "./receipt-identity.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
 /** @import { Receipt, Scope } from "@cairn-ink/core/ports" */
@@ -27,6 +27,7 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
     if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant") ||
         !key || receiptIdentityKey(receipt) !== key || receiptExcerpt(excerpt) !== excerpt) return false;
     if (policy.withholdsReceipt(receipt, key, legacyKey) ||
+        (excerpt.length >= 799 && policy.legacy.has(receiptExcerptDenial(excerpt))) ||
         importTextBlocked(policy.facts, excerpt, policy.legacy)) return false;
     if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return false;
     const archived = readRawRow(db, scope, receipt, messageId);

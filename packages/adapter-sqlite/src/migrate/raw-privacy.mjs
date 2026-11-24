@@ -39,9 +39,13 @@ export function createMigratedRawPolicy(key, hashSession) {
       // Older conversions carry only counts. Legacy validation already rejected
       // derived receipts with missing roots. Claims and episodes can own job roots.
       return Boolean(db.prepare(`SELECT 1 FROM cairn_migration WHERE
+        json_type(source_evidence, '$.dropped.rawConversations') = 'integer' AND
         json_extract(source_evidence, '$.dropped.rawConversations') = 0 AND
+        json_type(source_evidence, '$.dropped.rawReceiptLineage') = 'integer' AND
         json_extract(source_evidence, '$.dropped.rawReceiptLineage') = 0 AND
+        json_type(source_evidence, '$.dropped.episodes') = 'integer' AND
         json_extract(source_evidence, '$.dropped.episodes') = 0 AND
+        json_type(source_evidence, '$.dropped.captureAdmissions') = 'integer' AND
         json_extract(source_evidence, '$.dropped.captureAdmissions') = 0`).get());
     },
 

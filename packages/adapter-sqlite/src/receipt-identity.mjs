@@ -19,3 +19,8 @@ export function receiptAddressDenial({ client, sessionId, messageId }) {
 export function receiptIdentityDenial(key) {
   return "read-receipt-identity-v1:" + key;
 }
+
+/** @param {string} excerpt */
+export function receiptExcerptDenial(excerpt) {
+  return "read-receipt-prefix-v1:" + sha256(excerpt);
+}
