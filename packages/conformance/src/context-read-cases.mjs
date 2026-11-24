@@ -1,6 +1,6 @@
 import { assertReadContractCapabilities } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { bounded, caught, check, equal, gate, isCoreErrorShape, observe, rejects, row, source } from "./support.mjs";
+import { bounded, caught, check, equal, gate, isCoreErrorShape, observe, receiptAttachAdvancesRevision, rejects, row, source } from "./support.mjs";
 
 /** @import { ClockAndHash, ContextReadSet, ContextReadStore, FindCandidatesInput, InsertRow,
   ReadContractStorage, Receipt, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
@@ -198,9 +198,18 @@ export const CONTEXT_READ_CASES = [
       const missing = { ...second, id: "not-a-retained-id" };
       await rejects(() => service.fetchEvidence(selection, { refs: [second, missing], intent: current }), "evidence_unavailable");
       const previous = await service.fetchEvidence(selection, { refs: [second], intent: current });
-      await storage.uow.run(ctx.owner, {}, tx => storage.memories.touchDuplicate(tx, scope, second.id, [receipt(1)],
+      const touched = await storage.uow.run(ctx.owner, {}, tx => storage.memories.touchDuplicate(tx, scope, second.id, [receipt(1)],
         { confidence: 0.4, kind: "fact", origin: "explicit" }, 3));
       await rejects(() => service.fetchEvidence(selection, { snapshot: previous.snapshot }), "snapshot_stale");
+      if (receiptAttachAdvancesRevision(ctx)) {
+        equal(touched.revision, second.revision + 1, "A newly attached receipt should advance the revision once");
+        await rejects(() => service.fetchEvidence(selection, { refs: [second], intent: current }), "revision_conflict");
+        const updatedSecond = { ...second, revision: touched.revision };
+        const after = await service.fetchEvidence(selection, { refs: [updatedSecond], intent: current });
+        check(after.items[0].type === "memory" && after.items[0].provenance.sources.length === 1, "Receipt-only change visible");
+        return;
+      }
+      equal(touched.revision, second.revision, "Receipt attachment preserves the revision with the flag off");
       const after = await service.fetchEvidence(selection, { refs: [second], intent: current });
       check(after.items[0].type === "memory" && after.items[0].provenance.sources.length === 1, "Receipt-only change visible");
     },
