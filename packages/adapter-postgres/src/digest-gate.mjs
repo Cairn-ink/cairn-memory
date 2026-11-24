@@ -97,7 +97,10 @@ export async function publishFingerprintKey(tx, nextKeyId) {
     if (currentKeyId === nextKeyId) return;
     let facts;
     try {
-      facts = await readVisibilityFacts(query, tx.owner, { textOnly: true, limit: maxRotationFacts + 1 });
+      // Pending legacy facts only add evidence to the key-retirement guard.
+      // This internal read never exposes those rows to user reads.
+      facts = await readVisibilityFacts(query, tx.owner,
+        { textOnly: true, allowPendingLegacy: true, limit: maxRotationFacts + 1 });
     } catch {
       throw new CoreError("fingerprint_key_mismatch");
     }
