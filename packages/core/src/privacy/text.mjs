@@ -1,5 +1,5 @@
 import { CoreError } from "../errors.mjs";
-import { redactCore, redactV1 } from "./redact.mjs";
+import { redactCore, redactHostedCurrent, redactV1 } from "./redact.mjs";
 
 /** @param {unknown} value @param {number} [rawMax] */
 export function normalizeBoundedText(value, rawMax = 20_000) {
@@ -24,6 +24,13 @@ export function boundedText(value, max, truncate = false, rawMax = 20_000) {
 /** @param {string} text */
 export function cleanContent(text) {
   return text.replace(/[\uD800-\uDFFF]/gu, "\uFFFD").replaceAll("\0", "");
+}
+
+/** Historical capture pipeline. Preserve the stored whitespace.
+ * @param {string} text
+ */
+export function prepareHostedCaptureText(text) {
+  return redactHostedCurrent(cleanContent(text).normalize("NFKC"));
 }
 
 /** @param {string} text */
