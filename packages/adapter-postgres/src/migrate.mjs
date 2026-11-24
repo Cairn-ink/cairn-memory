@@ -2,8 +2,10 @@ import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @import { Migration } from "./index.mjs" */
+/** @import { ApplyMigrationsOptions, Migration, MigrationQuery } from "./index.mjs" */
 
+const DEFAULT_STATEMENT_TIMEOUT_MS = 30_000;
+const SET_DEFAULT_STATEMENT_TIMEOUT = "SET statement_timeout = '30s'";
 const MIGRATION_LOCK_KEY = "hashtextextended('core_schema_migrations', 0)";
 const MIGRATION_LOCK = `SELECT pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) AS locked`;
 const MIGRATION_UNLOCK = `SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY}) AS unlocked`;
@@ -42,11 +44,22 @@ function quoteIdentifier(name) {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-/** @param {Connection} connection @param {Migration} migration */
-async function applyTransactional(connection, { id, sql }) {
+/** @param {Connection} connection @param {(query: MigrationQuery) => Promise<boolean>} adopt */
+async function shouldAdopt(connection, adopt) {
+  await connection.query("SAVEPOINT migration_adoption");
+  await connection.query("SET LOCAL transaction_read_only = on");
+  const adopted = await adopt(async (text, params) => (await connection.query(text, params)).rows);
+  // Rolling back the savepoint restores the transaction's write mode after the probe.
+  await connection.query("ROLLBACK TO SAVEPOINT migration_adoption");
+  await connection.query("RELEASE SAVEPOINT migration_adoption");
+  return adopted === true;
+}
+
+/** @param {Connection} connection @param {Extract<Migration, { concurrent: false }>} migration */
+async function applyTransactional(connection, { id, sql, adopt }) {
   await connection.query("BEGIN");
   try {
-    await connection.query(sql);
+    if (!adopt || !(await shouldAdopt(connection, adopt))) await connection.query(sql);
     await connection.query(RECORD_MIGRATION, [id]);
   } catch (error) {
     try {
@@ -68,7 +81,7 @@ async function applyTransactional(connection, { id, sql }) {
 }
 
 /** @param {Connection} connection @param {Extract<Migration, { concurrent: true }>} migration */
-async function applyConcurrent(connection, { id, sql, index }) {
+async function buildAndInspectIndex(connection, { sql, index }) {
   let failure;
   try {
     await connection.query(sql);
@@ -87,13 +100,36 @@ async function applyConcurrent(connection, { id, sql, index }) {
   if (state.definition !== index.definition.trim()) throw new CoreError("index_unavailable");
   // A same-named collation in another schema can render identically; require catalog identity.
   if (state.builtin_collations !== true) throw new CoreError("index_unavailable");
+  if (state.valid !== true && state.valid !== false) throw new CoreError("index_unavailable");
+  return state;
+}
+
+/**
+ * @param {Connection} connection
+ * @param {Extract<Migration, { concurrent: true }>} migration
+ * @param {number} statementTimeoutMs
+ */
+async function applyConcurrent(connection, migration, statementTimeoutMs) {
+  const override = statementTimeoutMs !== DEFAULT_STATEMENT_TIMEOUT_MS;
+  let state;
+  try {
+    if (override) await connection.query(`SET statement_timeout = '${statementTimeoutMs}ms'`);
+    state = await buildAndInspectIndex(connection, migration);
+  } finally {
+    if (override) {
+      try {
+        await connection.query(SET_DEFAULT_STATEMENT_TIMEOUT);
+      } catch (error) {
+        if (state) throw error;
+      }
+    }
+  }
   if (state.valid === false) {
     const qualifiedName = `${quoteIdentifier(state.schema)}.${quoteIdentifier(state.name)}`;
     await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
     throw new CoreError("index_unavailable");
   }
-  if (state.valid !== true) throw new CoreError("index_unavailable");
-  await connection.query(RECORD_MIGRATION, [id]);
+  await connection.query(RECORD_MIGRATION, [migration.id]);
 }
 
 /**
@@ -101,15 +137,22 @@ async function applyConcurrent(connection, { id, sql, index }) {
  * The connection must support session state and be dedicated to this run until destroyed.
  * @param {ConnectionSource} source
  * @param {readonly Migration[]} migrations
+ * @param {ApplyMigrationsOptions} [options]
  */
-export async function applyMigrations(source, migrations) {
+export async function applyMigrations(source, migrations, options = {}) {
   try {
+    const { concurrentStatementTimeoutMs = DEFAULT_STATEMENT_TIMEOUT_MS } = options;
+    // PostgreSQL accepts integer milliseconds up to the signed 32-bit limit.
+    if (!Number.isInteger(concurrentStatementTimeoutMs)
+      || concurrentStatementTimeoutMs < 1 || concurrentStatementTimeoutMs > 2_147_483_647) {
+      throw new CoreError("invalid_input");
+    }
     const ids = new Set();
     const ordered = migrations.map((migration) => {
       const { id, sql, concurrent } = migration;
-      if (!id || ids.has(id)) throw new CoreError("invalid_input");
+      if (typeof id !== "string" || !id || ids.has(id)) throw new CoreError("invalid_input");
       ids.add(id);
-      if (!concurrent) return { id, sql, concurrent };
+      if (!concurrent) return { id, sql, concurrent, adopt: migration.adopt };
 
       const target = CONCURRENT_INDEX.exec(sql);
       const { index } = migration;
@@ -124,7 +167,7 @@ export async function applyMigrations(source, migrations) {
     let complete = false;
     try {
       await connection.query("SET lock_timeout = '5s'");
-      await connection.query("SET statement_timeout = '30s'");
+      await connection.query(SET_DEFAULT_STATEMENT_TIMEOUT);
       // The runner owns its session: the hosted tables live in public, so new objects land there and
       // only public and pg_catalog are visible. A caller's search_path (or lookalike objects in other
       // schemas) cannot change what a migration touches or how index definitions render.
@@ -142,10 +185,14 @@ export async function applyMigrations(source, migrations) {
       }
 
       for (const migration of ordered.slice(applied.size)) {
-        if (migration.concurrent) {
-          await applyConcurrent(connection, migration);
-        } else {
-          await applyTransactional(connection, migration);
+        try {
+          if (migration.concurrent) {
+            await applyConcurrent(connection, migration, concurrentStatementTimeoutMs);
+          } else {
+            await applyTransactional(connection, migration);
+          }
+        } catch (error) {
+          throw Object.assign(new CoreError(toPostgresError(error).code), { migrationId: migration.id });
         }
       }
       // A pool may return from destroy before PostgreSQL ends the session.

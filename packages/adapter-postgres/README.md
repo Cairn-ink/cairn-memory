@@ -21,7 +21,7 @@ transaction while ordinary reads and writes continue.
 Migration 0010 adds memory relations. The hosted service ships a byte-identical copy as a drizzle migration until it applies the engine SQL directly.
 
 Load the SQL in the host and pass the full ordered list to
-`applyMigrations(source, migrations)`. Use immutable IDs, append new entries,
+`applyMigrations(source, migrations, options?)`. Use immutable IDs, append new entries,
 and set `concurrent: true` for `.concurrent.sql` files. A concurrent file
 contains one `CREATE [UNIQUE] INDEX CONCURRENTLY IF NOT EXISTS` statement.
 Each concurrent entry supplies `index: { name, table, definition }`. Use the
@@ -36,6 +36,22 @@ cannot guarantee that. The driver must support querying a transactional SQL
 file as a batch and close the session on `release(true)`. Transactional files
 and their ledger entries commit together.
 
+For a database whose schema the host already created with the same SQL, a
+transactional migration can supply an `async adopt(query)` callback. Use
+`await query(text, params)` for read-only probes that verify the migration is
+already in effect. The helper returns rows from the runner's connection inside
+the migration transaction. Returning `true` records the migration ID without
+executing its SQL. Returning `false` runs the SQL. Throwing rolls back the
+migration and stops the run. Earlier committed entries remain recorded, and
+the runner processes the unapplied suffix in order.
+
+The session defaults are a 5-second lock timeout and a 30-second statement
+timeout. A transactional migration's own `SET LOCAL` takes precedence. Pass
+`concurrentStatementTimeoutMs` in `options` to set the statement timeout for
+each concurrent index build and its inspection. It defaults to 30000 and
+accepts integer milliseconds from 1 through 2147483647. The runner restores the
+session statement timeout after inspection or failure when an override is used.
+
 The runner records a concurrent file after PostgreSQL reports a valid index
 with the expected definition. It drops an invalid index with a matching
 definition so a subsequent run can retry. An invalid index or a definition
@@ -43,6 +59,8 @@ mismatch returns `index_unavailable`. A mismatched index is left in place.
 The runner returns `storage_busy` if another runner holds the migration lock or
 `invalid_input` if the manifest omits an applied migration or has a gap in the
 applied prefix.
+When an individual migration fails, the thrown `CoreError` also carries its
+`migrationId`.
 
 The migration runner sets `search_path = public, pg_catalog` and turns off
 identifier quoting before it compares index definitions. These session settings
