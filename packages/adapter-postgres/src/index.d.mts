@@ -1,4 +1,4 @@
-import type { FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
+import type { CoreError, FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type {
   ConflictEdgeStore, HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore,
@@ -26,12 +26,27 @@ interface MigrationBase {
   sql: string;
 }
 
+/** Runs one read-only SELECT or WITH statement on the migration connection and returns its rows. */
+export type MigrationQuery = (text: string, params?: unknown[]) => Promise<QueryResult["rows"]>;
+
 export type Migration = MigrationBase & (
-  | { concurrent: false }
+  | { concurrent: false; adopt?: (query: MigrationQuery) => Promise<boolean> }
   | { concurrent: true; index: { name: string; table: string; definition: string } }
 );
 
-export function applyMigrations(source: ConnectionSource, migrations: readonly Migration[]): Promise<void>;
+export interface ApplyMigrationsOptions {
+  /** Timeout in milliseconds for a concurrent index build and its inspection. Defaults to 30000. */
+  concurrentStatementTimeoutMs?: number;
+}
+
+export type MigrationError = CoreError & { readonly migrationId: string };
+
+/** Rejects with a MigrationError when an individual migration fails. */
+export function applyMigrations(
+  source: ConnectionSource,
+  migrations: readonly Migration[],
+  options?: ApplyMigrationsOptions,
+): Promise<void>;
 export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 /** Snapshot and validate a suppression fact before computing its storage slot. */
 export function factSlot(fact: SuppressionFact): string;
