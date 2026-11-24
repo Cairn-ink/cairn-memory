@@ -29,6 +29,26 @@ function mutant(mutate) {
   });
 }
 
+
+/** Records each archived message's content by ID, so a mutant can tell archived from unarchived receipts.
+ * @param {ReturnType<typeof createMemoryAdapter>} adapter
+ */
+function trackArchived(adapter) {
+  const { raw } = adapter;
+  assert.ok(raw);
+  /** @type {Map<string, string>} */
+  const archived = new Map();
+  adapter.raw = {
+    ...raw,
+    async archive(tx, key, messages) {
+      const result = await raw.archive(tx, key, messages);
+      for (const { id, content } of messages) archived.set(id, content);
+      return result;
+    },
+  };
+  return archived;
+}
+
 test("K-RCPT-W1 rejects a missing receiptWithheld port", async () => {
   const factory = mutant(({ suppressions }) => { delete suppressions.receiptWithheld; });
   await assert.rejects(runCase(factory, testCase),
@@ -45,6 +65,19 @@ test("K-RCPT-W1 rejects a port that always withholds receipts", async () => {
   const factory = mutant(({ suppressions }) => { suppressions.receiptWithheld = async () => true; });
   await assert.rejects(runCase(factory, testCase),
     /^Error: A receipt from a visible archived message must not be withheld$/);
+});
+
+test("K-RCPT-W1 rejects a port that only withholds the deleted message's exact text", async () => {
+  const factory = mutant(adapter => {
+    const archived = trackArchived(adapter);
+    const { suppressions } = adapter;
+    const { receiptWithheld } = suppressions;
+    assert.ok(receiptWithheld);
+    suppressions.receiptWithheld = async (tx, scope, receipt) => archived.get(receipt.messageId) === receipt.excerpt
+      ? receiptWithheld.call(suppressions, tx, scope, receipt) : false;
+  });
+  await assert.rejects(runCase(factory, testCase),
+    /^Error: A reworded receipt from a deleted conversation must be withheld$/);
 });
 
 test("K-RCPT-W1 rejects a port that allows receipts from fenced conversations", async () => {
@@ -67,19 +100,31 @@ test("K-RCPT-W1 rejects a port that allows receipts from fenced conversations", 
     /^Error: A receipt from a fenced conversation must be withheld$/);
 });
 
+test("K-RCPT-W1 rejects a port that checks fences only for archived messages", async () => {
+  const factory = mutant(adapter => {
+    const archived = trackArchived(adapter);
+    const { suppressions } = adapter;
+    const { receiptWithheld } = suppressions;
+    assert.ok(receiptWithheld);
+    suppressions.receiptWithheld = async (tx, scope, receipt) => archived.has(receipt.messageId)
+      ? receiptWithheld.call(suppressions, tx, scope, receipt) : false;
+  });
+  await assert.rejects(runCase(factory, testCase),
+    /^Error: A receipt for an unarchived message in a fenced conversation must be withheld$/);
+});
+
 test("K-RCPT-W1 rejects a port that only fails when core calls it during save", async () => {
-  let calls = 0;
   const factory = mutant(({ suppressions }) => {
     const { receiptWithheld } = suppressions;
     assert.ok(receiptWithheld);
     suppressions.receiptWithheld = async (tx, scope, receipt) => {
-      // The case probes the port three times before core's save makes the fourth call.
-      if (++calls > 3) throw new CoreError("storage_transaction_active");
+      // Core's save calls the port from its write service; the case's own probes do not.
+      if (new Error().stack?.includes("service/writes.mjs")) throw new CoreError("storage_transaction_active");
       return receiptWithheld.call(suppressions, tx, scope, receipt);
     };
   });
   await assert.rejects(runCase(factory, testCase), error => {
-    assert.equal(error.message, "Core save must suppress a receipt from a deleted conversation (save rejected)");
+    assert.equal(error.message, "Core save must suppress a deleted receipt (save rejected)");
     assert.equal(error.cause?.message, "storage_transaction_active");
     return true;
   });
@@ -98,4 +143,39 @@ test("K-RCPT-W1 rejects a port that writes while it checks a receipt", async () 
   });
   await assert.rejects(runCase(factory, testCase),
     /^Error: A suppressed deleted receipt save must leave the dump unchanged$/);
+});
+
+test("K-RCPT-W1 accepts an adapter that exposes its ports through prototype getters", async () => {
+  const factory = rawFactory({
+    create(options) {
+      const reference = createMemoryAdapter(options);
+      /** @type {PropertyDescriptorMap} */
+      const getters = {};
+      for (const key of Object.keys(reference)) getters[key] = { get: () => reference[key] };
+      return Object.create(Object.create(Object.prototype, getters));
+    },
+  });
+  assert.equal(await runCase(factory, testCase), null);
+});
+
+test("K-RCPT-W1 accepts a harness whose equivalent dumps differ in key order", async () => {
+  /** @param {unknown} value @param {boolean} reverse @returns {unknown} */
+  function reorder(value, reverse) {
+    if (Array.isArray(value)) return value.map(item => reorder(item, reverse));
+    if (!value || typeof value !== "object" || ArrayBuffer.isView(value)) return value;
+    const keys = Object.keys(value);
+    if (reverse) keys.reverse();
+    return Object.fromEntries(keys.map(key => [key, reorder(value[key], reverse)]));
+  }
+  const base = rawFactory();
+  let dumps = 0;
+  const factory = {
+    ...base,
+    async open(request) {
+      const opened = await base.open(request);
+      const { dump } = opened.harness;
+      return { ...opened, harness: { ...opened.harness, async dump() { return reorder(await dump(), ++dumps % 2 === 0); } } };
+    },
+  };
+  assert.equal(await runCase(factory, testCase), null);
 });

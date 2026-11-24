@@ -6,12 +6,43 @@ import { check, DEFAULT_EMBEDDING_DIMENSIONS, equal, readDump } from "./support.
 
 const encoder = new TextEncoder();
 
+/** Copies every port, including ports an adapter exposes through prototype getters.
+ * @param {CaseContext["adapter"]} adapter @returns {CaseContext["adapter"]}
+ */
+function storageOf(adapter) {
+  /** @type {Record<string, unknown>} */
+  const storage = {};
+  for (let source = adapter; source && source !== Object.prototype; source = Object.getPrototypeOf(source)) {
+    for (const key of Object.getOwnPropertyNames(source)) {
+      if (key !== "constructor" && !Object.hasOwn(storage, key)) storage[key] = Reflect.get(adapter, key);
+    }
+  }
+  return /** @type {CaseContext["adapter"]} */ (storage);
+}
+
+/** Equivalent dumps compare equal whatever order their object keys were inserted in.
+ * @param {unknown} value @returns {unknown}
+ */
+function sortedKeys(value) {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (value && typeof value === "object") {
+    const record = /** @type {Record<string, unknown>} */ (value);
+    return Object.fromEntries(Object.keys(record).sort().map(key => [key, sortedKeys(record[key])]));
+  }
+  return value;
+}
+
+/** @param {CaseContext["harness"]} harness */
+async function dumpText(harness) {
+  return JSON.stringify(sortedKeys(await readDump(harness)));
+}
+
 /** @param {CaseContext} ctx */
 function saveService(ctx) {
   const unused = () => { throw new Error("Unexpected provider call during save"); };
   const dimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
   return createMemoryService({
-    storage: { ...ctx.adapter, name: "receipt-fixture" },
+    storage: { ...storageOf(ctx.adapter), name: "receipt-fixture" },
     model: { model: "fixture-only", contextWindow: 1, call: unused, countTokens: unused },
     embedder: ctx.adapter.capabilities.embeddingRequiredOnInsert ? {
       model: "fixture-only", dimensions,
@@ -51,20 +82,20 @@ function conversation(scope, content, occurredAtMs) {
 
 /**
  * @param {CaseContext} ctx @param {Scope} scope @param {ReturnType<typeof saveService>} service
- * @param {ReturnType<typeof conversation>} fixture @param {"deleted" | "fenced"} state
+ * @param {ReturnType<typeof conversation>["receipt"]} receipt @param {string} text @param {string} label
  */
-async function expectSuppressedSave({ adapter: { memories, uow }, harness }, scope, service, fixture, state) {
+async function expectSuppressedSave({ adapter: { memories, uow }, harness }, scope, service, receipt, text, label) {
   const index = () => uow.run(scope.owner, { readOnly: true }, async tx => memories.indexRevision?.(tx));
   const revision = memories.indexRevision ? await index() : undefined;
-  const before = JSON.stringify(await readDump(harness));
-  const message = `Core save must suppress a receipt from a ${state} conversation`;
-  const result = await service.save(scope, fixture.message.content,
-    { kind: "mcp", client: fixture.key.client, sessionId: null }, "fact", { receipt: fixture.receipt }).catch(cause => {
+  const before = await dumpText(harness);
+  const message = `Core save must suppress a ${label} receipt`;
+  const result = await service.save(scope, text,
+    { kind: "mcp", client: receipt.client, sessionId: null }, "fact", { receipt }).catch(cause => {
     throw new Error(`${message} (save rejected)`, { cause });
   });
   equal(result.status, "suppressed", message);
-  equal(JSON.stringify(await readDump(harness)), before, `A suppressed ${state} receipt save must leave the dump unchanged`);
-  if (memories.indexRevision) equal(await index(), revision, `A suppressed ${state} receipt save must leave the index revision unchanged`);
+  equal(await dumpText(harness), before, `A suppressed ${label} receipt save must leave the dump unchanged`);
+  if (memories.indexRevision) equal(await index(), revision, `A suppressed ${label} receipt save must leave the index revision unchanged`);
 }
 
 /** @type {readonly ConformanceCase[]} */
@@ -79,9 +110,9 @@ export const RECEIPT_WITHHELD_CASES = [
       check(raw, "rawArchive requires the raw ports");
       const scope = ctx.scope(null);
       // Core checks the receipt inside its pause-locked write transaction, so the probes use the same kind.
-      /** @param {ReturnType<typeof conversation>} fixture */
-      const withheld = ({ receipt, message }) => uow.run(scope.owner, { pauseLock: true },
-        tx => receiptWithheld.call(suppressions, tx, scope, { ...receipt, excerpt: message.content }));
+      /** @param {Receipt} receipt @param {string} excerpt */
+      const withheld = (receipt, excerpt) => uow.run(scope.owner, { pauseLock: true },
+        tx => receiptWithheld.call(suppressions, tx, scope, { ...receipt, excerpt }));
       /** @param {ReturnType<typeof conversation>} fixture */
       const archive = async ({ key, message }) => {
         const result = await uow.run(scope.owner, { pauseLock: true }, tx => raw.archive(tx, key, [message]));
@@ -90,20 +121,31 @@ export const RECEIPT_WITHHELD_CASES = [
 
       const deleted = conversation(scope, "The copper kettle sits on the shelf.", 1);
       await archive(deleted);
-      equal(await withheld(deleted), false, "A receipt from a visible archived message must not be withheld");
+      equal(await withheld(deleted.receipt, deleted.message.content), false,
+        "A receipt from a visible archived message must not be withheld");
       const removal = await uow.run(scope.owner, { pauseLock: true },
         tx => raw.deleteConversation(tx, scope, deleted.session));
       equal(removal.rawDeleted, 1, "Deleting the conversation must remove its archived message");
-      equal(await withheld(deleted), true, "A receipt from a deleted conversation must be withheld");
+      equal(await withheld(deleted.receipt, deleted.message.content), true, "A receipt from a deleted conversation must be withheld");
+      // The excerpt is the saved text, so a reworded save still cites the deleted message.
+      const reworded = "A copper kettle rests on a shelf.";
+      equal(await withheld(deleted.receipt, reworded), true, "A reworded receipt from a deleted conversation must be withheld");
 
       const fenced = conversation(scope, "The linen curtains are blue.", 2);
       await archive(fenced);
       await uow.run(scope.owner, { pauseLock: true }, tx => raw.fenceSession(tx, scope, fenced.session));
-      equal(await withheld(fenced), true, "A receipt from a fenced conversation must be withheld");
+      equal(await withheld(fenced.receipt, fenced.message.content), true, "A receipt from a fenced conversation must be withheld");
+      // A fence covers the whole conversation, including messages that were never archived.
+      const unarchived = { ...fenced.receipt, messageId: crypto.randomUUID() };
+      const unarchivedText = "The linen curtains were washed.";
+      equal(await withheld(unarchived, unarchivedText), true,
+        "A receipt for an unarchived message in a fenced conversation must be withheld");
 
       const service = saveService(ctx);
-      await expectSuppressedSave(ctx, scope, service, deleted, "deleted");
-      await expectSuppressedSave(ctx, scope, service, fenced, "fenced");
+      await expectSuppressedSave(ctx, scope, service, deleted.receipt, deleted.message.content, "deleted");
+      await expectSuppressedSave(ctx, scope, service, deleted.receipt, reworded, "reworded deleted");
+      await expectSuppressedSave(ctx, scope, service, fenced.receipt, fenced.message.content, "fenced");
+      await expectSuppressedSave(ctx, scope, service, unarchived, unarchivedText, "fenced unarchived");
     },
   },
 ];
