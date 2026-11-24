@@ -30,6 +30,7 @@ export type ConformanceCase = CaseRun & {
 export declare const CASES: readonly ConformanceCase[];
 export declare const PRIVACY_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_CASES: readonly ConformanceCase[];
+export declare const CAPTURE_CONTAINMENT_CASES: readonly ConformanceCase[];
 export declare const ADMISSION_CASES: readonly ConformanceCase[];
 export declare const IMPORT_TIME_CASES: readonly ConformanceCase[];
 export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];

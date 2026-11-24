@@ -378,12 +378,14 @@ const selected = new Set([
   "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
+  "K-SNAP-C1", "K-SNAP-C3",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
   "K-KD-1", "K-KD-2", "K-HASH-1",
 ]);
 
-// Each entry names a missing port, method, or capability.
+// Each entry names a missing port, method, capability, or profile behavior.
 const notApplicable = {
+  "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
