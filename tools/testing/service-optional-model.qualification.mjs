@@ -24,7 +24,11 @@ try {
   const start = dispatch - refresh.length;
   assert.ok(start >= 0);
   assert.deepEqual(actual.calls.slice(start, dispatch).map(([method]) => method), refresh);
-  const finishRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  const preEmbedRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  assert.ok(preEmbedRead > dispatch);
+  assert.deepEqual(actual.calls.slice(preEmbedRead - 5, preEmbedRead + 2).map(([method]) => method),
+    ["run", "lock", "lock", "pause.get", "capture.eligible", "capture.load", "suppressions.snapshot"]);
+  const finishRead = actual.calls.findIndex(([method], index) => index > preEmbedRead && method === "capture.load");
   assert.ok(finishRead > dispatch);
   assert.deepEqual(actual.calls.slice(finishRead - 4, finishRead + 2).map(([method]) => method),
     ["run", "lock", "lock", "pause.get", "capture.load", "capture.assertEligible"]);
@@ -33,7 +37,8 @@ try {
     assert.notEqual(mutation.run, refreshRun, "the refresh has no mutations");
     return { ...mutation, run: mutation.run - Number(mutation.run > refreshRun) };
   });
-  const normalized = { ...actual, calls: actual.calls.toSpliced(finishRead, 1).toSpliced(start, refresh.length), mutations };
+  const calls = actual.calls.toSpliced(finishRead, 1).toSpliced(preEmbedRead, 1).toSpliced(start, refresh.length);
+  const normalized = { ...actual, calls, mutations };
   assert.deepEqual(normalized, expected);
   assert.equal(JSON.stringify(normalized), JSON.stringify(expected));
 

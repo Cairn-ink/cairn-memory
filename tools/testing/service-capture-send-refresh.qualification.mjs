@@ -26,11 +26,15 @@ try {
   assert.ok(start >= 0);
   assert.deepEqual(actual.calls.slice(start, dispatch).map(([method]) => method), refresh);
   assert.equal(actual.calls[dispatch + 1][0], "model.call");
-  const finishRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  const preEmbedRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  assert.ok(preEmbedRead > dispatch);
+  assert.deepEqual(actual.calls.slice(preEmbedRead - 5, preEmbedRead + 2).map(([method]) => method),
+    ["run", "lock", "lock", "pause.get", "capture.eligible", "capture.load", "suppressions.snapshot"]);
+  const finishRead = actual.calls.findIndex(([method], index) => index > preEmbedRead && method === "capture.load");
   assert.ok(finishRead > dispatch);
   assert.deepEqual(actual.calls.slice(finishRead - 4, finishRead + 2).map(([method]) => method),
     ["run", "lock", "lock", "pause.get", "capture.load", "capture.assertEligible"]);
-  assert.deepEqual(actual.calls.toSpliced(finishRead, 1).toSpliced(start, refresh.length), expected.calls);
+  assert.deepEqual(actual.calls.toSpliced(finishRead, 1).toSpliced(preEmbedRead, 1).toSpliced(start, refresh.length), expected.calls);
   assert.deepEqual({ ...actual, calls: undefined, mutations: undefined },
     { ...expected, calls: undefined, mutations: undefined });
   const writes = trace => trace.mutations.map(({ method, args }) => [method, args]);
