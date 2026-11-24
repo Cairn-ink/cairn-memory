@@ -289,7 +289,7 @@ for (const [label, point] of [["2a", "embed-card"], ["2b", "dispatch-3"]]) {
       race: { point, commit: () => f.deleteRaw(event) },
     });
     assert.deepEqual(f.trace, ["dispatch-1", "extract", "dispatch-2", "embed-memory",
-      ...(point === "embed-card" ? ["dispatch-3", "embed-card", "committed"] : ["dispatch-3", "committed", "embed-card"])]);
+      ...(point === "embed-card" ? ["dispatch-3", "embed-card", "committed"] : ["dispatch-3", "committed"])]);
     await assertNoDeletedArtifacts(f, result);
     await captureSeparateSurvivor(f);
   });

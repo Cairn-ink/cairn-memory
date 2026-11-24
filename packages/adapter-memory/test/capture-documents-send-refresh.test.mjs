@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
+import { coreDigest, factIncarnationBody } from "@cairn-ink/core";
 import { documentCardSearchText } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
 
@@ -128,4 +130,120 @@ for (const forgotten of ["bound memory", "unrelated memory", "new value"]) {
       assert.ok(f.diagnostics.some(({ reason }) => reason === "verify_skipped_ineligible"));
     }
   });
+}
+
+function planModel() {
+  return {
+    model: "fixture", contextWindow: 32768, countTokens: () => 1,
+    async call(_stage, { input }) {
+      return { items: input.messages.some(({ content }) => content === plan.content)
+        ? [{ content: schedule, sourceIndices: [0], kind: "fact", confidence: 0.9 }]
+        : [] };
+    },
+  };
+}
+
+for (const related of [true, false]) {
+  test(`Raw deletion in card dispatch ${related ? "withdraws the card payload" : "preserves an unrelated card payload"}`, async () => {
+    const f = fixture({ rawArchive: true, model: planModel() });
+    const capture = event("plan");
+    const deleted = related ? capture : event("unrelated");
+    await f.enqueue(capture, [plan]);
+    assert.equal((await f.write(tx => f.storage.raw.importArchive(tx, scope, deleted, [related ? plan : unrelated]))).archived, 1);
+    // Extraction and memory embedding dispatch before card embedding.
+    await f.run(capture, { phase: "dispatch", occurrence: 3, async commit() {
+      assert.deepEqual(await f.write(tx => f.storage.raw.deleteConversation(tx, scope, deleted)), { rawDeleted: 1 });
+    } });
+    assert.deepEqual(f.embeddings.filter(texts => texts.includes(planText)), related ? [] : [[planText]]);
+  });
+}
+
+const newValue = "Open the hatch at 10 during workshop hours.";
+
+async function prepareVerification(onDetect) {
+  let cardId;
+  const verifyRequests = [];
+  const f = fixture({ model: {
+    ...planModel(),
+    async detectChanges() {
+      onDetect?.();
+      return { changes: [{ card_id: cardId, quote: correction.content, new_value: newValue }] };
+    },
+    async verifyChange(request) {
+      verifyRequests.push(request);
+      return { applies: true, line: newValue };
+    },
+  } });
+  const seed = event("plan");
+  await f.enqueue(seed, [plan]);
+  await f.run(seed);
+  const [card] = await f.read(tx => f.storage.documentCards.list(tx, scope));
+  cardId = card.id;
+  const capture = event("correction");
+  await f.enqueue(capture, [correction]);
+  return { ...f, capture, verifyRequests };
+}
+
+test("an exact edit fact for the new value committed in verify dispatch withdraws the verify payload", async () => {
+  const f = await prepareVerification();
+  const fact = { ...scope, kind: "text", mode: "exact", origin: "edit", actionId: "edit-new-value",
+    text: { digests: [await coreDigest(newValue)] } };
+  await f.run(f.capture, { phase: "dispatch", occurrence: 3, async commit() {
+    await f.write(tx => f.storage.suppressions.writeFact(tx, fact,
+      createHash("sha256").update(factIncarnationBody(fact)).digest("hex")));
+  } });
+  assert.deepEqual(f.verifyRequests, []);
+  assert.ok(f.diagnostics.some(({ reason }) => reason === "verify_skipped_ineligible"));
+});
+
+for (const stage of ["card embedding", "verification"]) {
+  for (const code of ["model_cancelled", "model_timeout"]) {
+    test(`${stage} refresh interrupted by ${code} fails capture with zero sends`, { timeout: 5000 }, async t => {
+      let armed = stage === "card embedding";
+      const f = armed ? fixture() : await prepareVerification(() => { armed = true; });
+      const capture = f.capture ?? event("plan");
+      if (stage === "card embedding") await f.enqueue(capture, [plan]);
+
+      const caller = new AbortController();
+      const timers = [];
+      if (code === "model_timeout") {
+        t.mock.method(AbortSignal, "timeout", () => {
+          const timer = new AbortController();
+          timers.push(timer);
+          return timer.signal;
+        });
+      }
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const { suppressions } = f.storage;
+      const snapshot = suppressions.snapshot;
+      // The unprojected payload read occurs only inside the locked send refresh.
+      let remaining = stage === "verification" ? 2 : 1;
+      suppressions.snapshot = async (tx, target, candidates) => {
+        if (armed && Object.keys(candidates).length === 0 && --remaining === 0) {
+          entered.resolve();
+          await release.promise;
+        }
+        return snapshot(tx, target, candidates);
+      };
+
+      const attempt = f.service.runCapture(scope, capture, { signal: caller.signal });
+      try {
+        assert.equal(await Promise.race([entered.promise, attempt]), undefined, "refresh reached before capture ended");
+        if (code === "model_timeout") {
+          assert.ok(timers.length > 0);
+          for (const timer of timers) timer.abort(new DOMException("Deadline expired", "TimeoutError"));
+        } else {
+          caller.abort(new Error("Caller cancelled"));
+        }
+        await setImmediate();
+      } finally {
+        release.resolve();
+      }
+      assert.deepEqual(stage === "verification" ? f.verifyRequests : f.embeddings, []);
+      assert.deepEqual(await attempt, { status: "failed", code });
+      await f.write(() => {});
+      assert.deepEqual(stage === "verification" ? f.verifyRequests : f.embeddings, []);
+    });
+  }
 }

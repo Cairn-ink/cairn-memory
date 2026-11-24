@@ -1,3 +1,4 @@
+import { createCaptureDeadline } from "../capture/deadline.mjs";
 import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
@@ -86,6 +87,17 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /** @param {DocumentCardSession} session */
   const sessionKey = session => deps.documentCardSessionKey ? deps.documentCardSessionKey(session) : session.sessionId;
 
+  /**
+   * @template T
+   * @param {{signal: AbortSignal, check(): void}} transport
+   * @param {() => Promise<T>} refresh
+   */
+  async function awaitRefresh(transport, refresh) {
+    transport.check();
+    try { return await untilAborted(transport.signal, refresh()); }
+    finally { transport.check(); }
+  }
+
   /** @param {readonly CaptureMessage[]} messages */
   const extractionSpec = messages => plainExtractionSpec(messages, { quantities: true });
 
@@ -113,10 +125,13 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     return messages.filter((_, index) => allowed[index]);
   }
 
-  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @returns {Promise<(texts: readonly string[]) => Promise<boolean>>} */
-  async function readTextWithholding(tx, scope) {
+  /**
+   * @param {Tx} tx @param {CaptureKey["scope"]} scope @param {boolean} [allOrigins]
+   * @returns {Promise<(texts: readonly string[]) => Promise<boolean>>}
+   */
+  async function readTextWithholding(tx, scope, allOrigins = false) {
     const facts = (await suppressions.snapshot(tx, scope, {})).passages
-      .map(({ fact }) => fact).filter(({ origin }) => origin === "forget");
+      .map(({ fact }) => fact).filter(({ origin }) => allOrigins || origin === "forget");
     const fingerprintKey = facts.length && capabilities.fingerprintKey
       ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
     const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
@@ -274,11 +289,14 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    */
   async function amend(key, messages, generation, assertSendGeneration, caller, sourceStillEligible) {
     if (!cards || !config.documentCards?.amendments || !model || !messages.some(({ role }) => role === "user")) return;
+    /** @type {(() => void) | undefined} */
+    let checkVerifyRefresh;
     try {
       const { detectChanges, verifyChange } = model;
       if (typeof detectChanges !== "function" || typeof verifyChange !== "function") return;
       const { scope, client, sessionId } = key;
       const { owner } = scope;
+      const timeoutMs = config.deadlines?.extract ?? 30_000;
       const dates = messages.map(({ occurredAtMs }) => utcDate(occurredAtMs)).filter(date => date !== null).sort();
       if (!dates.length) return;
       const earlier = await uow.run(owner, { readOnly: true }, async tx => {
@@ -316,18 +334,35 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
        */
       async function guarded(deadline, send, verification) {
         const signal = AbortSignal.any([...(caller ? [caller] : []), ...(deadline ? [deadline] : [])]);
+        const transport = verification && transportFor(caller, createCaptureDeadline(timeoutMs, clock));
+        const refreshSignal = transport && AbortSignal.any([signal, transport.signal]);
+
+        async function stillEligible() {
+          if (!verification || !transport || !refreshSignal) return true;
+          const check = () => {
+            if (deadline?.aborted && refreshSignal.reason === deadline.reason) throw new CoreError("model_timeout");
+            transport.check();
+          };
+          checkVerifyRefresh = check;
+          try { return await awaitRefresh({ signal: refreshSignal, check }, verification.eligible); }
+          finally {
+            check();
+            checkVerifyRefresh = undefined;
+          }
+        }
+
         signal.throwIfAborted();
         await gate.assertOpen(owner, "pre-send");
         await assertSendGeneration();
         if (verification) {
           signal.throwIfAborted();
-          if (!await untilAborted(signal, verification.eligible())) return verification.skip();
+          if (!await stillEligible()) return verification.skip();
         }
         await gate.assertOpen(owner, "dispatch");
         try {
           signal.throwIfAborted();
           // A deletion can commit while the dispatch gate is pending.
-          if (verification && !await untilAborted(signal, verification.eligible())) return verification.skip();
+          if (verification && !await stillEligible()) return verification.skip();
           signal.throwIfAborted();
           return await untilAborted(signal, send(signal));
         } finally {
@@ -344,7 +379,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       let target;
       const { amendments, counters } = await detectCardAmendments({
         capture, cards: earlier,
-        limits: { timeoutMs: config.deadlines?.extract },
+        limits: { timeoutMs },
         async canVerify(id, source) {
           const message = byMessage.get(source.messageId);
           if (!message || !await uow.run(owner, { pauseLock: true }, tx => correctionEligible(tx, message))) return false;
@@ -379,7 +414,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
                 if (!card || !selected || !texts.length ||
                     !await correctionEligible(tx, selected.message, true) ||
                     !await canAmend(tx, selected.cardId, selected.message)) return false;
-                const withholds = await readTextWithholding(tx, scope);
+                const withholds = await readTextWithholding(tx, scope, true);
                 return !await withholds([card.body, ...sentenceTexts(card), ...texts]);
               }),
               skip: () => {
@@ -416,6 +451,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       }
     } catch {
       emitDiagnostic(diagnostics, "amendment", "core_call", "amendment_failed");
+    } finally {
+      // The amendment runner treats provider failures as best effort, including when its timer wins the race.
+      checkVerifyRefresh?.();
     }
   }
 
@@ -473,10 +511,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     /** @param {CaptureDeadline} deadline @param {number[]} positions */
     async function embed(deadline, positions) {
       if (!cards || !embedder) return;
-      const screened = await runAtGeneration(tx => screenEmbeddingSources(tx, positions));
+      const transport = transportFor(signal, deadline);
+      const screened = await awaitRefresh(transport, () => runAtGeneration(tx => screenEmbeddingSources(tx, positions)));
       if (screened === null) return /** @type {const} */ ({ status: "paused" });
       if ("status" in screened) return screened;
-      screenedForEmbedding = new Set(screened.map(({ id }) => id));
+      screenedForEmbedding = new Set();
 
       // Precompute vectors for all potential cards. The finish may route a different subset.
       /** @type {{message: CaptureMessage, card: import("../routing/index.mjs").DocumentCard}[]} */
@@ -490,31 +529,40 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
       const { owner } = key.scope;
       await gate.assertOpen(owner, "pre-send");
-      const transport = transportFor(signal, deadline);
       await assertSendGeneration();
-      transport.check();
-      const refreshed = await untilAborted(transport.signal, runAtGeneration(async tx => {
+      /** @param {typeof candidates} batch */
+      const refresh = batch => awaitRefresh(transport, () => runAtGeneration(async tx => {
         const eligible = await screenEmbeddingSources(tx, positions);
         if ("status" in eligible) return eligible;
         const allowed = new Set(eligible);
         if (!allowed.size) return [];
-        const withholds = await readTextWithholding(tx, key.scope);
-        const texts = new Set();
-        for (const { message, card } of candidates) {
-          if (allowed.has(message) && !await withholds(sentenceTexts(card))) texts.add(documentCardSearchText(card));
+        const withholds = await readTextWithholding(tx, key.scope, true);
+        const survivors = [];
+        for (const { message, card } of batch) {
+          if (!allowed.has(message)) continue;
+          const text = documentCardSearchText(card);
+          const payload = [text, card.body, ...sentenceTexts(card)];
+          if (card.title) payload.push(card.title);
+          if (!await withholds(payload)) survivors.push({ message, card, text });
         }
-        return [...texts];
+        return survivors;
       }));
-      transport.check();
-      if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
-      if ("status" in refreshed) return refreshed;
-      if (!refreshed.length) return;
+      const beforeDispatch = await refresh(candidates);
+      if (beforeDispatch === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in beforeDispatch) return beforeDispatch;
+      if (!beforeDispatch.length) return;
 
       await gate.assertOpen(owner, "dispatch");
-      let embedded;
+      let texts, embedded;
       try {
+        const refreshed = await refresh(beforeDispatch);
+        if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
+        if ("status" in refreshed) return refreshed;
+        if (!refreshed.length) return;
+        screenedForEmbedding = new Set(refreshed.map(({ message }) => message.id));
+        texts = [...new Set(refreshed.map(({ text }) => text))];
         transport.check();
-        embedded = await untilAborted(transport.signal, embedder.embed(refreshed, { signal: transport.signal }));
+        embedded = await untilAborted(transport.signal, embedder.embed(texts, { signal: transport.signal }));
       } catch (error) {
         transport.check();
         throw error;
@@ -523,8 +571,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       }
       transport.check();
       vectors = new Map();
-      if (Array.isArray(embedded) && embedded.length <= refreshed.length) {
-        for (const [index, text] of refreshed.entries()) {
+      if (Array.isArray(embedded) && embedded.length <= texts.length) {
+        for (const [index, text] of texts.entries()) {
           const vector = embedded[index];
           if (validWriteEmbedding(vector, embedder.dimensions)) vectors.set(text, { model: embedder.model, vector });
         }

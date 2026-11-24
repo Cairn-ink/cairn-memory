@@ -330,6 +330,15 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     fake.deps.embedder.embed = async (texts, options) => {
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
+      // Card search text has a title followed by its body. Its locked refresh can span microtasks.
+      if (!dispatchReady && capture && texts.length && texts.every(text => {
+        const [title, body] = text.split("\n\n", 2);
+        return title && body?.startsWith(title);
+      })) {
+        assert.equal(calls.findLast(([method]) => method === "gate")?.[2], "dispatch");
+        dispatchReady = true;
+        queueMicrotask(() => { dispatchReady = false; });
+      }
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
       if (hooks.embedBatch) return hooks.embedBatch(texts);
       const result = await hooks.embed?.(texts, options);
