@@ -1,14 +1,35 @@
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
-import { factBlocksIncoming, factHidesRow, withholdsPassage } from "@cairn-ink/core";
+import { coreDigest, factBlocksIncoming, factHidesRow, withholdsPassage } from "@cairn-ink/core";
+import { buildDocumentCard, documentCardSourceWithheld, documentCardVisible } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { allDigests } from "../src/privacy/fingerprint.mjs";
 import { shingleContainmentMatch } from "../src/privacy/withholds.mjs";
 import { captureTextWithholding } from "../src/service/capture.mjs";
 import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
 
+// Core's tests install Core alone. Resolve the sibling adapter's Core imports to this checkout.
+const adapterImports = new Map([
+  ["@cairn-ink/core", new URL("../src/index.mjs", import.meta.url).href],
+  ["@cairn-ink/core/routing", new URL("../src/routing/index.mjs", import.meta.url).href],
+]);
+const resolver = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(adapterImports.get(specifier) ?? specifier, context);
+  },
+});
+let createMemoryAdapter;
+try {
+  ({ createMemoryAdapter } = await import("../../adapter-memory/src/index.mjs"));
+} finally {
+  resolver.deregister();
+}
+
 const forgotten = "Cedar gates are painted on Fridays";
 const unrelated = "Maple seedlings are watered on Mondays";
+const containing = `${forgotten}. ${unrelated}.`;
+const explicitSource = { kind: "mcp", client: null, sessionId: null };
 const selection = { client: "client", sessionId: "fresh-session", eventId: "event" };
 const { client, sessionId } = selection;
 const source = { kind: "import", client, sessionId };
@@ -33,6 +54,122 @@ async function setup() {
   const seedForgotten = (evidence = {}) => fake.seedFact(fullTextFact({ digests, ...evidence }).fact);
   return { ...fake, service: createMemoryService(fake.deps), seedForgotten };
 }
+
+function referenceService({ fingerprintKey = false, resolveSpans } = {}) {
+  const adapter = createMemoryAdapter({ capabilities: { fingerprintKey } });
+  const { deps } = serviceFake({ writes: true, forgetting: {} });
+  // The reference adapter does not implement the optional span resolver.
+  const storage = resolveSpans ? {
+    ...adapter,
+    capabilities: { ...adapter.capabilities, spanLineage: true, rawSpans: true },
+    spanLineage: { resolveSpans },
+  } : adapter;
+  return { adapter, service: createMemoryService({ ...deps, storage }) };
+}
+
+async function forgetSaved(service, memorySource = explicitSource) {
+  const saved = await service.save(scope, forgotten, memorySource);
+  assert.equal(saved.status, "saved");
+  assert.deepEqual(await service.forget(scope, saved.item.id, explicitSource),
+    { status: "forgotten", removedSimilar: 0 });
+  return saved.item.id;
+}
+
+async function storedFacts(adapter) {
+  const [state] = await adapter.harness.dump();
+  return state.facts;
+}
+
+function manualCardRead(body, textFacts, fingerprintKey) {
+  // MemoryService.read does not serve cards yet. Check the routing verdict directly.
+  return documentCardVisible({
+    card: { id: "card", scope, origin: "manual", title: null, body, sourceMessage: null, sourceMemories: [] },
+    requestedScope: scope, textFacts, fingerprintKey,
+  });
+}
+
+const visible = { visible: true, reason: null };
+const textWithheld = { visible: false, reason: "text_withheld" };
+
+for (const [name, body, expected] of [
+  ["withholds the exact card", forgotten, textWithheld],
+  ["leaves the containing card visible", containing, visible],
+  ["leaves the unrelated card visible", unrelated, visible],
+]) {
+  test(`keyless forget ${name}`, async () => {
+    const { adapter, service } = referenceService();
+    await forgetSaved(service);
+    const [{ fact }] = await storedFacts(adapter);
+    const fingerprintKey = await adapter.keys.userKey(scope.owner);
+    assert.equal(fingerprintKey, null);
+    assert.equal(fact.mode, "exact");
+    assert.deepEqual(await manualCardRead(body, [fact], fingerprintKey), expected, "service forget fact");
+    // A full-mode fact carrying only SHA aliases reaches containment after a digest miss.
+    assert.deepEqual(await manualCardRead(body, [{ ...fact, mode: "full" }], fingerprintKey), expected,
+      "full-mode forget fact without key evidence");
+  });
+}
+
+test("keyless forget withholds a card derived from the forgotten memory's Raw source span", async () => {
+  const message = { ...replay, content: containing };
+  const { value: sessionKeyHash } = await coreDigest(sessionId);
+  const { value: contentDigest } = await coreDigest(message.content);
+  const span = { ...scope, kind: "rawSpan", origin: "forget", actionId: "source-span",
+    sessionKeyHash, messageKey: message.id, contentDigest, startUtf16: 0, endUtf16: forgotten.length };
+  let resolvedFor;
+  const { adapter, service } = referenceService({ async resolveSpans(_tx, requestedScope, memoryId) {
+    assert.deepEqual(requestedScope, scope);
+    resolvedFor = memoryId;
+    return [span];
+  } });
+  const id = await forgetSaved(service, { kind: "capture", client, sessionId });
+  assert.equal(resolvedFor, id);
+  const [textFact, spanFact] = await storedFacts(adapter);
+  assert.deepEqual(spanFact.fact, { ...span, actionId: textFact.fact.actionId });
+  const fingerprintKey = await adapter.keys.userKey(scope.owner);
+  assert.equal(fingerprintKey, null);
+  const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey: sessionId });
+  assert.ok(card);
+  const source = { sourceLengthUtf16: message.content.length, sourceExcluded: false,
+    rawRows: [{ type: "raw", scope, sessionKeyHash, messageKey: message.id, startUtf16: 0,
+      endUtf16: message.content.length, digests: await allDigests(message.content, null) }] };
+  const cardRead = {
+    card: { ...card, scope, origin: "router", canonicalSessionKey: sessionId,
+      sourceMessage: { client, sessionId, messageId: message.id }, sourceMemories: [] },
+    requestedScope: scope, memoryStates: new Map(), fingerprintKey,
+  };
+  assert.deepEqual(await documentCardVisible({ ...cardRead,
+    sourceWithheld: documentCardSourceWithheld({ ...source, facts: [textFact] }) }), visible);
+  assert.deepEqual(await documentCardVisible({ ...cardRead,
+    sourceWithheld: documentCardSourceWithheld({ ...source, facts: [textFact, spanFact] }) }),
+    { visible: false, reason: "source_withheld" });
+});
+
+test("a keyed forget still withholds a containing card when the read key is lost", async () => {
+  const { adapter, service } = referenceService({ fingerprintKey: true });
+  const key = await adapter.keys.userKey(scope.owner);
+  assert.ok(key);
+  await forgetSaved(service);
+  const [{ fact }] = await storedFacts(adapter);
+  assert.equal(fact.mode, "full");
+  assert.equal(fact.text.keyId, key.id);
+  assert.ok(fact.text.shingles.length > 0);
+  assert.deepEqual(await manualCardRead(containing, [], null), visible);
+  assert.deepEqual(await manualCardRead(containing, [fact], key), textWithheld);
+  assert.deepEqual(await manualCardRead(containing, [fact], null), textWithheld);
+});
+
+test("an explicit keyless save refuses the forgotten text and accepts a containing passage", async () => {
+  const { adapter, service } = referenceService();
+  await forgetSaved(service);
+  const [{ fact }] = await storedFacts(adapter);
+  await adapter.harness.seedFact(scope.owner, { ...fact, mode: "full" });
+
+  assert.deepEqual(await service.save(scope, forgotten, explicitSource), { status: "suppressed" });
+  const saved = await service.save(scope, containing, explicitSource);
+  assert.equal(saved.status, "saved");
+  assert.equal(saved.item.text, containing);
+});
 
 test("capture admission keeps unrelated text and scrubs an exact replay without keys", async () => {
   const { service, seedForgotten, mutations } = await setup();
