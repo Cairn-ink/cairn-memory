@@ -670,7 +670,8 @@ export function captureMethods(deps) {
           }
           const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
             null, sourceEvidence, currentSourceKey);
-          const allowedMessages = allowedPositions.map(position => current[position]);
+          // Every allowed position passed sourceUnchanged, so its admitted copy equals the stored content.
+          const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
           const allowedIds = new Set(allowedMessages.map(({ id }) => id));
           const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>
             receipts.every(({ messageId }) => allowedIds.has(messageId)));
