@@ -3,7 +3,8 @@
 // Cases never assume a store's write time equals nowMs. Fixed write times come only from
 // harness.setWriteTime. Expected orders use those forced times and the actual ids.
 import { compareSortKey, compareUtf8, NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
-import { check, equal, evidence, fixtureEmbedding, projectReceipt, readDump, rejects, row, source } from "./support.mjs";
+import { check, equal, evidence, fixtureEmbedding, projectReceipt, readDump, receiptAttachAdvancesRevision, rejects, row, source,
+  withoutReceiptIds } from "./support.mjs";
 
 const near = { nearDistance: NEAR_DUPLICATE_DISTANCE };
 
@@ -115,6 +116,8 @@ export const memoryCases = [
       const scope = ctx.scope(null);
       const content = { ...await row(ctx, "touch"), origin: /** @type {const} */ ("inferred") };
       const { id, revision } = await uow.run(owner, {}, (tx) => memories.insert(tx, scope, content, [], 1));
+      // With receiptAttachAdvancesRevision, a newly attached receipt is a change (PHASE0 addendum 18).
+      const attachAdvances = receiptAttachAdvancesRevision(ctx);
 
       /**
        * @param {bigint} forcedTime @param {number} nowMs
@@ -124,7 +127,8 @@ export const memoryCases = [
        */
       async function touch(forcedTime, nowMs, receipts, merge, expected, message) {
         await harness.setWriteTime(scope, id, forcedTime);
-        const result = await uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, scope, id, receipts, merge, nowMs));
+        const result = withoutReceiptIds(
+          await uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, scope, id, receipts, merge, nowMs)), receipts.length);
         equal(result, expected, message);
         const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
         check(saved, "Touched row missing");
@@ -146,7 +150,9 @@ export const memoryCases = [
 
       await touch(400n, 5, [{ client: "test-client", sessionId: "test-origin", messageId: "first", role: "user", occurredAtMs: null }],
         { confidence: 0.6, kind: "decision", origin: "explicit" },
-        { outcome: "touched", revision: revision + 2 }, "Receipts alone should leave the revision unchanged");
+        attachAdvances ? { outcome: "changed", revision: revision + 3 } : { outcome: "touched", revision: revision + 2 },
+        attachAdvances ? "A newly attached receipt should advance the revision once"
+          : "Receipts alone should leave the revision unchanged");
       await rejects(() => uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, ctx.scope("other"), id, [], { confidence: 0.8 }, 6)),
         "memory_not_found");
     },
