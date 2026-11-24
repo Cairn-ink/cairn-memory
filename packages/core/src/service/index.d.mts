@@ -1,6 +1,6 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
+  DocumentCardSession, EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
@@ -22,17 +22,24 @@ export interface MemoryServiceConfig {
   /** Relative stage deadlines in milliseconds. */
   readonly deadlines?: Readonly<Partial<Record<ModelStage, number>>>;
   readonly rowShingles?: boolean;
+  /** Opt in to capture-time cards and, separately, post-commit amendments. Requires documentCards storage. */
+  readonly documentCards?: { readonly enabled: boolean; readonly amendments?: boolean };
+  /** Opt in to quantity extraction and persistence. Requires quantityLedger storage and a model. */
+  readonly quantityLedger?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {
   readonly storage: ReadContractStorage<StoredDocumentCardRecord>;
-  readonly model: ModelPort;
+  /** A null model is supported for capture with document cards enabled. */
+  readonly model: ModelPort | null;
   readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;
   readonly clock: ClockAndHash;
   readonly tokens: TokenCounter;
   readonly embedQuery?: EmbedQuery;
   readonly config: MemoryServiceConfig;
+  /** Resolve the card ID's session component when storage uses a non-plain canonical session key. */
+  readonly documentCardSessionKey?: (session: DocumentCardSession) => string | null;
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
   /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */

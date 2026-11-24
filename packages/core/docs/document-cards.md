@@ -1,10 +1,37 @@
 # Document card storage and reads
 
+## Service configuration
+
+Host presets choose the defaults. Core leaves all three switches off unless a
+host opts in. A switch applies only when the adapter advertises its storage
+capability and supplies the store.
+
+| `MemoryServiceConfig` switch | Capture behavior | Model requirement |
+| --- | --- | --- |
+| `documentCards.enabled` | Routes screened messages at successful finish, including finishes with no extraction or no extracted items. | Card routing uses no model key. A configured embedder supplies search vectors. Without it, cards are lexical-only. |
+| `documentCards.amendments` | Detects and verifies later corrections after commit when card capture is enabled. | Requires both amendment methods on a configured model port. |
+| `quantityLedger.enabled` | Includes quantities in extraction and reconciles them at finish. | Requires a model for extraction. See [Quantity ledger](quantity-ledger.md). |
+
+A write-capable service with card capture enabled may pass `model: null` to
+capture cards without extraction. Amendments and quantity extraction require
+a model, so neither runs in that composition or in the read-only
+`keyless-local` profile. When both storage options are absent or disabled,
+capture sends the original extraction request and makes the original writes.
+
+## Capture writes
+
 The optional `documentCards` store uses the live `UnitOfWork` transaction for
-every operation. Put the card inside capture finish so the card and its source
-memory writes commit or roll back together. Use plain session IDs in store
-records, sentence sources and hide selectors. Resolve the same canonical
-session key for Raw and ordinary capture before building the card.
+every operation. The service puts routed cards in the finish transaction
+after memory, source and Raw checks so cards and source memory writes commit
+or roll back together. It excludes withheld sources before routing. The
+embedder runs outside the transaction over screened search text. Only a
+card chosen from the final allowed batch can use its vector.
+
+Use plain session IDs in store records, sentence sources and hide selectors.
+The card ID uses the plain session ID by default. An adapter with a different
+canonical session key supplies its synchronous resolver as
+`documentCardSessionKey` when creating the service. Capture and visibility
+use the same resolver.
 
 At capture, bind a router card's `sourceMemories` to the memories that capture
 wrote or touched for its source message. On recapture, union the bindings by ID,
@@ -143,18 +170,22 @@ An amendment records a later change to an earlier card. It holds the session
 date, a sentence stating the updated value, and a verbatim quote with its
 source message. Only changes stated in the user's own words are linked.
 
-The host calls `detectCardAmendments` after the capture commits, outside any
-`UnitOfWork`. Pass the eligible, model-safe messages from that capture and
-the visible cards in the same scope, with their source session dates as
-`YYYY-MM-DD`. The helper considers sessions ordered by date and then session
-ID. It skips captures without user messages or visible earlier cards. It
-keeps the newest cards that fit the detect input budget and skips detection
-if none fits. A correction to an older card outside the list is unlinked.
+When enabled, the service calls `detectCardAmendments` after capture commits,
+outside any `UnitOfWork`. It supplies the finish-screened messages and visible
+earlier cards from the same scope. It derives the capture date from the
+earliest known message time in UTC. The helper considers sessions ordered
+by date and then session ID. It skips captures without user messages or
+visible earlier cards. It keeps the newest cards that fit the detect input
+budget and skips detection if none fits. A correction to an older card
+outside the list is unlinked.
 
 Each qualifying capture costs one detect call and up to four verify calls.
-Detection requires a model key and both optional model methods. To switch
-amendments off in a host, skip the post-commit helper. Model failures,
-malformed responses, and timeouts yield no amendments for the capture.
+The host binds models to `ModelPort.detectChanges` and
+`ModelPort.verifyChange`. The cloud host binds verify to `gpt-4.1`.
+Keep mini off the verification path. The service checks pause generation
+and the consent gate before each send, and checks the gate after each send.
+Model failures, malformed responses, and timeouts yield no amendments and
+leave the committed capture result intact.
 
 Write accepted results through `documentCards.amend` in a separate, short
 `UnitOfWork`. Recheck that the card is still visible, that the source message
@@ -162,6 +193,9 @@ is still eligible, and that the pause generation is unchanged before
 each write. The deterministic amendment ID makes replays idempotent.
 Hidden or tombstoned cards refuse amendments. Only a new amendment advances
 the owner index revision for an `amend` call.
+
+Hosts can also call `routeDocumentMessages`, `buildDocumentCard` and
+`detectCardAmendments` directly from `./routing`.
 
 `get` and `list` return visible amendments in date order. `hideAmendment`
 hides an individual amendment, and hiding a card hides its amendments.
