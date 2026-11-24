@@ -88,14 +88,15 @@ export interface MemoryStore {
     editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
   /**
-   * Attaches receipts and applies the merge verbatim; bumps the revision only when something
-   * changed. No exemption: a store that cannot persist kind/origin/confidence does not conform.
+   * Attaches receipts and applies the merge verbatim. A new receipt or a change to the row
+   * bumps its revision once. Stores must be able to persist kind, origin and confidence.
    */
   touchDuplicate(tx: Tx, scope: Scope, id: string, receipts: readonly Receipt[], merge: DuplicateMerge, nowMs: number): Promise<{ outcome: "touched" | "changed"; revision: Revision }>;
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;
   /**
    * Throws revision_conflict, memory_historical, or memory_conflict (the new text collides with
-   * another visible memory). Identical text → "unchanged", no revision bump.
+   * another visible memory). A kind change or a replacement receipt counts as a change even
+   * with identical text. An unchanged correction leaves the revision as-is.
    */
   replaceContent(tx: Tx, scope: Scope, id: string, expectedRevision: Revision, next: InsertRow, receipts: readonly Receipt[] | null, nowMs: number): Promise<{ outcome: "changed" | "unchanged"; revision: Revision }>;
   get(tx: Tx, scope: Scope, id: string): Promise<MemoryRow | null>;

@@ -285,3 +285,44 @@ touches when wired. Lineage proofs are recorded at admission, before finish. Any
 citation excludes a source, including sources also cited by a written item, matching hosted's
 `suppressedSources`. Core rejects a malformed list with `internal_error` inside the finish
 transaction before archiving. Omitting the field preserves existing behavior.
+
+## Addendum 17 — Write results for local parity
+
+- **Write results.** Read the owner's `indexRevision` from the run's index state inside the same
+  transaction, after all writes. Save returns `{ status, item, indexRevision }` with `saved` or
+  `duplicate`. Correct returns the same fields with `saved` or `unchanged`. Forget returns
+  `{ status: "forgotten", removedSimilar, indexRevision }` or `{ status: "not_found", indexRevision }`.
+  A missing or already forgotten row maps to `forgotten: false` on the wire. Refusals keep their
+  status. The result types allow older implementations to omit `indexRevision`.
+- **Index advances.** A new save, a duplicate save, a correction that writes, and a successful
+  forget each advance the owner index once. An unchanged correction, a missing or repeated forget,
+  and a refused write leave it unchanged.
+- **Forget guard.** With `options.expectedRevision`, compare the revision inside the forget
+  transaction after resolving the row and before any privacy mutation. A mismatch returns
+  `{ status: "conflict" }` and writes nothing. Omitting the option keeps forget unconditional.
+- **Explicit receipts.** Save accepts one `options.receipt` with `client`, `sessionId`, `eventId`
+  or `messageId`, `role: "user"`, and `occurredAtMs`. The host supplies the identity. Core uses
+  the supplied event or message ID as `Receipt.messageId`. The excerpt is the normalized,
+  redacted text from the write. `Receipt.id` and `Receipt.excerpt` are optional. A new save inserts
+  that one receipt. A duplicate attaches it, and a new attachment counts as a change under
+  `touchDuplicate` and advances the memory revision once.
+- **Pending: procedural anchor storage needs a port decision.** The local installer accepts
+  `options.procedural = { anchors: [{ receiptIndex, start, end }] }` for `instruction` and
+  `preference`. It requires one to four anchors on the explicit receipt at index zero, with
+  integer UTF-16 offsets satisfying `0 ≤ start < end ≤ excerpt.length` on code-point boundaries.
+  Invalid input returns `invalid` and writes nothing.
+- **Optional embedding.** Save and correct can write `embedding: null` when
+  `capabilities.embeddingRequiredOnInsert` is false and the embedder is absent or null.
+  Stores that require an embedding and failures from a configured embedder keep their current rules.
+- **Keyless correct.** Use addendum 15's keyless predecessor rule for exact suppression and
+  lineage when no fingerprint key is available. Correct keeps the explicit source and origin
+  and accepts an optional `options.kind`. When the host supplies `options.receipt`, the correction
+  replaces the old receipts with that one receipt, even if the text stays the same.
+
+The MCP host uses these status mappings.
+
+| Service status | Wire error code |
+| --- | --- |
+| `conflict` | `revision_conflict` |
+| `suppressed` | `memory_suppressed` |
+| `invalid` | `invalid_input` |

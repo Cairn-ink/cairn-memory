@@ -70,13 +70,17 @@ export interface MemoryRow {
   supersession?: "superseded (replacement no longer available)";
 }
 
-/** Evidence link from a memory to the capture messages it came from. */
+/** Evidence link from a memory to its source. */
 export interface Receipt {
+  /** Stored receipt ID, when available. */
+  id?: string;
   client: string;
   sessionId: string;
   messageId: string;
   role: Role;
   occurredAtMs: number | null;
+  /** For explicit writes, the saved text. */
+  excerpt?: string;
 }
 
 /** A content-free diagnostic event (no text, ids, hashes or keys). */
