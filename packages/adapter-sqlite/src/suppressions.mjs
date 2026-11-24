@@ -4,13 +4,25 @@ import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
+/** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
 
 const matchPolicy = { rowShingles: false };
 const capture = /** @type {const} */ ({ ...matchPolicy, mode: "capture" });
+const capturePassages = /** @type {const} */ ({ mode: "capture", rowShingles: true });
+
+/** @param {object} evidence */
+function hasNoShingleEvidence(evidence) {
+  return ["keyId", "shingles", "retainedShingles"].every(name => {
+    const field = Object.getOwnPropertyDescriptor(evidence, name);
+    if (!field) return true;
+    if (!Object.hasOwn(field, "value")) return false;
+    return field.value == null ||
+      (name === "retainedShingles" && Array.isArray(field.value) && field.value.length === 0);
+  });
+}
 
 /** @param {string} key @returns {SessionHasher} */
 export function sessionHasher(key) {
@@ -55,8 +67,8 @@ function copyFact(input) {
         ...base, kind, mode: fact.mode,
         sourceMemory: source == null ? source : { id: source.id, createdAtMs: source.createdAtMs },
         text: {
-          digests: digests.map(({ alg, value, pipeline, redactionVersion, keyId }) =>
-            ({ alg, value, pipeline, redactionVersion, keyId })),
+          digests: digests.map(({ alg, value, pipeline, redactionVersion, keyId, label }) =>
+            ({ alg, value, pipeline, redactionVersion, keyId, label })),
           embedding: embedding == null ? embedding : [...embedding],
           shingles: shingles == null ? shingles : [...shingles],
           keyId,
@@ -131,14 +143,19 @@ export function scopedSuppression(db, scope, hashSession) {
   const legacyText = (digests, historyHash) => digests.some(digest =>
     digest.alg === "sha256" && digest.value !== historyHash && legacy.has(digest.value));
 
+  /** @param {ReadonlyArray<Receipt & { legacyReceiptKey?: string }>} [receipts] */
+  function blocksReceipts(receipts) {
+    return hasLegacyReceipts && (receipts?.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
+      (legacyReceiptKey !== undefined && legacy.has("rs1:i:" + legacyReceiptKey)) ||
+      legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role]))))
+      ?? false);
+  }
+
   /** @param {Entry} entry */
   function classify(entry) {
     const { row, legacyHash, historyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
     const receipts = sessions.length || hasSpans || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
-    const receiptDenied = hasLegacyReceipts && receipts.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
-      (legacyReceiptKey !== undefined && legacy.has("rs1:i:" + legacyReceiptKey)) ||
-      legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role]))));
     /** @type {FactMatchRow} */
     const candidate = { type: "memory", scope, memoryId: row.id, revision: row.revision, digests: aliases };
     const applicable = facts.filter(stored => {
@@ -162,7 +179,7 @@ export function scopedSuppression(db, scope, hashSession) {
       }
     });
     const retained = row.historical && legacyHash === "sha256:" + historyHash ? historyHash : undefined;
-    return { applicable, legacyDenied: legacyText(aliases, retained) || receiptDenied };
+    return { applicable, legacyDenied: legacyText(aliases, retained) || blocksReceipts(receipts) };
   }
 
   /** @param {SourceRef["client"] | undefined} client @param {SourceRef["sessionId"] | undefined} sessionId */
@@ -189,6 +206,7 @@ export function scopedSuppression(db, scope, hashSession) {
     },
 
     blocksSession,
+    blocksReceipts,
 
     /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
     snapshot({ client, sessionId, occurredAtMs, passages }) {
@@ -206,18 +224,31 @@ export function scopedSuppression(db, scope, hashSession) {
           (client === undefined || sessionId === undefined ||
             fact.sessionKeyHash === hashSession(scope, client, sessionId)))) throw new CoreError("ineligible");
       }
+      let keylessPassages = false;
       if (passages !== undefined) {
         if (!Array.isArray(passages)) throw new CoreError("ineligible");
         for (const passage of passages) {
           if (!Array.isArray(passage?.digests) || !passage.digests.length) throw new CoreError("ineligible");
           if (legacyText(passage.digests)) throw new CoreError("ineligible");
         }
+        keylessPassages = passages.length > 0 && passages.every(passage =>
+          hasNoShingleEvidence(passage) &&
+          passage.digests.every((/** @type {TextDigest} */ digest) => digest?.keyId === null));
       }
       return {
         blockedSession: blocksSession(client, sessionId),
         blockedMessages,
-        passages: passages === undefined ? texts : texts.filter(stored =>
-          factBlocksIncoming(stored, { scope, passages }, capture) !== false),
+        passages: passages === undefined ? texts : texts.filter(stored => {
+          const { text } = stored.fact;
+          // The paired keyless profile has exact evidence only. Retained
+          // shingles and keyed digests still go through capture containment.
+          const rules = keylessPassages && hasNoShingleEvidence(text) &&
+            text.digests.every(digest => digest.keyId === null) ? capture : capturePassages;
+          const result = factBlocksIncoming(stored, { scope, passages }, rules);
+          // Let core handle legacy-only digest domains even on a comparable miss.
+          return result !== false || (text.digests.every(digest => digest.keyId !== null) &&
+            text.digests.some(digest => (digest.label ?? digest.pipeline) !== "core"));
+        }),
       };
     },
 
