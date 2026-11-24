@@ -30,7 +30,6 @@ export interface MemoryServiceConfig {
 
 export interface MemoryServiceDeps {
   readonly storage: ReadContractStorage<StoredDocumentCardRecord>;
-  /** A null model is supported for capture with document cards enabled. */
   readonly model: ModelPort | null;
   readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;
@@ -75,7 +74,14 @@ export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "cloc
 }
 
 export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
-export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "embedder"> & Partial<Pick<MemoryServiceDeps, "embedder">>;
+export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "embedder">
+  & Partial<Pick<MemoryServiceDeps, "embedder">> & {
+    /**
+     * Registration requires a model when storage.capabilities.fingerprintKey is true.
+     * Model-backed capture requires a model. Opted-in keyless document cards can finish without extraction.
+     */
+    readonly model?: MemoryServiceDeps["model"] | undefined;
+  };
 
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
 export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;

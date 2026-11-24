@@ -12,11 +12,12 @@ capability and supplies the store.
 | `documentCards.amendments` | Detects and verifies later corrections after commit when card capture is enabled. | Requires both amendment methods on a configured model port. |
 | `quantityLedger.enabled` | Includes quantities in extraction and reconciles them at finish. | Requires a model for extraction. See [Quantity ledger](quantity-ledger.md). |
 
-A write-capable service with card capture enabled may pass `model: null` to
-capture cards without extraction. Amendments and quantity extraction require
-a model, so neither runs in that composition or in the read-only
-`keyless-local` profile. When both storage options are absent or disabled,
-capture sends the original extraction request and makes the original writes.
+A write-capable service without a fingerprint key can omit `model` or pass
+`model: null`. With card capture enabled it can finish without extraction.
+Amendments and quantity extraction require a model. The explicit read-only
+`keyless-local` profile exposes read methods. When both storage options are
+absent or disabled, a service with a model uses the original extraction
+request and writes.
 
 ## Capture writes
 

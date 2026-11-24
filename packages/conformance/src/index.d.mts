@@ -1,10 +1,11 @@
 import type { Capabilities, Capability } from "@cairn-ink/core";
-import type { Namespace, Scope } from "@cairn-ink/core/ports";
+import type { Namespace, QuantityLedgerStore, Scope } from "@cairn-ink/core/ports";
 import type { AdapterFactory, OpenedAdapter } from "./factory.d.ts";
 
 export type { AdapterFactory, JsonValue, OpenedAdapter, TestHarness } from "./factory.d.ts";
 
 export type CaseContext = Omit<OpenedAdapter, "close"> & {
+  adapter: OpenedAdapter["adapter"] & { readonly quantityLedger?: QuantityLedgerStore };
   vec(distance: number): number[];
   hash(text: string): Promise<string>;
   owner: string;

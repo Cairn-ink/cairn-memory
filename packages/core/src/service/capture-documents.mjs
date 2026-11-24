@@ -1,6 +1,6 @@
 import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
-import { plainExtractionSpec, validatePlainCandidates, validatePlainExtraction } from "../extraction/extraction.mjs";
+import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
 import { writeLedgerQuantities } from "../ledger/index.mjs";
 import { sha256Hex } from "../privacy/fingerprint.mjs";
 import { receiptExcerpt } from "../privacy/text.mjs";
@@ -17,8 +17,30 @@ import { validWriteEmbedding } from "./writes.mjs";
 /** @import {ExtractedQuantity, LedgerReceipt} from "../ledger/index.mjs" */
 /** @import {DocumentCardMemoryState} from "../routing/visibility.mjs" */
 /** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
-/** @typedef {{item: FinishItem, quantities?: ExtractedQuantity[]}} Candidate */
 /** @typedef {Map<string, DocumentCardEmbedding>} CardVectors */
+/** @typedef {ReturnType<typeof validatePlainExtraction>["items"][number] & {quantities?: ExtractedQuantity[]}} ExtractedCandidate */
+/** @typedef {Awaited<ReturnType<import("../ports/privacy.d.ts").FingerprintKeyProvider["userKey"]>>} FingerprintKey */
+/** @typedef {{status: "failed", code: "fingerprint_key_mismatch"}} KeyMismatch */
+/**
+ * @typedef {{
+ *   key: CaptureKey,
+ *   messages: CaptureMessage[],
+ *   excludedSources: Set<string>,
+ *   sourceKey: FingerprintKey | undefined,
+ *   readSourcePassages: (tx: Tx, positions: number[]) => Promise<import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]>,
+ *   selectWriteKey: (tx: Tx) => Promise<FingerprintKey>,
+ *   filterSources: (positions: number[], passages: import("../ports/privacy.d.ts").SuppressionSnapshot["passages"],
+ *     writeKey: FingerprintKey) => Promise<number[]>,
+ *   abandonKeyMismatch: (tx: Tx) => Promise<KeyMismatch>,
+ *   readEligible: (tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[]) => Promise<number[]>,
+ *   runAtGeneration: <T>(work: (tx: Tx) => Promise<T>) => Promise<T | null>,
+ *   finish: (tx: Tx, items: readonly FinishItem[]) => Promise<FinishResult>,
+ *   assertSendGeneration: () => Promise<void>,
+ *   generation: number,
+ *   signal: AbortSignal | undefined,
+ * }} CaptureContext
+ */
+/** @typedef {ReturnType<typeof import("../capture/deadline.mjs").createCaptureDeadline>} CaptureDeadline */
 
 /** @param {number | null} time */
 function utcDate(time) {
@@ -46,27 +68,32 @@ const readScope = ({ owner, namespace }) => ({ owner, namespaces: [namespace] })
 /**
  * @param {Deps} deps
  * @param {<T>(signal: AbortSignal, pending: Promise<T>) => Promise<T>} untilAborted
+ * @param {(signal: AbortSignal | undefined, deadline: CaptureDeadline) => {signal: AbortSignal, check(): void}} transportFor
+ * @param {(signal: AbortSignal | undefined, deadline: CaptureDeadline) => void} checkAbort
  */
-export function captureDocumentSteps(deps, untilAborted) {
+export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbort) {
   const { storage, config, model, embedder, clock, gate, diagnostics } = deps;
   const { capabilities, uow, suppressions, raw, hydrate, inspect, fence, pause } = storage;
   const cards = capabilities.documentCards && config.documentCards?.enabled ? storage.documentCards : undefined;
-  const ledger = model && capabilities.quantityLedger && config.quantityLedger?.enabled ? storage.quantityLedger : undefined;
+  const skipExtraction = model === null || (embedder === null && capabilities.embeddingRequiredOnInsert === true);
+  const ledger = !skipExtraction && capabilities.quantityLedger && config.quantityLedger?.enabled
+    ? storage.quantityLedger : undefined;
+  if (!cards && !ledger) return;
+  const captureUnavailable = model === null && (!cards || capabilities.fingerprintKey === true);
   /** @param {DocumentCardSession} session */
   const sessionKey = session => deps.documentCardSessionKey ? deps.documentCardSessionKey(session) : session.sessionId;
 
   /** @param {readonly CaptureMessage[]} messages */
-  const extractionSpec = messages => ledger ? plainExtractionSpec(messages, { quantities: true }) : plainExtractionSpec(messages);
+  const extractionSpec = messages => plainExtractionSpec(messages, { quantities: true });
 
   /** @param {unknown} output @param {{sourceCount: number, itemLimit: number}} policy */
   function validateExtraction(output, policy) {
-    const checked = ledger ? validatePlainExtraction(output, policy, { quantities: true }) : undefined;
-    const items = checked?.items ?? validatePlainCandidates(output, policy);
-    for (let i = 0; i < (checked?.dropped.invalid_extraction_quantity ?? 0); i++) {
+    const checked = validatePlainExtraction(output, policy, { quantities: true });
+    for (let i = 0; i < checked.dropped.invalid_extraction_quantity; i++) {
       emitDiagnostic(diagnostics, "extract", "core_validation", "invalid_extraction_quantity");
     }
-    return items.map((item, index) => ({
-      ...item, quantities: checked?.quantities.filter(quantity => quantity.item === index),
+    return checked.items.map((item, index) => ({
+      ...item, quantities: checked.quantities.filter(quantity => quantity.item === index),
     }));
   }
 
@@ -134,18 +161,19 @@ export function captureDocumentSteps(deps, untilAborted) {
 
   /**
    * @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages
-   * @param {Candidate[]} candidates @param {FinishResult} result @param {CardVectors | undefined} vectors
+   * @param {readonly FinishItem[]} items @param {FinishResult} result @param {CardVectors | undefined} vectors
+   * @param {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} quantities
    */
-  async function write(tx, key, messages, candidates, result, vectors) {
+  async function write(tx, key, messages, items, result, vectors, quantities) {
     const { scope, client, sessionId } = key;
     const allowed = await screenReceipts(tx, key, messages);
     if (!allowed.length) return allowed;
 
     const suppressed = new Set(result.suppressedItems);
-    const surviving = candidates.filter((_, index) => !suppressed.has(index));
+    const surviving = items.filter((_, index) => !suppressed.has(index));
     if (surviving.length !== result.memories.length) throw new CoreError("internal_error");
-    const written = surviving.map(({ item, quantities }, index) => ({
-      ...result.memories[index], receipts: item.receipts, quantities,
+    const written = surviving.map(({ receipts }, index) => ({
+      ...result.memories[index], receipts, quantities: quantities?.get(receipts),
     }));
     const canonicalSessionKey = cards && sessionKey({ client, sessionId });
     if (cards && canonicalSessionKey) {
@@ -330,5 +358,109 @@ export function captureDocumentSteps(deps, untilAborted) {
     }
   }
 
-  return { cards, ledger, extractionSpec, validateExtraction, beforeEmbedding, embedCards, write, amend };
+  /** @param {CaptureContext} context */
+  function forCapture(context) {
+    const { key, messages, excludedSources, sourceKey, readSourcePassages, selectWriteKey, filterSources,
+      abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation, signal } = context;
+    const { capture } = storage;
+    const archive = capabilities.rawArchive ? raw : undefined;
+    // Candidate preparation and embedding preserve the receipts array through finish.
+    /** @type {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} */
+    const quantities = ledger ? new WeakMap() : undefined;
+    /** @type {readonly CaptureMessage[] | undefined} */
+    let messagesToEmbed;
+    /** @type {CardVectors | undefined} */
+    let vectors;
+    /** @type {readonly CaptureMessage[] | undefined} */
+    let finishedMessages;
+
+    /** @param {ExtractedCandidate[]} candidates @param {{item: Pick<FinishItem, "receipts">}[]} prepared */
+    function trackQuantities(candidates, prepared) {
+      if (!quantities) return;
+      for (const [index, candidate] of candidates.entries()) {
+        if (candidate.quantities?.length) quantities.set(prepared[index].item.receipts, candidate.quantities);
+      }
+    }
+
+    /** @param {Tx} tx @param {number[]} positions */
+    async function currentSources(tx, positions) {
+      const passages = await readSourcePassages(tx, positions);
+      const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
+      if (capabilities.fingerprintKey && passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
+        return null;
+      }
+      return filterSources(positions, passages, writeKey);
+    }
+
+    /** @param {number[]} positions */
+    const allowedMessages = positions => positions.map(position => messages[position]).filter(({ id }) => !excludedSources.has(id));
+
+    /** @param {Tx} tx @param {number[]} positions */
+    async function prepareEmbedding(tx, positions) {
+      if (!cards || !embedder) return;
+      const allowed = await currentSources(tx, positions);
+      if (allowed === null) return abandonKeyMismatch(tx);
+      messagesToEmbed = await beforeEmbedding(tx, key, allowedMessages(allowed));
+    }
+
+    /** @param {CaptureDeadline} deadline */
+    async function embed(deadline) {
+      if (messagesToEmbed) vectors = await embedCards(key, messagesToEmbed, () => transportFor(signal, deadline));
+    }
+
+    /** @param {Tx} tx @param {readonly CaptureMessage[]} allowed @param {readonly FinishItem[]} items @param {FinishResult} result */
+    async function finishDocuments(tx, allowed, items, result) {
+      if (allowed.length) finishedMessages = await write(tx, key, allowed, items, result, vectors, quantities);
+    }
+
+    async function afterCommit() {
+      if (!finishedMessages?.length) return;
+      await amend(key, finishedMessages, generation, assertSendGeneration, signal, async (tx, message) => {
+        const position = messages.indexOf(message);
+        if (!(await readEligible(tx, key, messages)).includes(position)) return false;
+        return (await currentSources(tx, [position]))?.length === 1;
+      });
+    }
+
+    /** @param {number[]} positions @param {CaptureDeadline} deadline */
+    async function finishWithoutExtraction(positions, deadline) {
+      const preEmbed = await runAtGeneration(async tx => {
+        const eligible = new Set(await readEligible(tx, key, messages));
+        const stillEligible = positions.filter(position => eligible.has(position));
+        return await prepareEmbedding(tx, stillEligible) ?? { stillEligible };
+      });
+      if (preEmbed === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in preEmbed) return preEmbed;
+      await embed(deadline);
+
+      const result = await runAtGeneration(async tx => {
+        checkAbort(signal, deadline);
+        await capture.assertEligible(tx, key, preEmbed.stillEligible);
+        const allowed = await currentSources(tx, preEmbed.stillEligible);
+        if (allowed === null) return abandonKeyMismatch(tx);
+        checkAbort(signal, deadline);
+        const result = await finish(tx, []);
+        const rawMessages = allowedMessages(allowed);
+        if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
+          await archive.archive(tx, key, rawMessages);
+          await finishDocuments(tx, rawMessages, [], result);
+        } else if (!archive) {
+          await finishDocuments(tx, rawMessages, [], result);
+        }
+        return result;
+      });
+      if (result === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in result) return result;
+      await afterCommit();
+      return /** @type {const} */ ({ status: "done", result });
+    }
+
+    return { trackQuantities, prepareEmbedding, embed, finishDocuments, afterCommit, finishWithoutExtraction };
+  }
+
+  /** @template {{item: Omit<FinishItem, "embedding">}} T @param {T[]} prepared */
+  const unembedded = prepared => prepared.map(candidate => ({ ...candidate, item: { ...candidate.item, embedding: null } }));
+
+  return { captureUnavailable, skipExtraction, forCapture, unembedded,
+    extractionSpec: ledger ? extractionSpec : undefined, validateExtraction: ledger ? validateExtraction : undefined };
 }

@@ -3,6 +3,7 @@ import { emitDiagnostic } from "../capture/model-call.mjs";
 import { countTokens, MODEL_OUTPUT_TOKENS, modelRequestText } from "../capture/request-size.mjs";
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
+import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
 import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
@@ -145,9 +146,9 @@ async function untilAborted(signal, pending) {
  * @param {unknown} raw
  * @param {{sourceCount: number, itemLimit: number}} policy
  * @param {CallOptions["onDiagnostic"]} diagnostics
- * @param {ReturnType<typeof captureDocumentSteps>["validateExtraction"]} validateExtraction
+ * @param {NonNullable<ReturnType<typeof captureDocumentSteps>>["validateExtraction"]} [validate]
  */
-function hostedCandidates(raw, policy, diagnostics, validateExtraction) {
+function hostedCandidates(raw, policy, diagnostics, validate) {
   let output;
   try {
     output = structuredClone(raw);
@@ -162,7 +163,7 @@ function hostedCandidates(raw, policy, diagnostics, validateExtraction) {
   try {
     // Hosted openai.ts:101–109 checks distinct, non-empty, in-range indices.
     // Hosted ingest.ts:122–125 and index.ts:37 apply the inclusive confidence floor.
-    const validated = validateExtraction(output, policy);
+    const validated = (validate ?? validatePlainCandidates)(output, policy);
     const { items } = /** @type {{items: Array<{content: string}>}} */ (output);
     return validated
       .map((candidate, index) => ({ ...candidate, rawContent: items[index].content }))
@@ -193,8 +194,7 @@ function prepareCaptureCandidates(candidates, messages, { client, sessionId }, f
       const { id: messageId, role, occurredAtMs } = messages[index];
       return { client, sessionId, messageId, role, occurredAtMs };
     });
-    return { item: { content, kind, confidence, textHash, ...(digests && { digests }), receipts }, passages,
-      quantities: candidate.quantities };
+    return { item: { content, kind, confidence, textHash, ...(digests && { digests }), receipts }, passages };
   }));
 }
 
@@ -228,7 +228,7 @@ function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
  */
 async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder }, deadline, caller) {
   if (prepared.length === 0) return [];
-  if (embedder === null) return prepared.map(candidate => ({ ...candidate, item: { ...candidate.item, embedding: null } }));
+  if (embedder === null) throw new CoreError("capability_unavailable");
   const texts = prepared.map(({ item }) => normalizeForHash(item.content));
   const { model, dimensions } = embedder;
   const { signal, check } = captureTransport(caller, deadline);
@@ -244,12 +244,11 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
   }
   check();
 
-  return prepared.map((candidate, index) => {
-    const { item } = candidate;
+  return prepared.map(({ item, passages }, index) => {
     const vector = Array.isArray(vectors) && vectors.length <= prepared.length ? vectors[index] : undefined;
     const embedding = validWriteEmbedding(vector, dimensions) ? { model, vector } : null;
     if (storage.capabilities.embeddingRequiredOnInsert && embedding === null) throw new CoreError("embedding_failed");
-    return { ...candidate, item: { ...candidate.item, embedding } };
+    return { item: { ...item, embedding }, passages };
   });
 }
 
@@ -260,9 +259,8 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
 export function captureMethods(deps) {
   const { storage, clock, model, gate, config, diagnostics, embedder } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
-  const documents = captureDocumentSteps(deps, untilAborted);
-  const requiresEmbedder = !documents.cards && (!documents.ledger || capabilities.embeddingRequiredOnInsert);
-  const captureModel = embedder === null && capabilities.embeddingRequiredOnInsert ? null : model;
+  const documents = captureDocumentSteps(deps, untilAborted, captureTransport, checkCaptureAbort);
+  const captureUnavailable = documents?.captureUnavailable ?? (model === null || embedder === null);
   /** @param {Tx} tx @param {SuppressionSnapshot["passages"]} passages */
   const sourceWriteKey = (tx, passages) =>
     capabilities.fingerprintKey && passages.length && keys.userKeyForWrite ? keys.userKeyForWrite(tx) : null;
@@ -270,7 +268,7 @@ export function captureMethods(deps) {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
       const admit = capture?.admit;
-      if ((embedder === null && requiresEmbedder) || typeof admit !== "function") throw new CoreError("capability_unavailable");
+      if (captureUnavailable || typeof admit !== "function") throw new CoreError("capability_unavailable");
       const { client: inputClient, sessionId: inputSession, eventId: inputEvent, messages } =
         validateObject(input, ["client", "sessionId", "eventId", "messages"]);
       const client = identifier(inputClient);
@@ -357,7 +355,7 @@ export function captureMethods(deps) {
       const load = capture?.load;
       const readStatus = capture?.status;
       const archive = capabilities.rawArchive ? raw : undefined;
-      if ((embedder === null && requiresEmbedder) || typeof load !== "function" || typeof readStatus !== "function" ||
+      if (captureUnavailable || typeof load !== "function" || typeof readStatus !== "function" ||
           [capture.claim, capture.beginDispatch, capture.finish, capture.abandon, capture.eligible, capture.assertEligible,
             suppressions?.snapshot, storage.keys?.userKey].some(method => typeof method !== "function") ||
           (capabilities.rawArchive && (typeof archive?.archiveAllowed !== "function" || typeof archive.archive !== "function"))) {
@@ -500,16 +498,11 @@ export function captureMethods(deps) {
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
         };
-        /** @param {Tx} tx @param {number[]} selected @param {FingerprintKey | null} [writeKey] */
-        async function currentSources(tx, selected, writeKey) {
-          const passages = await readSourcePassages(tx, selected);
-          const currentKey = capabilities.fingerprintKey && passages.length
-            ? (writeKey === undefined ? await selectWriteKey(tx) : writeKey) : null;
-          if (capabilities.fingerprintKey && passages.length && sourceKey !== undefined && currentKey?.id !== sourceKey?.id) {
-            return null;
-          }
-          return filterCaptureSources(sources, selected, passages, null, sourceEvidence, currentKey);
-        }
+        const supplemental = documents?.forCapture({ key, messages: admittedMessages, excludedSources, sourceKey,
+          readSourcePassages, selectWriteKey, filterSources: (positions, passages, writeKey) =>
+            filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
+          abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
+          generation: preflight.generation, signal: options?.signal });
         /** @type {{request: ModelRequest, messages: CaptureMessage[], policy: {sourceCount: number, itemLimit: number}} | undefined} */
         let extraction;
         for (;;) {
@@ -535,55 +528,53 @@ export function captureMethods(deps) {
 
           // Size only screened text, outside the lock. The next check can only shrink the batch.
           positions = dispatch.allowed;
-          if (!captureModel) break;
+          if (supplemental && documents?.skipExtraction) return await supplemental.finishWithoutExtraction(positions,
+            createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock));
+          if (model === null) throw new CoreError("capability_unavailable");
           const messages = positions.map(position => admittedMessages[position]);
-          const { system, input, schema } = documents.extractionSpec(messages);
-          const inputTokens = countTokens(captureModel, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
+          const { system, input, schema } = (documents?.extractionSpec ?? plainExtractionSpec)(messages);
+          const inputTokens = countTokens(model, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
           const maxOutputTokens = Math.min(HOSTED_EXTRACT_OUTPUT_TOKENS,
-            captureModel.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
+            model.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
           if (maxOutputTokens < MODEL_OUTPUT_TOKENS) throw new CoreError("context_budget_exceeded");
           const { properties } = /** @type {{properties: {items: {maxItems: number}}}} */ (schema);
           extraction = { messages, request: { system, input, schema, schemaName: "extract_memories", maxOutputTokens },
             policy: { sourceCount: messages.length, itemLimit: properties.items.maxItems } };
         }
+        if (!extraction || model === null) throw new CoreError("internal_error");
+        const { request, messages, policy } = extraction;
         const signal = options?.signal;
         const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
-        const messages = extraction?.messages ?? positions.map(position => admittedMessages[position]);
-        const policy = extraction?.policy ?? { sourceCount: messages.length, itemLimit: 0 };
-        /** @param {ModelRequest} request @param {NonNullable<typeof captureModel>} dispatchModel */
-        async function sendExtraction(request, dispatchModel) {
-          await gate.assertOpen(owner, "pre-send");
-          const transport = captureTransport(signal, deadline);
-          /** @type {CallOptions} */
-          const portOptions = {
-            signal: transport.signal,
-            onDiagnostic: diagnostics && (event => emitDiagnostic(diagnostics, event.stage, event.layer, event.reason)),
-          };
-          await assertSendGeneration();
-          await gate.assertOpen(owner, "dispatch");
-          let output;
-          try {
-            transport.check();
-            output = await untilAborted(transport.signal, dispatchModel.call("extract", request, portOptions));
-          } catch (error) {
-            transport.check();
-            const failure = entryError(error);
-            if (failure.code === "model_timeout" || failure.code === "model_cancelled" ||
-                failure.code === "context_budget_exceeded" || failure.code === "token_count_unavailable" ||
-                failure.code === "invalid_model_output") throw failure;
-            retryableExtraction = failure.kind === "retryable";
-            emitDiagnostic(diagnostics, "extract", "core_call", "provider_failure");
-            throw new CoreError("extraction_failed");
-          } finally {
-            await gate.assertOpen(owner, "post-send");
-          }
+        await gate.assertOpen(owner, "pre-send");
+        const transport = captureTransport(signal, deadline);
+        /** @type {CallOptions} */
+        const portOptions = {
+          signal: transport.signal,
+          onDiagnostic: diagnostics && (event => emitDiagnostic(diagnostics, event.stage, event.layer, event.reason)),
+        };
+        await assertSendGeneration();
+        await gate.assertOpen(owner, "dispatch");
+        let output;
+        try {
           transport.check();
-          return output;
+          output = await untilAborted(transport.signal, model.call("extract", request, portOptions));
+        } catch (error) {
+          transport.check();
+          const failure = entryError(error);
+          if (failure.code === "model_timeout" || failure.code === "model_cancelled" ||
+              failure.code === "context_budget_exceeded" || failure.code === "token_count_unavailable" ||
+              failure.code === "invalid_model_output") throw failure;
+          retryableExtraction = failure.kind === "retryable";
+          emitDiagnostic(diagnostics, "extract", "core_call", "provider_failure");
+          throw new CoreError("extraction_failed");
+        } finally {
+          await gate.assertOpen(owner, "post-send");
         }
-        const output = extraction && captureModel ? await sendExtraction(extraction.request, captureModel) : { items: [] };
-        const candidates = hostedCandidates(output, policy, diagnostics, documents.validateExtraction);
+        transport.check();
+        const candidates = hostedCandidates(output, policy, diagnostics, documents?.validateExtraction);
         const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
         const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
+        supplemental?.trackQuantities(candidates, prepared);
         /** @param {Tx} tx @param {PreparedCandidate[]} batch */
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
@@ -599,20 +590,13 @@ export function captureMethods(deps) {
             ? filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources) : prepared;
           const survivors = allowedByPassage.filter(({ item }) =>
             item.receipts.every(({ messageId }) => eligibleIds.has(messageId)));
-          let documentMessages;
-          if (documents.cards && embedder) {
-            const screened = await currentSources(tx, stillEligible);
-            if (screened === null) return abandonKeyMismatch(tx);
-            documentMessages = await documents.beforeEmbedding(tx, key,
-              screened.map(position => admittedMessages[position]).filter(({ id }) => !excludedSources.has(id)));
-          }
-          return { stillEligible, survivors, documentMessages };
+          return (supplemental && await supplemental.prepareEmbedding(tx, stillEligible)) ?? { stillEligible, survivors };
         });
         if (preEmbed === null) return { status: "paused" };
         if ("status" in preEmbed) return preEmbed;
-        const embedded = await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
-        const cardVectors = preEmbed.documentMessages && await documents.embedCards(key, preEmbed.documentMessages,
-          () => captureTransport(signal, deadline));
+        const embedded = embedder === null && documents ? documents.unembedded(preEmbed.survivors)
+          : await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
+        if (supplemental) await supplemental.embed(deadline);
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
@@ -630,36 +614,31 @@ export function captureMethods(deps) {
           const allowedCandidates = filterCaptureCandidates(embedded, snapshot, scope, excludedSources);
 
           // Source checks need the same unprojected text facts as admission.
-          const allowedPositions = await currentSources(tx, preEmbed.stillEligible, writeKey);
-          if (allowedPositions === null) return abandonKeyMismatch(tx);
+          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
+          let currentSourceKey = null;
+          if (capabilities.fingerprintKey && sourcePassages.length) {
+            currentSourceKey = writeKey === undefined ? await selectWriteKey(tx) : writeKey;
+            if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
+          }
+          const allowedPositions = await filterCaptureSources(sources, preEmbed.stillEligible, sourcePassages,
+            null, sourceEvidence, currentSourceKey);
           const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
           const allowedIds = new Set(allowedMessages.map(({ id }) => id));
-          const writing = allowedCandidates.filter(({ item }) =>
-            item.receipts.every(({ messageId }) => allowedIds.has(messageId)));
-          const items = writing.map(({ item }) => item);
+          const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>
+            receipts.every(({ messageId }) => allowedIds.has(messageId)));
           checkCaptureAbort(signal, deadline);
           const result = await finish(tx, items);
           const rawMessages = allowedMessages.filter(({ id }) => !excludedSources.has(id));
-          const canArchive = archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true;
-          if (archive && canArchive) {
+          if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
             await archive.archive(tx, key, rawMessages);
-          }
-          const documentMessages = documents.cards || documents.ledger
-            ? await documents.write(tx, key, archive && !canArchive ? [] : rawMessages, writing, result, cardVectors)
-            : [];
-          return /** @type {const} */ ({ status: "done", result, withheld: prepared.length - items.length, documentMessages });
+            if (supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
+          } else if (!archive && supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
+          return /** @type {const} */ ({ status: "done", result, withheld: prepared.length - items.length });
         });
         if (completed === null) return { status: "paused" };
         if (completed.status === "failed") return completed;
         for (let i = 0; i < completed.withheld; i++) emitDiagnostic(diagnostics, "extract", "core_finish", "candidate_withheld");
-        if (completed.documentMessages.length) {
-          await documents.amend(key, completed.documentMessages, preflight.generation, assertSendGeneration, signal,
-            async (tx, message) => {
-              const position = admittedMessages.indexOf(message);
-              if (!(await readEligible(tx, key, admittedMessages)).includes(position)) return false;
-              return (await currentSources(tx, [position]))?.length === 1;
-            });
-        }
+        if (supplemental) await supplemental.afterCommit();
         return { status: "done", result: completed.result };
       } catch (error) {
         const failure = entryError(error);
