@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "3cc1520b699dfc842d5945f200846cd84de4f01921e2779580c070a0245f09bd",
-  "bytes": 1497179,
+  "sha256": "333f59471fe547d8e4d0ba78c1fd1bac048b4f8b6feb5add46b205f355e36dd0",
+  "bytes": 1497137,
   "files": [
     "LICENSE",
     "README.md",
@@ -438,7 +438,7 @@
     "core/episode-schema.mjs": "f69f29986233a10715f0ffb84f96212052e3072b52d69c92627a2aed9a00c549",
     "core/episode-storage.mjs": "889b5b1937412f69295c1114d723b44a6fffc159d7d254547bfd7929bb658277",
     "core/episode-reads.mjs": "3aab36f3457011a7dabb600811923b8a462df5fb93f0bcfbce4ab7f771d0d03f",
-    "core/session-context.mjs": "1f2c3221bec5841cdf7ac1d0a9220a62eba822ce1034c5d1d3c62b320305de71",
+    "core/session-context.mjs": "a98a2b54d14553bfff1cb542eede272646efbfa71a1e7a193104c5b0947f50f6",
     "core/episode-input.mjs": "41b88513c9d75b06470b16a9647de700a1666dc322ee40b7f565f913279435e9",
     "core/episode-capture.mjs": "65259ce3662ac2ea80f8237e921cabdcbf01a73b614e0a42d1a1066a8e801b96",
     "core/prompts/interpret-episode.md": "5823a86c2545d3c915dd1e1bce20c5882af259f74260c284f40b77a7f5660d7c",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "c3d30445454c407f764a748a3ac30c34b6eb8efb753388ee7ad1f6513fe80f6d"
+    "engine-build.json": "804c37852e33250fc7285dc3ef36b6dfafecaed2a38ed01d7e44024c98ac3143"
   }
 }
