@@ -1,18 +1,21 @@
 # Quantity ledger
 
-The `quantityLedger` capability is off by default. A host with a
-`QuantityLedgerStore` can opt into the extra extraction instructions and
-strict schema with `{ quantities: true }`. The model returns a separate
-top-level list after `items` in the same extraction call. Without a model key,
-capture produces no quantities.
+Host presets decide whether to set `MemoryServiceConfig.quantityLedger.enabled`.
+Core defaults to the original extraction request. With a model and the
+`quantityLedger` capability and store, the opt-in sends the existing
+`{ quantities: true }` variant. The model returns a separate top-level list
+after `items` in the same extraction call. The keyless local profile produces
+no quantities.
 
 ## Capture and storage
 
-All store calls take a live transaction and a scope. Call `writeLedgerQuantities`
-inside the capture finish unit of work with the admitted memory ID, its existing
-core `textHash` from capture and the cited canonical receipts. Do this before
-recording the finish result and its index revision. `listForMemory`,
-reconciliation and `put` run in the same unit of work under the owner write lock.
+All store calls take a live transaction and a scope. The service calls
+`writeLedgerQuantities` in the finish transaction with the admitted memory ID,
+its current core `textHash`, and the cited canonical receipts. Every cited
+source must pass finish checks. Attribution uses retained user receipt IDs
+from hydration or the inspect store in that transaction. `listForMemory`,
+reconciliation and `put` run under the owner write lock and commit with the
+finish result. Hosts may also invoke the ledger helpers directly.
 A second writer on the same transaction is out of contract. The read leaves
 the index revision unchanged. Each row carries the memory ID, the receipt ID and that
 write-time hash. In a scoped memory, a replay leaves the original row intact for the same receipt,

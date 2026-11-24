@@ -1,6 +1,6 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
+  DocumentCardSession, EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
@@ -22,6 +22,10 @@ export interface MemoryServiceConfig {
   /** Relative stage deadlines in milliseconds. */
   readonly deadlines?: Readonly<Partial<Record<ModelStage, number>>>;
   readonly rowShingles?: boolean;
+  /** Opt in to capture-time cards and, separately, post-commit amendments. Requires documentCards storage. */
+  readonly documentCards?: { readonly enabled: boolean; readonly amendments?: boolean };
+  /** Opt in to quantity extraction and persistence. Requires quantityLedger storage and a model. */
+  readonly quantityLedger?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {
@@ -33,6 +37,8 @@ export interface MemoryServiceDeps {
   readonly tokens: TokenCounter;
   readonly embedQuery?: EmbedQuery;
   readonly config: MemoryServiceConfig;
+  /** Resolve the card ID's session component when storage uses a non-plain canonical session key. */
+  readonly documentCardSessionKey?: (session: DocumentCardSession) => string | null;
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
   /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
@@ -72,7 +78,7 @@ export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "e
   & Partial<Pick<MemoryServiceDeps, "embedder">> & {
     /**
      * Registration requires a model when storage.capabilities.fingerprintKey is true.
-     * Capture admission and execution always require a model.
+     * Model-backed capture requires a model. Opted-in keyless document cards can finish without extraction.
      */
     readonly model?: MemoryServiceDeps["model"] | undefined;
   };

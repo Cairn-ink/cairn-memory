@@ -34,7 +34,7 @@ function freezeConfig(input) {
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
     rowShingles: true,
   };
-  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines"]);
+  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger"]);
   const {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
@@ -42,6 +42,8 @@ function freezeConfig(input) {
     rowShingles = config.rowShingles,
     leaseMs,
     deadlines,
+    documentCards,
+    quantityLedger,
   } = input;
   for (const weight of [nearDuplicateDistance, lexicalWeight, vectorWeight]) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
@@ -57,10 +59,24 @@ function freezeConfig(input) {
     // Match the capture runner's deadline range.
     if (duration > 120_000) throw new CoreError("invalid_input");
   }
+  let cards, ledger;
+  if (documentCards !== undefined) {
+    const { enabled, amendments } = validateObject(documentCards, ["enabled", "amendments"]);
+    if (typeof enabled !== "boolean" || (amendments !== undefined && typeof amendments !== "boolean")) {
+      throw new CoreError("invalid_input");
+    }
+    cards = Object.freeze({ enabled, amendments });
+  }
+  if (quantityLedger !== undefined) {
+    const { enabled } = validateObject(quantityLedger, ["enabled"]);
+    if (typeof enabled !== "boolean") throw new CoreError("invalid_input");
+    ledger = Object.freeze({ enabled });
+  }
 
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
+    documentCards: cards, quantityLedger: ledger,
   });
 }
 
@@ -120,6 +136,9 @@ function freezeDeps(input) {
   requireMethods(tokens, "countTokens");
   if (embedQuery !== undefined) requireMethods(embedQuery, "embedQuery");
   if (diagnostics !== undefined && typeof diagnostics !== "function") throw new CoreError("invalid_input");
+  if (deps.documentCardSessionKey !== undefined && typeof deps.documentCardSessionKey !== "function") {
+    throw new CoreError("invalid_input");
+  }
 
   return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config) });
 }
