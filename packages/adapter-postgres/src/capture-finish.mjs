@@ -64,11 +64,13 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
 
   const writeTimeUs = writeTime(nowMs);
   const progress = { inserted: new Map(), writeTimes: new Map() };
+  /** @type {number[]} */
+  const suppressedItems = [];
   for (const [position, { row, receipts }] of items.entries()) {
     const decision = decideWrite(policy, position, progress);
     switch (decision.status) {
       case "suppressed":
-        result.suppressedCount++;
+        suppressedItems.push(position);
         break;
       case "saved": {
         const { id, revision, updatedAtUs } = await memories.insert(tx, scope, { ...row, source }, receipts, nowMs);
@@ -91,5 +93,7 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
       }
     }
   }
+  result.suppressedCount = suppressedItems.length;
+  if (suppressedItems.length > 0) result.suppressedItems = suppressedItems;
   return { result, saved };
 }
