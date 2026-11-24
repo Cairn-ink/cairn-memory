@@ -5,7 +5,8 @@ import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
-import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { publishFingerprintKey, readFingerprintKeyId } from "../src/digest-gate.mjs";
 import { toPostgresError } from "../src/errors.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
@@ -18,6 +19,7 @@ import { requireLiveRun } from "../src/uow.mjs";
 import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
+/** @import { RetainedDigestFixture } from "@cairn-ink/conformance/factory" */
 
 const databaseUrl = process.env.CORE_PG_TEST_URL;
 const options = { timeout: 120_000, skip: databaseUrl ? false : "CORE_PG_TEST_URL is not set" };
@@ -238,7 +240,7 @@ async function openDatabase() {
   }
 }
 
-function postgresFactory(wrapSuppressions = (store) => store) {
+function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedState = false } = {}) {
   return {
     name: "Postgres",
     async open({ capabilities: requested }) {
@@ -251,18 +253,39 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
       const lineageSecret = randomUUID();
-      const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey });
       const nearDuplicate = requested.nearDuplicate !== false;
+      let elapsed = 0;
+      const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey, nearDuplicate,
+        allowNonNullNamespace: true, now: () => Date.now() + elapsed });
       const semanticRetrieval = requested.semanticRetrieval !== false;
       const rawArchive = requested.rawArchive === true;
       const fingerprintKey = requested.fingerprintKey === true;
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
         conflictEdges: true, semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
-        sessionLineage: rawArchive, rawSpans: true, fingerprintKey, placement: true,
+        sessionLineage: rawArchive, rawSpans: true, fingerprintKey, shingleSuppression: rawArchive && fingerprintKey,
+        placement: true,
       });
-      const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
-      const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      const fixtureSecrets = new Map(["test-secret-a", "test-secret-rotation", "test-secret-later"]
+        .map(secret => [secret, randomUUID()]));
+      const stagedSecrets = fingerprintKey ? [...fixtureSecrets.values()] : [];
+      const provider = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      /** @type {Map<string, RetainedDigestFixture>} */
+      const retainedFixtures = new Map();
+      const keys = {
+        ...provider,
+        async retainedDigesters(owner) {
+          const fixture = retainedFixtures.get(owner);
+          if (!fixture) return [];
+          const scope = { owner, namespace: null };
+          const { passages } = await uow.run(owner, { readOnly: true }, tx => suppressions.snapshot(tx, scope, {}));
+          const live = passages.some(({ fact }) => fact.text.digests.every(({ alg }) => alg === "hmac") &&
+            fact.text.digests.some(({ keyId, label, pipeline }) => keyId === fixture.keyId && (label ?? pipeline) === fixture.label));
+          if (!live) return [];
+          return [{ alg: "hmac", keyId: fixture.keyId, label: fixture.label,
+            mac: (text) => createHmac("sha256", fixture.secret).update(text).digest("hex") }];
+        },
+      };
       const rawOptions = {
         lineageSecret, hashSessionKey,
         fingerprintKeys: async (owner) => {
@@ -270,25 +293,53 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           return key ? [key] : [];
         },
       };
-      const rawPorts = rawArchive ? createPostgresRawPorts(rawOptions) : null;
+      const rawPorts = rawArchive ? createPostgresRawPorts({ ...rawOptions,
+        fingerprintKeys: async (owner) => (await rawOptions.fingerprintKeys(owner)).map((key) => ({ key, pipeline: "core" })),
+      }) : null;
       const readOptions = { hashSessionKey, allowNonNullNamespace: true };
       const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
       const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
       const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate });
       /** @type {string[]} */
       const harnessOwners = [];
-      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret" | "seedClientlessRaw"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      /** @type {Omit<TestHarness, "counters"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         hashSessionKey,
-        rowsMissingKeyedDigest: createPostgresDigestGate(uow, async (owner) => {
-          const key = await keys.userKey(owner);
-          return key ? [key.id] : [];
-        }),
+        async advanceClock(ms) { elapsed += ms; },
+        async rowsMissingKeyedDigest(owner) {
+          return (await digestCoverage(owner)).missingPairs;
+        },
+        async setRetainedDigestFixture(owner, fixture) {
+          if (fixture === null) retainedFixtures.delete(owner);
+          else retainedFixtures.set(owner, fixture);
+        },
         async setFingerprintSecret(secret) {
-          assert.ok(fingerprintKey);
-          const key = await userFingerprintKey(secret, harnessOwners[0], HOSTED_FINGERPRINT_LABELS);
-          assert.ok(key);
-          for (const owner of harnessOwners) await keys.publish(owner, key.id);
+          const fixtureSecret = fixtureSecrets.get(secret);
+          assert.ok(fingerprintKey && fixtureSecret);
+          for (const owner of harnessOwners) {
+            const key = await userFingerprintKey(fixtureSecret, owner, HOSTED_FINGERPRINT_LABELS);
+            assert.ok(key);
+            if (seedRetainedState && secret === "test-secret-rotation") {
+              // This case starts from a retained fact and a newer active key.
+              await uow.run(owner, {}, (tx) => query(tx,
+                "UPDATE core_owner_state SET fingerprint_key_id = $2 WHERE user_id = $1", [owner, key.id]));
+              continue;
+            }
+            // The host stages the new MACs before publication. Keep test staging and
+            // publication atomic so a refused rotation leaves the fixture untouched.
+            await uow.run(owner, {}, async (tx) => {
+              const runQuery = (sql, values) => query(tx, sql, values);
+              if (await readFingerprintKeyId(runQuery, owner) === key.id) return;
+              const { rows } = await runQuery("SELECT id, text FROM memories WHERE user_id = $1", [owner]);
+              for (const { id, text } of rows) {
+                const digest = await coreDigest(text, key);
+                await runQuery(`UPDATE memories SET core_digests = COALESCE(core_digests, '[]'::jsonb) || $3::jsonb
+                    WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([digest])]);
+              }
+              if (rows.length) await advanceIndex(runQuery, owner, requireLiveRun(tx, true));
+              await publishFingerprintKey(tx, key.id);
+            });
+          }
         },
         async seedClientlessRaw(scope, sessionId, { id, occurredAtMs, role, content }) {
           assert.equal(scope.namespace, null);
@@ -321,6 +372,10 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           await uow.run(owner, {}, (tx) => suppressions.writeFact(tx, fact, incarnation));
         },
       };
+      const digestCoverage = createPostgresDigestGate(uow, async (owner) => {
+        const key = await keys.userKey(owner);
+        return key ? [key.id] : [];
+      });
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
@@ -351,7 +406,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
 // requests as preferences. K-CAP-2 exercises the semantic-retrieval-off profile.
 const selected = new Set([
   "K-UOW-3", "K-UOW-3r", "K-ERR-1", "K-CAP-0", "K-CAP-2",
-  "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
+  "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
   "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
   "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5",
@@ -369,7 +424,13 @@ const selected = new Set([
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
   "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
-  "K-KD-1", "K-KD-2", "K-HASH-1",
+  "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6",
+  "K-KD-7", "K-KD-7v", "K-KD-8", "K-HASH-1",
+  "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
+  "K-ADM-2", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
+  "K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k", "K-IMP-RAW-5",
+  "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10",
+  "K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-8w",
   "K-REL-1", "K-REL-2", "K-REL-3", "K-REL-4", "K-REL-5", "K-REL-6",
   "K-REL-7", "K-REL-8", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12",
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
@@ -379,22 +440,17 @@ const selected = new Set([
 
 // Each entry names a missing port, method, capability, or profile behavior.
 const notApplicable = {
+  "K-FACT-4 expects changed pipeline, key ID, and redaction version to share an algorithm/value slot. Postgres slots include the full digest domain": ["K-FACT-4"],
+  "K-KD-9 expects two missing domains. Its direct insert supplies no current digest, so Postgres counts three": ["K-KD-9"],
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
-  "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
-  "capture.finish": [
-    "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5", "K-CLM-6",
-    "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
-    "K-KD-3", "K-KD-5",
-  ],
-  "snapshot.stateToken": ["K-ADM-7"],
-  raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
-  "hosted raw is personal-only until scopes step 2 (namespace guard)": ["K-RAW-4", "K-RAW-5"],
-  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
-    "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
+  "hosted raw is personal-only (namespace guard)": ["K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-8", "K-IMP-RAW-4", "K-IMP-RAW-4e"],
+  "raw conflict counters": ["K-RAW-7"],
+  "raw span purge": ["K-RAW-8s"],
   "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
   "spanLineage.resolveSpans": ["K-SPAN-1", "K-SPAN-2"],
+  "capture.finish suppressedItems (Postgres follow-up)": ["K-CLM-6"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session"],
@@ -466,13 +522,14 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
 }
 
 const factory = postgresFactory();
+const retainedStateFactory = postgresFactory(undefined, { seedRetainedState: true });
 for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   const name = `${factory.name} conformance ${testCase.id} ${testCase.title}`;
   // K-HYD-2 contains assertions even though the kit marks the supersession suite pending.
   const prepared = testCase.id === "K-HYD-2" ? { ...testCase, pending: undefined } : testCase;
   // The primary cases cover the memory ports. Their semantic follow-ups belong to the vector lane.
   const memoryOnly = ["K-HIDE-2", "K-HIDE-3", "K-WRITE-1"].includes(testCase.id);
-  test(name, options, (t) => runPreparedCase(factory,
+  test(name, options, (t) => runPreparedCase(testCase.id === "K-KD-5" ? retainedStateFactory : factory,
     memoryOnly ? { ...prepared, followUp: undefined } : prepared, t));
 }
 

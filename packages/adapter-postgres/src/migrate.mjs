@@ -4,7 +4,9 @@ import { toPostgresError } from "./errors.mjs";
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
 /** @import { Migration } from "./index.mjs" */
 
-const MIGRATION_LOCK = "SELECT pg_try_advisory_lock(hashtextextended('core_schema_migrations', 0)) AS locked";
+const MIGRATION_LOCK_KEY = "hashtextextended('core_schema_migrations', 0)";
+const MIGRATION_LOCK = `SELECT pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) AS locked`;
+const MIGRATION_UNLOCK = `SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY}) AS unlocked`;
 const CREATE_LEDGER = `CREATE TABLE IF NOT EXISTS core_schema_migrations (
   id text PRIMARY KEY,
   applied_at timestamptz NOT NULL DEFAULT now()
@@ -145,6 +147,11 @@ export async function applyMigrations(source, migrations) {
         } else {
           await applyTransactional(connection, migration);
         }
+      }
+      // A pool may return from destroy before PostgreSQL ends the session.
+      // Wait for the server to release the lock before reporting success.
+      if ((await connection.query(MIGRATION_UNLOCK)).rows[0]?.unlocked !== true) {
+        throw new CoreError("storage_error");
       }
       complete = true;
     } finally {

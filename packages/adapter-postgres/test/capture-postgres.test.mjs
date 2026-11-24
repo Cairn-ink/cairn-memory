@@ -7,7 +7,7 @@ import { allDigests, fingerprintLegacyCapture, hostedV1Digest } from "../../core
 import { createMemoryService } from "../../core/src/service/index.mjs";
 import {
   createPostgresCapturePorts, createPostgresFingerprintKeyProvider, createPostgresMemoryReads,
-  createPostgresMemoryStore, createPostgresPauseStore, createPostgresSuppressionStore,
+  createPostgresMemoryStore, createPostgresPauseStore, createPostgresRawPorts, createPostgresSuppressionStore,
   createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS,
 } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
@@ -38,7 +38,7 @@ async function database(t, captureOptions, afterQuery) {
       return {
         async query(sql, params) {
           const result = await client.query(sql, params);
-          afterQuery?.(sql);
+          await afterQuery?.(sql);
           return result;
         },
         release: (destroy) => client.release(destroy),
@@ -77,6 +77,121 @@ async function waitForBlock(pool, backends, offset, waiter) {
   }
   assert.fail("Postgres did not report the expected lock wait");
 }
+
+test("Postgres finish preserves retained digest domains with near-duplicate detection enabled", migrationDbTest, async (t) => {
+  let nearReads = 0;
+  const { pool, uow, capture } = await database(t, { nearDuplicate: true }, (sql) => {
+    if (sql.includes("<=>")) nearReads++;
+  });
+  const { scope } = event;
+  const key = await userFingerprintKey("capture-fingerprint-fixture", owner, HOSTED_FINGERPRINT_LABELS);
+  const content = "A separate capture detail.";
+  const current = await coreDigest(content, key);
+  const retained = { ...current, keyId: "retained", label: "archive" };
+  const digests = [current, retained];
+  const embedding = index => ({ model: "fixture", vector: Float32Array.from({ length: 1536 }, (_, i) => Number(i === index)) });
+  const hash = text => createHash("sha256").update(text).digest("hex");
+  const store = createPostgresSuppressionStore();
+  const memories = createPostgresMemoryStore();
+  await uow.run(owner, write, async tx => {
+    const existing = "An unrelated existing detail.";
+    await memories.insert(tx, scope, { kind: "fact", origin: "explicit", confidence: 1, text: existing,
+      textHash: `sha256:${hash(existing)}`, source: { kind: "mcp", client: null, sessionId: null }, embedding: embedding(0) }, [], 1);
+    const fact = { ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "retained", text: {
+      digests: [{ ...retained, value: hash("Forgotten detail") }],
+    } };
+    await store.writeFact(tx, fact, hash(factIncarnationBody(fact)));
+  });
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  assert.equal(claim.status, "claimed");
+  const { token } = await uow.run(owner, write, tx => capture.beginDispatch(tx, claim.token));
+  const result = await uow.run(owner, write, tx => capture.finish(tx, token, [{
+    content, kind: "fact", confidence: 1, textHash: `sha256:${hash(content)}`, digests, embedding: embedding(1), receipts: [],
+  }]));
+  assert.deepEqual(result.memories.map(({ outcome }) => outcome), ["inserted"]);
+  assert.ok(nearReads > 0);
+  const { rows: [stored] } = await pool.query("SELECT core_digests FROM memories WHERE user_id = $1 AND id = $2", [owner, result.memories[0].id]);
+  assert.deepEqual(stored.core_digests, digests);
+});
+
+test("Postgres finish rejects extra properties on its batch and digest arrays", migrationDbTest, async (t) => {
+  const { uow, capture } = await database(t);
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  const item = {
+    content: "A capture detail.", kind: "fact", confidence: 1, textHash: `sha256:${"f".repeat(64)}`,
+    embedding: { model: "fixture", vector: Float32Array.from({ length: 1536 }, (_, i) => Number(i === 0)) }, receipts: [],
+  };
+  const digest = { alg: "sha256", value: "f".repeat(64), pipeline: "core", keyId: null, redactionVersion: 1 };
+  const malformedBatch = Object.assign([item], { extra: true });
+  const malformedDigests = Object.assign([digest], { extra: true });
+  for (const items of [malformedBatch, [{ ...item, digests: malformedDigests }]]) {
+    await assert.rejects(uow.run(owner, write, tx => capture.finish(tx, claim.token, items)), { code: "invalid_input" });
+  }
+  assert.equal((await uow.run(owner, write, tx => capture.finish(tx, claim.token, [item]))).memories.length, 1);
+});
+
+test("Postgres finish advances once after an overlapping hosted write and invalidates its read token", migrationDbTest, async (t) => {
+  const { snapshot } = createPostgresMemoryReads();
+  const readSet = { owner, namespaces: [null] };
+  let preCaptureToken;
+  const { pool, uow, capture } = await database(t, undefined, async (sql) => {
+    if (!sql.startsWith("INSERT INTO memories") || preCaptureToken) return;
+    const { rows } = await pool.query(`UPDATE core_owner_state SET index_revision = index_revision + 1
+      WHERE user_id = $1 RETURNING index_revision`, [owner]);
+    assert.deepEqual(rows, [{ index_revision: "11" }]);
+    preCaptureToken = await uow.run(owner, read, tx => snapshot.stateToken(tx, readSet));
+  });
+  await pool.query("UPDATE core_owner_state SET index_revision = 10 WHERE user_id = $1", [owner]);
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  const { token } = await uow.run(owner, write, tx => capture.beginDispatch(tx, claim.token));
+  const result = await uow.run(owner, write, tx => capture.finish(tx, token, ["First detail", "Second detail"].map((content, index) => ({
+    content, kind: "fact", confidence: 1, textHash: `sha256:${createHash("sha256").update(content).digest("hex")}`,
+    embedding: { model: "fixture", vector: Float32Array.from({ length: 1536 }, (_, i) => Number(i === index)) }, receipts: [],
+  }))));
+
+  assert.equal(result.memories.length, 2);
+  assert.equal(result.indexRevision, 12);
+  const { rows: [state] } = await pool.query("SELECT index_revision FROM core_owner_state WHERE user_id = $1", [owner]);
+  assert.equal(state.index_revision, "12");
+  assert.ok(preCaptureToken);
+  await assert.rejects(uow.run(owner, read, tx => snapshot.assertUnchanged(tx, readSet, preCaptureToken)), { code: "cursor_stale" });
+  const replay = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  assert.equal(replay.status, "rawReplay");
+  assert.deepEqual(replay.result, result);
+});
+
+test("Postgres finish rejects a receipt source fenced after claim", migrationDbTest, async (t) => {
+  const lineageSecret = randomBytes(32).toString("hex");
+  const { uow, capture } = await database(t, { lineageSecret });
+  const { raw } = createPostgresRawPorts({ lineageSecret });
+  const { scope, client, sessionId } = event;
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  await uow.run(owner, write, tx => raw.fenceSession(tx, scope, { client, sessionId }));
+  await assert.rejects(uow.run(owner, write, tx => capture.finish(tx, claim.token, [{
+    content: "A memory from the fenced source.", kind: "fact", confidence: 1,
+    textHash: `sha256:${"f".repeat(64)}`,
+    embedding: { model: "fixture", vector: Float32Array.from({ length: 1536 }, (_, i) => Number(i === 0)) },
+    receipts: [{ client, sessionId, messageId: messages[0].id, role: messages[0].role, occurredAtMs: messages[0].occurredAtMs }],
+  }])), { code: "lineage_fenced" });
+});
+
+test("Postgres finish and replay report a later Raw archive's revision from the same run", migrationDbTest, async (t) => {
+  const lineageSecret = randomBytes(32).toString("hex");
+  const { uow, capture } = await database(t, { lineageSecret });
+  const { raw } = createPostgresRawPorts({ lineageSecret });
+  await uow.run(owner, write, tx => capture.admit(tx, event, messages));
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  const result = await uow.run(owner, write, async tx => {
+    const finished = await capture.finish(tx, claim.token, []);
+    assert.equal(finished.indexRevision, 0);
+    assert.equal((await raw.archive(tx, event, messages)).archived, 1);
+    return finished;
+  });
+  assert.equal(result.indexRevision, 1);
+  const replay = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  assert.equal(replay.status, "rawReplay");
+  assert.deepEqual(replay.result, result);
+});
 
 for (const format of ["current key", "legacy hosted"]) {
   test(`core capture finish withholds a contained forgotten passage from a ${format} fact`, migrationDbTest, async (t) => {
@@ -165,7 +280,8 @@ for (const format of ["current key", "legacy hosted"]) {
     const [{ fact }] = snapshot.passages;
     assert.deepEqual(fact.text.shingles, shingles);
     assert.equal(fact.text.keyId, key.id);
-    assert.deepEqual(fact.text.digests.find(({ alg }) => alg === digest.alg), digest);
+    const expectedDigest = digest.keyId === null ? digest : { ...digest, label: digest.pipeline };
+    assert.deepEqual(fact.text.digests.find(({ alg }) => alg === digest.alg), expectedDigest);
   });
 }
 

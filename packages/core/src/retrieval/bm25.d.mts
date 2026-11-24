@@ -22,4 +22,8 @@ export function createBM25<T extends RefRow & { text: string }>(documents: reado
   avgLength: number;
   df: Map<string, number>;
   search(text: string, depth?: number): (Omit<T, "text" | "length" | "frequencies" | "score"> & { score: number })[];
+  searchWithCount(text: string, depth?: number): {
+    rows: (Omit<T, "text" | "length" | "frequencies" | "score"> & { score: number })[];
+    matched: number;
+  };
 };

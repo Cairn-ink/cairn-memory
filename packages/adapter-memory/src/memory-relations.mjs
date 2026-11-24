@@ -1,5 +1,6 @@
 import { canonicalPair, compareUtf8, CoreError } from "@cairn-ink/core";
 import { invalidateRationale } from "./rationale.mjs";
+import { advanceInspectEpoch } from "./unit-of-work.mjs";
 import { validateMemoryId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { ConflictEdge, ConflictEdgeStore, Namespace, Scope, SupersessionStore } from "@cairn-ink/core/ports" */
@@ -111,9 +112,11 @@ export function createRelationStores(port, matchFacts) {
         };
         if (record.previous.id === record.replacement.id) throw new CoreError("invalid_ref");
         return (getState) => {
-          const { supersessions } = ensureRelations(getState(), namespace);
+          const state = getState();
+          const { supersessions } = ensureRelations(state, namespace);
           if (supersessions.has(record.previous.id)) throw new CoreError("invalid_ref");
           supersessions.set(record.previous.id, record);
+          advanceInspectEpoch(state, namespace);
         };
       });
     },
@@ -130,7 +133,10 @@ export function createRelationStores(port, matchFacts) {
             Object.assign(row, { historical: true, revision: row.revision + 1, ...writeTime(nowMs) });
             invalidateRationale(state, namespace, id);
           }
-          if (row || dropped) markDirty();
+          if (row || dropped) {
+            advanceInspectEpoch(state, namespace);
+            markDirty();
+          }
         };
       });
     },
@@ -168,9 +174,11 @@ export function createRelationStores(port, matchFacts) {
           relation, source, createdAtMs: nowMs,
         };
         return (getState, markDirty) => {
-          const { conflicts } = ensureRelations(getState(), namespace);
+          const state = getState();
+          const { conflicts } = ensureRelations(state, namespace);
           if (conflicts.has(key)) return { inserted: false };
           conflicts.set(key, record);
+          advanceInspectEpoch(state, namespace);
           markDirty();
           return { inserted: true };
         };
@@ -186,8 +194,12 @@ export function createRelationStores(port, matchFacts) {
       return port.write(tx, scope, "conditional", () => {
         const namespace = writeNamespace(scope);
         return (getState, markDirty) => {
-          const count = deleteConflicts(getState().relations.get(namespace), id);
-          if (count) markDirty();
+          const state = getState();
+          const count = deleteConflicts(state.relations.get(namespace), id);
+          if (count) {
+            advanceInspectEpoch(state, namespace);
+            markDirty();
+          }
           return count;
         };
       });

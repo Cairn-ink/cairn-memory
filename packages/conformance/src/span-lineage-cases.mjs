@@ -36,8 +36,11 @@ export const SPAN_LINEAGE_CASES = [
       const resolve = () => uow.run(owner, { pauseLock: true }, tx => spanLineage.resolveSpans(tx, scope, memory.id));
       const spans = await resolve();
       // Span granularity and keys are store-defined; the contract only requires the archived source to resolve.
-      check(Array.isArray(spans) && spans.length > 0 && spans.every(span => span?.kind === "rawSpan"),
-        "The archived source must resolve to at least one raw span");
+      check(Array.isArray(spans) && spans.length > 0, "The archived source must resolve to at least one raw span");
+      for (let index = 0; index < spans.length; index++) {
+        check(Object.hasOwn(spans, index) && spans[index]?.kind === "rawSpan",
+          "The archived source must resolve only to raw spans");
+      }
 
       const { rawDeleted } = await uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, session));
       equal(rawDeleted, 1, "The fixture must delete its source message");

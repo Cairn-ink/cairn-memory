@@ -74,11 +74,26 @@ key evidence needed for comparison withhold the card.
 
 For facts with legacy MACs, the adapter can pass `legacyFingerprint: { key, labels }`.
 Use the adapter's frozen legacy domain labels and derive the key with
-`userFingerprintKey(secret, owner, labels)`. Core compares legacy exact MACs
-and keyed shingles for the original and historically redacted forms of each
-field after cleaning the stored text. A fact with both legacy and Core aliases
-can match through either comparison. A host holding both kinds of facts passes
-both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
+`userFingerprintKey(secret, owner, labels)`. For each field, Core compares
+legacy exact MACs and keyed shingles under those labels for the cleaned
+original, V1 redacted text, hosted-current redacted text, Core-prepared text,
+NFKC then V1, and NFKC then hosted-current capture redaction. The signer
+normalizes its input. Core signs both the original and already-normalized
+forms of each spelling when that produces different bytes. Each signature
+keeps its own shingles and associated redaction versions for labelled facts.
+For full legacy facts, `containmentThreshold` sets
+the shingle cutoff. It defaults to 0.6 and must be greater than zero and at
+most one. An invalid cutoff withholds the card. A higher cutoff requires more
+overlap, so it hides fewer cards; hosts should not raise it above the default
+without a privacy review.
+
+Hosted legacy facts are passed without a digest `label`. A labelled digest
+compares redaction versions, and the version Core assigns to each legacy
+spelling can differ from the version the hosted writer recorded. Before any
+adapter starts labelling hosted legacy facts, Core must first treat an equal
+legacy MAC as a match regardless of its redaction version. A fact with both legacy and
+Core aliases can match through either comparison. A host holding both kinds
+of facts passes both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
 (derived with adapter labels). Omitting either leaves facts that require that
 key fail-closed. For a fact with both MACs, passing only `legacyFingerprint`
 can withhold an unrelated card because the Core MAC cannot be compared. With

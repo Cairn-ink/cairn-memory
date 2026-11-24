@@ -1,7 +1,10 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
+import { withContextRawRead } from "./context-raw-read.mjs";
+import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { createInspectStore } from "./inspect.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
@@ -9,6 +12,7 @@ import { createProceduralTagStore } from "./procedural-tags.mjs";
 import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
+import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
@@ -23,10 +27,13 @@ const nativeErrorMap = Object.freeze({});
  * @returns {import("./index.d.mts").MemoryAdapter}
  */
 export function createMemoryAdapter(options = {}) {
-  const flags = Object.freeze({ ...capabilities(options.capabilities ?? {}),
+  const flags = capabilities({ ...options.capabilities,
     ...(options.receiptAttachAdvancesRevision === true && { receiptAttachAdvancesRevision: true }),
     ...(options.proceduralTags === true && { proceduralTags: true }),
   });
+  if ((flags.contextRead && flags.cards) || (flags.contextRawRead && (!flags.contextRead || !flags.rawArchive))) {
+    throw new CoreError("capability_unavailable");
+  }
   const sessionRefs = options.sessionRefs ?? "plain";
   if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
   const newId = options.newId ?? (() => crypto.randomUUID());
@@ -40,24 +47,33 @@ export function createMemoryAdapter(options = {}) {
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
+  const receiptReadSafety = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
+  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceVisible);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
+  const placement = flags.placement ? handleWriteRejections(
+    createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
+    ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
+  const inspect = flags.inspect ? createInspectStore({ placement,
+    supersession: flags.supersession ? supersession : undefined,
+    conflicts: flags.conflictEdges ? conflicts : undefined }, work, matchFacts, receiptReadSafety) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
     capabilities: flags,
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
-    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
+    ...(contextRead && { contextRead: flags.contextRawRead && archive ? withContextRawRead(work, archive, contextRead) : contextRead }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
@@ -65,9 +81,8 @@ export function createMemoryAdapter(options = {}) {
     ...(flags.proceduralTags === true && { proceduralTags: handleWriteRejections(
       createProceduralTagStore(port, matchFacts), ["write", "clear"]) }),
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
-    ...(flags.placement && { placement: handleWriteRejections(
-      createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
-      ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) }),
+    ...(placement && { placement }),
+    ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
       createDocumentCardStore(port, now), ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
@@ -82,6 +97,7 @@ export function createMemoryAdapter(options = {}) {
         }
       },
       ...(rationale && createRationaleHarness(port, runSeed)),
+      ...(inspect && { seedInspectEvidence: inspect.seedInspectEvidence }),
       setWriteTime,
       setFingerprintSecret,
       setRetainedDigestFixture,

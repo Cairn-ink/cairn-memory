@@ -33,7 +33,23 @@ function fenced(db, scope, hash) {
 /** @param {string} key @param {SessionHasher} hashSession */
 export function createMigratedRawPolicy(key, hashSession) {
   return {
-    /** @param {Connection} db @param {CaptureKey} key */
+    /** @param {Connection} db @param {boolean | undefined} receiptProof */
+    receiptAncestryEmpty(db, receiptProof) {
+      if (receiptProof !== undefined) return receiptProof === true;
+      // Older conversions carry only counts. Legacy validation already rejected
+      // derived receipts with missing roots. Claims and episodes can own job roots.
+      return Boolean(db.prepare(`SELECT 1 FROM cairn_migration WHERE
+        json_type(source_evidence, '$.dropped.rawConversations') = 'integer' AND
+        json_extract(source_evidence, '$.dropped.rawConversations') = 0 AND
+        json_type(source_evidence, '$.dropped.rawReceiptLineage') = 'integer' AND
+        json_extract(source_evidence, '$.dropped.rawReceiptLineage') = 0 AND
+        json_type(source_evidence, '$.dropped.episodes') = 'integer' AND
+        json_extract(source_evidence, '$.dropped.episodes') = 0 AND
+        json_type(source_evidence, '$.dropped.captureAdmissions') = 'integer' AND
+        json_extract(source_evidence, '$.dropped.captureAdmissions') = 0`).get());
+    },
+
+    /** @param {Connection} db @param {Pick<CaptureKey, "scope" | "client" | "eventId">} key */
     blocksEvent(db, { scope, client, eventId }) {
       return Boolean(db.prepare(`SELECT 1 FROM cairn_migrated_raw_privacy
         WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND kind = 'event' AND selector = ?`)

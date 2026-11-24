@@ -52,8 +52,8 @@ keep the runner's target objects and comparisons independent of caller settings.
 
 Migrations 0005 and 0006 add owner state, suppression facts, and their digest
 rows. Each new fact advances its owner's `fact_epoch` by one. The owner's
-`index_revision` advances on every committed change to visible rows, receipts,
-raw data, lineage, or facts. This is the value returned as
+`index_revision` advances once per committed run that changes visible rows,
+receipts, raw data, lineage, or facts. This is the value returned as
 `FinishResult.indexRevision` and used to bind retrieval state tokens.
 `legacy_facts_ready` defaults to false for the later legacy copy. The backfill
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
@@ -71,28 +71,39 @@ numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
 `factSlot(fact)` uses `JSON.stringify` on the following target tuples.
 
-The slot is the canonical JSON array `[namespace ?? null, ...target]`. Every
-store uses the same target per kind; only its encoding is store-specific.
+The slot is the canonical JSON array `[namespace ?? null, ...target]`. Each
+digest contributes `[alg, value, keyId, label ?? pipeline, pipeline, redactionVersion]`.
+New keyed fact bodies include the signing label, defaulting to the pipeline
+when the caller omits it. Unkeyed SHA evidence follows Core's label-free format.
+Historical fact bodies and their shorter `[alg, value]` slot entries remain
+readable. A retry checks the historical body's full domain before reusing its slot.
 
 | Kind | Target |
 | --- | --- |
 | Identity | `["identity", memoryId, throughRevision ?? null]` |
-| Text | `["text", mode, [[alg, value], …], sourceMemory?.id ?? null]` using every digest in canonical order |
+| Text | `["text", mode, [digest, …], sourceMemory?.id ?? null]` using every digest tuple in canonical order |
 | Session | `["session", client, "id", sessionId]` or `["session", client, "hash", sessionKeyHash]` |
 | Window | `["window", client, startMs, endMs, unknownTime === true, anchor ?? null]` |
 | Raw span | `["rawSpan", sessionKeyHash, messageKey, startUtf16, endUtf16]` |
 
 A null window client selects all clients. `canonicalDigests(digests)` sorts a
-copy by algorithm, then value, in UTF-8 byte order. Each digest contributes
-only its algorithm and value to the target: the pipeline, redaction version and
-key id are not part of it, so the same digest set under a different pipeline
-label is the same target. Reordering the same digests preserves the slot.
+copy by algorithm, then value, then the encoded target tuple, in UTF-8 byte
+order. Reordering the same digests preserves the slot.
 Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
 
-Store core's canonical `factBody(snapshot)` in `body` and index every text digest
-in `core_fact_digests`. Populate the embedding and shingle lookup columns
+The first hosted rollout applies the full engine migration chain to a fresh
+database, with `core_fact_digests` empty when 0024 runs. Use a populated-table
+variant before applying 0024 to any database with existing facts. Migration
+0024 rewrites the digest table under an exclusive lock and refuses to proceed
+if it has more than 10,000 rows.
+
+Store core's canonical `factBody(snapshot)` in `body`. Migration 0024 adds the
+effective label and a bounded lookup key over the complete digest tuple to
+`core_fact_digests`. New text facts write lookup rows for every distinct digest,
+including labelled digests. Existing lookup rows use their pipeline as the
+effective label. Populate the embedding and shingle lookup columns
 only for full-mode text facts. The `vector(1536)` column is a float4 projection
 used only for neighbour search, and `body` stays authoritative. In exact mode,
 the embedding and shingles stay in `body` for raw checks, with no vector
@@ -165,12 +176,15 @@ and ID. Coverage stays incomplete when the page budget ends before the
 requested visible depth or when an unchecked model gap remains.
 
 `createPostgresDigestGate(uow, keyIdsForOwner)` returns
-`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
-The gate counts each row missing evidence for an accepted key or for any live
-HMAC-only fact domain, including hosted facts during dual-read. Require a zero
-count before enabling the adapter. For each fact, admission and visibility
-withhold candidates without a comparable MAC. MAC domains match on algorithm,
-key ID, and pipeline label.
+`digestCoverage(owner)`. Supply an array with the owner's current key ID for
+cutover, or an empty array if keyed Core writes are disabled. Coverage reports
+`incompleteRows` and `missingPairs`. Each pair consists of one row and one
+required signing domain. Require `missingPairs === 0` before enabling the
+adapter. Required domains include the current Core domain used at publication
+and every domain on a live keyed-only fact from the Core or hosted store.
+The algorithm, key ID, label, pipeline, and redaction version must all match.
+Historical unlabelled MACs use their pipeline as the default signing label.
+For each fact, admission and visibility use Core's comparability rules.
 
 Configure the fingerprint provider with the unit of work and the secrets
 available for staging. Call `publish(owner, keyId)` to activate a configured key
@@ -183,8 +197,9 @@ With the owner's memory writers paused, the host's cutover script can call
 `backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
 for each required hosted key. The callback receives stored text and returns the
 legacy exact MAC as 64 lowercase hex characters. The host keeps the signing key.
-The backfill appends missing `hosted-v1` digests in one transaction per call and
-returns the number of rows updated. Recheck the digest gate before cutover.
+The backfill appends digests for the `hosted-v1` signing domain at the requested
+redaction version in one transaction per call and returns the number of rows
+updated. Recheck the digest gate before cutover.
 
 A receipt with `forgotten_at` set is a replay tombstone. Its original memory ID
 serves as part of the storage key. Replacement and erasure delete active receipts

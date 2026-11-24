@@ -4,7 +4,7 @@ import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
-import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { cleanContent, normalizeForHash, prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { redactAmendmentText } from "../routing/redaction.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
@@ -25,12 +25,12 @@ function reportedIndex(indexRevision) {
 }
 
 /** @param {import("../ports/host.d.ts").ExplicitWriteReceipt | undefined} receipt
- * @param {string} text @returns {Receipt[]}
+ * @param {string} text @returns {(Receipt & { excerpt: string })[]}
  */
 function explicitReceipts(receipt, text) {
   return receipt ? [{
     client: receipt.client, sessionId: receipt.sessionId, messageId: receipt.eventId ?? receipt.messageId,
-    role: receipt.role, occurredAtMs: receipt.occurredAtMs, excerpt: text,
+    role: receipt.role, occurredAtMs: receipt.occurredAtMs, excerpt: receiptExcerpt(text),
   }] : [];
 }
 
@@ -357,7 +357,7 @@ export function writeMethods(deps) {
       if (procedural !== undefined) {
         if (receipts.length === 0 || (kind !== "instruction" && kind !== "preference")) return invalid();
         try {
-          spans = proceduralSpans(procedural, text);
+          spans = proceduralSpans(procedural, receipts[0].excerpt);
         } catch {
           return invalid();
         }
@@ -372,7 +372,7 @@ export function writeMethods(deps) {
       const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex, digesters);
       const embedding = embedder === null ? null : await embed(owner, text, key);
       if (embedding) query.embedding = embedding.vector;
-      const tag = spans && { spans, digest: await sha256Hex(text) };
+      const tag = spans && { spans, digest: await sha256Hex(receipts[0].excerpt) };
       const explicit = source.kind === "mcp" || source.kind === "web";
       const mode = explicit ? "hash" : "full";
       const row = /** @type {InsertRow} */ ({

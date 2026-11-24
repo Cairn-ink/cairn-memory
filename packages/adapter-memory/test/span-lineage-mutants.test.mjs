@@ -71,6 +71,14 @@ test("K-SPAN-1 detects a stale span after Raw deletion", async () => {
   await assert.rejects(runCase(mutant, deletedRaw), { message: "Deleted source Raw must resolve to []" });
 });
 
+test("K-SPAN-1 detects a hole while source Raw exists", async () => {
+  const mutant = factory(resolve => async (...args) => {
+    const spans = await resolve(...args);
+    return spans.length ? Array(1) : spans;
+  });
+  await assert.rejects(runCase(mutant, deletedRaw), { message: "The archived source must resolve only to raw spans" });
+});
+
 test("K-SPAN-2 detects an empty result for an unknown memory", async () => {
   const mutant = factory(resolve => async (...args) => {
     try {
@@ -118,7 +126,7 @@ test("K-SPAN-1 resolves in the pause-locked run forget uses", async () => {
   await assert.rejects(runCase(writerThrows, deletedRaw), { code: "raw_lineage_unavailable" });
   // A resolver that requires the pause lock satisfies the contract.
   const lockedOnly = trackingFactory((resolve, locked) => async (...args) => {
-    if (!locked()) throw new CoreError("raw_lineage_unavailable");
+    if (!locked()) throw new CoreError("internal_error");
     return resolve(...args);
   });
   assert.equal(await runCase(lockedOnly, deletedRaw), null);
