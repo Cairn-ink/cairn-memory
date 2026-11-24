@@ -1,11 +1,17 @@
+type WriteResultCapability = "proceduralTags" | "receiptAttachAdvancesRevision";
+
 export type Capability =
   | "nearDuplicate" | "vectorSuppression" | "shingleSuppression" | "fingerprintKey"
   | "orderedCapture" | "stagedEvidence" | "placement" | "relations" | "cards" | "documentCards" | "episodes"
   | "spanLineage" | "sessionLineage" | "rawSpans" | "rawArchive" | "rawWindowHide"
   | "supersession" | "conflictEdges" | "semanticRetrieval" | "forgetLog"
-  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch";
+  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch"
+  | WriteResultCapability;
 
-export type Capabilities = Readonly<Record<Capability, boolean>>;
+export type Capabilities = Readonly<
+  Record<Exclude<Capability, WriteResultCapability>, boolean> &
+  Partial<Record<WriteResultCapability, boolean>>
+>;
 
 export declare const CAPABILITIES: readonly Capability[];
 /** Unknown names throw invalid_input; unset names are false. */

@@ -73,7 +73,7 @@ type ExplicitWriteReceipt = Pick<Receipt, "client" | "sessionId" | "occurredAtMs
 
 interface SaveOptions {
   receipt?: ExplicitWriteReceipt;
-  /** Pending a storage port decision. Offsets refer to the explicit receipt excerpt. */
+  /** Requires proceduralTags. Offsets refer to the explicit receipt excerpt. */
   procedural?: { anchors: readonly { receiptIndex: 0; start: number; end: number }[] };
 }
 
@@ -82,22 +82,25 @@ interface CorrectOptions {
   receipt?: ExplicitWriteReceipt;
 }
 
-/** The facade every host (MCP, plugin, web, hosted service) talks to. Template: cloud port.ts. */
+/**
+ * The facade used by the MCP host, plugin, web client and the hosted service.
+ * On write results, indexRevision is the revision as it will commit. Older implementations may omit it.
+ */
 export interface MemoryService {
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
-  /** Write revisions are read inside the run. Older implementations may omit indexRevision. */
+  /** Throws capability_unavailable if procedural options are supplied without proceduralTags. */
   save(scope: Scope, text: string, source: SourceRef, kind?: MemoryKind, options?: SaveOptions): Promise<
     { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number } |
-    { status: "suppressed" | "paused" | "invalid" }
+    { status: "suppressed" | "paused" | "invalid"; indexRevision?: number }
   >;
   correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef, options?: CorrectOptions): Promise<
     { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |
-    { status: "suppressed" | "paused" | "not_found" | "conflict" }
+    { status: "suppressed" | "paused" | "not_found" | "conflict"; indexRevision?: number }
   >;
   forget(scope: Scope, id: string, source: SourceRef, options?: { expectedRevision?: Revision }): Promise<
     { status: "forgotten"; removedSimilar: number; indexRevision?: number } |
     { status: "not_found"; indexRevision?: number } |
-    { status: "conflict" }
+    { status: "conflict"; indexRevision?: number }
   >;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   /** A null query leaves the raw layer empty. */
