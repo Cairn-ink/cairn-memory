@@ -191,13 +191,17 @@ test("an absent row takes precedence over a missing or failing key and writes no
   assert.deepEqual(mutations, []);
 });
 
-test("an existing row without a fingerprint key fails closed with zero writes", async () => {
+test("an existing row without a fingerprint key is forgotten with an exact-only fact", async () => {
   const target = row("target");
-  const { service, mutations, committed } = setup({ rows: [target], hasKey: false });
-  const before = committed(scope.owner);
-  await assert.rejects(() => service.forget(scope, target.id, source), code("fingerprint_unavailable"));
-  assert.deepEqual(committed(scope.owner), before);
-  assert.deepEqual(mutations, []);
+  const { service, committed } = setup({ rows: [target], hasKey: false });
+  assert.deepEqual(await service.forget(scope, target.id, source), { status: "forgotten", removedSimilar: 0 });
+  const { rows, facts } = committed(scope.owner);
+  assert.deepEqual(rows, []);
+  assert.equal(facts.length, 1);
+  const { fact } = facts[0];
+  assert.equal(fact.kind, "text");
+  assert.equal(fact.mode, "exact");
+  assert.deepEqual(fact.text, { digests: await allDigests(target.text, null), keyId: null });
 });
 
 test("forget remains available while paused and keeps the pause lock", async () => {
