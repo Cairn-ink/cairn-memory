@@ -7,7 +7,7 @@ import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fak
 const source = { kind: "mcp", client: null, sessionId: null };
 
 for (const fingerprintKey of [false, true]) {
-  test(`forget erases a suppressed row with ${fingerprintKey ? "the adapter's" : "an external"} key provider`, async () => {
+  test(`forget erases a suppressed row ${fingerprintKey ? "with the adapter's key provider" : "without using the external key provider"}`, async () => {
     const row = memory("target", { text: "The spare lens is in the cabinet." });
     const [digest] = await allDigests(row.text);
     row.textHash = "sha256:" + digest.value;
@@ -33,15 +33,19 @@ for (const fingerprintKey of [false, true]) {
 
     assert.deepEqual(await service.forget(scope, row.id, source), { status: "forgotten", removedSimilar: 0 });
     assert.equal(transactionLookups, fingerprintKey ? 1 : 0);
-    assert.deepEqual(calls.filter(([method]) => method === "keys.userKey"),
-      fingerprintKey ? [] : [["keys.userKey", scope.owner]]);
+    assert.deepEqual(calls.filter(([method]) => method === "keys.userKey"), []);
     const { rows, facts } = committed(scope.owner);
     assert.deepEqual(rows, []);
     assert.equal(facts.length, 2);
     const { fact } = facts[1];
     assert.equal(fact.kind, "text");
-    assert.equal(fact.mode, "full");
-    assert.equal(fact.text.keyId, key.id);
+    if (fingerprintKey) {
+      assert.equal(fact.mode, "full");
+      assert.equal(fact.text.keyId, key.id);
+    } else {
+      assert.equal(fact.mode, "exact");
+      assert.deepEqual(fact.text, { digests: await allDigests(row.text, null), keyId: null });
+    }
     assert.ok(fact.text.digests.every(digest => !("label" in digest)));
   });
 }

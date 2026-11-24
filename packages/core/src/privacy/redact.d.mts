@@ -9,3 +9,5 @@ export declare function redactCore(text: string): string;
 
 /** One pass of the core policy, with UTF-16 offsets in the original text. */
 export declare function coreRedactionMasks(text: string): [start: number, end: number][];
+/** @internal Collects the secret values removed by either redaction policy. */
+export declare function collectRedactedSecretValues(text: string, values: Set<string>): void;

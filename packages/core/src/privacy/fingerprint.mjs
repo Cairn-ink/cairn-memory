@@ -175,7 +175,11 @@ const coreDigestText = raw => normalizeForHash(prepareCoreText(raw));
 
 /** @param {string} raw @param {FingerprintKey | null} [key] @returns {Promise<TextDigest>} */
 export async function coreDigest(raw, key) {
-  const text = coreDigestText(raw);
+  return hashCore(coreDigestText(raw), key);
+}
+
+/** @param {string} text @param {FingerprintKey | null} [key] @returns {Promise<TextDigest>} */
+async function hashCore(text, key) {
   const version = { pipeline: /** @type {const} */ ("core"), redactionVersion: PRIVACY_REDACTION_VERSIONS.core };
   if (key == null) return { alg: "sha256", value: await sha256(text), ...version, keyId: null };
   try {
@@ -185,9 +189,16 @@ export async function coreDigest(raw, key) {
   }
 }
 
+/** @param {string} raw */
+const hostedV1Text = raw => normalizeForHash(redactV1(cleanContent(raw)));
+
 /** @param {string} raw @returns {Promise<TextDigest>} */
 export async function hostedV1Digest(raw) {
-  const text = normalizeForHash(redactV1(cleanContent(raw)));
+  return hashHostedV1(hostedV1Text(raw));
+}
+
+/** @param {string} text @returns {Promise<TextDigest>} */
+async function hashHostedV1(text) {
   return { alg: "sha256", value: await sha256(text), pipeline: "hosted-v1", redactionVersion: PRIVACY_REDACTION_VERSIONS.v1, keyId: null };
 }
 
@@ -219,9 +230,21 @@ export async function engineLegacyDigest(raw, max = 4_000, rawMax = 20_000) {
  */
 export async function allDigests(raw, key) {
   if (typeof raw !== "string") throw new CoreError("invalid_input");
+  return digestAliases(raw, key);
+}
+
+/** @param {string} raw @param {FingerprintKey | null} [key]
+ * @param {(text: string) => boolean} [allows] @returns {Promise<TextDigest[]>}
+ */
+async function digestAliases(raw, key, allows = () => true) {
   const engine = engineLegacyText(raw, 4_000, 20_000);
-  const digests = await Promise.all([coreDigest(raw, key), hostedV1Digest(raw)]);
-  if (engine !== undefined) digests.push(await hashEngineLegacy(engine));
+  const core = coreDigestText(raw);
+  const hosted = hostedV1Text(raw);
+  const digests = await Promise.all([
+    ...(allows(core) ? [hashCore(core, key)] : []),
+    ...(allows(hosted) ? [hashHostedV1(hosted)] : []),
+  ]);
+  if (engine !== undefined && allows(engine)) digests.push(await hashEngineLegacy(engine));
 
   const unique = new Map();
   for (const digest of digests) {
@@ -251,6 +274,47 @@ export function textVariants(raw, text) {
 }
 
 /** @typedef {ReturnType<typeof textVariants>} TextVariants */
+
+/** @param {string} raw @param {string} text */
+function passageSpellings(raw, text) {
+  /** @type {Map<string, TextVariants>} */
+  const spellings = new Map();
+  for (const variant of textVariants(raw, text)) {
+    const normalized = normalizeForHash(variant[0]);
+    const variants = spellings.get(normalized) ?? [];
+    variants.push(variant);
+    spellings.set(normalized, variants);
+  }
+  return spellings;
+}
+
+/** @param {string} normalized @param {TextVariants[number]} variant
+ * @param {FingerprintKey | null} key @param {(text: string) => Promise<string>} hash
+ * @param {(text: string) => boolean} allows
+ */
+async function passageDigests(normalized, [variant, pipeline, redactionVersion], key, hash, allows) {
+  const [digests, exact] = await Promise.all([
+    digestAliases(variant, key, allows),
+    allows(normalized) ? hash(normalized) : null,
+  ]);
+  // The aliases re-redact their input. Keep the exact variant for historical facts.
+  if (exact !== null) addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
+  return digests;
+}
+
+/** Uses the same exact inputs as candidate fingerprinting, with a filter before hashing.
+ * @param {string} raw @param {string} text @param {(text: string) => boolean} allows
+ */
+export async function unkeyedForgetDigests(raw, text, allows) {
+  const variants = await Promise.all(Array.from(passageSpellings(raw, text), ([normalized, spellings]) =>
+    passageDigests(normalized, spellings[spellings.length - 1], null, sha256, allows)));
+  /** @type {TextDigest[]} */
+  const digests = [];
+  for (const aliases of variants) {
+    for (const digest of aliases) addDigest(digests, digest);
+  }
+  return digests;
+}
 
 /** @param {Map<string, TextVariants>} spellings @param {RetainedDigester} digester */
 async function retainedFingerprints(spellings, digester) {
@@ -301,27 +365,18 @@ async function retainedFingerprints(spellings, digester) {
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>}
  */
 export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256, digesters) {
-  /** @type {Map<string, TextVariants>} */
-  const spellings = new Map();
-  for (const variant of textVariants(raw, text)) {
-    const normalized = normalizeForHash(variant[0]);
-    const variants = spellings.get(normalized) ?? [];
-    variants.push(variant);
-    spellings.set(normalized, variants);
-  }
+  const spellings = passageSpellings(raw, text);
   const retained = digesters?.length ?
     (await Promise.all(digesters.map(digester => retainedFingerprints(spellings, digester)))).filter(evidence => evidence !== null) : [];
   const retainedDigests = retained.flatMap(evidence => evidence.digests);
   // Each spelling has the complete exact evidence. Containment still checks its own shingles.
   return Promise.all(Array.from(spellings, async ([normalized, variants], index) => {
-    const [variant, pipeline, redactionVersion] = variants[variants.length - 1];
-    const [digests, exact, legacy] = await Promise.all([
-      allDigests(variant, key),
-      sha256Hex(normalized),
+    const spelling = variants[variants.length - 1];
+    const [variant, , redactionVersion] = spelling;
+    const [digests, legacy] = await Promise.all([
+      passageDigests(normalized, spelling, key, sha256Hex, () => true),
       key && fingerprintLegacyCapture(variant, key, coreFingerprintLabels),
     ]);
-    // allDigests re-redacts its input. Keep the exact variant for historical facts.
-    addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
     if (legacy) {
       addDigest(digests, {
         alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,

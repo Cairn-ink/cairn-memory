@@ -53,7 +53,7 @@ export function createPostgresConflictEdgeStore({ allowNonNullNamespace = false,
       const [leftRevision, rightRevision] = (left === first ? [edge.left, edge.right] : [edge.right, edge.left])
         .map(endpoint => readRevisionNumber(endpoint.revision));
       const us = writeTime(nowMs);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const { rows } = await query(`INSERT INTO memory_conflicts (user_id, left_memory_id, left_revision,
           right_memory_id, right_revision, relation, source, created_at)
@@ -65,7 +65,7 @@ export function createPostgresConflictEdgeStore({ allowNonNullNamespace = false,
           ON CONFLICT DO NOTHING RETURNING left_memory_id`,
         [owner, ns, left, leftRevision, right, rightRevision, relation, source, us.toString()]);
         const inserted = rows.length > 0;
-        if (inserted) await advanceIndex(query, owner);
+        if (inserted) await advanceIndex(query, owner, run);
         return { inserted };
       });
     },
@@ -81,9 +81,9 @@ export function createPostgresConflictEdgeStore({ allowNonNullNamespace = false,
       guardOwner(tx, scope, true);
       const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const { rows } = await query(`DELETE FROM memory_conflicts WHERE ${TOUCHING} RETURNING 1`, [tx.owner, ns, key]);
-        if (rows.length) await advanceIndex(query, tx.owner);
+        if (rows.length) await advanceIndex(query, tx.owner, run);
         return rows.length;
       });
     },
