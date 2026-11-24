@@ -672,9 +672,11 @@ test("Postgres scopes relation mutations and advances the index only for real co
   await run(owner, {}, async tx => {
     assert.deepEqual(await conflicts.insert(tx, scope, edge, 3), { inserted: false });
     assert.equal(await conflicts.invalidate(tx, scope, foreign.id), 0);
-    await supersession.record(tx, scope, { previous: first, replacement: second }, [], 2);
   });
-  assert.notEqual(await readToken(), afterInsert);
+  const afterDuplicate = await readToken();
+  assert.equal(afterDuplicate, afterInsert);
+  await run(owner, {}, tx => supersession.record(tx, scope, { previous: first, replacement: second }, [], 2));
+  assert.notEqual(await readToken(), afterDuplicate);
   await assert.rejects(run(other, {}, tx => conflicts.invalidate(tx, scope, first.id)), { code: "internal_error" });
   await assert.rejects(run(other, {}, tx => supersession.record(tx, foreignScope, {
     previous: foreign, replacement: second,

@@ -131,8 +131,8 @@ export const TOPIC_FOR_MEMORIES_CASES = [
     await checkIsolation([setup(ctx), setup(ctx, { owner: ctx.otherOwner, namespace: null })]);
   }),
 
-  batchCase("4-namespace", "other namespaces are invisible to the batch lookup", async (ctx) => {
-    await checkIsolation([setup(ctx), setup(ctx, ctx.scope("other-namespace"))]);
+  batchCase("4-namespace", "other owners and namespaces are invisible to the batch lookup", async (ctx) => {
+    await checkIsolation([setup(ctx), setup(ctx, ctx.scope("other-namespace")), setup(ctx, { owner: ctx.otherOwner, namespace: null })]);
   }),
 
   batchCase(5, "the batch size must be between 1 and 100 before deduplication", async (ctx) => {
