@@ -1,3 +1,6 @@
+// This guard catches accidental outer transaction control in first-party port code.
+// Deliberate evasion is out of scope.
+
 import { CoreError } from "@cairn-ink/core";
 
 /** @import { DatabaseSync, StatementSync, SQLOutputValue } from "node:sqlite" */
@@ -11,7 +14,8 @@ import { CoreError } from "@cairn-ink/core";
 const sqlTrivia = String.raw`(?:[\t\n\v\f\r \uFEFF]|--[^\n]*(?:\n|$)|\/\*(?:[^*]|\*(?!\/))*(?:\*\/|$))`;
 const leadingTrivia = new RegExp(`^(?:;|${sqlTrivia})*`);
 const outerTransactionControl = /^(?:BEGIN|COMMIT|END|ROLLBACK)\b/i;
-const rollbackToSavepoint = new RegExp(`^ROLLBACK${sqlTrivia}+(?:TRANSACTION${sqlTrivia}+)?TO\\b`, "i");
+// SQLite identifiers can continue with $ or any non-ASCII character.
+const rollbackToSavepoint = new RegExp(String.raw`^ROLLBACK${sqlTrivia}+(?:TRANSACTION${sqlTrivia}+)?TO(?![A-Za-z0-9_$\u0080-\uFFFF])`, "i");
 
 /** @param {string} sql */
 function withoutTrivia(sql) {
