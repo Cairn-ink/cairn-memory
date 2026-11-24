@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { factIncarnationBody } from "../../core/src/index.mjs";
-import { createPostgresCapturePorts, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
+import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "../../core/src/index.mjs";
+import { allDigests, fingerprintLegacyCapture, hostedV1Digest } from "../../core/src/privacy/fingerprint.mjs";
+import { createMemoryService } from "../../core/src/service/index.mjs";
+import {
+  createPostgresCapturePorts, createPostgresFingerprintKeyProvider, createPostgresMemoryReads,
+  createPostgresMemoryStore, createPostgresPauseStore, createPostgresSuppressionStore,
+  createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS,
+} from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const owner = "capture-owner";
@@ -69,6 +75,97 @@ async function waitForBlock(pool, backends, offset, waiter) {
     if (await Promise.race([settled, delay(20, false)])) assert.fail("contender completed while the first write held its lock");
   }
   assert.fail("Postgres did not report the expected lock wait");
+}
+
+for (const format of ["current key", "legacy hosted"]) {
+  test(`core capture finish withholds a contained forgotten passage from a ${format} fact`, migrationDbTest, async (t) => {
+    const { pool, uow, capture } = await database(t);
+    const { scope, client, sessionId, eventId } = event;
+    const selection = { client, sessionId, eventId };
+    const suppressions = createPostgresSuppressionStore();
+    const memories = createPostgresMemoryStore();
+    const secret = "capture-fingerprint-fixture";
+    const keys = createPostgresFingerprintKeyProvider(secret, { uow });
+    const key = await userFingerprintKey(secret, owner, HOSTED_FINGERPRINT_LABELS);
+    await keys.publish(owner, key.id);
+    await pool.query("UPDATE core_owner_state SET legacy_facts_ready = true WHERE user_id = $1", [owner]);
+
+    const forgotten = "The spare brass lantern sits behind the painted cabinet.";
+    const contained = `Keep this maintenance detail in mind. ${forgotten}`;
+    const unrelated = "Log small purchases in the blue notebook.";
+    const { text_hmac, shingles, key_id } = await fingerprintLegacyCapture(forgotten, key, HOSTED_FINGERPRINT_LABELS);
+    const digest = await (format === "legacy hosted" ? hostedV1Digest(forgotten) : coreDigest(forgotten, key));
+    const vector = Float32Array.from({ length: 1536 }, (_, index) => Number(index === 0));
+    const sha256Hex = text => createHash("sha256").update(text).digest("hex");
+    const clock = { nowMs: Date.now, monotonicMs: () => performance.now(), sha256Hex,
+      hmacHex: (secret, text) => createHmac("sha256", secret).update(text).digest("hex") };
+    const tokens = { countTokens: () => 100 };
+    const service = createMemoryService({
+      storage: {
+        name: "Postgres", uow, suppressions, memories, keys, ...createPostgresMemoryReads(),
+        pause: createPostgresPauseStore(),
+        capabilities: capabilities({ fingerprintKey: true, embeddingRequiredOnInsert: true }),
+        capture: {
+          ...capture,
+          // Exercise the Core finish transaction with real memory inserts until
+          // the Postgres capture port provides its own finish implementation.
+          async finish(tx, _token, items) {
+            const inserted = [];
+            for (const { content, receipts, ...item } of items) {
+              const { id, revision } = await memories.insert(tx, scope, {
+                ...item, text: content, origin: "inferred", source: { kind: "capture", client, sessionId },
+              }, receipts, clock.nowMs());
+              inserted.push({ id, revision, outcome: "inserted" });
+            }
+            return { indexRevision: inserted.length, memories: inserted, suppressedCount: 0, duplicateCount: 0, counters: {} };
+          },
+        },
+      },
+      config: {}, clock, tokens, gate: { async assertOpen() {} },
+      model: {
+        model: "fixture", contextWindow: 40_000, ...tokens,
+        async call() {
+          return { items: [contained, unrelated].map(content => ({
+            content, kind: "fact", confidence: 0.9, sourceIndices: [0],
+          })) };
+        },
+      },
+      embedder: {
+        model: "fixture", dimensions: vector.length,
+        async embed(texts) {
+          // The fact arrives after the pre-embedding snapshot, so the final
+          // snapshot must supply it for the capture write to withhold the copy.
+          assert.deepEqual(texts, [contained.toLowerCase(), unrelated.toLowerCase()]);
+          if (format === "legacy hosted") {
+            await pool.query(`INSERT INTO suppressions
+              (id, user_id, kind, origin, text_hash, text_hmac, shingles, key_id, embedding)
+              VALUES ('legacy-passage', $1, 'text', 'forget', $2, $3, $4, $5, $6)`,
+            [owner, digest.value, text_hmac, shingles, key_id, JSON.stringify([...vector])]);
+          } else {
+            const fact = { ...scope, actionId: "forget-passage", kind: "text", origin: "forget", mode: "full",
+              text: { digests: [digest], shingles, keyId: key_id } };
+            await uow.run(owner, write, tx => suppressions.writeFact(tx, fact, sha256Hex(factIncarnationBody(fact))));
+          }
+          return texts.map(() => vector);
+        },
+      },
+    });
+
+    assert.deepEqual(await service.enqueueCapture(scope, { ...selection, messages }), { status: "accepted" });
+    const done = await service.runCapture(scope, selection);
+    assert.equal(done.status, "done", done.code);
+    assert.deepEqual((await pool.query("SELECT text FROM memories WHERE user_id = $1 ORDER BY text", [owner])).rows,
+      [{ text: unrelated }]);
+    assert.equal(done.result.memories.length, 1);
+
+    const passages = [{ digests: await allDigests(unrelated, key), shingles: [], keyId: key.id }];
+    const snapshot = await uow.run(owner, read, tx => suppressions.snapshot(tx, scope, { passages }));
+    assert.equal(snapshot.passages.length, 1);
+    const [{ fact }] = snapshot.passages;
+    assert.deepEqual(fact.text.shingles, shingles);
+    assert.equal(fact.text.keyId, key.id);
+    assert.deepEqual(fact.text.digests.find(({ alg }) => alg === digest.alg), digest);
+  });
 }
 
 test("capture concurrency gives two connections exactly one lease for an identity", migrationDbTest, async (t) => {
