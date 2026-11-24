@@ -26,26 +26,35 @@ export function receiptExcerptDenial(namespace, excerpt) {
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["receiptSourcesVisible"]} [rawSourcesVisible]
  */
 export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
-  /** @param {State} state @param {Scope} scope @param {StoredReceipt} receipt
-   * @param {string | undefined} key @param {Policy} policy @returns {Promise<InspectReceipt | null>}
+  /** @param {State} state @param {Scope} scope @param {Receipt & { excerpt: string }} receipt
+   * @param {Policy} policy @param {string} [key]
    */
-  return async function receiptReadSafety(state, scope, receipt, key, policy) {
-    const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
-    if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant") ||
-        !id || !excerpt || createdAtMs === undefined || !key || key !== await receiptIdentityKey(receipt)) return null;
+  async function receiptWithheld(state, scope, receipt, policy, key) {
+    const { excerpt } = receipt;
     if (state.receiptDenials.size) {
       const { namespace } = scope;
-      if (state.receiptDenials.has(JSON.stringify([namespace, key])) ||
+      if (state.receiptDenials.has(JSON.stringify([namespace, key ?? await receiptIdentityKey(receipt)])) ||
           state.receiptDenials.has(await receiptAddressKey(namespace, receipt)) ||
-          (excerpt.length >= 799 && state.receiptDenials.has(await receiptExcerptDenial(namespace, excerpt)))) return null;
+          (excerpt.length >= 799 && state.receiptDenials.has(await receiptExcerptDenial(namespace, excerpt)))) return true;
     }
 
     const digests = policy.textFacts.length ? await allDigests(excerpt) : [];
     if (policy.textFacts.length) {
       for (const fingerprintKey of await ringKeys(scope.owner)) digests.push(await coreDigest(excerpt, fingerprintKey));
     }
-    if (policy.withholdsRaw(receipt, digests)) return null;
-    if (rawSourcesVisible && !await rawSourcesVisible(state, scope, receipt)) return null;
+    return policy.withholdsRaw(receipt, digests) || (rawSourcesVisible ? !await rawSourcesVisible(state, scope, receipt) : false);
+  }
+
+  /** @param {State} state @param {Scope} scope @param {StoredReceipt} receipt
+   * @param {string | undefined} key @param {Policy} policy @returns {Promise<InspectReceipt | null>}
+   */
+  async function receiptReadSafety(state, scope, receipt, key, policy) {
+    const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
+    if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant") ||
+        !id || !excerpt || createdAtMs === undefined || !key || key !== await receiptIdentityKey(receipt) ||
+        await receiptWithheld(state, scope, { ...receipt, excerpt }, policy, key)) return null;
     return { client, sessionId, messageId, eventId: messageId, role, occurredAtMs, id, excerpt, createdAtMs };
-  };
+  }
+
+  return { receiptReadSafety, receiptWithheld };
 }

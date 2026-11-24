@@ -36,7 +36,7 @@ function matchOrder(a, b) {
 
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
- * @param {import("@cairn-ink/core").Capabilities} capabilities
+ * @param {import("@cairn-ink/core/ports").StorageAdapter["capabilities"]} capabilities
  * @param {() => string} newId
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  * @param {import("./privacy.mjs").RingKeys} [ringKeys]
@@ -44,6 +44,7 @@ function matchOrder(a, b) {
 export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression),
   ringKeys = async () => []) {
   let nearSkippedUnembedded = 0;
+  const proceduralTags = capabilities.proceduralTags === true;
 
   /** @param {InsertRow} row */
   const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
@@ -105,22 +106,28 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @param {import("./unit-of-work.mjs").State} state @param {Entry} entry
    * @param {StoredReceipt[]} incoming @param {number} createdAtMs
+   * @param {boolean} [returnReceiptIds] @param {boolean} [checkReplay]
    */
-  async function appendReceipts(state, entry, incoming, createdAtMs) {
-    const receipts = attachReceipts(entry.receipts, incoming);
+  async function appendReceipts(state, entry, incoming, createdAtMs, returnReceiptIds = false, checkReplay = false) {
+    /** @type {StoredReceipt[] | undefined} */
+    const retained = returnReceiptIds && incoming.length ? [] : undefined;
+    const receipts = attachReceipts(entry.receipts, incoming, retained, checkReplay);
     for (const receipt of receipts.slice(entry.receipts.length)) {
       if (capabilities.inspect) {
         const position = state.nextInspectReceiptPosition++;
         if (!Number.isSafeInteger(position)) throw new CoreError("internal_error");
         (entry.inspectReceiptPositions ??= new Map()).set(receipt, position);
       }
-      if (receipt.excerpt !== undefined && (capabilities.inspect || capabilities.contextRead)) {
+      if (receipt.excerpt !== undefined && (capabilities.inspect || capabilities.contextRead || returnReceiptIds)) {
         receipt.id = capabilities.inspect ? crypto.randomUUID() : (receipt.id ?? crypto.randomUUID());
         receipt.createdAtMs ??= createdAtMs;
         (entry.receiptKeys ??= new Map()).set(receipt, await receiptIdentityKey(receipt));
+      } else if (retained) {
+        receipt.id = crypto.randomUUID();
       }
     }
     entry.receipts = receipts;
+    return retained?.map(receipt => receipt.id ??= crypto.randomUUID());
   }
 
   /**
@@ -157,11 +164,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: [],
             };
-            await appendReceipts(state, entry, incoming, nowMs);
+            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, proceduralTags && !fromFinish);
             entries.set(id, entry);
             advanceInspectEpoch(state, namespace);
             markDirty();
-            return created;
+            return { ...created, ...(receiptIds && { receiptIds }) };
           };
         });
       },
@@ -177,19 +184,23 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const state = getState();
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
+            const previousCount = entry.receipts.length;
+            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, proceduralTags && !fromFinish, !fromFinish);
             const { row } = entry;
-            let changed = false;
-            if (!row.historical) {
+            let changed = capabilities.receiptAttachAdvancesRevision === true && entry.receipts.length > previousCount;
+            const proceduralKindChange = !fromFinish && proceduralTags && copy.kind !== row.kind &&
+              (copy.kind === "instruction" || copy.kind === "preference");
+            if (!row.historical || proceduralKindChange) {
               const { confidence, kind = row.kind, origin = row.origin } = copy;
-              changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
-              Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
+              changed ||= confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+              Object.assign(row, { confidence, kind, origin });
             }
+            if (changed) row.revision++;
             Object.assign(row, writeTime(nowMs));
-            await appendReceipts(state, entry, incoming, nowMs);
             if (changed || incoming.length) invalidateRationale(state, namespace, id);
             advanceInspectEpoch(state, namespace);
             markDirty();
-            return { outcome: changed ? "changed" : "touched", revision: row.revision };
+            return { outcome: changed ? "changed" : "touched", revision: row.revision, ...(receiptIds && { receiptIds }) };
           };
         });
       },

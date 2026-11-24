@@ -7,6 +7,8 @@ export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResu
 
 export interface MemoryAdapterOptions {
   capabilities?: Partial<Record<Capability, boolean>>;
+  receiptAttachAdvancesRevision?: boolean;
+  proceduralTags?: boolean;
   newId?: () => string;
   now?: () => number;
   topicRetryAfterMs?: number;
@@ -20,7 +22,8 @@ type CapturePorts = StorageAdapter["capture"];
 
 export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
-  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText" | "inspect"> & {
+  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText" | "inspect" |
+  "proceduralTags"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
   readonly contextRead?: import("@cairn-ink/core/ports").ContextReadStore;
   name: "memory";

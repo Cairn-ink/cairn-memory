@@ -166,7 +166,9 @@ test("an explicit keyless save refuses the forgotten text and accepts a containi
   const [{ fact }] = await storedFacts(adapter);
   await adapter.harness.seedFact(scope.owner, { ...fact, mode: "full" });
 
-  assert.deepEqual(await service.save(scope, forgotten, explicitSource), { status: "suppressed" });
+  const { indexRevision: refusedRevision, ...refused } = await service.save(scope, forgotten, explicitSource);
+  assert.deepEqual(refused, { status: "suppressed" });
+  assert.ok(Number.isSafeInteger(refusedRevision) && refusedRevision > 0);
   const saved = await service.save(scope, containing, explicitSource);
   assert.equal(saved.status, "saved");
   assert.equal(saved.item.text, containing);

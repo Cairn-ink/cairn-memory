@@ -15,6 +15,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @typedef {{row: Row, receipts: StoredReceipt[], inspectReceiptPositions?: Map<Receipt, number>,
  * receiptKeys?: Map<Receipt, string>,
+ * proceduralTag?: import("@cairn-ink/core/ports").ProceduralTag,
  * inspectEvidence?: import("./inspect.mjs").StoredInspectEvidence}} Entry */
 /** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */

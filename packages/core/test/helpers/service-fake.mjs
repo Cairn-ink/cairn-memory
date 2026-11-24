@@ -342,6 +342,8 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       return createHash("sha256").update(value).digest("hex");
     };
     storage.capabilities.nearDuplicate = near;
+    // The explicit-write fixtures model the hosted adapter's configured key provider.
+    if (writes && !capture && !forgetting) storage.capabilities.fingerprintKey = true;
     storage.keys = {
       async userKey(owner) {
         if (active.size > 0) {

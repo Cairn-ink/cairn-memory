@@ -54,7 +54,7 @@ function projectionKey(readSet, { types, intent }) {
  * @returns {ContextReadStore} */
 export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, rawSourcesVisible) {
   enableContextEpochs();
-  const receiptReadSafety = createReceiptReadSafety(ringKeys, rawSourcesVisible);
+  const { receiptReadSafety } = createReceiptReadSafety(ringKeys, rawSourcesVisible);
   /** @type {Map<string, Publication>} */
   const projections = new Map();
   /** @type {WeakMap<Tx, Map<string, Publication | undefined>>} */

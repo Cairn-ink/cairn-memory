@@ -1,4 +1,4 @@
-import type { OwnerId, Scope } from "./common.d.ts";
+import type { OwnerId, Receipt, Scope } from "./common.d.ts";
 import type { RawSpanFact, StoredFact, SuppressionFact, TextDigest } from "../suppression-fact.mjs";
 import type { Tx } from "./unit-of-work.d.ts";
 
@@ -47,6 +47,8 @@ export interface SuppressionStore {
    * Uncertain or unbounded → throws ineligible (fail closed).
    */
   snapshot(tx: Tx, scope: Scope, candidates: { client?: string; sessionId?: string; occurredAtMs?: ReadonlyArray<number | null>; passages?: readonly PassageFingerprint[] }): Promise<SuppressionSnapshot>;
+  /** Checks the explicit receipt against source withholding and tombstones in the write transaction. */
+  receiptWithheld?(tx: Tx, scope: Scope, receipt: Receipt & { excerpt: string }): Promise<boolean>;
   /** Facts that target one item; "ineligible" when the store cannot decide. */
   factsFor(tx: Tx, scope: Scope, target: { memoryId: string }): Promise<StoredFact[] | "ineligible">;
   /** Current owner epoch, or null before the first fact. */
