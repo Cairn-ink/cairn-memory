@@ -66,11 +66,18 @@ const cases = [
     name: "core-domain HMAC under a retained key",
     digests: async (key) => [await coreDigest(target, key)],
     rotate: true,
+    withheld: ["matching"],
+  },
+  {
+    name: "core-domain HMAC under a retained key without a signer",
+    digests: async (key) => [await coreDigest(target, key)],
+    rotate: true,
+    omitRetainedSigner: true,
     withheld: ["matching", "unrelated"],
   },
 ];
 
-for (const { name, digests, shingles, matchingContent = target, rotate, withheld } of cases) {
+for (const { name, digests, shingles, matchingContent = target, rotate, omitRetainedSigner, withheld } of cases) {
   test(`Raw import and capture admission withhold the same messages for ${name}`, async () => {
     const storage = createMemoryAdapter({
       capabilities: { rawArchive: true, fingerprintKey: true, shingleSuppression: true },
@@ -85,6 +92,7 @@ for (const { name, digests, shingles, matchingContent = target, rotate, withheld
       await harness.setFingerprintSecret("rotated-test-secret");
       assert.notEqual((await keys.userKey(scope.owner)).id, key.id);
     }
+    if (omitRetainedSigner) delete keys.retainedDigesters;
     const messages = [{ id: "matching", role: "user", content: matchingContent, occurredAtMs: 10 }, unrelated];
 
     assert.deepEqual(await captureService(storage).enqueueCapture(scope, { ...session, eventId, messages }),

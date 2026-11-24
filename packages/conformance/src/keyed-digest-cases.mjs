@@ -1,8 +1,13 @@
 import { allDigests, coreDigest, decideWrite } from "@cairn-ink/core";
+import { cleanContent, normalizeForHash, prepareCoreText, PRIVACY_REDACTION_VERSIONS, redactV1 } from "@cairn-ink/core";
+import { createMemoryService } from "@cairn-ink/core/service";
 import { check, equal, rejects, row, source } from "./support.mjs";
+import { fixtureEmbedding, readDump } from "./support.mjs";
 
 /** @import { FingerprintKey } from "@cairn-ink/core" */
+/** @import { TextDigest } from "@cairn-ink/core" */
 /** @import { FinishItem, ItemRef } from "@cairn-ink/core/ports" */
+/** @import { RetainedDigestFixture } from "./factory.d.ts" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 
 const matching = "Garden basil";
@@ -187,6 +192,181 @@ export const KEYED_DIGEST_CASES = [
       equal((await ownerKey(ctx)).id, current.id, "A refused rotation must preserve the current key");
       equal(await harness.dump(), before, "A refused rotation must preserve stored state");
       equal(await harness.rowsMissingKeyedDigest(owner), gate, "A refused rotation must preserve the gate");
+    },
+  },
+];
+
+const legacy = { keyId: "legacy-test-key", label: "legacy-test", secret: "synthetic-test-signing-seed" };
+const variantText = 'Garden basil notes put API_KEY=fixture12345 beside {"id_token":"synthetic-marker"}.';
+const currentForm = (/** @type {string} */ text) => normalizeForHash(prepareCoreText(text));
+const v1Form = (/** @type {string} */ text) => normalizeForHash(redactV1(cleanContent(text)));
+const encoder = new TextEncoder();
+
+/** @param {ArrayBuffer} bytes */
+function hex(bytes) {
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** @param {string} normalized @param {RetainedDigestFixture} fixture @param {boolean} [v1] */
+async function fixtureDigest(normalized, fixture, v1 = false) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(fixture.secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(normalized));
+  return /** @satisfies {TextDigest} */ ({
+    alg: /** @type {const} */ ("hmac"), keyId: fixture.keyId, label: fixture.label,
+    value: hex(mac),
+    pipeline: v1 ? "hosted-v1" : "core",
+    redactionVersion: v1 ? PRIVACY_REDACTION_VERSIONS.v1 : PRIVACY_REDACTION_VERSIONS.core,
+  });
+}
+
+/** @param {CaseContext} ctx @param {TextDigest} digest @param {string} actionId */
+async function seedRetainedFact(ctx, digest, actionId) {
+  await ctx.harness.seedFact(ctx.owner, {
+    ...ctx.scope(null), actionId, origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [digest] },
+  });
+}
+
+/** @param {CaseContext} ctx */
+function retainedSaveService(ctx) {
+  const unused = () => { throw new Error("Unexpected provider call during save"); };
+  return createMemoryService({
+    storage: { ...ctx.adapter, name: "retained-digest-test" },
+    model: { model: "test", contextWindow: 1, call: unused, countTokens: unused },
+    embedder: {
+      model: "fixture-only", dimensions: ctx.embeddingDimensions ?? 16,
+      async embed(texts) {
+        return texts.map(() => new Float32Array(fixtureEmbedding(ctx)?.vector ?? [1, ...Array(15).fill(0)]));
+      },
+    },
+    gate: { async assertOpen() {} },
+    clock: {
+      nowMs: () => 1, monotonicMs: () => 0, hmacHex: unused,
+      sha256Hex: async (input) => hex(await crypto.subtle.digest(
+        "SHA-256", typeof input === "string" ? encoder.encode(input) : new Uint8Array(input))),
+    },
+    tokens: { countTokens: unused },
+    config: {},
+  });
+}
+
+/** @param {CaseContext} ctx @param {boolean} [v1] */
+async function retainedSave(ctx, v1 = false) {
+  const { adapter, harness, owner } = ctx;
+  if (!harness.setRetainedDigestFixture) return "needs harness.setRetainedDigestFixture for a foreign signer";
+  if (!adapter.keys.retainedDigesters) return "needs keys.retainedDigesters for a foreign signer";
+  await harness.setRetainedDigestFixture(owner, legacy);
+  equal(await adapter.keys.retainedDigesters(owner), [], "A configured signer without a live fact must be omitted");
+  const current = currentForm(variantText);
+  const v1Text = v1Form(variantText);
+  if (v1) check(v1Text !== current && v1Text !== normalizeForHash(cleanContent(variantText)),
+    "The frozen V1 spelling must differ from both the cleaned original and current spelling");
+  await seedRetainedFact(ctx, await fixtureDigest(v1 ? v1Text : current, legacy, v1), "test-forget-retained");
+  const service = retainedSaveService(ctx);
+  const scope = ctx.scope(null);
+  equal((await service.save(scope, unrelated, source)).status, "saved", "A comparable retained-domain miss must be saved");
+  const result = await service.save(scope, variantText, source);
+  check(result.status === "suppressed",
+    `A matching ${v1 ? "V1-variant" : "current-form"} retained-domain save must be suppressed, got ${result.status}`);
+  const exported = await adapter.uow.run(owner, { readOnly: true }, (tx) =>
+    adapter.memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+  equal(exported.items.map(({ text }) => text), [unrelated], "Only the unrelated row must be visible");
+}
+
+/** @param {CaseContext} ctx @param {string} id @param {TextDigest[]} expected */
+async function expectStoredDigests(ctx, id, expected) {
+  /** @type {{owner: string, rows: {row: {id: string, digests: TextDigest[]}}[]}[]} */
+  const snapshot = /** @type {any} */ (await readDump(ctx.harness));
+  const stored = snapshot.find(({ owner }) => owner === ctx.owner)?.rows.find(({ row }) => row.id === id);
+  equal(stored?.row.digests, expected, "Dump must preserve all supplied digest fields and domains");
+}
+
+/** @type {readonly ConformanceCase[]} */
+export const RETAINED_KEYED_DIGEST_CASES = [
+  {
+    id: "K-KD-7", title: "admits a retained-domain miss and suppresses a current-form match",
+    needs: ["fingerprintKey"],
+    run: retainedSave,
+  },
+  {
+    id: "K-KD-7v", title: "suppresses a retained-domain match on the frozen V1 spelling",
+    needs: ["fingerprintKey"],
+    run: (ctx) => retainedSave(ctx, true),
+  },
+  {
+    id: "K-KD-8", title: "fails closed when a live foreign domain has no signer",
+    needs: ["fingerprintKey"],
+    async run(ctx) {
+      const { adapter: { keys, memories, uow }, owner } = ctx;
+      await seedRetainedFact(ctx, await fixtureDigest(currentForm(matching), legacy), "test-forget-foreign");
+      const scope = ctx.scope(null);
+      const service = retainedSaveService(ctx);
+      equal((await service.save(scope, unrelated, source)).status, "suppressed",
+        "A save without its live foreign domain must fail closed");
+
+      // K-KD-5 covers missing ring-key evidence. Here even the right key ID is insufficient with a different label.
+      const content = await row(ctx, unrelated);
+      const key = await ownerKey(ctx);
+      const wrongDomain = await fixtureDigest(currentForm(unrelated), { ...legacy, label: "other-test-domain" });
+      const digests = [...await allDigests(unrelated, key), wrongDomain];
+      await uow.run(owner, {}, async (tx) => {
+        const policy = await memories.readWritePolicy(tx, scope, [{ textHash: content.textHash, digests }], source, "hash");
+        equal(policy.blockedPositions, [0], "A wrong-label write query must fail closed");
+        await memories.insert(tx, scope, { ...content, digests }, [], 1);
+      });
+      const page = await uow.run(owner, { readOnly: true }, (tx) =>
+        memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+      equal(page.items, [], "A wrong-label row must remain hidden");
+      equal(await keys.retainedDigesters?.(owner) ?? [], [], "An unconfigured foreign signer must be absent");
+    },
+  },
+  {
+    id: "K-KD-9", title: "persists retained digests on insert, replacement and finish and counts each missing domain",
+    needs: ["fingerprintKey"],
+    async run(ctx) {
+      const { adapter: { uow, memories }, harness, owner } = ctx;
+      if (!harness.rowsMissingKeyedDigest) return "needs harness.rowsMissingKeyedDigest for retained-domain coverage";
+      const key = await ownerKey(ctx);
+      const scope = ctx.scope(null);
+      const fixture = { ...legacy, keyId: key.id };
+      const both = async (/** @type {string} */ text) => {
+        const digest = await fixtureDigest(currentForm(text), fixture);
+        const historical = /** @satisfies {TextDigest} */ ({ ...digest, label: "hosted-v1", pipeline: "hosted-v1" });
+        return [digest, historical];
+      };
+      const [foreignFact, { label: _label, ...historicalFact }] = await both(matching);
+      await seedRetainedFact(ctx, foreignFact, "test-forget-foreign");
+      await seedRetainedFact(ctx, historicalFact, "test-forget-historical");
+      const missing = () => harness.rowsMissingKeyedDigest?.(owner);
+      const initial = await row(ctx, unrelated);
+      const current = await allDigests(unrelated, key);
+      const retained = await both(unrelated);
+      const inserted = await uow.run(owner, {}, async (tx) => {
+        const digests = [...current, ...retained];
+        const complete = await memories.insert(tx, scope, { ...initial, digests }, [], 1);
+        const incomplete = await memories.insert(tx, scope, await row(ctx, third), [], 1);
+        return { complete, incomplete, digests };
+      });
+      await expectStoredDigests(ctx, inserted.complete.id, inserted.digests);
+      equal(await missing(), 2, "One row missing two live domains must count twice");
+
+      const edited = "Garden sage";
+      const replacement = await row(ctx, edited);
+      const digests = [...await allDigests(edited, key), ...(await both(edited)).slice(0, 1)];
+      const replaced = await uow.run(owner, {}, (tx) => memories.replaceContent(
+        tx, scope, inserted.incomplete.id, inserted.incomplete.revision, { ...replacement, digests }, null, 2));
+      equal(replaced.outcome, "changed", "The replacement must commit");
+      await expectStoredDigests(ctx, inserted.incomplete.id, digests);
+      equal(await missing(), 1, "A different label under the same key must not cover the remaining domain");
+
+      const captureText = "Garden oregano";
+      const item = await finishItem(ctx, captureText, key);
+      const captureDigests = [...(item.digests ?? []), ...await both(captureText)];
+      const finished = await finish(ctx, [{ ...item, digests: captureDigests }]);
+      equal(finished.memories.map(({ outcome }) => outcome), ["inserted"], "A covered capture item must commit");
+      await expectStoredDigests(ctx, finished.memories[0].id, captureDigests);
+      equal(await missing(), 1, "A covered capture item must not increase the gate count");
     },
   },
 ];

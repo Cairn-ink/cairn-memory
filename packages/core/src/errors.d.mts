@@ -22,6 +22,7 @@ export type ErrorCode =
   | "context_item_too_large" | "conflict_limit" | "supersession_limit" | "invalid_ref"
   | "invalid_text" | "extraction_failed" | "source_excluded" | "context_budget_exceeded" | "evidence_unavailable"
   | "model_not_configured" | "model_timeout" | "model_cancelled" | "token_count_unavailable"
+  | "rationale_failed" | "rationale_limit"
   | "qualification_failed" | "reconciliation_failed" | "classification_failed"
   | "moc_title_conflict";
 

@@ -1,8 +1,10 @@
-import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
+import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
+import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { DuplicateQuery, PassageFingerprint, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
 
@@ -29,9 +31,9 @@ function digestsFor({ textHash, legacyHash }) {
 
 /** @param {Pick<DuplicateQuery, "textHash" | "legacyHash" | "digests">} candidate */
 function withDigestAliases(candidate) {
-  const aliases = digestsFor(candidate);
-  const supplied = candidate.digests?.filter(({ alg, value }) =>
-    !aliases.some((alias) => alias.alg === alg && alias.value === value)) ?? [];
+  const supplied = candidate.digests ?? [];
+  const aliases = digestsFor(candidate).filter((alias) => !supplied.some(({ alg, label, value }) =>
+    label === undefined && alg === alias.alg && value === alias.value));
   return [...aliases, ...supplied];
 }
 
@@ -55,7 +57,7 @@ function snapshotPassageList(value) {
   }
 }
 
-/** @param {FactMatchIncoming["passages"]} passages @returns {FactMatchIncoming["passages"]} */
+/** @param {readonly PassageFingerprint[]} passages @returns {readonly PassageFingerprint[]} */
 function projectPassages(passages) {
   const copy = snapshotPassageList(passages);
   if (!Array.isArray(copy)) return copy;
@@ -70,14 +72,14 @@ function projectPassages(passages) {
       if (isRecord) {
         // Preserve descriptor-based validation of every other field in core.
         const record = {};
-        for (const key of ["digests", "shingles", "keyId", "embedding"]) {
+        for (const key of ["digests", "shingles", "keyId", "embedding", "retainedShingles"]) {
           const field = evidenceDescriptor(passage, key);
           if (!field) continue;
           if (key === "embedding" && field.value != null) {
             const embedding = readEmbedding(field.value, "passage");
             field.value = embedding.length === 0 ? undefined : embedding;
           }
-          if (key === "digests" || key === "shingles") {
+          if (key === "digests" || key === "shingles" || key === "retainedShingles") {
             if (Object.hasOwn(field, "value")) field.value = snapshotPassageList(field.value);
           }
           Object.defineProperty(record, key, field);
@@ -87,6 +89,22 @@ function projectPassages(passages) {
     }
     return passage;
   });
+}
+
+/** @param {unknown} value */
+function hasNoShingleEvidence(value) {
+  try {
+    if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+    return ["shingles", "keyId", "retainedShingles"].every((key) => {
+      const field = evidenceDescriptor(value, key);
+      if (field === undefined) return true;
+      if (!Object.hasOwn(field, "value")) return false;
+      if (key !== "retainedShingles") return field.value == null;
+      return field.value === undefined || (Array.isArray(field.value) && field.value.length === 0);
+    });
+  } catch {
+    return false;
+  }
 }
 
 /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
@@ -107,11 +125,13 @@ function isKind(stored, kind) {
   return stored.fact.kind === kind;
 }
 
-/** @param {boolean} vectorSuppression @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
-export function createFactMatcher(vectorSuppression, hashSessionKey) {
+/** @param {boolean} vectorSuppression @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
+ * @param {"plain" | "hashed"} [sessionRefs] */
+export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs = "plain") {
   /** @type {FactMatchPolicy} */
   const policy = { vectorSuppression, rowShingles: false, hashSessionKey };
   const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
+  const snapshotCapture = { ...capture, rowShingles: true };
 
   /** @param {State["facts"]} facts @param {Scope} scope */
   return function matchFacts(facts, scope) {
@@ -184,8 +204,39 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         });
       },
 
+      /** @param {import("@cairn-ink/core/ports").Receipt} receipt @param {readonly TextDigest[]} digests */
+      withholdsRaw(receipt, digests) {
+        // A RawSpan fact without span-lineage proof is uncertain in this adapter.
+        const passages = [{ digests, shingles: null, keyId: null }];
+        return scoped.some(stored => stored.fact.kind === "rawSpan") ||
+          blocksSession(receipt.client, receipt.sessionId) ||
+          blockedMessages(receipt.client, receipt.sessionId, [receipt.occurredAtMs]).length > 0 ||
+          texts.some((stored) => factBlocksIncoming(stored, { scope, passages }, capture) !== false);
+      },
+
       blocksSession,
       blockedMessages,
+
+      /** @param {NonNullable<CardWrite["sourceMessage"]>} source */
+      canonicalSessionKey({ client, sessionId }) {
+        return hashSessionKey ? hashSessionKey(client, sessionId) : sessionRefs === "plain" ? sessionId : null;
+      },
+
+      textFacts: texts.map(({ fact }) => fact),
+
+      /** @param {CardWrite} card @param {FactMatchIncoming["passages"]} passages */
+      withholdsCardSource({ sourceMessage, sourceMemories, date }, passages) {
+        if (!sourceMessage) return false;
+        const { client, sessionId } = sourceMessage;
+        return scoped.some((stored) => {
+          if (stored.fact.kind === "identity") {
+            return sourceMemories.some(({ id, revision }) => factHidesRow(stored,
+              { type: "memory", scope, memoryId: id, revision }, policy) !== false);
+          }
+          return factBlocksIncoming(stored, { scope, session: { client, sessionId }, occurredAtMs: date, passages },
+            capture) !== false;
+        });
+      },
 
       /** @param {ReturnType<typeof copySuppressionCandidates>} candidates */
       snapshot({ client, sessionId, occurredAtMs, passages: projected }) {
@@ -204,11 +255,21 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
       },
     };
 
-    /** @param {StoredFact<TextFact>[]} stored @param {FactMatchIncoming["passages"]} passages */
+    /** @param {StoredFact<TextFact>[]} stored @param {readonly PassageFingerprint[]} passages */
     function matchingPassages(stored, passages) {
       if (stored.length === 0) return [];
       const incoming = { scope, passages };
-      return stored.filter((fact) => factBlocksIncoming(fact, incoming, capture) !== false);
+      const hasCandidates = Array.isArray(passages) && passages.length > 0;
+      const unkeyed = hasCandidates && passages.every(hasNoShingleEvidence);
+      return stored.filter((fact) => {
+        const exactOnly = unkeyed && fact.fact.mode === "full" && hasNoShingleEvidence(fact.fact.text);
+        const rules = exactOnly ? capture : snapshotCapture;
+        const result = factBlocksIncoming(fact, incoming, rules);
+        // Core validates the full fact even with no passages. Use validation alone
+        // in the exact-only profile, where the matcher already checks the candidates.
+        return result !== false || withholdsAnyPassage(exactOnly ? [] : passages, [fact.fact]) ||
+          (hasCandidates && requiresLegacyMacDomain(fact.fact));
+      });
     }
   };
 }

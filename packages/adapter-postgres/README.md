@@ -120,19 +120,107 @@ namespace. Hosted scope mapping is deferred to scopes step 2.
 As a P2 difference, Postgres returns L1 `parentIds` in UTF-8 parent ID order.
 The in-memory store preserves placement order.
 
-When the Postgres conformance driver can seed core memories, split the namespace
-half of `T-TFM-4` into a sub-case with ID `T-TFM-4-namespace` and use this
-`notApplicable` entry.
+## Memory ports
 
-```js
-"topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
-```
+Migration 0013 adds memory namespaces, digest evidence, and the creation-time
+sidecar. Migration 0014 adds the receipt-time sidecar in a separate transaction.
+Receipt times that PostgreSQL represents exactly stay in `occurred_at`.
 
-The namespace half requires named-namespace placement, which the hosted TopicStore
-rejects with `capability_unavailable`. Run the owner-isolation half as `T-TFM-4`.
+`core_namespace` stays null on hosted until the product's scopes step 2 defines
+the mapping. The adapter rejects non-null namespace writes on hosted unless
+`allowNonNullNamespace` is enabled on the memory and supersession ports. The
+hosted unique key applies across the owner. All writers store bare SHA-256 hex in
+`memories.text_hash`, and core ports return `sha256:<hex>`. An exact hash held by a
+hidden row suppresses the incoming save. An exact hash in a different namespace
+is also withheld without exposing the existing row. Near duplicate queries use
+pgvector to fetch at most 32 candidates per vector. Imports request exact-only
+dedupe and still supply their embeddings for suppression.
 
-## Database tests
+`createPostgresMemoryStore` and `createPostgresMemoryReads` use the same
+visibility checks for duplicates, export, recent, hydration, and the memory
+fence. A pending legacy suppression copy closes those reads and write policy
+for owners with legacy suppression rows. Once the copy is ready, both fact stores
+remain authoritative until the final per-owner reconciliation. Set migration
+0015's `legacy_writes_reconciled` after stopping legacy suppression writes and
+copying all remaining facts for that owner. Receipt-less rows use their stored
+source and creation/write times for session and window checks.
 
-Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with
-pgvector and PGroonga. The test role needs permission to create and drop the
-disposable databases and install the extensions.
+State tokens assume all writers advance `core_owner_state` in the same
+transaction as retrieval-affecting changes. Legacy hosted writers must do so
+before this adapter serves reads, including shadow reads.
+
+Raw search, export, and delivery compute withheld sessions from stored lineage
+before reading candidates. Hosted writers need to backfill lineage for legacy
+sessions that could replay fenced content. An unrecorded session with no
+stored link to a fence cannot be found from the fence's MACs. For a session
+that shares a recorded message ID with a fenced component, the legacy
+fallback checks at most 1,000 raw message IDs and signs content only for a
+potential match without a stored proof. Larger sessions are withheld. A host
+can pass `onLineageOverflow(sessions)` to count overflow per visibility check.
+
+Vector recall applies full visibility checks to bounded candidate pages. The
+cosine page includes the full boundary distance group, ranked by update time
+and ID. Coverage stays incomplete when the page budget ends before the
+requested visible depth or when an unchecked model gap remains.
+
+`createPostgresDigestGate(uow, keyIdsForOwner)` returns
+`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
+The gate counts each row missing evidence for an accepted key or for any live
+HMAC-only fact domain, including hosted facts during dual-read. Require a zero
+count before enabling the adapter. For each fact, admission and visibility
+withhold candidates without a comparable MAC. MAC domains match on algorithm,
+key ID, and pipeline label.
+
+Configure the fingerprint provider with the unit of work and the secrets
+available for staging. Call `publish(owner, keyId)` to activate a configured key
+for one owner. Publication verifies stored digest coverage and updates the
+owner's key ID under the same lock that Core writers use to select their key.
+K2 also refuses publication while a live HMAC-only fact references a
+non-current key. Keep the active secret available on every writer.
+
+With the owner's memory writers paused, the host's cutover script can call
+`backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
+for each required hosted key. The callback receives stored text and returns the
+legacy exact MAC as 64 lowercase hex characters. The host keeps the signing key.
+The backfill appends missing `hosted-v1` digests in one transaction per call and
+returns the number of rows updated. Recheck the digest gate before cutover.
+
+A receipt with `forgotten_at` set is a replay tombstone. Its original memory ID
+serves as part of the storage key. Replacement and erasure delete active receipts
+only, and receipt hydration omits tombstones. Admission still resolves them by
+owner, client, session, and message.
+
+The direct MemoryStore lookup is available inside transactions for revision
+checks and forget operations.
+`createPostgresPauseStore` requires a run opened with `pauseLock`.
+`createPostgresSupersessionStore` records edges and marks historical rows.
+Historical rows remain available for direct reads and export after the other
+visibility checks pass.
+
+## Raw writes and lineage
+
+Create the capture and Raw ports with the same stable `lineageSecret` and
+optional `hashSessionKey`. `createPostgresRawPorts` returns `raw` for archive and
+privacy writes and `sessionLineage` for proof resolution. Wire Raw search and
+listing before enabling `rawArchive`. The optional `importArchive` method is a
+separate integration.
+
+Run Raw mutations with `pauseLock: true`. Resolve a proven closure and pass it
+to `eraseSessions` inside that same transaction. Erasure fences the proven
+sessions, deletes their Raw rows, and blanks their ledger messages. An
+ID-only match withholds admission without joining the erase closure.
+`deleteConversation` deletes the conversation's Raw rows and preserves its
+ledger and any existing fence.
+
+Supply `fingerprintKeys(owner)` with the current and retained keys and their
+respective fingerprint pipelines to enable keyed Raw purge. Exact evidence
+and keyed containment can prove a match. Inconclusive evidence preserves the
+stored row. A scrub keeps the hosted ledger's object or encoded-string
+representation and retains the message positions and their IDs.
+
+Hosted Raw writes require the personal (null) namespace. Suppression facts
+can still apply to ancestors in project namespaces. Migrations 0022 and 0023
+add concurrent Raw purge and capture ledger scan indexes. Archive withholds
+messages with timestamps outside the hosted wire range and reports their
+count as `withheld` when it is positive. Messages with a genuinely unknown
+timestamp are eligible to be archived with a null `occurred_at`.

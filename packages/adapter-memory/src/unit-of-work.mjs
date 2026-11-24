@@ -1,5 +1,6 @@
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
-import { addKeyedDigest, createFactStore } from "./privacy.mjs";
+import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
+import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -16,19 +17,25 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number,
+ * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
+/** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>,
+ * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
+ * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
- * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
+ * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number, cardWrites: number,
  * writeTail?: Promise<void>}} IssuedRun */
 
 /** @param {IssuedRun} run */
 export function indexRevisionAfterRun(run) {
   // Ordinary writes share one revision advance. Each finish with writes contributes one.
-  const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes;
+  const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes + run.cardWrites;
   if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
   return revision;
 }
@@ -104,9 +111,10 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
+    rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -178,14 +186,14 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         /** @type {IssuedRun} */
         const issuedRun = {
           run, state, indexDirty: false, stateWritten: false, pauseLock, poisoned: false,
-          writeErrorCode: "internal_error", finishes: new Set(), writingFinishes: 0,
+          writeErrorCode: "internal_error", finishes: new Set(), writingFinishes: 0, cardWrites: 0,
         };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
         // A write callback can submit another write before the run callback returns.
         while (issuedRun.writeTail) await issuedRun.writeTail;
         if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
-        if (issuedRun.indexDirty || issuedRun.stateWritten) {
+        if (issuedRun.indexDirty || issuedRun.stateWritten || issuedRun.cardWrites) {
           const revision = indexRevisionAfterRun(issuedRun);
           for (const finish of issuedRun.finishes) {
             // A later port call in the same run may have made the index dirty.
@@ -316,13 +324,16 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return (getState, _markDirty, run) => body(getState, run);
   }, true);
 
-  function dump(includeRaw = false) {
+  function dump(includeRaw = false, includeDocumentCards = false, includeRationale = false) {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
         (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 ||
-          committed.rawAnchors.size > 0 || committed.indexRevision > 0)))
+          committed.rawAnchors.size > 0 || committed.indexRevision > 0)) ||
+        (includeDocumentCards && committed.documentCards.size > 0) ||
+        (includeRationale && (committed.rationale.size > 0 || committed.rationaleMessages.size > 0 ||
+          committed.rawConflicts.size > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -339,6 +350,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
           rawFences: [...committed.rawFences].sort(compareUtf8),
         }),
+        ...(includeRaw && includeRationale && { rawConflicts: [...committed.rawConflicts].sort(compareUtf8) }),
         ...(includeRaw && committed.rawAnchors.size > 0 && {
           rawAnchors: [...committed.rawAnchors].sort(([a], [b]) => compareUtf8(a, b)).flatMap(([client, sessions]) =>
             [...sessions].sort(([a], [b]) => compareUtf8(a, b)).map(([, { namespace, sessionId, messages }]) => ({
@@ -348,14 +360,29 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
               })),
             }))),
         }),
-        ...((includeRaw || includeTopics) && { indexRevision: committed.indexRevision }),
+        ...((includeRaw || includeTopics || includeDocumentCards) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {
-          topics: [...committed.topics].map(([namespace, { topics, outcomes, failures }]) => ({
+          topics: [...committed.topics].map(([namespace, { topics, outcomes, failures, cardOutcomes, cardFailures }]) => ({
             namespace,
             topics: [...topics.values()],
             outcomes: [...outcomes].map(([id, { revision, memberships }]) => ({ id, revision, memberships: [...memberships] })),
             failures: [...failures],
+            ...(includeDocumentCards && {
+              cardOutcomes: [...cardOutcomes].map(([id, { contentHash, memberships }]) =>
+                ({ id, contentHash, memberships: [...memberships] })),
+              cardFailures: [...cardFailures],
+            }),
           })),
+        }),
+        ...(includeDocumentCards && {
+          documentCards: [...committed.documentCards].map(([namespace, cards]) =>
+            ({ namespace, cards: [...cards].map(([id, { amendments, ...entry }]) =>
+              [id, amendments ? { ...entry, amendments: [...amendments] } : entry]) })),
+        }),
+        ...(includeRationale && {
+          rationale: [...committed.rationale].map(([namespace, edges]) => ({ namespace, edges: [...edges.values()] })),
+          rationaleMessages: [...committed.rationaleMessages].map(([namespace, messages]) =>
+            ({ namespace, messages: [...messages] })),
         }),
         ...(committed.claims.size ? {
           claims: [...committed.claims.values()],
@@ -440,11 +467,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         try {
           const base = current.committed;
           if (staged.get(current)?.base === base) continue;
-          const keyedFacts = [...base.facts.values()].flatMap(({ fact }) =>
-            fact.kind === "text" && fact.text.digests.every(({ alg }) => alg === "hmac") ? fact.text.digests : []);
-          if (keyedFacts.length > 0) {
+          const domains = liveKeyedDomains(base.facts.values());
+          if (domains.size > 0) {
             const olderIds = await retainedKeyIds(owner);
-            if (keyedFacts.some(({ keyId }) => keyId !== null && olderIds.has(keyId))) {
+            if ([...domains.values()].some(({ alg, keyId }) => alg === "hmac" && keyId !== null && olderIds.has(keyId))) {
               throw new CoreError("fingerprint_key_mismatch");
             }
           }
@@ -465,19 +491,37 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     publish();
   }
 
+  /** @param {Tx} tx */
+  function writeOwner(tx) {
+    if (!issued.has(tx) || tx.readOnly) throw new CoreError("internal_error");
+    return tx.owner;
+  }
+
+  /** @param {string} owner @param {boolean} [includeShingles] */
+  function keyedDomains(owner, includeShingles) {
+    return liveKeyedDomains(owners.get(owner)?.committed.facts.values() ?? [], includeShingles);
+  }
+
   /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */
   async function rowsMissingKeyedDigest(owner, ringKeys) {
     const rows = owners.get(owner)?.committed.rows;
     if (!rows) return 0;
+    const domains = keyedDomains(owner);
     const keys = await ringKeys(owner);
+    if (keys.length === 0) return 0;
+    const current = await coreDigest("", keys[0]);
+    const currentDomain = digestDomain(current);
+    if (!domains.has(currentDomain)) domains.set(currentDomain, current);
     let count = 0;
     for (const entries of rows.values()) {
       for (const { row: { digests } } of entries.values()) {
-        if (keys.some((key) => !digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id))) count++;
+        for (const digest of domains.values()) {
+          if (compareValidatedDigests(digests ?? [], [digest]) === "ineligible") count++;
+        }
       }
     }
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner };
 }

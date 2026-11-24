@@ -190,7 +190,8 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
   const pool = keepConnections((await migrationDatabase(t)).pool);
   await pool.query("INSERT INTO users (id) VALUES ('owner'), ('other-owner')");
   const { rows: [state] } = await pool.query("INSERT INTO core_owner_state (user_id) VALUES ('owner') RETURNING *");
-  assert.deepEqual(state, { user_id: "owner", fact_epoch: "0", index_revision: "0", legacy_facts_ready: false });
+  assert.deepEqual(state, { user_id: "owner", fact_epoch: "0", index_revision: "0",
+    legacy_facts_ready: false, legacy_writes_reconciled: false, fingerprint_key_id: null });
   for (const counter of ["fact_epoch", "index_revision"]) {
     await assert.rejects(pool.query(`UPDATE core_owner_state SET ${counter} = -1`), { code: "23514" });
   }

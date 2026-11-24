@@ -1,6 +1,6 @@
 import type {
   ClockAndHash, DiagnosticEvent, EmbedderPort, EmbedQuery, FinishResult, MemoryService,
-  ModelGate, ModelPort, ModelStage, Scope, StorageAdapter, TokenCounter,
+  ModelGate, ModelPort, ModelStage, Scope, StorageAdapter, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
 export type { DiagnosticEvent } from "../ports/common.d.ts";
@@ -16,7 +16,7 @@ export interface MemoryServiceConfig {
 }
 
 export interface MemoryServiceDeps {
-  readonly storage: StorageAdapter;
+  readonly storage: StorageAdapter<StoredDocumentCardRecord>;
   readonly model: ModelPort;
   readonly embedder: EmbedderPort;
   readonly gate: ModelGate;

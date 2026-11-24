@@ -127,9 +127,12 @@ function copyDigests(digests) {
       if (!digest || typeof digest !== "object" || Array.isArray(digest)) invalid();
       /** @param {keyof typeof digest} key */
       const field = (key) => Object.getOwnPropertyDescriptor(digest, key)?.value;
+      const label = Object.getOwnPropertyDescriptor(digest, "label");
+      if (label && !Object.hasOwn(label, "value")) invalid();
       return {
         alg: field("alg"), value: field("value"), pipeline: field("pipeline"),
         redactionVersion: field("redactionVersion"), keyId: field("keyId"),
+        ...(label && { label: label.value }),
       };
     });
     validateSuppressionFact({
@@ -190,9 +193,21 @@ export function writeNamespace({ namespace }) {
   return namespace;
 }
 
+/** @param {import("@cairn-ink/core/ports").Scope} scope */
+export function copyScope(scope) {
+  if (!scope) invalid();
+  return { owner: scope.owner, namespace: writeNamespace(scope) };
+}
+
 /** @param {string} id */
 export function validateMemoryId(id) {
   if (typeof id !== "string") invalid();
+}
+
+/** @param {unknown} id */
+export function validateCardId(id) {
+  if (typeof id !== "string" || !id) invalid();
+  return id;
 }
 
 /** @param {DuplicateMerge} merge */

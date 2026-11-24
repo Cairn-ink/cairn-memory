@@ -49,6 +49,18 @@ export interface DocumentCardRecord {
   amendments: readonly DocumentCardAmendment[];
 }
 
+/** Authored cards can be written without a source message. Amendment history is managed by the store. */
+export interface SourceLessDocumentCardRecord extends Omit<DocumentCardRecord, "origin" | "sourceMessage" | "amendments"> {
+  readonly origin: "import" | "manual";
+  sourceMessage: null;
+}
+
+/** The record set for stores that support both message-backed and source-less cards. */
+export type StoredDocumentCardRecord = DocumentCardRecord |
+  (SourceLessDocumentCardRecord & Pick<DocumentCardRecord, "amendments">);
+
+type DocumentCardWrite<Card> = Card extends StoredDocumentCardRecord ? Omit<Card, "amendments"> : never;
+
 /** Select exactly one kind of source. All selectors are confined to the call's scope. */
 export type DocumentCardHideSelector =
   | { sourceMemoryId: string; sourceMessage?: never; session?: never }
@@ -64,8 +76,10 @@ export interface DocumentCardEmbedding {
  * Optional (capability documentCards). All calls use the live Tx from UnitOfWork.
  * Each card insert or replacement, each hide call affecting at least one card or amendment,
  * and each markStale call advances the owner index revision once.
+ * With placement enabled, the host drops topic memberships in the same transaction
+ * as every hide or tombstone.
  */
-export interface DocumentCardStore {
+export interface DocumentCardStore<Card extends StoredDocumentCardRecord = DocumentCardRecord> {
   /**
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
    * Bind sourceMemories for a router card to the memories that capture wrote or
@@ -77,7 +91,7 @@ export interface DocumentCardStore {
    * Vectors supplied with a write are keyed by model. Amendment history is managed
    * through the amendment operations.
    */
-  put(tx: Tx, scope: Scope, card: Omit<DocumentCardRecord, "amendments">, embedding?: DocumentCardEmbedding): Promise<{
+  put(tx: Tx, scope: Scope, card: DocumentCardWrite<Card>, embedding?: DocumentCardEmbedding): Promise<{
     status: "inserted" | "unchanged" | "replaced" | "tombstoned";
   }>;
   /**
@@ -114,9 +128,9 @@ export interface DocumentCardStore {
    * Same read snapshot as the final visibility check. Returns visible cards and amendments only,
    * with amendments in ascending date order and insertion order for equal dates.
    */
-  get(tx: Tx, scope: Scope, cardId: string): Promise<DocumentCardRecord | null>;
+  get(tx: Tx, scope: Scope, cardId: string): Promise<Card | null>;
   /** Same read snapshot, visibility, and amendment ordering as get. */
-  list(tx: Tx, scope: Scope): Promise<DocumentCardRecord[]>;
+  list(tx: Tx, scope: Scope): Promise<Card[]>;
 }
 
 /**

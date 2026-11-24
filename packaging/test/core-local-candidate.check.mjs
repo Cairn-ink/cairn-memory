@@ -1,3 +1,8 @@
+// Threat model: this static audit catches ACCIDENTAL capability use (SQLite, network,
+// native, worker or child-process access) in first-party code reachable from the
+// candidate's entry points. It is not a sandbox: code written to evade it on purpose,
+// for example through reflection, is out of scope. The runtime check is the builder's
+// installed startup smoke with SQLite disabled.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

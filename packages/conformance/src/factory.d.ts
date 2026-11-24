@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
-import type { CaptureMessage, Scope, StorageAdapter } from "@cairn-ink/core/ports";
+import type { CaptureMessage, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -8,9 +8,9 @@ export type AdapterFactory = {
 };
 
 export type OpenedAdapter = {
-  adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
+  adapter: Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
-    "suppressions" | "pause" | "keys" | "placement" | "raw">;
+    "suppressions" | "pause" | "keys" | "placement" | "raw" | "documentCards" | "rationale" | "rationaleSourceText">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -25,13 +25,23 @@ export type OpenedAdapter = {
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
+export type RationaleFixtureChange = "revision" | "content" | "currentness" | "receipt-remove" | "namespace";
+
+export type RetainedDigestFixture = { keyId: string; label: string; secret: string };
+
 export type TestHarness = {
+  /** Synthetic raw text for a receipt. Null retires the source. */
+  seedRationaleMessage?(scope: Scope, receipt: Receipt, text: string | null): Promise<void>;
+  /** Exercise invalidating writes an adapter does not expose on its ordinary ports. */
+  changeRationaleMemory?(scope: Scope, id: string, change: RationaleFixtureChange): Promise<void>;
   /** A JSON-safe snapshot. Numbers must be finite. */
   dump(): Promise<JsonValue>;
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   setFingerprintSecret?(secret: string): Promise<void>;
-  /** Counts rows missing a digest under any key in the owner's ring. Returns zero when no key is enabled. */
+  /** Configures a synthetic raw HMAC-SHA256 signer for one owner. Null removes it. */
+  setRetainedDigestFixture?(owner: string, fixture: RetainedDigestFixture | null): Promise<void>;
+  /** Counts missing (row, live signing domain) pairs, including the enabled current domain. */
   rowsMissingKeyedDigest?(owner: string): Promise<number>;
   advanceClock?(ms: number): Promise<void>;
   /** Required for privacy matching cases under the hashed session profile. */

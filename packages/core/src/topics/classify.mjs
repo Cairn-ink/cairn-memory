@@ -11,7 +11,9 @@ import { classificationWire, classifySchema, schemaAccepts } from './wire.mjs';
 /** @import { BuiltModelRequest } from '../capture/model-call.mjs' */
 
 /** @param {ClassifyPlacementOptions} options @returns {Promise<ClassifyPlacementResult>} */
-export async function classifyPlacement({ model, snapshot, catalog, validateFresh, deadline, gate, owner, signal, onDiagnostic }) {
+export async function classifyPlacement({
+  model, snapshot, catalog, allowNewTopics = true, validateFresh, deadline, gate, owner, signal, onDiagnostic,
+}) {
   let call;
   try { call = model?.call; }
   catch { /* An unreadable model call is unavailable. */ }
@@ -26,7 +28,7 @@ export async function classifyPlacement({ model, snapshot, catalog, validateFres
   const { map, mapExhausted } = catalog;
   let packed;
   try {
-    packed = packClassification(model, system, { memories, map, mapExhausted }, deadline);
+    packed = packClassification(model, system, { memories, map, mapExhausted: allowNewTopics && mapExhausted }, deadline);
   } catch (error) {
     if (isCoreError(error) && (error.code === 'token_count_unavailable' || error.code === 'model_timeout')) {
       emitDiagnostic(onDiagnostic, 'classify', 'core_call', error.code);
@@ -38,6 +40,8 @@ export async function classifyPlacement({ model, snapshot, catalog, validateFres
   const sizingText = modelRequestText(system, packedInput);
   const wire = classificationWire(packedInput);
   const schema = classifySchema(wire.input);
+  // Accept the shared creation shape locally so a model that returns it can still file existing parents.
+  const decodeSchema = allowNewTopics ? schema : classifySchema({ ...wire.input, mapExhausted: true });
   /** @type {BuiltModelRequest<PlacementProposal>} */
   const built = {
     stage: 'classify',
@@ -48,7 +52,7 @@ export async function classifyPlacement({ model, snapshot, catalog, validateFres
         report('classify', 'adapter', 'output_shape');
         throw new CoreError('invalid_model_output');
       };
-      if (!schemaAccepts(schema, raw)) return reject();
+      if (!schemaAccepts(decodeSchema, raw)) return reject();
       try { return wire.decode(/** @type {PlacementProposal} */ (raw)); }
       catch { return reject(); }
     },
@@ -56,13 +60,16 @@ export async function classifyPlacement({ model, snapshot, catalog, validateFres
 
   await validateFresh();
   const output = await callBuiltModel(model, 'classify', built, {
-    failureCode: 'classification_failed', deadline, gate, owner, signal, onDiagnostic,
+    failureCode: 'classification_failed', refresh: validateFresh, deadline, gate, owner, signal, onDiagnostic,
   });
   await validateFresh();
 
   let proposal;
   try {
-    proposal = placementProposal(output, memoryRevisions.map(({ memoryId }) => memoryId));
+    const allowed = allowNewTopics ? output : {
+      items: output.items.map(({ memoryId, parentIds }) => ({ memoryId, parentIds })),
+    };
+    proposal = placementProposal(allowed, memoryRevisions.map(({ memoryId }) => memoryId));
     checkProposalAgainstCatalog(proposal, packedInput.map, packedInput.mapExhausted);
   } catch (error) {
     deadline?.check();

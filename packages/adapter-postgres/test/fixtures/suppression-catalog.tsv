@@ -15,10 +15,13 @@ core_fact_digests	constraint	core_fact_digests_value_check	CHECK ((value ~ '^[0-
 core_fact_digests	index	core_fact_digests_pkey	CREATE UNIQUE INDEX core_fact_digests_pkey ON public.core_fact_digests USING btree (user_id, fact_id, alg, value)
 core_fact_digests	index	core_fact_digests_user_value_idx	CREATE INDEX core_fact_digests_user_value_idx ON public.core_fact_digests USING btree (user_id, value)
 core_owner_state	column	fact_epoch	bigint NOT NULL DEFAULT 0
+core_owner_state	column	fingerprint_key_id	text NULL
 core_owner_state	column	index_revision	bigint NOT NULL DEFAULT 0
 core_owner_state	column	legacy_facts_ready	boolean NOT NULL DEFAULT false
+core_owner_state	column	legacy_writes_reconciled	boolean NOT NULL DEFAULT false
 core_owner_state	column	user_id	text NOT NULL
 core_owner_state	constraint	core_owner_state_fact_epoch_check	CHECK ((fact_epoch >= 0))
+core_owner_state	constraint	core_owner_state_fingerprint_key_id_check	CHECK ((fingerprint_key_id ~ '^[0-9a-f]{16}$'::text))
 core_owner_state	constraint	core_owner_state_index_revision_check	CHECK ((index_revision >= 0))
 core_owner_state	constraint	core_owner_state_pkey	PRIMARY KEY (user_id)
 core_owner_state	constraint	core_owner_state_user_id_fkey	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

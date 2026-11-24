@@ -85,6 +85,8 @@ export function importMethod(deps) {
       /** @type {ImportResult} */
       const counts = { imported: 0, duplicate: 0, suppressed: 0, invalid: 0 };
       const paused = () => /** @type {const} */ ({ status: "paused", ...counts });
+      /** @type {readonly import("../ports/privacy.d.ts").RetainedDigester[] | undefined} */
+      let digesters;
       for (let start = 0; start < rows.length; start += batchSize) {
         const inputBatch = rows.slice(start, start + batchSize);
         let validationTime;
@@ -100,8 +102,9 @@ export function importMethod(deps) {
         const before = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
         if (before.paused) return paused();
         const key = await keys.userKey(owner);
+        digesters ??= await keys.retainedDigesters?.(owner) ?? [];
         const prepared = await Promise.all(batch.map(async ({ raw, ...item }) => {
-          const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text));
+          const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text), digesters);
           return { ...item, query, passages };
         }));
         const embeddings = await embedImport(owner, prepared.map(({ text }) => text), key);
@@ -110,9 +113,12 @@ export function importMethod(deps) {
         const committed = await uow.run(owner, { pauseLock: true }, async tx => {
           const state = pauseResult(await pause.get(tx, owner));
           if (state.paused || state.generation !== before.generation) return null;
+          if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+            throw new CoreError("fingerprint_key_mismatch");
+          }
           const withheld = await fullWriteWithholds(suppressions, tx, scope, source, prepared);
           const queries = prepared.map(({ query }, i) => ({ ...query, embedding: embeddings[i]?.vector }));
-          const policy = await memories.readWritePolicy(tx, scope, queries, source, "full");
+          const policy = await memories.readWritePolicy(tx, scope, queries, source, "full", undefined, { nearDuplicate: false });
           const exactPolicy = {
             ...policy, matches: policy.matches.map(matches => matches.filter(match => match.match === "exact")),
           };
@@ -219,7 +225,8 @@ export function importRawMethod({ storage }) {
           if (legacyKeyUnavailable) {
             withheld = prepared.map((_, position) => position);
           } else if (matches && messages.length) {
-            const key = capabilities.fingerprintKey ? await keys.userKey(owner) : null;
+            const key = capabilities.fingerprintKey
+              ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner)) : null;
             const blocked = await Promise.all(messages.map(({ message, originalContent }) =>
               matches(originalContent, message.content, key)));
             withheld = blocked.flatMap((matched, position) => matched ? [position] : []);

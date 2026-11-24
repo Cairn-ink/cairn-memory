@@ -112,7 +112,7 @@ for (const phase of ['before', 'after']) {
     assert.deepEqual(await placePending({ scope, uow, memories, placement, model, gate }), {
       status: 'failed', error: { code: 'revision_conflict', retryable: false },
     });
-    assert.deepEqual(operations, phase === 'before' ? ['fresh', 'failure'] : ['fresh', 'call', 'fresh', 'failure']);
+    assert.deepEqual(operations, phase === 'before' ? ['fresh', 'failure'] : ['fresh', 'fresh', 'call', 'fresh', 'failure']);
   });
 }
 

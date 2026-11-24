@@ -8,7 +8,9 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
 /** @import { Scope, Topic, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
 /** @typedef {import("./driver.mjs").Connection["query"]} Query */
-/** @typedef {Required<TopicStore>} Placement */
+/** @typedef {Pick<Required<TopicStore>, "pending" | "catalog" | "applyPlacement" | "markFailed" |
+ * "list" | "members" | "forMemory" | "forMemories" | "dropMemory">} MemoryPlacement */
+/** @typedef {TopicStore & MemoryPlacement} Placement */
 
 const BATCH_LIMIT = 5;
 const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
@@ -217,6 +219,40 @@ async function replaceMemberships(query, owner, id, revision, topicIds, retained
   }
 }
 
+// Document cards are a separate capability. Keep the memory port's own methods
+// while satisfying the card hooks that core-next added to TopicStore.
+class WithoutDocumentCards {
+  /** @param {Tx} tx @param {Scope} scope */
+  async pendingCards(tx, scope) {
+    personalOwner(tx, scope);
+    return [];
+  }
+
+  /** @param {Tx} tx @param {Scope} scope @returns {Promise<never>} */
+  async applyCardPlacement(tx, scope) {
+    personalOwner(tx, scope, true);
+    throw new CoreError("capability_unavailable");
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async markCardsFailed(tx, scope) {
+    personalOwner(tx, scope, true);
+    throw new CoreError("capability_unavailable");
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async forCard(tx, scope) {
+    personalOwner(tx, scope);
+    return [];
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async dropCard(tx, scope) {
+    personalOwner(tx, scope, true);
+    return { dropped: 0 };
+  }
+}
+
 /**
  * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number}} [options]
  * @returns {Placement}
@@ -225,7 +261,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
   validateLimit(topicMaxAttempts, 3);
   if (!Number.isSafeInteger(topicRetryAfterMs) || topicRetryAfterMs < 0) throw new CoreError("invalid_input");
 
-  return {
+  /** @type {MemoryPlacement} */
+  const placement = {
     async pending(tx, scope, options) {
       const owner = personalOwner(tx, scope);
       const { limit } = options;
@@ -466,4 +503,5 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       });
     },
   };
+  return Object.assign(new WithoutDocumentCards(), placement);
 }
