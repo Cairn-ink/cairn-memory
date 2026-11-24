@@ -12,10 +12,10 @@ const hmac = { alg: "hmac", value: "c".repeat(64), pipeline: "hosted-v1", redact
 const text = { owner, actionId: "action", origin: "edit", kind: "text", mode: "exact", text: { digests: [sha, hmac] } };
 const store = createPostgresSuppressionStore();
 const timeUs = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us";
-const selectSlot = `SELECT fact_id, slot, incarnation, epoch::text, ${timeUs} FROM core_suppression_facts WHERE user_id = $1 AND slot_hash = $2`;
+const selectSlot = `SELECT fact_id, slot, slot_hash, incarnation, epoch::text, ${timeUs}, action_id, kind, mode, origin, body FROM core_suppression_facts WHERE user_id = $1 AND slot_hash = ANY($2::text[])`;
 const advance = "INSERT INTO core_owner_state (user_id, fact_epoch, index_revision) VALUES ($1, 1, 1) ON CONFLICT (user_id) DO UPDATE SET fact_epoch = core_owner_state.fact_epoch + 1, index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text, index_revision::text";
 const insert = `INSERT INTO core_suppression_facts ( user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body, embedding, shingles, key_id ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING ${timeUs}`;
-const digests = "INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id) SELECT $1, $2, * FROM unnest($3::text[], $4::text[], $5::text[], $6::integer[], $7::text[])";
+const digests = "INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id, label) SELECT $1, $2, * FROM unnest($3::text[], $4::text[], $5::text[], $6::integer[], $7::text[], $8::text[])";
 const selectEpoch = "SELECT fact_epoch::text FROM core_owner_state WHERE user_id = $1";
 const code = (code) => ({ name: "CoreError", message: code, code });
 
@@ -56,10 +56,10 @@ for (const fact of [identity, text]) {
     assert.match(factId, /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u);
     assert.deepEqual(result, { factId, epoch: 9007199254740993n, createdAtMs: 1234, created: true });
     const s = await buildFactStorage(fact);
-    const expected = [[selectSlot, [owner, s.slotHash]], [advance, [owner]], [insert, [owner, factId,
+    const expected = [[selectSlot, [owner, [s.slotHash, ...(s.historicalSlotHash ? [s.historicalSlotHash] : [])]]], [advance, [owner]], [insert, [owner, factId,
       s.slot, s.slotHash, incarnation, s.actionId, "9007199254740993", s.origin, s.kind, s.mode, s.body, null, null, null]]];
     if (fact.kind === "text") expected.push([digests, [owner, factId, [hmac.alg, sha.alg], [hmac.value, sha.value],
-      [hmac.pipeline, sha.pipeline], [1, 2], ["key", null]]]);
+      [hmac.pipeline, sha.pipeline], [1, 2], ["key", null], [hmac.pipeline, sha.pipeline]]]);
     assert.deepEqual(db.calls, expected);
     assert.equal(ownerReads, 1);
     assert.ok(db.lifecycle.includes("COMMIT"));
@@ -67,7 +67,7 @@ for (const fact of [identity, text]) {
 }
 
 const storage = await buildFactStorage(identity);
-const existing = { fact_id: "original", slot: storage.slot, incarnation, epoch: "4", created_at_us: "-1001" };
+const existing = { fact_id: "original", slot: storage.slot, slot_hash: storage.slotHash, incarnation, epoch: "4", created_at_us: "-1001" };
 
 for (const insertFails of [false, true]) {
   test(`drains an in-flight fact write after a caught validation error (insert ${insertFails ? "fails" : "succeeds"})`, async () => {
@@ -124,7 +124,7 @@ for (const sameIncarnation of [true, false]) {
       if (sql === advance) return [{ fact_epoch: String(++epoch), index_revision: "1" }];
       assert.equal(sql, insert);
       if (row) return Object.assign(new Error(), { code: "23505" });
-      row = { fact_id: values[1], slot: values[2], incarnation: values[4], epoch: values[6], created_at_us: "1234999" };
+      row = { fact_id: values[1], slot: values[2], slot_hash: values[3], incarnation: values[4], epoch: values[6], created_at_us: "1234999" };
       return [row];
     });
 
@@ -152,7 +152,7 @@ test("replay only reads the slot and floors timestamps before the Unix epoch", a
   const db = stub([existing]);
   assert.deepEqual(await db.run(owner, {}, (tx) => store.writeFact(tx, identity, incarnation)),
     { factId: "original", epoch: 4n, createdAtMs: -2, created: false });
-  assert.deepEqual(db.calls, [[selectSlot, [owner, storage.slotHash]]]);
+  assert.deepEqual(db.calls, [[selectSlot, [owner, [storage.slotHash]]]]);
 });
 
 for (const [changes, error] of [
@@ -164,7 +164,7 @@ for (const [changes, error] of [
   test(`caught slot error ${error} (${Object.keys(changes)}) prevents COMMIT`, async () => {
     const db = stub([{ ...existing, ...changes }]);
     await assert.rejects(db.run(owner, {}, (tx) => assert.rejects(store.writeFact(tx, identity, incarnation), code(error))), code(error));
-    assert.deepEqual(db.calls, [[selectSlot, [owner, storage.slotHash]]]);
+    assert.deepEqual(db.calls, [[selectSlot, [owner, [storage.slotHash]]]]);
     assert.equal(db.lifecycle.at(-1), "ROLLBACK");
     assert.ok(!db.lifecycle.includes("COMMIT"));
   });

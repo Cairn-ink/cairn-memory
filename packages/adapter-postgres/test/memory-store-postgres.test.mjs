@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { allDigests, capabilities, coreDigest, decideWrite, legacyExactMac, normalizeForHash, userFingerprintKey } from "@cairn-ink/core";
+import { allDigests, capabilities, coreDigest, decideWrite, legacyExactMac, normalizeForHash, PRIVACY_REDACTION_VERSIONS, userFingerprintKey } from "@cairn-ink/core";
 import { forgetMethod } from "../../core/src/service/forget.mjs";
 import { importMethod } from "../../core/src/service/import.mjs";
 import { cases, FAKE_MASTER, inputOf, OWNERS } from "../../core/test/privacy-vectors.mjs";
@@ -199,7 +199,7 @@ test("P1-5 keyed digest gate counts missing rows and HMAC-only visibility evalua
   const f = await fixture(t);
   await hostedMemory(f.pool, "no-key", "legacy text");
   await hostedMemory(f.pool, "foreign", "foreign text", { user: other });
-  const digest = { alg: "hmac", value: hash("matched"), keyId, pipeline: "core", redactionVersion: 1 };
+  const digest = { alg: "hmac", value: hash("matched"), keyId, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core };
   const [matched, different] = await f.run(owner, {}, async tx => [
     await f.memories.insert(tx, scope, { ...content("matched"), digests: [digest] }, [], 10),
     await f.memories.insert(tx, scope, { ...content("different"), digests: [{ ...digest, value: hash("different") }] }, [], 11),
@@ -209,18 +209,107 @@ test("P1-5 keyed digest gate counts missing rows and HMAC-only visibility evalua
   const { items } = await f.run(owner, readOnly, tx => f.recent.recent(tx, readSet, { cursor: null, limit: 10 }));
   assert.deepEqual(items.map(row => row.id), [different.id]);
   assert.notEqual(matched.id, different.id);
-  const rowsMissingKeyedDigest = postgres.createPostgresDigestGate(f.uow, async id => id === owner ? [keyId] : []);
-  assert.equal(await rowsMissingKeyedDigest(owner), 1);
-  assert.equal(await rowsMissingKeyedDigest(other), 0);
+  const coverage = postgres.createPostgresDigestGate(f.uow, async id => id === owner ? [keyId] : []);
+  assert.deepEqual(await coverage(owner), { incompleteRows: 1, missingPairs: 1 });
+  assert.deepEqual(await coverage(other), { incompleteRows: 0, missingPairs: 0 });
   await f.pool.query("UPDATE memories SET core_digests = $1::jsonb WHERE user_id = $2 AND id = 'no-key'",
     [JSON.stringify([{ ...digest, keyId: "retired" }]), owner]);
-  assert.equal(await rowsMissingKeyedDigest(owner), 1);
+  assert.deepEqual(await coverage(owner), { incompleteRows: 1, missingPairs: 1 });
   await f.pool.query("UPDATE memories SET core_digests = $1::jsonb WHERE user_id = $2 AND id = 'no-key'",
     [JSON.stringify([digest]), owner]);
-  assert.equal(await rowsMissingKeyedDigest(owner), 0);
+  assert.deepEqual(await coverage(owner), { incompleteRows: 0, missingPairs: 0 });
 });
 
 const hostedFingerprints = JSON.parse(readFileSync(new URL("./fixtures/fingerprint-labels.json", import.meta.url), "utf8"));
+
+test("Postgres digest records preserve distinct labels through insert and replacement", migrationDbTest, async (t) => {
+  const { pool, run, memories } = await fixture(t);
+  const digest = { alg: "hmac", value: hash("fixture digest"), keyId, pipeline: "core", redactionVersion: 2, label: "first" };
+  const digests = [digest, { ...digest, label: "second" }];
+  const readDigests = async (id) => (await pool.query("SELECT core_digests FROM memories WHERE id = $1", [id])).rows[0].core_digests;
+  const row = await run(owner, {}, tx => memories.insert(tx, scope, { ...content("original"), digests: [digest] }, [], 1));
+  assert.deepEqual(await readDigests(row.id), [digest]);
+  await run(owner, {}, tx => memories.replaceContent(tx, scope, row.id, row.revision, { ...content("edited"), digests }, null, 2));
+  assert.deepEqual(await readDigests(row.id), digests);
+});
+
+test("Postgres digest gate requires every live label and redaction version", migrationDbTest, async (t) => {
+  const { pool, run, uow, suppressions } = await fixture(t);
+  await hostedMemory(pool, "coverage", "coverage fixture");
+  const first = { alg: "hmac", value: hash("first fact"), keyId, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core };
+  const second = { ...first, value: hash("second fact"), redactionVersion: 2 };
+  for (const digest of [first, second]) {
+    await run(owner, {}, tx => suppressions.writeFact(tx, {
+      ...scope, actionId: "coverage", kind: "text", mode: "exact", origin: "forget", text: { digests: [digest] },
+    }, digest.value));
+  }
+  const missing = postgres.createPostgresDigestGate(uow, () => [keyId]);
+  const store = (digests) => pool.query("UPDATE memories SET core_digests = $1::jsonb WHERE id = 'coverage'", [JSON.stringify(digests)]);
+  const row = { ...first, value: hash("row") };
+  await store([{ ...row, label: "foreign" }]);
+  assert.deepEqual(await missing(owner), { incompleteRows: 1, missingPairs: 2 }, "A different label covers neither live domain");
+  await store([row]);
+  assert.deepEqual(await missing(owner), { incompleteRows: 1, missingPairs: 1 }, "The historical core label covers only the matching redaction version");
+  await store([row, { ...row, redactionVersion: 2, label: "core" }]);
+  assert.deepEqual(await missing(owner), { incompleteRows: 0, missingPairs: 0 });
+  assert.deepEqual((await pool.query("SELECT core_digests->0 AS digest FROM memories WHERE id = 'coverage'")).rows[0].digest, row);
+});
+
+async function digestGateFixture(t) {
+  const f = await fixture(t);
+  const key = await userFingerprintKey(FAKE_MASTER, owner, postgres.HOSTED_FINGERPRINT_LABELS);
+  const text = "cutover row";
+  const current = await coreDigest(text, key);
+  const hosted = { ...current, label: "hosted-v1", pipeline: "hosted-v1", redactionVersion: 1 };
+  await hostedMemory(f.pool, "cutover-row", text);
+  const stage = (digests) => f.pool.query("UPDATE memories SET core_digests = $1::jsonb WHERE id = 'cutover-row'",
+    [JSON.stringify(digests)]);
+  const addHosted = () => f.pool.query(`INSERT INTO suppressions (id, user_id, kind, text_hash, text_hmac, key_id, embedding)
+    VALUES ('hosted-cutover', $1, 'text', $2, $3, $4, $5)`,
+  [owner, `hmac:${hosted.value}`, hosted.value, hosted.keyId, JSON.stringify(content("").embedding.vector)]);
+  const addCore = (digests) => f.run(owner, {}, tx => f.suppressions.writeFact(tx, {
+    ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "cutover", text: { digests },
+  }, hash("cutover")));
+  const gate = postgres.createPostgresDigestGate(f.uow, () => [key.id]);
+  return { stage, addHosted, addCore, gate: () => gate(owner), current, hosted };
+}
+
+test("Cutover P1 current Core domain is required even when hosted uses the same key ID and MAC", migrationDbTest, async (t) => {
+  const { stage, addHosted, gate, current, hosted } = await digestGateFixture(t);
+  await addHosted();
+  await stage([hosted]);
+  const missing = await gate();
+  assert.equal(missing.missingPairs ?? missing, 1);
+  await stage([hosted, current]);
+  assert.deepEqual(await gate(), { incompleteRows: 0, missingPairs: 0 });
+});
+
+test("Cutover P1 mixed keyed algorithm identifiers each require evidence", migrationDbTest, async (t) => {
+  const { stage, addCore, gate, current } = await digestGateFixture(t);
+  const retained = { ...current, label: "retained", value: hash("retained") };
+  const vendor = { ...retained, alg: "hmac-sha256-vendor" };
+  await addCore([retained, vendor]);
+  await stage([current]);
+  const missing = await gate();
+  assert.equal(missing.missingPairs ?? missing, 2);
+  await stage([current, vendor]);
+  assert.deepEqual(await gate(), { incompleteRows: 1, missingPairs: 1 });
+  await stage([current, retained, vendor]);
+  assert.deepEqual(await gate(), { incompleteRows: 0, missingPairs: 0 });
+});
+
+test("Cutover P1 counts each missing row-domain pair across both fact stores", migrationDbTest, async (t) => {
+  const { stage, addHosted, addCore, gate, current } = await digestGateFixture(t);
+  const retained = { ...current, keyId: "retained", label: "archive" };
+  await addHosted();
+  await addCore([retained]);
+  await stage([current]);
+  const missing = await gate();
+  assert.equal(missing.missingPairs ?? missing, 2);
+  assert.equal(missing.incompleteRows, 1);
+  await stage([]);
+  assert.deepEqual(await gate(), { incompleteRows: 1, missingPairs: 3 });
+});
 for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth-secret"]) {
   test(`P1-5 hosted HMAC domain ${caseId} fails closed until backfill`, migrationDbTest, async (t) => {
     const f = await fixture(t);
@@ -256,8 +345,10 @@ for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth
       }
       return results;
     });
-    const rowsMissing = postgres.createPostgresDigestGate(f.uow, id => id === owner ? [hostedKeyId] : []);
-    const rowsMissingLiveDomains = postgres.createPostgresDigestGate(f.uow, () => []);
+    const coverage = postgres.createPostgresDigestGate(f.uow, id => id === owner ? [hostedKeyId] : []);
+    const liveCoverage = postgres.createPostgresDigestGate(f.uow, () => []);
+    const rowsMissing = async (id) => (await coverage(id)).incompleteRows;
+    const rowsMissingLiveDomains = async (id) => (await liveCoverage(id)).incompleteRows;
     assert.deepEqual({
       blocked: await admission(rows.map(row => row.digests)),
       visible: (await visible()).length,
@@ -275,7 +366,7 @@ for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth
     const { rows: stored } = await f.pool.query("SELECT core_digests FROM memories WHERE user_id = $1 ORDER BY updated_at", [owner]);
     for (const [i, { core_digests }] of stored.entries()) {
       assert.deepEqual(core_digests.slice(0, rows[i].digests.length), rows[i].digests);
-      assert.deepEqual(core_digests.at(-1), { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
+      assert.deepEqual(core_digests.at(-1), { alg: "hmac", pipeline: "hosted-v1", label: "hosted-v1", redactionVersion: 1,
         keyId: hostedKeyId, value: await legacyExactMac(rows[i].text, key, labels) });
     }
     assert.deepEqual(await visible(), [ref(different.id)]);
