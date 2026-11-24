@@ -12,19 +12,20 @@ import { readVisibilityFacts } from "./memory-visibility.mjs";
 /** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Query } from "./memory-rows.mjs" */
 /** @typedef {Pick<CaptureOptions, "lineageSecret" | "hashSessionKey"> & {
+ *   onLineageOverflow?: (sessions: number) => void;
  *   fingerprintKeys?: (owner: string) => readonly FingerprintKey[] | Promise<readonly FingerprintKey[]>
  * }} RawReadOptions */
 
 const MAX_MESSAGE_UNITS = 20_000;
 
 /** @param {RawReadOptions} options */
-export function createRawVisibility({ lineageSecret, hashSessionKey, fingerprintKeys }) {
+export function createRawVisibility({ lineageSecret, hashSessionKey, fingerprintKeys, onLineageOverflow }) {
   if (!inputText(lineageSecret)) invalid();
   const captureProofs = createCaptureProofs(lineageSecret);
   const policy = { hashSessionKey };
 
-  /** @param {Query} query @param {string} owner */
-  return async function rawVisibility(query, owner) {
+  /** @param {Query} query @param {string} owner @param {string[] | null} clients */
+  return async function rawVisibility(query, owner, clients) {
     const scope = { owner, namespace: null };
     const facts = (await readVisibilityFacts(query, owner, { rawSpans: true }))
       .filter(({ fact }) => fact.namespace == null);
@@ -34,7 +35,9 @@ export function createRawVisibility({ lineageSecret, hashSessionKey, fingerprint
     const sessionFacts = facts.flatMap(({ fact }) => fact.kind === "session" ? [fact.session] : []);
     const hasHostedMac = textFacts.some(({ fact }) =>
       fact.kind === "text" && fact.text.digests.some(digest => digest.alg === "hmac" && digest.pipeline === "hosted-v1"));
-    const lineage = readLineageFence(query, owner, captureProofs, sessionFacts, hashSessionKey);
+    const { sessions, withheldClients, overflowSessions } =
+      await readLineageFence(query, owner, clients, captureProofs, sessionFacts, hashSessionKey);
+    if (overflowSessions) onLineageOverflow?.(overflowSessions);
     /** @type {Promise<readonly FingerprintKey[]> | undefined} */
     let keys;
 
@@ -90,14 +93,17 @@ export function createRawVisibility({ lineageSecret, hashSessionKey, fingerprint
       }
     }
 
-    /** @param {readonly RawSegment[]} segments */
-    return async function visibleBatch(segments) {
-      const withheld = await lineage(segments);
-      const result = [];
-      for (const [position, segment] of segments.entries()) {
-        if (!withheld[position] && await visible(segment)) result.push(segment);
-      }
-      return result;
+    return {
+      sessions: JSON.stringify(sessions),
+      withheldClients,
+      /** @param {readonly RawSegment[]} segments */
+      async visibleBatch(segments) {
+        const result = [];
+        for (const segment of segments) {
+          if (await visible(segment)) result.push(segment);
+        }
+        return result;
+      },
     };
   };
 }

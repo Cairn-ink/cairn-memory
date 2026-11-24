@@ -137,9 +137,19 @@ State tokens assume all writers advance `core_owner_state` in the same
 transaction as retrieval-affecting changes. Legacy hosted writers must do so
 before this adapter serves reads, including shadow reads.
 
-Vector recall applies full visibility checks to bounded candidate pages.
-Its coverage counts include unchecked rows. An unchecked row with a missing
-model match keeps coverage incomplete so Core can use lexical ranking.
+Raw search, export, and delivery compute withheld sessions from stored lineage
+before reading candidates. Hosted writers need to backfill lineage for legacy
+sessions that could replay fenced content. An unrecorded session with no
+stored link to a fence cannot be found from the fence's MACs. For a session
+that shares a recorded message ID with a fenced component, the legacy
+fallback checks at most 1,000 raw message IDs and signs content only for a
+potential match without a stored proof. Larger sessions are withheld. A host
+can pass `onLineageOverflow(sessions)` to count overflow per visibility check.
+
+Vector recall applies full visibility checks to bounded candidate pages. The
+cosine page includes the full boundary distance group, ranked by update time
+and ID. Coverage stays incomplete when the page budget ends before the
+requested visible depth or when an unchecked model gap remains.
 
 `createPostgresDigestGate(uow, keyIdsForOwner)` returns
 `rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.

@@ -19,8 +19,8 @@ const DENIED_CALL = new RegExp("^(?:"
 
 /** @param {string} text */
 export function isReadStatement(text) {
-  // The bounded vector reader uses these transaction-local planner settings.
-  if (text === "SET LOCAL hnsw.iterative_scan = 'strict_order'" ||
+  // Retrieval uses these transaction-local planner settings.
+  if (text === "SET LOCAL jit = off" || text === "SET LOCAL hnsw.iterative_scan = 'strict_order'" ||
       text === "SET LOCAL enable_sort = off" || text === "SET LOCAL enable_sort = on") return true;
   let first;
   let depth = 0;

@@ -112,8 +112,12 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           async function collect(mode) {
             const ann = mode === "ann";
             const distance = ann ? "embedding <=> $8::vector" : "1::float8";
-            const order = ann ? distance : NEWEST;
-            const norm = mode === "zero" ? "AND vector_norm(embedding) = 0" : "";
+            const filter = ann ? `AND ($10::float8 IS NULL OR ${distance} > $10)
+              AND ${distance} <> 'NaN'::float8` : mode === "zero" ? "AND vector_norm(embedding) = 0" : "";
+            // WITH TIES uses only distance so the index can supply the entire
+            // boundary group. Rank that group before taking any visible prefix.
+            const boundary = ann ? `ORDER BY ${distance} FETCH FIRST $9 ROWS WITH TIES`
+              : `ORDER BY ${NEWEST} LIMIT $9 OFFSET $10`;
             const vectorFacts = vectors.length ? `, vector_facts AS MATERIALIZED (
               SELECT * FROM jsonb_to_recordset($11::jsonb) AS f(namespace text, embedding vector(1536))
             )` : "";
@@ -123,18 +127,20 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
                 AND (f.embedding IS NULL OR NOT ((m.embedding <=> f.embedding) > ${SUPPRESSION_CUTOFF}
                   AND (m.embedding <=> f.embedding) <> 'NaN'::float8))
             )` : "false";
+            /** @type {number | null} */
+            let afterDistance = null;
             for (let page = 0; page < MAX_VECTOR_PAGES; page++) {
-              const arguments_ = [...params, model, JSON.stringify(values), pageSize, page * pageSize];
+              const arguments_ = [...params, model, JSON.stringify(values), pageSize, ann ? afterDistance : page * pageSize];
               if (vectors.length) arguments_.push(JSON.stringify(vectors));
               const { rows } = await query(`WITH candidates AS MATERIALIZED (
-                  SELECT id, ${distance} AS distance FROM memories
-                  WHERE ${MEMORY_FILTER} AND embedding_model = $7 AND $8::vector IS NOT NULL ${norm}
-                  ORDER BY ${order} LIMIT $9 OFFSET $10
+                  SELECT id, updated_at, ${distance} AS distance FROM memories
+                  WHERE ${MEMORY_FILTER} AND embedding_model = $7 AND $8::vector IS NOT NULL ${filter}
+                  ${boundary}
                 )${vectorFacts}
                 SELECT page.*, c.distance FROM candidates c CROSS JOIN LATERAL (
                   SELECT ${columns}, ${suppression} AS vector_hidden FROM memories m WHERE m.id = c.id AND m.user_id = $1
                   OFFSET 0
-                ) page`, arguments_);
+                ) page ORDER BY c.distance, c.updated_at DESC, c.id COLLATE "C" DESC`, arguments_);
               const pending = rows.filter(row => !seen.has(row.id) && Number.isFinite(row.distance));
               const checked = await visibility.check(pending.map(row => readCandidate(row, selection.owner)));
               for (const [i, { memory, hidden }] of checked.entries()) {
@@ -153,14 +159,19 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               }
               result.sort((a, b) => a.distance - b.distance || compareSortKey(b.updatedAtUs, a.updatedAtUs) ||
                 compareUtf8(b.ref.id, a.ref.id));
-              const lastDistance = Math.max(...rows.map(row => row.distance));
-              if (rows.length < pageSize || (ann && !Number.isFinite(lastDistance)) ||
-                  (result.length >= depth && (!ann || lastDistance > result[depth - 1].distance))) break;
+              if (result.length > depth) result.length = depth;
+              afterDistance = rows.at(-1)?.distance ?? null;
+              if (rows.length < pageSize ||
+                  (result.length >= depth && (!ann || afterDistance !== null && afterDistance >= result[depth - 1].distance))) {
+                return true;
+              }
             }
+            return false;
           }
 
+          let checkedDepth;
           if (zeroQuery) {
-            await collect("orthogonal");
+            checkedDepth = await collect("orthogonal");
           } else {
             await query("SET LOCAL hnsw.iterative_scan = 'strict_order'");
             // Prefer HNSW over sorting a broad owner. For selective scopes the planner can
@@ -172,14 +183,18 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               restoreSort = settings.enable_sort === "on";
               if (restoreSort) await query("SET LOCAL enable_sort = off");
             }
-            await collect("ann");
+            checkedDepth = await collect("ann");
             if (restoreSort) await query("SET LOCAL enable_sort = on");
             // Zero vectors have no cosine index entry. They rank at distance 1.
-            if (result.length < depth || result[depth - 1].distance >= 1) await collect("zero");
+            if (result.length < depth || result[depth - 1].distance >= 1) {
+              const checkedZeros = await collect("zero");
+              checkedDepth &&= checkedZeros;
+            }
           }
-          // Counts beyond the checked pages are upper bounds. An unchecked model gap
-          // keeps coverage incomplete so core can fall back to lexical ranking.
-          return { coverage: { eligible, embedded, complete: eligible === embedded }, rows: result.slice(0, depth) };
+          // Counts beyond checked pages are upper bounds. A bounded index scan can
+          // also end short while same-model rows remain unchecked.
+          const complete = eligible === embedded && checkedDepth && result.length >= Math.min(depth, embedded);
+          return { coverage: { eligible, embedded, complete }, rows: result };
         });
       },
     },

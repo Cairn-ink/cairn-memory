@@ -155,11 +155,14 @@ test("Postgres applies the same raw lineage visibility during search, list, and 
   await addRaw(pool, "other-copy", { session: "unrelated", messageId: "shared", content: "cedar differs" });
   await addRaw(pool, "id-only", { session: "redacted", messageId: "uncertain", content: "cedar reappears" });
   const captureProofs = createCaptureProofs(lineageSecret);
-  const [proof, uncertain] = await captureProofs({ scope: { owner, namespace: null }, client: "one" },
-    [{ id: "shared", content: "cedar garden" }, { id: "uncertain", content: "" }]);
+  const [proof, uncertain, different, replay] = await captureProofs({ scope: { owner, namespace: null }, client: "one" }, [
+    { id: "shared", content: "cedar garden" }, { id: "uncertain", content: "" },
+    { id: "shared", content: "cedar differs" }, { id: "uncertain", content: "cedar reappears" },
+  ]);
   await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
-    VALUES ($1, 'one', 'closed', $2, $3), ($1, 'one', 'closed', $4, NULL)`,
-  [owner, proof.message_mac, proof.content_mac, uncertain.message_mac]);
+    VALUES ($1, 'one', 'closed', $2, $3), ($1, 'one', 'closed', $4, NULL),
+      ($1, 'one', 'fork', $2, $3), ($1, 'one', 'unrelated', $2, $5), ($1, 'one', 'redacted', $4, $6)`,
+  [owner, proof.message_mac, proof.content_mac, uncertain.message_mac, different.content_mac, replay.content_mac]);
   await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, 'one', 'closed')", [owner]);
 
   await uow.run(owner, { readOnly: true }, async tx => {
@@ -223,24 +226,56 @@ test("P1-2 raw reads match legacy keyed shingle containment", migrationDbTest, a
     "cedar", ["visible"], ["contained", "exact"]);
 });
 
-test("P1-3 raw lineage withholds the whole session for ID-only and full proofs", migrationDbTest, async (t) => {
-  const { pool, uow } = await setup(t);
+test("P1-3 and P1-10 fence stored descendants and bound proof-less siblings of touching sessions", migrationDbTest, async (t) => {
+  const { pool, source } = await setup(t);
   const proofs = createCaptureProofs(lineageSecret);
-  const [idOnly, full] = await proofs({ scope: personal, client: "one" },
-    [{ id: "id-only", content: "maple" }, { id: "full", content: "maple" }]);
+  const [idOnly, full, touch, different, secondHop] = await proofs({ scope: personal, client: "one" }, [
+    { id: "id-only", content: "maple" }, { id: "full", content: "maple" },
+    { id: "touch", content: "maple" }, { id: "touch", content: "different" }, { id: "second-hop", content: "maple" },
+  ]);
   await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
-    VALUES ($1, 'one', 'closed', $2, NULL), ($1, 'one', 'closed', $4, $5),
-      ($1, 'one', 'recorded-child', $2, $3)`,
-  [owner, idOnly.message_mac, idOnly.content_mac, full.message_mac, full.content_mac]);
+    VALUES ($1, 'one', 'closed', $2, NULL), ($1, 'one', 'closed', $4, $5), ($1, 'one', 'closed', $6, $7),
+      ($1, 'one', 'recorded-child', $2, $3),
+      ($1, 'one', 'exact-child', $4, $5), ($1, 'one', 'exact-child', $9, $10),
+      ($1, 'one', 'exact-grandchild', $9, $10),
+      ($1, 'one', 'full-child', $6, $8), ($1, 'one', 'id-child', $6, $8), ($1, 'one', 'overflow', $6, $8)`,
+  [owner, idOnly.message_mac, idOnly.content_mac, full.message_mac, full.content_mac,
+    touch.message_mac, touch.content_mac, different.content_mac, secondHop.message_mac, secondHop.content_mac]);
   await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, 'one', 'closed')", [owner]);
   await addRaw(pool, "recorded-sibling", { session: "recorded-child" });
+  await addRaw(pool, "grandchild-sibling", { session: "exact-grandchild" });
   await addRaw(pool, "full-copy", { session: "full-child", messageId: "full", content: "maple", us: null });
   await addRaw(pool, "full-sibling", { session: "full-child" });
   await addRaw(pool, "id-copy", { session: "id-child", messageId: "id-only", content: "maple", us: null });
   await addRaw(pool, "id-sibling", { session: "id-child" });
+  // The stored proof for this message ID is authoritative. Its raw body is never re-signed.
+  await addRaw(pool, "recorded-touch", { session: "full-child", messageId: "touch", content: "cedar maple" });
+  await addRaw(pool, "overflow-sibling", { session: "overflow" });
   await addRaw(pool, "visible");
-  await assertRawVisibility(t, uow, rawOptions, "cedar", ["visible"],
-    ["recorded-sibling", "full-sibling", "id-sibling"]);
+  await pool.query(`INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content)
+    SELECT 'overflow-' || i, $1, 'one', 'overflow', 'overflow-' || i, 'user', 'maple'
+    FROM generate_series(1, 1000) i`, [owner]);
+
+  const overflows = [];
+  const fetchedBodies = [];
+  const uow = createPostgresUnitOfWork({
+    async connect() {
+      const connection = await source.connect();
+      return {
+        release: connection.release,
+        async query(sql, args) {
+          if (sql.includes("SELECT client, session_id, message_id, content FROM raw_messages")) {
+            fetchedBodies.push(args[1].slice().sort());
+          }
+          return connection.query(sql, args);
+        },
+      };
+    },
+  });
+  await assertRawVisibility(t, uow, { ...rawOptions, onLineageOverflow: count => overflows.push(count) }, "cedar", ["visible"],
+    ["recorded-sibling", "grandchild-sibling", "full-sibling", "id-sibling", "recorded-touch", "overflow-sibling"]);
+  assert.deepEqual(overflows, [1, 1, 1]);
+  assert.deepEqual(fetchedBodies, Array.from({ length: 3 }, () => ["full-copy", "id-copy"]));
 });
 
 test("Postgres recent and memory export cursors are bound to their owner", migrationDbTest, async (t) => {
@@ -293,7 +328,8 @@ test("Postgres retrieval plans use hosted search and scoped indexes on populated
         release: connection.release,
         async query(sql, args) {
           const kind = sql.includes("pgroonga_score") ? (sql.includes("FROM raw_messages") ? "raw" : "lexical")
-            : sql.includes("<=>") ? "vector" : sql.includes("FROM core_memory_receipts") ? "receipts" : null;
+            : sql.includes("<=>") ? "vector" : sql.includes("FROM capture_raw_fences") ? "lineage"
+              : sql.includes("FROM core_memory_receipts") ? "receipts" : null;
           if (kind) {
             const { rows } = await connection.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`, args);
             plans.set(kind, indexNames(rows[0]["QUERY PLAN"][0].Plan));
@@ -314,7 +350,7 @@ test("Postgres retrieval plans use hosted search and scoped indexes on populated
 
   assert.ok(plans.get("lexical").includes("memories_text_idx"), JSON.stringify([...plans]));
   assert.ok(plans.get("raw").includes("raw_messages_content_idx"), JSON.stringify([...plans]));
-  assert.ok(plans.get("raw").includes("capture_raw_fences_user_id_client_session_id_pk"), JSON.stringify([...plans]));
+  assert.ok(plans.get("lineage").includes("capture_raw_fences_user_id_client_session_id_pk"), JSON.stringify([...plans]));
   assert.ok(plans.get("vector").some(name => name === "memories_embedding_idx" || name.startsWith("memories_user_")),
     JSON.stringify([...plans]));
   assert.ok(plans.get("receipts").some(name => name.startsWith("core_memory_receipts_")), JSON.stringify([...plans]));
