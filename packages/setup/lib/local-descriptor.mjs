@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { SetupError } from './errors.mjs';
 import { legacyEngineIdPattern as engineIdPattern, coreLocalEngineIdPattern, legacyEngine,
   coreLocalEngine, engineExecutable } from './local-engine-generation.mjs';
+import { validCutover } from './local-cutover-journal.mjs';
 
 export { engineIdPattern };
 const version1 = 'cairn-local-installation-v1';
@@ -173,7 +174,9 @@ function validEngine(value, allowCoreLocal) {
 
 function validMigration(journal, engine) {
   const failure = journal?.state === 'failed' || journal?.state === 'paused-recovery';
-  if (!keys(journal, ['state', 'sourceEngineId', 'targetEngineId', ...(failure ? ['resumeFrom'] : [])]) ||
+  const cutover = journal && Object.hasOwn(journal, 'cutover');
+  if (!keys(journal, ['state', 'sourceEngineId', 'targetEngineId', ...(failure ? ['resumeFrom'] : []),
+    ...(cutover ? ['cutover'] : [])]) ||
       typeof journal.sourceEngineId !== 'string' || !engineIdPattern.test(journal.sourceEngineId) ||
       !coreLocalId(journal.targetEngineId) ||
       engine?.id !== (journal.state === 'activated' ? journal.targetEngineId : journal.sourceEngineId)) return false;
@@ -204,6 +207,8 @@ export function validateDescriptor(value, root) {
   const consistent = vector => vector.ownerId === value.ownerId && vector.projectId === value.projectId && vector.databasePath === value.database.path;
   if (value.engine !== null && !validEngine(value.engine, allowCoreLocal)) fail();
   if (hasMigration && !validMigration(value.migration, value.engine)) fail();
+  if (value.migration?.cutover && !validCutover(value, iso, validIdentifier)) fail();
+  if (value.migration && Object.hasOwn(value.migration, 'cutover') && !value.migration.cutover) fail();
   if (value.node !== null && !validPath(value.node)) fail();
   for (const client of clients) {
     const receipt = value.clients[client];
@@ -273,6 +278,31 @@ export async function deletionPath(root, name, { purge = false, databasePath, re
   return path;
   } catch (error) { throw localFilesystemError(error); }
 }
+
+// Cutover file operations use the same filesystem boundary as the v1 journal.
+// A retired file keeps the reserved basename even across a partially completed rename.
+export async function retireCutoverTarget(path) {
+  const parent = dirname(path), stale = path + '.stale';
+  const exists = async file => {
+    try { await lstat(file); return true; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  };
+  const current = await exists(path), retired = await exists(stale);
+  if (!current && !retired) return false;
+  await ownedDirectory(parent);
+  if (await realpath(parent) !== parent || current && retired) throw recovery(parent);
+  if (current) await rename(path, stale);
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    if (await exists(path + suffix)) await rename(path + suffix, stale + suffix);
+  }
+  return true;
+}
+
+export async function removeCutoverMaintenance(root, id) {
+  const path = join(root, '.cutover-' + id);
+  if (await ownedDirectory(path, { missing: true })) await rm(path, { recursive: true });
+}
+
 const locks = new Map();
 export async function withLocalLock(root, work) {
   await ownedLocalTree(root);
@@ -302,13 +332,16 @@ export async function withLocalLock(root, work) {
     catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
   }
 }
-export async function writeDescriptor(root, descriptor) {
+export async function writeDescriptor(root, descriptor, { preserveUpdatedAt = false } = {}) {
   try {
   if (!locks.has(root)) throw recovery(root);
-  descriptor.updatedAt = new Date().toISOString(); validateDescriptor(descriptor, root);
+  if (!preserveUpdatedAt) descriptor.updatedAt = new Date().toISOString();
+  validateDescriptor(descriptor, root);
+  const contents = JSON.stringify(descriptor, null, 2) + '\n';
+  if (descriptor.migration?.cutover && Buffer.byteLength(contents) > 65536) throw recovery(root);
   const temporary = join(root, `.installation-${process.pid}-${randomBytes(8).toString('hex')}.tmp`);
   const file = await open(temporary, 'wx', 0o600);
-  try { await file.writeFile(JSON.stringify(descriptor, null, 2) + '\n'); await file.sync(); }
+  try { await file.writeFile(contents); await file.sync(); }
   finally { await file.close(); }
   await rename(temporary, join(root, 'installation.json'));
   const directory = await open(root, 'r'); try { await directory.sync(); } finally { await directory.close(); }

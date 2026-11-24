@@ -53,7 +53,15 @@ test('check-config verifies a built candidate and refuses wrong identities, repo
     "console.log(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { capabilities: {}, serverInfo: { name: 'other', version: '0.0.0' }, protocolVersion: '2025-11-25' } }));\n" +
     "  console.log(JSON.stringify({ jsonrpc: '2.0', id: 2, result: {} }));");
   const blockedImport = original.replace("import { serveStdio }", "import './adapter-slot.mjs';\nimport { serveStdio }");
-  for (const [source, code] of [[wrongReport, 0], [blockedImport, 1]]) {
+  const blockedStartup = [
+    "await fetch('http://127.0.0.1:1/');",
+    "new WebSocket('ws://127.0.0.1:1/');",
+    'new XMLHttpRequest();',
+    "new EventSource('http://127.0.0.1:1/');",
+    "process.binding('tcp_wrap');",
+    'process.dlopen({}, "unused");',
+  ].map(call => [original.replace('await serveStdio', call + '\n  await serveStdio'), 1, 'candidate_probe_startup_denied']);
+  for (const [source, code, reason] of [[wrongReport, 0], [blockedImport, 1, 'candidate_probe_import_denied'], ...blockedStartup]) {
     assert.notEqual(source, original);
     await writeFile(executable, source);
     const files = { ...manifest.files, [binPath]: sha256(source) };
@@ -62,7 +70,7 @@ test('check-config verifies a built candidate and refuses wrong identities, repo
       manifest: { ...manifest, files, engineId: id } }), error => {
       assert.equal(error.key, verificationFailed.key);
       assert.equal(error.params.exitCode, code);
-      if (code === 1) assert.match(error.params.stderr, /candidate_probe_import_denied/u);
+      if (reason) assert.ok(error.params.stderr.includes(reason), error.params.stderr);
       return true;
     });
   }
