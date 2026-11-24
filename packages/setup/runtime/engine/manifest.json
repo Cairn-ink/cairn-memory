@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "333f59471fe547d8e4d0ba78c1fd1bac048b4f8b6feb5add46b205f355e36dd0",
-  "bytes": 1497137,
+  "sha256": "45d9fb9b06f7bfe94d0ba9ced7a7b666d3a6b5c17a03e2b778b94655dc1fb477",
+  "bytes": 1497743,
   "files": [
     "LICENSE",
     "README.md",
@@ -436,9 +436,9 @@
     "core/confirmation-storage.mjs": "02917ae3e6e10150def0b673ae999f1ce5601b255b8019b41770381782bf5ffa",
     "core/relation-limits.mjs": "dc4e2a2b63e526f3decc7549d49e496cf247aab4d3117c08d8fd21acd80e09cf",
     "core/episode-schema.mjs": "f69f29986233a10715f0ffb84f96212052e3072b52d69c92627a2aed9a00c549",
-    "core/episode-storage.mjs": "889b5b1937412f69295c1114d723b44a6fffc159d7d254547bfd7929bb658277",
+    "core/episode-storage.mjs": "ee8d32987b0a741ea5bcb79c8038c141655cb63ef37f4e4716a1a08744bdc3f3",
     "core/episode-reads.mjs": "3aab36f3457011a7dabb600811923b8a462df5fb93f0bcfbce4ab7f771d0d03f",
-    "core/session-context.mjs": "a98a2b54d14553bfff1cb542eede272646efbfa71a1e7a193104c5b0947f50f6",
+    "core/session-context.mjs": "13571f010130b3f009c806e13ac4ec15e94b48ae926c1d7674d860812cf1fc14",
     "core/episode-input.mjs": "41b88513c9d75b06470b16a9647de700a1666dc322ee40b7f565f913279435e9",
     "core/episode-capture.mjs": "65259ce3662ac2ea80f8237e921cabdcbf01a73b614e0a42d1a1066a8e801b96",
     "core/prompts/interpret-episode.md": "5823a86c2545d3c915dd1e1bce20c5882af259f74260c284f40b77a7f5660d7c",
@@ -562,10 +562,10 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "2d12a272349964ffc4242c5cc7186d22f1f689ef748e4aba64d8854113bb5991",
-    "core/runtime.mjs": "492f5ba07452f020e51aca85900f44473e3ee316ab15997b143809238990216a",
+    "core/runtime.mjs": "6b8f3170ddc4cb387e45ff1e4a5dceb95dab3e1bbd2fc16b5ab08fd5ee38245e",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
-    "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
+    "core/suppression-content.mjs": "823e47a6c5e4f12c19c7ddd2ab7453bc564bd4a41538537efa0dd30bf3fe4f7a",
     "core/prompts/classify-placement.md": "0d0442e1132bb8b4440dbd5c652cee841f828ef1775b6a5289aad69b6babba8a",
     "core/prompts/extract-memories.md": "08aa15c586ba0eee113a610d6f8d196ee49441088b69e33b64f016c2cb9ad087",
     "core/prompts/extract-retained-sources.md": "8624702295547e40ae5e670e2fd673a0496fbcb70cace51b26519bcfa706de8c",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "804c37852e33250fc7285dc3ef36b6dfafecaed2a38ed01d7e44024c98ac3143"
+    "engine-build.json": "63d7e23445d6a7e7c658aff225b995e7c30d1bb072eb57b93b78cfe252596322"
   }
 }

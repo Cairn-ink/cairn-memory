@@ -1264,23 +1264,32 @@ export function bindEpisodeMarkerKeys(db) {
     episodeMarkerFunctions.add(db);
   }
 }
-const sourceReceiptKeySQL = 'episode_receipt_key(origin.client,origin.session_key,src.message_id,src.role,src.text)';
+const episodeReceiptKeySQL = excerpt => `episode_receipt_key(origin.client,origin.session_key,src.message_id,src.role,${excerpt})`;
+const sourceReceiptKeySQL = episodeReceiptKeySQL('src.text');
 
 // Project the same scoped receipt-marker matches in the bounded Episode
 // candidate query used by Session Start.
-export const episodeWithheldSourceIdsSQL = `CASE WHEN EXISTS (
+const episodeHasReceiptMarkersSQL = `EXISTS (
   SELECT 1 FROM suppressed marker WHERE marker.owner_id=e.owner_id AND marker.scope=e.scope
     AND marker.project_id=e.project_id AND marker.fingerprint GLOB 'rs1:*'
-) THEN (
-  SELECT json_group_array(src.id)
+)`;
+const episodeReceiptMatchesSQL = (select, receiptKey, tokenFilter = '') => `  SELECT ${select}
   FROM episode_sources src INDEXED BY episode_source_page
   CROSS JOIN session_episodes origin ON origin.id=src.origin_episode_id
   WHERE src.episode_id=e.id AND origin.owner_id=e.owner_id AND origin.scope=e.scope AND origin.project_id=e.project_id
     AND EXISTS (
-      SELECT 1 FROM json_each(receipt_marker_keys(${sourceReceiptKeySQL},origin.client,origin.session_key,src.message_id,src.role)) k
+      SELECT 1 FROM json_each(receipt_marker_keys(${receiptKey},origin.client,origin.session_key,src.message_id,src.role)) k
       CROSS JOIN suppressed marker ON marker.owner_id=e.owner_id AND marker.scope=e.scope
-        AND marker.project_id=e.project_id AND marker.fingerprint=k.value
-    )
+        AND marker.project_id=e.project_id AND marker.fingerprint=k.value${tokenFilter}
+    )`;
+export const episodeWithheldSourceIdsSQL = `CASE WHEN ${episodeHasReceiptMarkersSQL} THEN (
+${episodeReceiptMatchesSQL('json_group_array(src.id)', sourceReceiptKeySQL)}
+) END`;
+
+// Probe exact receipt identities with the candidate text as the excerpt.
+// An address-only marker has no excerpt and cannot serve as a text fact.
+export const episodeWithheldReceiptTextSQL = text => `CASE WHEN ${episodeHasReceiptMarkersSQL} THEN EXISTS (
+${episodeReceiptMatchesSQL('1', episodeReceiptKeySQL(text), " AND k.value GLOB 'rs1:i:*'")}
 ) END`;
 
 export function withheldEpisodeSourcesInside(db, ns, ids, receiptIds = []) {

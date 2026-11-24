@@ -9360,6 +9360,7 @@
     "core/runtime.mjs:withholdSource:values": 1,
     "core/session-context.mjs:<filter callback>:contentReadSafety": 1,
     "core/session-context.mjs:<filter callback>:contentSuppressionReasonInside": 1,
+    "core/session-context.mjs:<function callback>:fingerprint": 1,
     "core/session-context.mjs:<map callback>:sourcedMemory": 1,
     "core/session-context.mjs:<map callback>:step": 1,
     "core/session-context.mjs:<some callback>:has": 2,

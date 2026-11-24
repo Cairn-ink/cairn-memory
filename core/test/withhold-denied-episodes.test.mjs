@@ -230,14 +230,14 @@ const statementTrace = {
     'list continued': [5, '3c2bce40d8738300f9b4437cf19fa07096c470c63e97b56c09c3a348563cc1b4'],
     'get initial': [14, 'd3b86807335d1c0cf07650b11f0ad000b9e8344b760c52dbf6b7e62e35736446'],
     'get continued': [14, '7fd215950e96762663c2498a547d325432caf2ffadc5a2687bf7953f346ddc14'],
-    'next step': [14, '9b595fc82eb2a392d2941d8f7c4bfc5ac78d7e54ca8b1e0e67882c72aceb153c'],
+    'next step': [14, 'ed7519ce19db48f094f3e152cfeb85b86bf0025590fb4a136fb7288749518138'],
   },
   true: {
     'list initial': [14, '2841da168741725130b61ec825badc08dd339e01d5055d77dd02e0bbc98b41e9'],
     'list continued': [14, '46c198f5f166759e2d36b2a5db9df4d15eee6e5536a5c4020cb5dbddc0988c28'],
     'get initial': [23, '6dbda12aae707aa5262cbb1bd1f73c3fe4b8a84b969b29d1bf475d228a8d6604'],
     'get continued': [23, '050904875cc9ac141fe7de925c535f1c57484094e9f1146afefcf607cbd89015'],
-    'next step': [27, 'c94cde9cffd20e3f5f217f8d88f5d82e96ca41992cfab21ee62046da81e09f97'],
+    'next step': [27, 'd3b19493c6b2304bd53b5e67dc04782641c993b7a99ee31c5acbf71c766c49b5'],
   },
 };
 
