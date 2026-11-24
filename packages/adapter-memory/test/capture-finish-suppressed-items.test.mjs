@@ -215,3 +215,42 @@ test("K-CLM-6 compares the replay against the positions checked at finish", asyn
   await assert.rejects(runCase(rawFactory({ create }), testCase),
     /Replay must preserve the reported suppression positions/);
 });
+
+/** Runs K-CLM-6 on a memory adapter whose finish result carries `suppressedItems` from `define`; replay stays correct. */
+async function runWithFinishField(define) {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish } = adapter.capture;
+    adapter.capture.finish = async (tx, token, items) => {
+      const { suppressedItems, ...rest } = await finish(tx, token, items);
+      assert.deepEqual(suppressedItems, [1]);
+      return define(rest);
+    };
+    return adapter;
+  };
+  return runCase(rawFactory({ create }), testCase);
+}
+
+test("K-CLM-6 reads the finish field once, as core does", async () => {
+  let reads = 0;
+  // Core reads the field once and would see [0]; a second read would see the expected [1].
+  const result = runWithFinishField((rest) => Object.defineProperty(rest, "suppressedItems", {
+    enumerable: true, get: () => (reads++ === 0 ? [0] : [1]),
+  }));
+  await assert.rejects(result, /Finish must report exactly the suppressed middle position/);
+});
+
+test("K-CLM-6 reads each entry before checking that it is the list's own, as core does", async () => {
+  const result = runWithFinishField((rest) => {
+    const positions = [9];
+    // Core reads 1 here, then finds no own entry and fails the capture.
+    Object.defineProperty(positions, 0, { configurable: true, enumerable: true,
+      get() { delete positions[0]; return 1; } });
+    return { ...rest, suppressedItems: positions };
+  });
+  await assert.rejects(result, /Finish suppression positions must not have holes/);
+});

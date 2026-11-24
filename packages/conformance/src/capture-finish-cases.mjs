@@ -4,8 +4,9 @@ import { check, equal, fixtureEmbedding } from "./support.mjs";
 /** @import { ConformanceCase } from "./index.d.mts" */
 
 /**
- * Reads reported positions the way core does: the array length and its own indexed entries, never its iterator.
- * Returns a sorted copy, so a later change to the store's array cannot alter what was checked.
+ * Reads reported positions the way core does: the array length and its own indexed entries, never its iterator,
+ * each entry read before its ownership is checked. Returns a sorted copy, so a later change to the store's array
+ * cannot alter what was checked. Callers read the result field once and pass that value here.
  * @param {unknown} list
  * @param {string} label
  */
@@ -15,8 +16,8 @@ function readPositions(list, label) {
   /** @type {number[]} */
   const values = [];
   for (let index = 0; index < positions.length; index++) {
-    check(Object.hasOwn(positions, index), `${label} must not have holes`);
     const position = positions[index];
+    check(Object.hasOwn(positions, index), `${label} must not have holes`);
     check(Number.isInteger(position), `${label} must hold integer positions`);
     values.push(/** @type {number} */ (position));
   }
@@ -54,16 +55,17 @@ export const captureFinishCases = [
       const result = await uow.run(owner, { pauseLock: true }, (tx) => capture.finish(tx, fresh.token, items));
       equal(result.suppressedCount, 1, "Finish must count the suppressed middle item");
       equal(result.memories.length, 2, "Finish must write the other two items");
-      const reported = result.suppressedItems === undefined ? undefined
-        : readPositions(result.suppressedItems, "Finish suppression positions");
+      const finishList = result.suppressedItems;
+      const reported = finishList === undefined ? undefined : readPositions(finishList, "Finish suppression positions");
       if (reported) equal(reported, [1], "Finish must report exactly the suppressed middle position");
 
       const replay = await claim();
       // A completed claim may acknowledge a duplicate without returning a result.
       check(replay.status === "rawReplay" || replay.status === "duplicate", "Expected a completed claim");
       if (replay.status === "rawReplay") {
-        const replayed = replay.result.suppressedItems === undefined ? undefined
-          : readPositions(replay.result.suppressedItems, "Replayed suppression positions");
+        const replayList = replay.result.suppressedItems;
+        const replayed = replayList === undefined ? undefined
+          : readPositions(replayList, "Replayed suppression positions");
         equal(replayed, reported, "Replay must preserve the reported suppression positions");
       }
     },
