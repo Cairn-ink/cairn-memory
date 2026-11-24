@@ -395,21 +395,33 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
       return async (getState, _markDirty, run) => {
         const state = getState();
+        const { deletedMessages } = state;
+        const before = deletedMessages.size;
         const deleted = [];
         for (const [id, row] of state.rawRows) {
           if (slots.has(sessionSlot(row.ref.namespace, row))) {
             state.rawRows.delete(id);
             state.rawConflicts.delete(id);
-            state.receiptDenials.add(await receiptAddressKey(namespace, row));
+            const address = await receiptAddressKey(namespace, row);
+            deletedMessages.add(address);
+            state.receiptDenials.add(address);
             deleted.push(row);
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        const ledgerBlanked = await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key)));
+        for (const claim of state.claims.values()) {
+          const { key, messages } = claim;
+          if (key.scope.namespace !== namespace || !slots.has(sessionSlot(namespace, key))) continue;
+          const { client, sessionId } = key;
+          const messageIds = claim.messageIds ?? messages?.map(({ id }) => id) ?? [];
+          for (const messageId of messageIds) {
+            deletedMessages.add(await receiptAddressKey(namespace, { client, sessionId, messageId }));
+          }
+        }
+        const ledgerBlanked = await blankCaptureMessages(state, namespace, key => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
-        if (ledgerBlanked) run.stateWritten = true;
+        if (ledgerBlanked || deletedMessages.size !== before) run.stateWritten = true;
         return { rawDeleted: deleted.length, ledgerBlanked };
       };
     });
@@ -425,8 +437,16 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         return async (getState, _markDirty, run) => {
           if (!copied.length) return;
           const state = getState();
-          const { rawAnchors } = state;
-          const proofs = await captureProofs(selection, client, copied);
+          const { deletedMessages, rawAnchors } = state;
+          const retained = [];
+          for (const message of copied) {
+            // A deleted resend is blanked at admission, so its proof would match any text at this ID.
+            if (message.content === "" && deletedMessages.size && deletedMessages.has(await receiptAddressKey(selection.namespace,
+              { client, sessionId, messageId: message.id }))) continue;
+            retained.push(message);
+          }
+          if (!retained.length) return;
+          const proofs = await captureProofs(selection, client, retained);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const sessions = rawAnchors.get(client) ?? new Map();
           const slot = sessionSlot(selection.namespace, { client, sessionId });
