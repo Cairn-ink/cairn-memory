@@ -3,21 +3,23 @@ import { lstat, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/prom
 import { spawn } from 'node:child_process';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { SetupError } from './errors.mjs';
+import { legacyEngineIdPattern as engineIdPattern, coreLocalEngineIdPattern, legacyEngine,
+  coreLocalEngine, engineExecutable } from './local-engine-generation.mjs';
 
 const bundle = new URL('../runtime/engine/', import.meta.url);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = { '@modelcontextprotocol/server': '2.3.1', '@modelcontextprotocol/core': '2.3.1',
   zod: '4.6.7', tiktoken: '1.0.22' };
 const failure = (key, params = {}) => new SetupError(key, 1, params);
-const engineIdPattern = /^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}(?:-r(?:[2-9]|[1-9]\d+))?$/u;
 
 export function engineIdFor(installerVersion, manifestBytes) {
   return `${installerVersion}-${hash(manifestBytes).slice(0, 12)}`;
 }
 
 export function engineBaseId(engineId) {
-  if (typeof engineId !== 'string' || !engineIdPattern.test(engineId)) {
+  if (typeof engineId !== 'string' || !(engineIdPattern.test(engineId) || coreLocalEngineIdPattern.test(engineId))) {
     throw failure('local_engine_install_failed');
   }
   return engineId.replace(/-r(?:[2-9]|[1-9]\d+)$/u, '');
@@ -39,12 +41,12 @@ export async function nextRepairId(root, baseId) {
   }
 }
 
-function validateManifest(manifest) {
+function validateManifest(manifest, { packageName, packageVersion, binPath } = legacyEngine) {
   const pathOK = name => typeof name === 'string' && name.length > 0 &&
     !isAbsolute(name) && !/[\\\x00-\x1f\x7f]/u.test(name) &&
     name.split('/').every(part => part && part !== '.' && part !== '..');
-  if (manifest?.schemaVersion !== 1 || manifest.package?.name !== 'cairn-memory-local-preview' ||
-      manifest.package?.version !== '0.0.0-preview.1' || !/^[a-f0-9]{64}$/u.test(manifest.sha256) ||
+  if (manifest?.schemaVersion !== 1 || manifest.package?.name !== packageName ||
+      manifest.package?.version !== packageVersion || !/^[a-f0-9]{64}$/u.test(manifest.sha256) ||
       !Number.isSafeInteger(manifest.bytes) || manifest.bytes <= 0 || !Array.isArray(manifest.files) ||
       !manifest.sourceHashes || !manifest.generatedHashes) throw failure('engine_bundle_invalid');
   const hashes = { ...manifest.sourceHashes, ...manifest.generatedHashes };
@@ -52,11 +54,34 @@ function validateManifest(manifest) {
       JSON.stringify(Object.keys(hashes).sort()) !== JSON.stringify([...manifest.files].sort()) ||
       Object.keys(manifest.generatedHashes).sort().join(',') !== 'engine-build.json,npm-shrinkwrap.json,package.json' ||
       Object.keys(manifest.sourceHashes).some(name => Object.hasOwn(manifest.generatedHashes, name)) ||
-      !manifest.files.includes('bin/cairn-memory.mjs') ||
+      !manifest.files.includes(binPath) ||
       !manifest.files.every(name => pathOK(name) && /^[a-f0-9]{64}$/u.test(hashes[name]))) {
     throw failure('engine_bundle_invalid');
   }
   return hashes;
+}
+
+function validateCandidateManifest(manifest, engineId) {
+  const { packageName, packageVersion, binPath } = coreLocalEngine;
+  const { archive, files } = manifest ?? {};
+  const digest = /^[a-f0-9]{64}$/u;
+  if (typeof engineId !== 'string' || !coreLocalEngineIdPattern.test(engineId) ||
+      manifest?.schemaVersion !== 1 || manifest.package?.name !== packageName ||
+      manifest.package.version !== packageVersion || archive?.filename !== packageName + '-' + packageVersion + '.tgz' ||
+      typeof archive.sha256 !== 'string' || !digest.test(archive.sha256) ||
+      !Number.isSafeInteger(archive.bytes) || archive.bytes <= 0 ||
+      !files || typeof files !== 'object' || Array.isArray(files) ||
+      !Object.hasOwn(files, 'package.json') || !Object.hasOwn(files, binPath)) {
+    throw failure('engine_bundle_invalid');
+  }
+  // This digest domain and portable path grammar match the candidate builder.
+  const prefix = 'core-local-v1';
+  const pairs = Object.keys(files).sort().map(path => [path, files[path]]);
+  if (pairs.some(([path, value]) => !/^(?:[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/u.test(path) ||
+      typeof value !== 'string' || !digest.test(value)) ||
+      manifest.engineId !== prefix + '-' + hash(JSON.stringify([prefix, pairs])) ||
+      manifest.engineId !== engineBaseId(engineId)) throw failure('engine_bundle_invalid');
+  return files;
 }
 
 async function regularFiles(directory, prefix = '') {
@@ -71,19 +96,21 @@ async function regularFiles(directory, prefix = '') {
   return entries.sort();
 }
 
-export async function verifyInstalledTree(appDirectory, manifest) {
+export async function verifyInstalledTree(appDirectory, manifest, { candidateEngineId } = {}) {
   try {
-    const hashes = validateManifest(manifest);
+    const candidate = candidateEngineId !== undefined;
+    const hashes = candidate ? validateCandidateManifest(manifest, candidateEngineId) : validateManifest(manifest);
     const directory = join(appDirectory, 'node_modules', manifest.package.name);
     for (const path of [appDirectory, join(appDirectory, 'node_modules'), directory]) {
       if (!(await lstat(path)).isDirectory()) throw new Error('invalid_directory');
     }
     const files = await regularFiles(directory);
-    if (JSON.stringify(files) !== JSON.stringify([...manifest.files].sort())) throw new Error('inventory');
+    const expected = (candidate ? Object.keys(hashes) : [...manifest.files]).sort();
+    if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('inventory');
     for (const name of files) {
       if (hash(await readFile(join(directory, name))) !== hashes[name]) throw new Error('hash');
     }
-    for (const [name, version] of Object.entries(pins)) {
+    for (const [name, version] of candidate ? [] : Object.entries(pins)) {
       let parent = join(appDirectory, 'node_modules');
       for (const part of name.split('/')) {
         parent = join(parent, part);
@@ -121,9 +148,9 @@ async function childEnvironment(root, node, env) {
 
 // Capture child diagnostics for the coordinator's verbose path only. Never
 // interpolate child text into a translated error or send it to the writer.
-function run(executable, args, cwd, env, kind, onChild, timeoutMs) {
+function run(executable, args, cwd, env, kind, onChild, timeoutMs, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'],
+    const child = spawn(executable, args, { cwd, env, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       windowsHide: true });
     let stdout = '', stderr = '', spawnError, timedOut = false, overflow = false;
     let childClosed = false, hookSettled = false, hookFailed = false, settled = false;
@@ -169,11 +196,64 @@ function run(executable, args, cwd, env, kind, onChild, timeoutMs) {
     child.stdout.on('data', collect('stdout'));
     child.stderr.on('data', collect('stderr'));
     child.on('error', error => { spawnError = error.code; });
+    if (input !== undefined) {
+      child.stdin.on('error', error => { spawnError = error.code; });
+      child.stdin.end(input);
+    }
     child.on('close', (code, terminationSignal) => {
       childClosed = true; exitCode = code; signal = terminationSignal;
       finish();
     });
   });
+}
+
+// The staging candidate exposes initialize/ping as its config probe. Block
+// SQLite and accidental storage/provider imports along that startup path.
+const candidateProbeGuard = 'data:text/javascript,' + encodeURIComponent(String.raw`
+  import { registerHooks } from 'node:module';
+  const banned = /^(?:node:)?(?:sqlite|fs|net|http|https|http2|tls|dns|dgram|child_process|worker_threads)(?:\/|$)/u;
+  registerHooks({ resolve(specifier, context, next) {
+    const resolved = next(specifier, context);
+    if (banned.test(specifier) || resolved.url.endsWith('/adapter-slot.mjs') || resolved.url.endsWith('.node')) {
+      throw new Error('candidate_probe_import_denied');
+    }
+    return resolved;
+  } });
+`);
+
+// Callers supply a trusted detached manifest and an already staged app tree.
+// The generation id binds the tree's payload, independent of archive compression.
+export async function checkCoreLocalConfig({ appDirectory, manifest, engineId, node }) {
+  if (typeof appDirectory !== 'string' || !isAbsolute(appDirectory) ||
+      typeof node !== 'string' || !isAbsolute(node) || typeof engineId !== 'string') {
+    throw failure('local_engine_verification_failed');
+  }
+  await verifyInstalledTree(appDirectory, manifest, { candidateEngineId: engineId });
+  const executable = engineExecutable(appDirectory, coreLocalEngine);
+  const protocolVersion = '2025-11-25';
+  const requests = [
+    { id: 1, method: 'initialize', params: { protocolVersion, capabilities: {},
+      clientInfo: { name: 'cairn-memory-setup', version: '1' } } },
+    { method: 'notifications/initialized' },
+    { id: 2, method: 'ping' },
+  ].map(request => JSON.stringify({ jsonrpc: '2.0', ...request }) + '\n').join('');
+  const expected = [
+    { jsonrpc: '2.0', id: 1, result: { protocolVersion, capabilities: {}, serverInfo: manifest.package } },
+    { jsonrpc: '2.0', id: 2, result: {} },
+  ];
+  let checked;
+  try {
+    const env = process.platform === 'win32' && process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {};
+    checked = await run(node, ['--no-experimental-sqlite', '--import', candidateProbeGuard, executable, '--stdio'],
+      appDirectory, env, 'check', undefined, 10000, requests);
+    const replies = checked.stdout.trim().split('\n').map(line => JSON.parse(line));
+    if (checked.stderr === '' && isDeepStrictEqual(replies, expected)) {
+      return { ok: true, engineId, databaseOpened: false, providerContacted: false };
+    }
+  } catch (error) {
+    if (error instanceof SetupError) checked = error.params;
+  }
+  throw failure('local_engine_verification_failed', checked);
 }
 
 async function ownedDirectory(directory, { generation = false } = {}) {
@@ -253,7 +333,7 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
   for (;;) {
     const directory = join(root, 'engine', engineId);
     const app = join(directory, 'app');
-    const executable = join(app, 'node_modules', manifest.package.name, 'bin/cairn-memory.mjs');
+    const executable = engineExecutable(app);
     const result = { executable, engineId, sha256: manifest.sha256 };
     let exists = false;
     try { await lstat(directory); exists = true; }

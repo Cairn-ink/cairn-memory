@@ -4,8 +4,13 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { SetupError } from './errors.mjs';
+import { legacyEngineIdPattern as engineIdPattern, coreLocalEngineIdPattern, legacyEngine,
+  coreLocalEngine, engineExecutable } from './local-engine-generation.mjs';
 
-export const engineIdPattern = /^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}(?:-r(?:[2-9]|[1-9]\d+))?$/u;
+export { engineIdPattern };
+const version1 = 'cairn-local-installation-v1';
+const version2 = 'cairn-local-installation-v2';
+const migrationCheckpoints = ['staged', 'quiesced', 'backup-proved', 'migrated', 'verified', 'activated'];
 const clients = ['claude', 'codex'];
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, names) => object(value) && Object.keys(value).sort().join(',') === [...names].sort().join(',');
@@ -144,22 +149,48 @@ export async function localRoot(env = process.env, { create = false } = {}) {
   return canonicalPath(path);
 }
 export function executableFor(root, engineId) {
-  if (!engineIdPattern.test(engineId)) throw recovery(root);
-  return join(root, 'engine', engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
+  const candidate = coreLocalId(engineId);
+  if (!candidate && !engineIdPattern.test(engineId)) throw recovery(root);
+  return engineExecutable(join(root, 'engine', engineId, 'app'), candidate ? coreLocalEngine : legacyEngine);
 }
 export const vectorArguments = (root, vector) => [executableFor(root, vector.engineId), '--db',
   vector.databasePath, '--owner', vector.ownerId, ...(vector.projectId === null ? [] : ['--project', vector.projectId])];
 export const sameVector = (a, b) => Boolean(a) && Boolean(b) &&
   ['engineId', 'node', 'databasePath', 'ownerId', 'projectId'].every(key => a[key] === b[key]);
-const validVector = value => keys(value, ['engineId', 'node', 'databasePath', 'ownerId', 'projectId']) &&
-  engineIdPattern.test(value.engineId) && validPath(value.node) && validPath(value.databasePath) &&
+const coreLocalId = value => typeof value === 'string' && coreLocalEngineIdPattern.test(value);
+const validVector = (value, allowCoreLocal) => keys(value, ['engineId', 'node', 'databasePath', 'ownerId', 'projectId']) &&
+  (engineIdPattern.test(value.engineId) || (allowCoreLocal && coreLocalId(value.engineId))) &&
+  validPath(value.node) && validPath(value.databasePath) &&
   validIdentifier(value.ownerId) && (value.projectId === null || validIdentifier(value.projectId));
 const iso = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
+function validEngine(value, allowCoreLocal) {
+  if (!keys(value, ['id', 'package', 'packageVersion', 'sha256']) || !/^[a-f0-9]{64}$/u.test(value.sha256)) return false;
+  const profile = allowCoreLocal && coreLocalId(value.id) ? coreLocalEngine : legacyEngine;
+  return (profile === coreLocalEngine || engineIdPattern.test(value.id)) &&
+    value.package === profile.packageName && value.packageVersion === profile.packageVersion;
+}
+
+function validMigration(journal, engine) {
+  const failure = journal?.state === 'failed' || journal?.state === 'paused-recovery';
+  if (!keys(journal, ['state', 'sourceEngineId', 'targetEngineId', ...(failure ? ['resumeFrom'] : [])]) ||
+      typeof journal.sourceEngineId !== 'string' || !engineIdPattern.test(journal.sourceEngineId) ||
+      !coreLocalId(journal.targetEngineId) ||
+      engine?.id !== (journal.state === 'activated' ? journal.targetEngineId : journal.sourceEngineId)) return false;
+  // resumeFrom records the last completed checkpoint. Quiescing can fail
+  // after admissions close, so paused recovery can also resume from staged.
+  if (journal.state === 'failed') return journal.resumeFrom === null || journal.resumeFrom === 'staged';
+  if (journal.state === 'paused-recovery') return migrationCheckpoints.slice(0, -1).includes(journal.resumeFrom);
+  return migrationCheckpoints.includes(journal.state);
+}
+
 export function validateDescriptor(value, root) {
   const fail = () => { throw recovery(root); };
+  const allowCoreLocal = value?.version === version2;
+  const hasMigration = allowCoreLocal && Object.hasOwn(value, 'migration');
   if (!keys(value, ['version', 'state', 'installerVersion', 'ownerId', 'projectId', 'database', 'engine',
-    'node', 'operation', 'clients', 'createdAt', 'updatedAt']) || value.version !== 'cairn-local-installation-v1' ||
+    'node', 'operation', 'clients', 'createdAt', 'updatedAt', ...(hasMigration ? ['migration'] : [])]) ||
+      !(value.version === version1 || allowCoreLocal) ||
       !['pending', 'installed', 'uninstalling', 'uninstalled'].includes(value.state) ||
       !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/u.test(value.installerVersion) || !validIdentifier(value.ownerId) ||
       !(value.projectId === null || validIdentifier(value.projectId)) || !iso(value.createdAt) || !iso(value.updatedAt) ||
@@ -171,16 +202,15 @@ export function validateDescriptor(value, root) {
     .some(target => inside(target, path));
   if (!databaseSafe(value.database.path)) fail();
   const consistent = vector => vector.ownerId === value.ownerId && vector.projectId === value.projectId && vector.databasePath === value.database.path;
-  if (value.engine !== null && (!keys(value.engine, ['id', 'package', 'packageVersion', 'sha256']) ||
-      !engineIdPattern.test(value.engine.id) || value.engine.package !== 'cairn-memory-local-preview' ||
-      value.engine.packageVersion !== '0.0.0-preview.1' || !/^[a-f0-9]{64}$/u.test(value.engine.sha256))) fail();
+  if (value.engine !== null && !validEngine(value.engine, allowCoreLocal)) fail();
+  if (hasMigration && !validMigration(value.migration, value.engine)) fail();
   if (value.node !== null && !validPath(value.node)) fail();
   for (const client of clients) {
     const receipt = value.clients[client];
     if (receipt === null) continue;
     if (!keys(receipt, client === 'claude' ? ['server', 'scope', 'home', 'vector'] : ['server', 'configPath', 'vector']) ||
         receipt.server !== 'cairn-local' || (client === 'claude' && receipt.scope !== 'user') ||
-        !validPath(client === 'claude' ? receipt.home : receipt.configPath) || !validVector(receipt.vector) || !consistent(receipt.vector) ||
+        !validPath(client === 'claude' ? receipt.home : receipt.configPath) || !validVector(receipt.vector, allowCoreLocal) || !consistent(receipt.vector) ||
         !databaseSafe(receipt.vector.databasePath)) fail();
   }
   const op = value.operation;
@@ -192,7 +222,7 @@ export function validateDescriptor(value, root) {
     for (const checkpoint of Object.values(op.checkpoints)) {
       if (!keys(checkpoint, ['state', 'destination', 'previous', 'desired']) || !validPath(checkpoint.destination) ||
           !(op.kind === 'setup' ? ['planned', 'registering', 'done', 'manual'] : ['planned', 'detaching', 'detached']).includes(checkpoint.state) ||
-          ![checkpoint.previous, checkpoint.desired].every(vector => vector === null || (validVector(vector) && consistent(vector) && databaseSafe(vector.databasePath))) ||
+          ![checkpoint.previous, checkpoint.desired].every(vector => vector === null || (validVector(vector, allowCoreLocal) && consistent(vector) && databaseSafe(vector.databasePath))) ||
           (op.kind === 'setup' && checkpoint.desired === null)) fail();
     }
   }
@@ -202,10 +232,12 @@ export function validateDescriptor(value, root) {
   if (value.state === 'uninstalled' && (value.engine !== null || value.node !== null || op !== null || Object.values(value.clients).some(Boolean))) fail();
   return value;
 }
-export async function readDescriptor(root) {
+export async function readDescriptor(root, { allowV2 = false } = {}) {
   try {
     const value = await boundedJSON(join(root, 'installation.json'), 65536, { privateFile: true });
     validateDescriptor(value, root);
+    // Existing setup, daemon and capture flows only handle v1.
+    if (value.version === version2 && allowV2 !== true) throw recovery(root);
     for (const vector of [value.database.path, ...Object.values(value.clients).filter(Boolean).map(receipt => receipt.vector.databasePath),
       ...Object.values(value.operation?.checkpoints ?? {}).flatMap(cp => [cp.previous, cp.desired].filter(Boolean).map(v => v.databasePath))]) {
       const path = await canonicalPath(vector);
@@ -284,7 +316,7 @@ export async function writeDescriptor(root, descriptor) {
 }
 export function newDescriptor(root, installerVersion, { owner, db, project } = {}) {
   const now = new Date().toISOString();
-  return { version: 'cairn-local-installation-v1', state: 'pending', installerVersion,
+  return { version: version1, state: 'pending', installerVersion,
     ownerId: owner ?? 'local-' + randomBytes(8).toString('hex'), projectId: project ?? null,
     database: { path: db ?? join(root, 'data/memory.sqlite'), external: Boolean(db && db !== join(root, 'data/memory.sqlite')) },
     engine: null, node: process.execPath, operation: null, clients: { claude: null, codex: null }, createdAt: now, updatedAt: now };
