@@ -364,6 +364,8 @@ export function captureMethods(deps) {
       const readLedgerStatus = readStatus.bind(capture);
       const lock = { pauseLock: true };
       /** @param {Tx} tx */
+      const readAdmission = tx => load.call(capture, tx, { scope, client, sessionId, eventId });
+      /** @param {Tx} tx */
       const readPause = async tx => pauseResult(await pause.get(tx, owner));
       /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages */
       const readEligible = async (tx, key, messages) => {
@@ -392,7 +394,7 @@ export function captureMethods(deps) {
       try {
         claimed = await uow.run(owner, lock, async tx => {
           if ((await readPause(tx)).paused) return /** @type {const} */ ({ status: "paused" });
-          const admission = await load.call(capture, tx, { scope, client, sessionId, eventId });
+          const admission = await readAdmission(tx);
           if (admission === null) return /** @type {const} */ ({ status: "failed", code: "not_found" });
           const { key, messages } = admission;
           if (key?.scope?.owner !== owner || key.scope.namespace !== scope.namespace ||
@@ -419,6 +421,19 @@ export function captureMethods(deps) {
       if (claimed.status !== "claimed") return claimed;
       const { key, admittedMessages } = claimed;
       let { token, positions } = claimed;
+
+      /** @param {Tx} tx */
+      async function readCurrentMessages(tx) {
+        const current = await readAdmission(tx);
+        return current?.key.payloadDigest === key.payloadDigest ? current.messages : [];
+      }
+
+      /** @param {CaptureMessage[]} current @param {number} position */
+      function sourceUnchanged(current, position) {
+        const content = current[position]?.content;
+        // Erasure preserves the slot and blanks its content. Compare the stored text verbatim.
+        return !!content && content === admittedMessages[position].content;
+      }
 
       /** @param {Tx} tx */
       async function pauseChanged(tx) {
@@ -498,8 +513,22 @@ export function captureMethods(deps) {
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
         };
+        /** @param {Tx} tx @param {number[]} positions */
+        async function screenSourcePositions(tx, positions) {
+          const passages = await readSourcePassages(tx, positions);
+          const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
+          if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) return null;
+          const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
+          await capture.assertEligible(tx, key, allowed);
+          return allowed;
+        }
         const supplemental = documents?.forCapture({ key, messages: admittedMessages, excludedSources, sourceKey,
-          readSourcePassages, selectWriteKey, filterSources: (positions, passages, writeKey) =>
+          readSourcePassages, selectWriteKey,
+          unchangedPositions: async (tx, positions) => {
+            const current = await readCurrentMessages(tx);
+            return positions.filter(position => sourceUnchanged(current, position));
+          },
+          filterSources: (positions, passages, writeKey) =>
             filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
           abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
           generation: preflight.generation, signal: options?.signal });
@@ -507,13 +536,8 @@ export function captureMethods(deps) {
         let extraction;
         for (;;) {
           const dispatch = await runAtGeneration(async tx => {
-            const passages = await readSourcePassages(tx, positions);
-            const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
-            if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
-              return abandonKeyMismatch(tx);
-            }
-            const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
-            await capture.assertEligible(tx, key, allowed);
+            const allowed = await screenSourcePositions(tx, positions);
+            if (allowed === null) return abandonKeyMismatch(tx);
             if (!allowed.length) return { result: await finish(tx, []) };
             if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
             return { allowed };
@@ -553,6 +577,26 @@ export function captureMethods(deps) {
           onDiagnostic: diagnostics && (event => emitDiagnostic(diagnostics, event.stage, event.layer, event.reason)),
         };
         await assertSendGeneration();
+        // Recheck the positions bound to the request before the dispatch gate.
+        // As with callBuiltModel, a hide can still commit while the gate is pending.
+        // The finish-time source recheck keeps withheld evidence out of storage.
+        transport.check();
+        try {
+          await untilAborted(transport.signal, uow.run(owner, lock, async tx => {
+            if (await pauseChanged(tx)) throw new CoreError("capture_paused");
+            const allowed = await screenSourcePositions(tx, positions);
+            if (allowed?.length !== positions.length) throw new CoreError("ingest_inputs_changed");
+            const current = await readCurrentMessages(tx);
+            if (!positions.every(position => sourceUnchanged(current, position))) {
+              throw new CoreError("ingest_inputs_changed");
+            }
+          }));
+        } catch (error) {
+          transport.check();
+          const failure = entryError(error);
+          if (failure.code === "suppressed") throw new CoreError("ingest_inputs_changed");
+          throw failure;
+        }
         await gate.assertOpen(owner, "dispatch");
         let output;
         try {
@@ -602,7 +646,9 @@ export function captureMethods(deps) {
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
-          await capture.assertEligible(tx, key, preEmbed.stillEligible);
+          const current = await readCurrentMessages(tx);
+          const stillCurrent = preEmbed.stillEligible.filter(position => sourceUnchanged(current, position));
+          await capture.assertEligible(tx, key, stillCurrent);
           let writeKey;
           if (prepared.length && keys.userKeyForWrite) {
             writeKey = await keys.userKeyForWrite(tx);
@@ -616,14 +662,15 @@ export function captureMethods(deps) {
           const allowedCandidates = filterCaptureCandidates(embedded, snapshot, scope, excludedSources);
 
           // Source checks need the same unprojected text facts as admission.
-          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
+          const sourcePassages = await readSourcePassages(tx, stillCurrent);
           let currentSourceKey = null;
           if (capabilities.fingerprintKey && sourcePassages.length) {
             currentSourceKey = writeKey === undefined ? await selectWriteKey(tx) : writeKey;
             if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
           }
-          const allowedPositions = await filterCaptureSources(sources, preEmbed.stillEligible, sourcePassages,
+          const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
             null, sourceEvidence, currentSourceKey);
+          // Every allowed position passed sourceUnchanged, so its admitted copy equals the stored content.
           const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
           const allowedIds = new Set(allowedMessages.map(({ id }) => id));
           const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>

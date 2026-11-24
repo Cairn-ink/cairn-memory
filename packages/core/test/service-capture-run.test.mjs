@@ -70,13 +70,14 @@ test("capture runs the leased plain extraction outside transactions and binds tr
     ...locked, "capture.load", "capture.claim", "capture.eligible",
     ...locked, "suppressions.snapshot", "capture.assertEligible",
     ...locked, "suppressions.snapshot", "capture.assertEligible", "capture.beginDispatch",
-    "gate", ...locked, "gate", "model.call", "gate", "keys.userKey",
+    "gate", ...locked, ...locked, "suppressions.snapshot", "capture.assertEligible", "capture.load",
+    "gate", "model.call", "gate", "keys.userKey",
     ...locked, "capture.eligible", "suppressions.snapshot", "gate", "embed",
-    ...locked, "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "suppressions.snapshot", "capture.finish",
+    ...locked, "capture.load", "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "suppressions.snapshot", "capture.finish",
   ]);
   const runs = f.calls.filter(([method]) => method === "run");
   assert.deepEqual(runs.map(([, owner]) => owner), Array(runs.length).fill(scope.owner));
-  assert.deepEqual(runs.map(([, , options]) => options), Array(7).fill({ pauseLock: true }));
+  assert.deepEqual(runs.map(([, , options]) => options), Array(8).fill({ pauseLock: true }));
   assert.deepEqual(f.calls.filter(([method]) => method === "gate").map(([, , phase]) => phase),
     ["pre-send", "dispatch", "post-send", "dispatch"]);
   const [, stage, request] = f.calls.find(([method]) => method === "model.call");
