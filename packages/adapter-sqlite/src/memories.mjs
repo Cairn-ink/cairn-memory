@@ -110,8 +110,9 @@ function duplicateMatches(db, scope, batch, policy, excludeId, hiddenIds) {
 /** @param {Connection} db @param {Scope} scope @param {readonly DuplicateQuery[]} input
  * @param {SourceRef} source @param {"hash" | "full"} mode @param {SessionHasher} hashSession
  * @param {string} [editId]
+ * @param {ReadonlyArray<readonly Receipt[]>} [receiptsByPosition]
  */
-export function readWritePolicy(db, scope, input, source, mode, hashSession, editId) {
+export function readWritePolicy(db, scope, input, source, mode, hashSession, editId, receiptsByPosition) {
   const batch = validateBatch(input);
   validateSource(source);
   if ((mode !== "hash" && mode !== "full") || (editId !== undefined && typeof editId !== "string")) invalidInput();
@@ -122,7 +123,9 @@ export function readWritePolicy(db, scope, input, source, mode, hashSession, edi
   const sourceMemory = edit && { id: edit.id, createdAtMs: edit.createdAtMs };
   const blockedPositions = [];
   for (const [i, query] of batch.entries()) {
-    if (policy.blocks(query, mode, sourceMemory)) blockedPositions.push(i);
+    if (policy.blocks(query, mode, sourceMemory) || policy.blocksReceipts(receiptsByPosition?.[i])) {
+      blockedPositions.push(i);
+    }
   }
   return {
     matches, hiddenIds: [...hidden].sort(compareUtf8), blockedPositions,
@@ -197,7 +200,12 @@ export function createMemoryStore(port, hashSession, markDirty) {
 
     insert(tx, scope, row, receipts, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        const inserted = insertMemory(db, scope, encodeContent(row), copyReceipts(receipts), nowMs, row.createdAtMs ?? nowMs);
+        const content = encodeContent(row);
+        const evidence = copyReceipts(receipts);
+        if (evidence.length && scopedSuppression(db, scope, hashSession).blocksReceipts(evidence)) {
+          throw new CoreError("suppressed");
+        }
+        const inserted = insertMemory(db, scope, content, evidence, nowMs, row.createdAtMs ?? nowMs);
         markDirty?.(db, tx);
         return inserted;
       });

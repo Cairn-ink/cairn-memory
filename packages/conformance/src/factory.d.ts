@@ -10,7 +10,8 @@ export type AdapterFactory = {
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
-    "suppressions" | "pause" | "keys" | "placement" | "raw" | "documentCards" | "rationale" | "rationaleSourceText">;
+    "suppressions" | "pause" | "keys" | "placement" | "raw" | "sessionLineage" | "documentCards" | "rationale" |
+    "rationaleSourceText">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

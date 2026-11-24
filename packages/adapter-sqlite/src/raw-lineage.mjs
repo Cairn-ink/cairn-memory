@@ -105,8 +105,13 @@ export function createSpanLineage(port, hashSession) {
         for (const receipt of receipts) {
           const { client, sessionId, messageId, role } = receipt;
           const archived = readRawRow(db, scope, receipt, messageId);
-          if (!archived?.message.content || archived.message.role !== role) throw new CoreError("raw_lineage_unavailable");
+          // A missing row leaves no Raw span to fence. Surviving rows still need
+          // to support the receipt before their content can supply a span.
+          if (!archived) continue;
           const { content } = archived.message;
+          if (typeof content !== "string" || !content || archived.message.role !== role) {
+            throw new CoreError("raw_lineage_unavailable");
+          }
           // Capture receipts identify a full message. Core supplies the final
           // action ID when it writes the resolved facts.
           spans.push({ ...scope, kind: "rawSpan", origin: "forget", actionId: memoryId,

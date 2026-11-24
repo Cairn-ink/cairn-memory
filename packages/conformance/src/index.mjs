@@ -20,6 +20,7 @@ export { FENCE_INTENT_CASES } from "./fence-intent-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { TOPIC_FOR_MEMORIES_CASES } from "./topics-for-memories-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
+export { RAW_LEDGER_CASES } from "./raw-ledger-cases.mjs";
 export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
 export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
 export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
@@ -67,11 +68,19 @@ async function runOpenedCase(factory, testCase) {
   try {
     opened = await factory.open({ capabilities });
   } catch (error) {
-    const { rawArchive, ...withoutRawArchive } = capabilities;
-    if (rawArchive !== true || testCase.needs.includes("rawArchive") ||
-        toCoreError(error).code !== "capability_unavailable") throw error;
-    // A factory can reject an optional raw archive request during setup. Retry with its default raw setting.
-    opened = await factory.open({ capabilities: withoutRawArchive });
+    if (toCoreError(error).code !== "capability_unavailable") throw error;
+    const retry = { ...capabilities };
+    // A factory can reject these requests during setup. Check the actual flags after reopening.
+    if (retry.rawArchive === true && !testCase.needs.includes("rawArchive")) delete retry.rawArchive;
+    if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
+    if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
+    opened = await factory.open({ capabilities: retry });
+    // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
+    // capability after all, the first rejection was a real setup failure and must not become a pass.
+    if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
+      await opened.close();
+      throw error;
+    }
   }
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
