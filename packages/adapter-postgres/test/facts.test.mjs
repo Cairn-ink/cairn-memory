@@ -8,6 +8,7 @@ import { canonicalDigests, factSlot } from "../src/index.mjs";
 const base = { owner: "owner", namespace: "namespace", actionId: "action", origin: "edit" };
 const hash = "a".repeat(64);
 const earlier = { alg: "hmac", value: hash, pipeline: "core", redactionVersion: 1, keyId: "key" };
+const earlierTarget = ["hmac", hash, "key", "core", "core", 1];
 const text = {
   ...base, kind: "text", mode: "exact",
   text: { digests: [earlier], shingles: ["abcd"], embedding: [1, 2], keyId: "key" },
@@ -24,8 +25,8 @@ const invalidInput = { name: CoreError.name, code: "invalid_input", message: "in
 for (const [name, fact, tuple] of [
   ["identity", { ...base, kind: "identity", memoryId: "memory" }, ["identity", "memory", null]],
   ["identity through a revision", { ...base, kind: "identity", memoryId: "memory", throughRevision: 0 }, ["identity", "memory", 0]],
-  ["exact text", text, ["text", "exact", [["hmac", hash]], "source"]],
-  ["full text", full, ["text", "full", [["hmac", hash]], "source"]],
+  ["exact text", text, ["text", "exact", [earlierTarget], "source"]],
+  ["full text", full, ["text", "full", [earlierTarget], "source"]],
   ["session ID", session, ["session", "client", "id", hash]],
   ["session hash", { ...session, session: { client: "client", sessionKeyHash: hash } }, ["session", "client", "hash", hash]],
   ["all-client window", window, ["window", null, -10, 20, false, null]],
@@ -42,7 +43,7 @@ for (const [name, fact, tuple] of [
   });
 }
 
-test("canonical digest ordering uses algorithm then value, ignoring the pipeline, without changing the input", () => {
+test("canonical digest ordering starts with algorithm then value without changing the input", () => {
   const laterValue = { ...earlier, value: "b".repeat(64) };
   const laterAlgorithm = { ...earlier, alg: "sha256", value: "0".repeat(64), keyId: null };
   const otherPipeline = { ...earlier, pipeline: "engine-legacy", value: "1".repeat(64) };
@@ -50,7 +51,8 @@ test("canonical digest ordering uses algorithm then value, ignoring the pipeline
   const shuffled = Object.freeze([laterAlgorithm, otherPipeline, laterValue, earlier]);
   assert.deepEqual(canonicalDigests(shuffled), order);
   assert.deepEqual(canonicalDigests(order), order);
-  const expected = JSON.stringify(["namespace", "text", "exact", order.map(({ alg, value }) => [alg, value]), "source"]);
+  const expected = JSON.stringify(["namespace", "text", "exact", order.map(({ alg, value, keyId, pipeline, redactionVersion }) =>
+    [alg, value, keyId, pipeline, pipeline, redactionVersion]), "source"]);
   assert.equal(factSlot({ ...text, text: { digests: shuffled } }), expected);
   assert.equal(factSlot({ ...text, text: { digests: order } }), expected);
 });
@@ -187,7 +189,7 @@ test("storage preflight enforces the slot's UTF-8 byte limit across all digests"
   // Many digests plus a namespace padded so the slot lands exactly on the limit.
   const withNamespace = (namespace) => ({
     ...text, namespace,
-    text: { digests: Array.from({ length: 101 }, (_, i) => ({ ...earlier, value: i.toString(16).padStart(64, "0") })) },
+    text: { digests: Array.from({ length: 82 }, (_, i) => ({ ...earlier, value: i.toString(16).padStart(64, "0") })) },
   });
   const pad = 8192 - Buffer.byteLength(factSlot(withNamespace("x"))) + 1;
   assert.ok(pad >= 1 && pad < 512);
@@ -277,14 +279,17 @@ test("the snapshot reads each field through one descriptor lookup and never thro
     },
   });
   const fact = { ...text, text: { ...text.text, digests: [digest] } };
-  assert.equal(factSlot(fact), JSON.stringify(["namespace", "text", "exact", [["hmac", hash]], "source"]));
+  assert.equal(factSlot(fact), JSON.stringify(["namespace", "text", "exact", [earlierTarget], "source"]));
   assert.equal(gets, 0);
   assert.deepEqual([...descriptorReads.values()], Object.keys(earlier).map(() => 1));
 });
 
-test("a digest set that differs only in pipeline labels is the same target", () => {
-  const relabelled = { ...text, text: { ...text.text, digests: [{ ...earlier, pipeline: "hosted-v1", redactionVersion: 2 }] } };
-  assert.equal(factSlot(relabelled), factSlot(text));
+test("digest slots include the effective label, pipeline, and redaction version", () => {
+  const withDigest = change => ({ ...text, text: { ...text.text, digests: [{ ...earlier, ...change }] } });
+  assert.equal(factSlot(withDigest({ label: "core" })), factSlot(text));
+  for (const change of [{ label: "alternate" }, { pipeline: "hosted-v1" }, { redactionVersion: 2 }]) {
+    assert.notEqual(factSlot(withDigest(change)), factSlot(text));
+  }
 });
 
 test("text facts that differ only in sourceMemory.id are distinct targets", () => {

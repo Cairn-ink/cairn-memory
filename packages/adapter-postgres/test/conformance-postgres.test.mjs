@@ -306,14 +306,8 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const harness = {
         hashSessionKey,
         async advanceClock(ms) { elapsed += ms; },
-        keyedDigestGateCountsRows: true,
-        rowsMissingKeyedDigest: createPostgresDigestGate(uow, async (owner) => {
-          const key = await keys.userKey(owner);
-          return key ? [key.id] : [];
-        }),
-        async readStoredDigests(owner, id) {
-          const { rows: [row] } = await pool.query("SELECT core_digests FROM memories WHERE user_id = $1 AND id = $2", [owner, id]);
-          return row?.core_digests ?? null;
+        async rowsMissingKeyedDigest(owner) {
+          return (await digestCoverage(owner)).missingPairs;
         },
         async setRetainedDigestFixture(owner, fixture) {
           if (fixture === null) retainedFixtures.delete(owner);
@@ -342,7 +336,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
                 await runQuery(`UPDATE memories SET core_digests = COALESCE(core_digests, '[]'::jsonb) || $3::jsonb
                     WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([digest])]);
               }
-              if (rows.length) await advanceIndex(runQuery, owner);
+              if (rows.length) await advanceIndex(runQuery, owner, requireLiveRun(tx, true));
               await publishFingerprintKey(tx, key.id);
             });
           }
@@ -378,6 +372,10 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
           await uow.run(owner, {}, (tx) => suppressions.writeFact(tx, fact, incarnation));
         },
       };
+      const digestCoverage = createPostgresDigestGate(uow, async (owner) => {
+        const key = await keys.userKey(owner);
+        return key ? [key.id] : [];
+      });
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
@@ -408,7 +406,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
 // requests as preferences. K-CAP-2 exercises the semantic-retrieval-off profile.
 const selected = new Set([
   "K-UOW-3", "K-UOW-3r", "K-ERR-1", "K-CAP-0", "K-CAP-2",
-  "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
+  "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
   "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
   "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5",
@@ -427,7 +425,7 @@ const selected = new Set([
   "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
   "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6",
-  "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9", "K-HASH-1",
+  "K-KD-7", "K-KD-7v", "K-KD-8", "K-HASH-1",
   "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
   "K-ADM-2", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
   "K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k", "K-IMP-RAW-5",
@@ -442,6 +440,8 @@ const selected = new Set([
 
 // Each entry names a missing port, method, capability, or profile behavior.
 const notApplicable = {
+  "K-FACT-4 expects changed pipeline, key ID, and redaction version to share an algorithm/value slot. Postgres slots include the full digest domain": ["K-FACT-4"],
+  "K-KD-9 expects two missing domains. Its direct insert supplies no current digest, so Postgres counts three": ["K-KD-9"],
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],

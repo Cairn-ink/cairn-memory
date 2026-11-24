@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { coreDigest, factIncarnationBody, userFingerprintKey } from "../../core/src/index.mjs";
+import { coreDigest, factBlocksIncoming, factIncarnationBody, userFingerprintKey } from "../../core/src/index.mjs";
 import {
   createPostgresFingerprintKeyProvider, createPostgresMemoryReads, createPostgresSuppressionStore,
   createPostgresUnitOfWork, factSlot, HOSTED_FINGERPRINT_LABELS,
@@ -58,6 +58,24 @@ test("Postgres snapshot keeps ineligible labels and distinct digest records", mi
   assert.deepEqual(result.passages[1].fact.text.digests, digests);
 });
 
+test("Capture snapshot keeps full fact evidence for the retained-shingle matcher", migrationDbTest, async (t) => {
+  const { run, store, write } = await setup(t);
+  const digest = { alg: "hmac", value: "a".repeat(64), pipeline: "core", label: "core", keyId: "retained", redactionVersion: 2 };
+  const text = { digests: [digest], shingles: ["abcd"], keyId: digest.keyId };
+  const saved = await write({ ...base, kind: "text", mode: "full", text });
+  const passage = { digests: [{ ...digest, value: "b".repeat(64) }], shingles: null, keyId: null,
+    retainedShingles: [{ keyId: digest.keyId, shingles: ["1234"] }] };
+  const snapshot = (candidate) => run(owner, { readOnly: true }, tx => store.snapshot(tx, scope, { passages: [candidate] }));
+  const { passages: [stored] } = await snapshot(passage);
+  assert.equal(stored.factId, saved.factId);
+  assert.deepEqual(stored.fact.text, text);
+  const matches = (candidate) => factBlocksIncoming(stored, { scope, passages: [candidate] }, { mode: "capture" });
+  assert.equal(matches(passage), false);
+  assert.equal(matches({ ...passage, retainedShingles: [{ keyId: digest.keyId, shingles: ["abcd"] }] }), true);
+  await assert.rejects(snapshot({ ...passage, retainedShingles: [{ keyId: digest.keyId, shingles: ["invalid"] }] }),
+    { code: "ineligible" });
+});
+
 test("Postgres snapshots use the indexed digest lookup with owner and epoch isolation", migrationDbTest, async (t) => {
   let lookup;
   const { pool, run, store, write } = await setup(t, (sql, values) => {
@@ -97,8 +115,8 @@ test("Postgres snapshots use the indexed digest lookup with owner and epoch isol
   await pool.query("DELETE FROM core_fact_digests WHERE user_id = $1 AND fact_id = $2", [other, foreign.factId]);
   await pool.query("UPDATE core_suppression_facts SET fact_id = $3 WHERE user_id = $1 AND fact_id = $2",
     [other, foreign.factId, miss.factId]);
-  await pool.query(`INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+  await pool.query(`INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id, label)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $5)`,
   [other, miss.factId, digest.alg, digest.value, digest.pipeline, digest.redactionVersion, digest.keyId]);
   await pool.query("ANALYZE core_owner_state; ANALYZE core_suppression_facts; ANALYZE core_fact_digests; ANALYZE suppressions");
   assert.ok(lookup);

@@ -171,34 +171,41 @@ function snapshotFact(fact) {
 
 /** @param {readonly TextDigest[]} digests */
 export function canonicalDigests(digests) {
+  return sortDigests(digests, digestTarget);
+}
+
+/** @param {readonly TextDigest[]} digests @param {(digest: TextDigest) => unknown[]} target */
+function sortDigests(digests, target) {
   return [...digests].sort((a, b) => (
     compareUtf8(a.alg, b.alg) || compareUtf8(a.value, b.value) ||
-    compareUtf8(JSON.stringify(digestTarget(a)), JSON.stringify(digestTarget(b)))
+    compareUtf8(JSON.stringify(target(a)), JSON.stringify(target(b)))
   ));
 }
 
 /** @param {TextDigest} digest */
 function digestTarget({ alg, value, keyId, label, pipeline, redactionVersion }) {
-  return label === undefined ? [alg, value] : [alg, value, keyId, label, pipeline, redactionVersion];
+  return [alg, value, keyId, label ?? pipeline, pipeline, redactionVersion];
 }
 
-/**
- * The slot keeps the historical target for unlabelled digests and distinguishes
- * explicitly labelled digests by their full domain.
- * @param {SuppressionFact} fact The validated snapshot.
- */
-function encodeSlot(fact) {
-  return JSON.stringify([fact.namespace ?? null, ...slotTarget(fact)]);
+/** @param {TextDigest} digest */
+function historicalDigestTarget(digest) {
+  return digest.label === undefined ? [digest.alg, digest.value] : digestTarget(digest);
 }
 
-/** @param {SuppressionFact} fact The validated snapshot. @returns {unknown[]} */
-function slotTarget(fact) {
+/** @param {SuppressionFact} fact The validated snapshot. @param {boolean} [historical] */
+function encodeSlot(fact, historical = false) {
+  return JSON.stringify([fact.namespace ?? null, ...slotTarget(fact, historical)]);
+}
+
+/** @param {SuppressionFact} fact @param {boolean} historical @returns {unknown[]} */
+function slotTarget(fact, historical) {
   switch (fact.kind) {
     case "identity":
       return ["identity", fact.memoryId, fact.throughRevision ?? null];
     case "text": {
-      const target = canonicalDigests(fact.text.digests).map(digestTarget);
-      return ["text", fact.mode, target, fact.sourceMemory?.id ?? null];
+      const target = historical ? historicalDigestTarget : digestTarget;
+      const digests = sortDigests(fact.text.digests, target).map(target);
+      return ["text", fact.mode, digests, fact.sourceMemory?.id ?? null];
     }
     case "session": {
       const { session } = fact;
@@ -238,15 +245,25 @@ function assertStorableFact(fact) {
       if (shingles?.length && !keyId) invalidInput();
     }
   }
-  const slot = encodeSlot(fact);
-  if (encoder.encode(slot).byteLength > 8192) invalidInput();
-  return slot;
 }
 
 /** @param {unknown} candidate */
 function prepareFact(candidate) {
-  const fact = validateSuppressionFact(snapshotFact(candidate));
-  return { fact, slot: assertStorableFact(fact) };
+  const snapshot = validateSuppressionFact(snapshotFact(candidate));
+  assertStorableFact(snapshot);
+  const historicalSlot = encodeSlot(snapshot, true);
+  const fact = withFactDigestLabels(snapshot);
+  const slot = encodeSlot(fact);
+  if (encoder.encode(slot).byteLength > 8192) invalidInput();
+  return { fact, slot, historicalSlot };
+}
+
+/** @param {SuppressionFact} fact */
+function withFactDigestLabels(fact) {
+  if (fact.kind !== "text" || !fact.text.digests.some(d => d.keyId !== null && d.label === undefined)) return fact;
+  const digests = new Map(fact.text.digests.map(digest => [JSON.stringify(digestTarget(digest)),
+    digest.keyId !== null && digest.label === undefined ? { ...digest, label: digest.pipeline } : digest]));
+  return { ...fact, text: { ...fact.text, digests: [...digests.values()] } };
 }
 
 /** @param {SuppressionFact} fact */
@@ -254,9 +271,17 @@ export function factSlot(fact) {
   return prepareFact(fact).slot;
 }
 
+/** @param {SuppressionFact} fact @param {string} slot */
+export function matchesFactSlot(fact, slot) {
+  const snapshot = validateSuppressionFact(snapshotFact(fact));
+  assertStorableFact(snapshot);
+  return typeof slot === "string" && encoder.encode(slot).byteLength <= 8192 &&
+    (encodeSlot(withFactDigestLabels(snapshot)) === slot || encodeSlot(snapshot, true) === slot);
+}
+
 /** @param {unknown} candidate */
 export async function buildFactStorage(candidate) {
-  const { fact, slot } = prepareFact(candidate);
+  const { fact, slot, historicalSlot } = prepareFact(candidate);
   const mode = fact.kind === "text" ? fact.mode : null;
   const lookup = fact.kind === "text" && mode === "full" ? fact.text : null;
   return {
@@ -268,6 +293,8 @@ export async function buildFactStorage(candidate) {
     mode,
     slot,
     slotHash: await slotHash(slot),
+    historicalSlot,
+    historicalSlotHash: historicalSlot === slot ? null : await slotHash(historicalSlot),
     body: factBody(fact),
     embedding: lookup?.embedding == null ? null : JSON.stringify(lookup.embedding),
     shingles: lookup?.shingles?.length ? lookup.shingles : null,

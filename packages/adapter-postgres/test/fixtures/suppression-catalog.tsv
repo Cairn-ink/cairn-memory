@@ -1,18 +1,21 @@
 core_fact_digests	column	alg	text NOT NULL
 core_fact_digests	column	fact_id	text COLLATE "C" NOT NULL
 core_fact_digests	column	key_id	text NULL
+core_fact_digests	column	label	text NOT NULL
+core_fact_digests	column	lookup_key	bytea NOT NULL GENERATED STORED core_fact_digest_lookup_key(alg, value, pipeline, redaction_version, key_id, label)
 core_fact_digests	column	pipeline	text NOT NULL
 core_fact_digests	column	redaction_version	integer NOT NULL
 core_fact_digests	column	user_id	text NOT NULL
 core_fact_digests	column	value	text NOT NULL
-core_fact_digests	constraint	core_fact_digests_alg_check	CHECK ((alg = ANY (ARRAY['sha256'::text, 'hmac'::text])))
-core_fact_digests	constraint	core_fact_digests_key_check	CHECK (((alg = 'hmac'::text) = (key_id IS NOT NULL)))
+core_fact_digests	constraint	core_fact_digests_alg_check	CHECK (((length(alg) >= 1) AND (length(alg) <= 512)))
+core_fact_digests	constraint	core_fact_digests_key_check	CHECK ((((key_id IS NULL) AND (alg = 'sha256'::text) AND (label = pipeline)) OR ((key_id IS NOT NULL) AND ((length(key_id) >= 1) AND (length(key_id) <= 64)))))
+core_fact_digests	constraint	core_fact_digests_label_check	CHECK (((length(label) >= 1) AND (length(label) <= 512)))
 core_fact_digests	constraint	core_fact_digests_pipeline_check	CHECK ((pipeline = ANY (ARRAY['core'::text, 'hosted-v1'::text, 'engine-legacy'::text])))
-core_fact_digests	constraint	core_fact_digests_pkey	PRIMARY KEY (user_id, fact_id, alg, value)
+core_fact_digests	constraint	core_fact_digests_pkey	PRIMARY KEY (user_id, fact_id, lookup_key)
 core_fact_digests	constraint	core_fact_digests_redaction_version_check	CHECK ((redaction_version >= 1))
 core_fact_digests	constraint	core_fact_digests_user_id_fact_id_fkey	FOREIGN KEY (user_id, fact_id) REFERENCES core_suppression_facts(user_id, fact_id) ON DELETE CASCADE
 core_fact_digests	constraint	core_fact_digests_value_check	CHECK ((value ~ '^[0-9a-f]{64}$'::text))
-core_fact_digests	index	core_fact_digests_pkey	CREATE UNIQUE INDEX core_fact_digests_pkey ON public.core_fact_digests USING btree (user_id, fact_id, alg, value)
+core_fact_digests	index	core_fact_digests_pkey	CREATE UNIQUE INDEX core_fact_digests_pkey ON public.core_fact_digests USING btree (user_id, fact_id, lookup_key)
 core_fact_digests	index	core_fact_digests_user_value_idx	CREATE INDEX core_fact_digests_user_value_idx ON public.core_fact_digests USING btree (user_id, value)
 core_owner_state	column	fact_epoch	bigint NOT NULL DEFAULT 0
 core_owner_state	column	fingerprint_key_id	text NULL

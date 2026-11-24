@@ -1,7 +1,7 @@
 import {
   allDigests, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, validateSuppressionFact,
 } from "../../core/src/index.mjs";
-import { factSlot } from "./facts.mjs";
+import { matchesFactSlot } from "./facts.mjs";
 import { CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
@@ -74,7 +74,7 @@ export function readCreatedAtMs(value) {
 export function decodeCoreFact(row, owner) {
   const fact = validateSuppressionFact({ ...row.body, owner, actionId: row.action_id });
   if (fact.kind !== row.kind || fact.origin !== row.origin ||
-      (fact.kind === "text" ? fact.mode : null) !== row.mode || factSlot(fact) !== row.slot ||
+      (fact.kind === "text" ? fact.mode : null) !== row.mode || !matchesFactSlot(fact, row.slot) ||
       typeof row.fact_id !== "string" || row.fact_id.length > 512 || !/^[^\u0000\uD800-\uDFFF]+$/u.test(row.fact_id) ||
       typeof row.incarnation !== "string" || !/^[0-9a-f]{64}$/u.test(row.incarnation)) {
     throw new CoreError("ineligible");

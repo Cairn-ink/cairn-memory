@@ -53,10 +53,11 @@ async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
 
 function insertDigest(pool, owner, factId, candidate) {
   return pool.query(`
-    INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id, label)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   `, [
     owner, factId, candidate.alg, candidate.value, candidate.pipeline, candidate.redactionVersion, candidate.keyId,
+    candidate.label ?? candidate.pipeline,
   ]);
 }
 
@@ -134,7 +135,7 @@ test("slot and insert read each caller field and array element once", async () =
   }
   const [, ...digests] = await captureInsert(full);
   assert.deepEqual(digests, full.text.digests.map(({ alg, value, pipeline, redactionVersion, keyId }) => [
-    "owner", "fact", alg, value, pipeline, redactionVersion, keyId,
+    "owner", "fact", alg, value, pipeline, redactionVersion, keyId, pipeline,
   ]));
 });
 
@@ -222,7 +223,7 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
   await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac" }), {
     code: "23514", constraint: "core_fact_digests_key_check",
   });
-  await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, keyId: "unexpected" }), {
+  await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, keyId: null, label: "unexpected" }), {
     code: "23514", constraint: "core_fact_digests_key_check",
   });
   await insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac", keyId: "digest-key" });

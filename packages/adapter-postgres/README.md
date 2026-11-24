@@ -71,10 +71,12 @@ numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
 `factSlot(fact)` uses `JSON.stringify` on the following target tuples.
 
-The slot is the canonical JSON array `[namespace ?? null, ...target]`. A text
-digest contributes `[alg, value]` for historical unlabelled evidence or
-`[alg, value, keyId, label, pipeline, redactionVersion]` for labelled evidence.
-The fact body stores every digest. The lookup table indexes unlabelled evidence.
+The slot is the canonical JSON array `[namespace ?? null, ...target]`. Each
+digest contributes `[alg, value, keyId, label ?? pipeline, pipeline, redactionVersion]`.
+New keyed fact bodies include the signing label, defaulting to the pipeline
+when the caller omits it. Unkeyed SHA evidence follows Core's label-free format.
+Historical fact bodies and their shorter `[alg, value]` slot entries remain
+readable. A retry checks the historical body's full domain before reusing its slot.
 
 | Kind | Target |
 | --- | --- |
@@ -91,8 +93,11 @@ Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
 
-Store core's canonical `factBody(snapshot)` in `body` and index every text digest
-in `core_fact_digests`. Populate the embedding and shingle lookup columns
+Store core's canonical `factBody(snapshot)` in `body`. Migration 0024 adds the
+effective label and a bounded lookup key over the complete digest tuple to
+`core_fact_digests`. New text facts write lookup rows for every distinct digest,
+including labelled digests. Existing lookup rows use their pipeline as the
+effective label. Populate the embedding and shingle lookup columns
 only for full-mode text facts. The `vector(1536)` column is a float4 projection
 used only for neighbour search, and `body` stays authoritative. In exact mode,
 the embedding and shingles stay in `body` for raw checks, with no vector
@@ -165,12 +170,14 @@ and ID. Coverage stays incomplete when the page budget ends before the
 requested visible depth or when an unchecked model gap remains.
 
 `createPostgresDigestGate(uow, keyIdsForOwner)` returns
-`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
-The gate counts each row missing evidence for an accepted key or for any live
-HMAC-only fact domain, including hosted facts during dual-read. Require a zero
-count before enabling the adapter. The gate requires the algorithm, key ID,
-label, pipeline, and redaction version for each live domain. Historical
-unlabelled MACs use their pipeline as the default label at comparison time.
+`digestCoverage(owner)`. Supply an array with the owner's current key ID for
+cutover, or an empty array if keyed Core writes are disabled. Coverage reports
+`incompleteRows` and `missingPairs`. Each pair consists of one row and one
+required signing domain. Require `missingPairs === 0` before enabling the
+adapter. Required domains include the current Core domain used at publication
+and every domain on a live keyed-only fact from the Core or hosted store.
+The algorithm, key ID, label, pipeline, and redaction version must all match.
+Historical unlabelled MACs use their pipeline as the default signing label.
 For each fact, admission and visibility use Core's comparability rules.
 
 Configure the fingerprint provider with the unit of work and the secrets

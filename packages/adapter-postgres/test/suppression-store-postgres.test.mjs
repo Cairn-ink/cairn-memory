@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { factBody, factIncarnationBody } from "../../core/src/index.mjs";
 import { canonicalDigests, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
+import { slotHash } from "../src/facts.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const owner = "owner";
@@ -38,6 +39,37 @@ async function incarnation(fact) {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(factIncarnationBody(fact)));
   return Buffer.from(hash).toString("hex");
 }
+
+test("Cutover P1 unlabelled writes with equal MACs and distinct redaction versions use separate slots", migrationDbTest, async (t) => {
+  const { pool, source } = await migrationDatabase(t);
+  await pool.query("INSERT INTO users (id) VALUES ($1)", [owner]);
+  const { run } = createPostgresUnitOfWork(source);
+  const store = createPostgresSuppressionStore();
+  const digest = { alg: "hmac", value: "a".repeat(64), keyId: "key", pipeline: "core", redactionVersion: 2 };
+  const exact = { ...base, kind: "text", mode: "exact" };
+  const write = async (version) => {
+    const fact = { ...exact, text: { digests: [{ ...digest, redactionVersion: version }] } };
+    const hash = await incarnation(fact);
+    return run(owner, {}, tx => store.writeFact(tx, fact, hash));
+  };
+  const first = await write(2);
+  const second = await write(3);
+  assert.notEqual(first.factId, second.factId);
+  assert.deepEqual(await write(2), { ...first, created: false });
+  const { rows: lookup } = await pool.query("SELECT label, pipeline, redaction_version FROM core_fact_digests ORDER BY redaction_version");
+  assert.deepEqual(lookup, [2, 3].map(redaction_version => ({ label: "core", pipeline: "core", redaction_version })));
+  assert.deepEqual((await run(owner, { readOnly: true }, tx => store.snapshot(tx, { owner, namespace: null }, {})))
+    .passages.map(({ fact }) => fact.text.digests[0]), [digest, { ...digest, redactionVersion: 3 }].map(d => ({ ...d, label: "core" })));
+
+  // Recreate the pre-migration body and slot for the first fact, keeping its incarnation.
+  const slot = JSON.stringify([null, "text", "exact", [[digest.alg, digest.value]], null]);
+  await pool.query("UPDATE core_suppression_facts SET slot = $2, slot_hash = $3, body = $4 WHERE fact_id = $1",
+    [first.factId, slot, await slotHash(slot), factBody({ ...exact, text: { digests: [digest] } })]);
+  assert.deepEqual(await write(2), { ...first, created: false });
+  assert.equal((await write(4)).created, true);
+  const snapshot = await run(owner, { readOnly: true }, tx => store.snapshot(tx, { owner, namespace: null }, {}));
+  assert.deepEqual(snapshot.passages[0].fact.text.digests, [digest]);
+});
 
 test("Postgres suppression store persists facts and rolls back atomically", migrationDbTest, async (t) => {
   const { pool, source } = await migrationDatabase(t);
@@ -78,10 +110,11 @@ test("Postgres suppression store persists facts and rolls back atomically", migr
   assert.deepEqual(await write(changed, hash), { ...originals[1], created: false });
   const { factId } = originals[1];
   const [stored] = await rows("SELECT body, embedding::text, shingles, key_id FROM core_suppression_facts WHERE user_id = $1 AND fact_id = $2", [owner, factId]);
-  assert.deepEqual(stored, { body: JSON.parse(factBody(text)), embedding: JSON.stringify(text.text.embedding), shingles: text.text.shingles, key_id: text.text.keyId });
-  assert.deepEqual(await rows("SELECT user_id, fact_id, alg, value, pipeline, redaction_version, key_id FROM core_fact_digests ORDER BY alg, value"),
+  const labelled = { ...text, text: { ...text.text, digests: text.text.digests.map(d => d.keyId === null ? d : { ...d, label: d.pipeline }) } };
+  assert.deepEqual(stored, { body: JSON.parse(factBody(labelled)), embedding: JSON.stringify(text.text.embedding), shingles: text.text.shingles, key_id: text.text.keyId });
+  assert.deepEqual(await rows("SELECT user_id, fact_id, alg, value, pipeline, redaction_version, key_id, label FROM core_fact_digests ORDER BY alg, value"),
     canonicalDigests(text.text.digests).map(({ redactionVersion, keyId, ...digest }) =>
-      ({ user_id: owner, fact_id: factId, ...digest, redaction_version: redactionVersion, key_id: keyId })));
+      ({ user_id: owner, fact_id: factId, ...digest, redaction_version: redactionVersion, key_id: keyId, label: digest.pipeline })));
 
   const fresh = { ...text, namespace: "fresh" };
   const freshHash = await incarnation(fresh);

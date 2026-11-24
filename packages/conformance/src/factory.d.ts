@@ -1,4 +1,4 @@
-import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact, TextDigest } from "@cairn-ink/core";
+import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
 import type { CaptureMessage, InspectItemEvidence, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
@@ -45,12 +45,8 @@ export type TestHarness = {
   setFingerprintSecret?(secret: string): Promise<void>;
   /** Configures a synthetic raw HMAC-SHA256 signer for one owner. Null removes it. */
   setRetainedDigestFixture?(owner: string, fixture: RetainedDigestFixture | null): Promise<void>;
-  /** Counts missing (row, live signing domain) pairs by default, including the enabled current domain. */
+  /** Counts missing (row, live signing domain) pairs, including the enabled current domain. */
   rowsMissingKeyedDigest?(owner: string): Promise<number>;
-  /** Set when the gate counts each incomplete row once across all required domains. */
-  keyedDigestGateCountsRows?: boolean;
-  /** Reads the stored digest records when dump() uses an adapter-specific storage layout. */
-  readStoredDigests?(owner: string, id: string): Promise<readonly TextDigest[] | null>;
   advanceClock?(ms: number): Promise<void>;
   /** Required for privacy matching cases under the hashed session profile. */
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];

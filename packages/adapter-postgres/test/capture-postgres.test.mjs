@@ -78,6 +78,42 @@ async function waitForBlock(pool, backends, offset, waiter) {
   assert.fail("Postgres did not report the expected lock wait");
 }
 
+test("Postgres finish preserves retained digest domains with near-duplicate detection enabled", migrationDbTest, async (t) => {
+  let nearReads = 0;
+  const { pool, uow, capture } = await database(t, { nearDuplicate: true }, (sql) => {
+    if (sql.includes("<=>")) nearReads++;
+  });
+  const { scope } = event;
+  const key = await userFingerprintKey("capture-fingerprint-fixture", owner, HOSTED_FINGERPRINT_LABELS);
+  const content = "A separate capture detail.";
+  const current = await coreDigest(content, key);
+  const retained = { ...current, keyId: "retained", label: "archive" };
+  const digests = [current, retained];
+  const embedding = index => ({ model: "fixture", vector: Float32Array.from({ length: 1536 }, (_, i) => Number(i === index)) });
+  const hash = text => createHash("sha256").update(text).digest("hex");
+  const store = createPostgresSuppressionStore();
+  const memories = createPostgresMemoryStore();
+  await uow.run(owner, write, async tx => {
+    const existing = "An unrelated existing detail.";
+    await memories.insert(tx, scope, { kind: "fact", origin: "explicit", confidence: 1, text: existing,
+      textHash: `sha256:${hash(existing)}`, source: { kind: "mcp", client: null, sessionId: null }, embedding: embedding(0) }, [], 1);
+    const fact = { ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "retained", text: {
+      digests: [{ ...retained, value: hash("Forgotten detail") }],
+    } };
+    await store.writeFact(tx, fact, hash(factIncarnationBody(fact)));
+  });
+  const claim = await uow.run(owner, write, tx => capture.claim(tx, event, messages, options));
+  assert.equal(claim.status, "claimed");
+  const { token } = await uow.run(owner, write, tx => capture.beginDispatch(tx, claim.token));
+  const result = await uow.run(owner, write, tx => capture.finish(tx, token, [{
+    content, kind: "fact", confidence: 1, textHash: `sha256:${hash(content)}`, digests, embedding: embedding(1), receipts: [],
+  }]));
+  assert.deepEqual(result.memories.map(({ outcome }) => outcome), ["inserted"]);
+  assert.ok(nearReads > 0);
+  const { rows: [stored] } = await pool.query("SELECT core_digests FROM memories WHERE user_id = $1 AND id = $2", [owner, result.memories[0].id]);
+  assert.deepEqual(stored.core_digests, digests);
+});
+
 for (const format of ["current key", "legacy hosted"]) {
   test(`core capture finish withholds a contained forgotten passage from a ${format} fact`, migrationDbTest, async (t) => {
     const { pool, uow, capture } = await database(t);
@@ -165,7 +201,8 @@ for (const format of ["current key", "legacy hosted"]) {
     const [{ fact }] = snapshot.passages;
     assert.deepEqual(fact.text.shingles, shingles);
     assert.equal(fact.text.keyId, key.id);
-    assert.deepEqual(fact.text.digests.find(({ alg }) => alg === digest.alg), digest);
+    const expectedDigest = digest.keyId === null ? digest : { ...digest, label: digest.pipeline };
+    assert.deepEqual(fact.text.digests.find(({ alg }) => alg === digest.alg), expectedDigest);
   });
 }
 

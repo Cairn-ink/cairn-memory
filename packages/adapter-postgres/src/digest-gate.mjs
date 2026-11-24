@@ -9,11 +9,13 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 
 const macPattern = "^[0-9a-f]{64}$";
 const maxRotationFacts = 4096;
-const validMac = `d->>'alg' = 'hmac' AND d->>'pipeline' IN ('core', 'hosted-v1', 'engine-legacy')
+const validMac = `jsonb_typeof(d->'alg') = 'string' AND length(d->>'alg') BETWEEN 1 AND 512
+  AND d->>'pipeline' IN ('core', 'hosted-v1', 'engine-legacy')
   AND jsonb_typeof(d->'keyId') = 'string' AND length(d->>'keyId') BETWEEN 1 AND 64
-  AND (NOT d ? 'label' OR (jsonb_typeof(d->'label') = 'string' AND length(d->>'label') BETWEEN 1 AND 512))
+  AND (CASE WHEN d ? 'label' THEN jsonb_typeof(d->'label') = 'string' AND length(d->>'label') BETWEEN 1 AND 512
+    ELSE d->>'alg' = 'hmac' END)
   AND jsonb_typeof(d->'value') = 'string' AND d->>'value' ~ '${macPattern}'
-  AND jsonb_typeof(d->'redactionVersion') = 'number' AND d->>'redactionVersion' ~ '^[1-9][0-9]{0,15}$'
+  AND jsonb_typeof(d->'redactionVersion') = 'number' AND d->>'redactionVersion' ~ '^[1-9][0-9]{0,15}([.]0+)?$'
   AND d->'redactionVersion' <= '9007199254740991'::jsonb`;
 
 // Historical records use their pipeline as the signing label, without changing stored JSON.
@@ -25,32 +27,32 @@ function encodeDomain({ alg, keyId, label, pipeline, redactionVersion }) {
   return JSON.stringify([alg, keyId, label ?? pipeline, pipeline, redactionVersion]);
 }
 
-/** @param {Query} query @param {string} owner @param {readonly string[]} keys @param {ReadonlySet<string>} required */
-async function countMissingDigests(query, owner, keys, required) {
-  if (!keys.length && !required.size) return 0;
+/** @param {string} keyId */
+function coreDomain(keyId) {
+  return encodeDomain({ alg: "hmac", keyId, label: "core", pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core });
+}
+
+/** @param {Query} query @param {string} owner @param {ReadonlySet<string>} required */
+async function countMissingDigests(query, owner, required) {
+  if (!required.size) return { incompleteRows: 0, missingPairs: 0 };
   const { rows: [row] } = await query(`WITH required AS (
-    SELECT unnest($3::text[])::jsonb AS domain
+    SELECT unnest($2::text[])::jsonb AS domain
   )
-  SELECT count(*)::text AS count FROM memories
-  WHERE user_id = $1 AND (
-    (cardinality($2::text[]) > 0 AND NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(core_digests) d
-      WHERE ${validMac} AND d->>'keyId' = ANY($2::text[])
-    )) OR EXISTS (
-      SELECT 1 FROM required WHERE NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(core_digests) d
-        WHERE ${validMac} AND ${macDomain} = domain
-      )
+  SELECT count(*) FILTER (WHERE missing.pairs > 0)::text AS incomplete_rows,
+    COALESCE(sum(missing.pairs), 0)::text AS missing_pairs
+  FROM memories CROSS JOIN LATERAL (
+    SELECT count(*) AS pairs FROM required WHERE domain NOT IN (
+      SELECT ${macDomain} FROM jsonb_array_elements(memories.core_digests) d WHERE ${validMac}
     )
-  )`, [owner, keys, [...required]]);
-  return Number(row.count);
+  ) missing WHERE user_id = $1`, [owner, [...required]]);
+  return { incompleteRows: Number(row.incomplete_rows), missingPairs: Number(row.missing_pairs) };
 }
 
 /** @param {readonly StoredFact[]} facts @param {string | null} [currentKeyId] */
 function requiredDomains(facts, currentKeyId) {
   const required = new Set();
   for (const { fact } of facts) {
-    if (fact.kind !== "text" || fact.text.digests.some(d => d.alg !== "hmac")) continue;
+    if (fact.kind !== "text" || fact.text.digests.some(d => d.keyId === null)) continue;
     for (const digest of fact.text.digests) {
       if (currentKeyId !== undefined && digest.keyId !== currentKeyId) throw new CoreError("fingerprint_key_mismatch");
       required.add(encodeDomain(digest));
@@ -60,16 +62,19 @@ function requiredDomains(facts, currentKeyId) {
 }
 
 /**
- * The host supplies the accepted key IDs. For cutover, pass only the current key.
+ * The host supplies only the current key ID, or an empty array when keyed Core writes are disabled.
  * @param {UnitOfWork} uow
  * @param {(owner: string) => readonly string[] | Promise<readonly string[]>} keyIdsForOwner
  */
 export function createPostgresDigestGate(uow, keyIdsForOwner) {
-  return async function rowsMissingKeyedDigest(/** @type {string} */ owner) {
-    const keys = (await keyIdsForOwner(inputText(owner))).map(inputText);
+  return async function digestCoverage(/** @type {string} */ owner) {
+    const keyIds = await keyIdsForOwner(inputText(owner));
+    if (keyIds.length > 1) invalid();
     return uow.run(owner, { readOnly: true }, tx => runOperation(tx, async query => {
       const facts = await readVisibilityFacts(query, owner, { textOnly: true, allowPendingLegacy: true });
-      return countMissingDigests(query, owner, keys, requiredDomains(facts));
+      const required = requiredDomains(facts);
+      if (keyIds.length) required.add(coreDomain(inputText(keyIds[0])));
+      return countMissingDigests(query, owner, required);
     }));
   };
 }
@@ -98,8 +103,8 @@ export async function publishFingerprintKey(tx, nextKeyId) {
     }
     if (facts.length > maxRotationFacts) throw new CoreError("fingerprint_key_mismatch");
     const required = requiredDomains(facts, currentKeyId);
-    required.add(encodeDomain({ alg: "hmac", keyId: nextKeyId, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core }));
-    if (await countMissingDigests(query, tx.owner, [], required) !== 0) {
+    required.add(coreDomain(nextKeyId));
+    if ((await countMissingDigests(query, tx.owner, required)).missingPairs !== 0) {
       throw new CoreError("fingerprint_key_mismatch");
     }
     await query(`INSERT INTO core_owner_state (user_id, fingerprint_key_id) VALUES ($1, $2)
