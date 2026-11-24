@@ -1,40 +1,83 @@
 import { createInterface } from 'node:readline';
-import { createMemoryService } from '../../packages/core/src/service/index.mjs';
+import { createContinuations } from './continuations.mjs';
+import { initialize, tools } from './profile.mjs';
+import { toolInputError } from './tool-input.mjs';
+import { callTool, missingAuthority, textResult } from './wire-tools.mjs';
 
-export async function openLocalService(storageOptions, serviceDeps) {
+export async function openLocalService(storageOptions) {
+  if (typeof storageOptions?.database !== 'string' || !storageOptions.database || storageOptions.database.includes('\0')) {
+    throw new Error('invalid_core_local_storage_options');
+  }
   const { openStorage } = await import('./adapter-slot.mjs');
-  const storage = await openStorage(storageOptions);
-  return createMemoryService({ ...serviceDeps, storage });
+  return openStorage(storageOptions.database);
 }
 
-// A staging handshake with an empty capability set. Storage and tools are
-// added when the local composition and its wire contract are qualified.
-export async function serveStdio(input, output) {
+const rpcError = (code, message) => ({ code, message });
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const supportedProtocols = new Set(['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']);
+
+export async function serveStdio(input, output, options) {
   const lines = createInterface({ input, crlfDelay: Infinity, terminal: false });
-  for await (const line of lines) {
-    let request;
-    try { request = JSON.parse(line); }
-    catch {
-      output.write(JSON.stringify({ jsonrpc: '2.0', id: null,
-        error: { code: -32700, message: 'Parse error' } }) + '\n');
-      continue;
+  const handles = createContinuations();
+  const scope = options && { owner: options.owner,
+    namespace: options.project === undefined ? 'personal\0' : 'project\0' + options.project };
+  let runtime;
+  const send = reply => output.write(JSON.stringify(reply) + '\n');
+  try {
+    for await (const line of lines) {
+      let request;
+      try { request = JSON.parse(line); }
+      catch {
+        send({ jsonrpc: '2.0', id: null, error: rpcError(-32700, 'Parse error') });
+        continue;
+      }
+      if (request?.jsonrpc !== '2.0' || request.id === undefined) continue;
+      const reply = { jsonrpc: '2.0', id: request.id };
+      switch (request.method) {
+        case 'initialize': {
+          const protocol = request.params?.protocolVersion;
+          reply.result = { ...initialize, protocolVersion: supportedProtocols.has(protocol) ? protocol : initialize.protocolVersion };
+          break;
+        }
+        case 'ping':
+          reply.result = {};
+          break;
+        case 'tools/list':
+          reply.result = { tools };
+          break;
+        case 'tools/call': {
+          const params = request.params;
+          if (!isObject(params) || typeof params.name !== 'string' ||
+              (params.arguments !== undefined && !isObject(params.arguments))) {
+            reply.error = rpcError(-32602, 'Invalid params');
+            break;
+          }
+          const tool = tools.find(({ name }) => name === params.name);
+          if (!tool) {
+            reply.error = rpcError(-32602, 'Tool ' + params.name + ' not found');
+            break;
+          }
+          const args = params.arguments ?? {};
+          const error = toolInputError(tool, args);
+          if (scope && !error) {
+            try {
+              runtime ??= await openLocalService(options);
+              reply.result = await callTool(runtime.service, scope, handles, tool.name, args);
+            } catch {
+              reply.error = rpcError(-32603, 'Internal error');
+            }
+          } else {
+            reply.result = error ? textResult(error) : missingAuthority(tool.name);
+          }
+          break;
+        }
+        default:
+          reply.error = rpcError(-32601, 'Method not found');
+      }
+      send(reply);
     }
-    if (request?.jsonrpc !== '2.0' || request.id === undefined) continue;
-    const reply = { jsonrpc: '2.0', id: request.id };
-    switch (request.method) {
-      case 'initialize':
-        reply.result = {
-          protocolVersion: '2025-11-25',
-          capabilities: {},
-          serverInfo: { name: 'cairn-memory-core-local-candidate', version: '0.0.0' },
-        };
-        break;
-      case 'ping':
-        reply.result = {};
-        break;
-      default:
-        reply.error = { code: -32601, message: 'Method not found' };
-    }
-    output.write(JSON.stringify(reply) + '\n');
+  } finally {
+    handles.close();
+    await runtime?.close();
   }
 }
