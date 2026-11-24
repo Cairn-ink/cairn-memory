@@ -721,7 +721,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const [id, row] = liveClaim(tx, token);
         assert.ok(!items.length || row.dispatched);
         await hooks.finish?.();
-        const memories = items.map(item => {
+        const suppressedItems = hooks.finishSuppressedItems?.(items);
+        const suppressedPositions = new Set(Array.isArray(suppressedItems) ? suppressedItems : []);
+        const memories = items.filter((_, position) => !suppressedPositions.has(position)).map(item => {
           const memoryId = "captured-" + ++nextId;
           tx.rows = [...tx.rows, {
             ...memory(memoryId, { scope: row.key.scope, kind: item.kind, text: item.content }),
@@ -730,8 +732,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           }];
           return { id: memoryId, revision: 1, outcome: "inserted" };
         });
-        if (items.length) tx.revision++;
-        const result = { indexRevision: tx.revision, memories, suppressedCount: 0, duplicateCount: 0, counters: {} };
+        if (memories.length) tx.revision++;
+        const result = { indexRevision: tx.revision, memories, suppressedCount: items.length - memories.length,
+          duplicateCount: 0, counters: {}, ...(suppressedItems === undefined ? {} : { suppressedItems }) };
         updateAdmission(tx, id, { ...row, status: "done", token: undefined, result: structuredClone(result) });
         return result;
       },
