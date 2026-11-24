@@ -2,8 +2,8 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants } from "../privacy/fingerprint.mjs";
-import { PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
+import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
+import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { redactAmendmentText } from "../routing/redaction.mjs";
@@ -13,7 +13,7 @@ import { pauseResult } from "./pause.mjs";
 
 /** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
-/** @import {TextDigest, TextFact} from "../suppression-fact.mjs" */
+/** @import {IdentityFact, TextDigest, TextFact} from "../suppression-fact.mjs" */
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
@@ -69,7 +69,35 @@ export async function prepareWriteText(raw, text, key, sha256Hex, digesters) {
   return { query, passages };
 }
 
-/** @param {MemoryRow} row @param {FingerprintKey | null} key @param {"edit" | "forget"} origin
+/** @param {TextDigest[]} digests @param {MemoryRow} row */
+function addStoredExactDigest(digests, row) {
+  if (/^sha256:[0-9a-f]{64}$/u.test(row.textHash)) {
+    addDigest(digests, { alg: "sha256", value: row.textHash.slice(7), pipeline: "core",
+      redactionVersion: PRIVACY_REDACTION_VERSIONS.core, keyId: null });
+  }
+}
+
+/** @param {MemoryRow} row @returns {Promise<TextFact["text"] | null>} */
+async function keylessPredecessorText(row) {
+  const raw = cleanContent(row.text);
+  const normalized = raw.normalize("NFKC");
+  /** @type {Set<string>} */
+  const masked = new Set();
+  for (const spelling of new Set([row.text, raw, normalized])) collectRedactedSecretValues(spelling, masked);
+  const secrets = [...new Set([...masked].map(value => normalizeForHash(cleanContent(value)))
+    .filter(value => value.length > 0))];
+  // A normalization crossing a redaction boundary cannot be verified by projection.
+  if (secrets.length && redactAmendmentText(raw) === null) return null;
+  // A redactor can mask one occurrence and leave a copy elsewhere. Inspect every
+  // hash input, including the exact historical variants, before it reaches SHA.
+  const digests = await unkeyedForgetDigests(raw, prepareCoreText(raw),
+    spelling => secrets.every(secret => !normalizeForHash(spelling).includes(secret)));
+  if (!secrets.length) addStoredExactDigest(digests, row);
+  // With no safe spelling, keyless forget can only suppress identity and lineage.
+  return digests.length ? { digests, keyId: null } : null;
+}
+
+/** @param {MemoryRow} row @param {FingerprintKey} key @param {"edit" | "forget"} origin
  * @returns {Promise<TextFact["text"]>}
  */
 async function predecessorText(row, key, origin) {
@@ -77,15 +105,6 @@ async function predecessorText(row, key, origin) {
   const cleaned = cleanContent(row.text);
   const heldSecret = [row.text, cleaned.normalize("NFKC")].some(text =>
     redactCore(text) !== text || redactV1(text) !== text || redactHostedCurrent(text) !== text);
-  if (key === null) {
-    // Weaker without a key: hash only redacted spellings for a secret-bearing row.
-    // Redaction checks both sides of normalization. Use a full mask if projection is unsafe.
-    let text = row.text;
-    if (heldSecret || redactCore(cleaned) !== cleaned) {
-      text = (cleaned === row.text ? redactAmendmentText(row.text) : null) ?? "[REDACTED]";
-    }
-    return { digests: await allDigests(text, null), keyId: null };
-  }
   const [digests, legacyMac, shingles] = await Promise.all([
     heldSecret ? coreDigest(row.text, key).then(digest => [digest]) : allDigests(row.text, key),
     legacyExactMac(row.text, key, coreFingerprintLabels),
@@ -101,10 +120,7 @@ async function predecessorText(row, key, origin) {
     addDigest(digests, canonical);
   }
   if (origin === "forget") {
-    if (!heldSecret && /^sha256:[0-9a-f]{64}$/u.test(row.textHash)) {
-      addDigest(digests, { alg: "sha256", value: row.textHash.slice(7), pipeline: "core",
-        redactionVersion: core, keyId: null });
-    }
+    if (!heldSecret) addStoredExactDigest(digests, row);
     // The original and the historical redacted spellings must all be matchable
     // for a secret-bearing row, without persisting an unkeyed digest.
     const keyedVariants = await Promise.all(textVariants(row.text, oldText).map(
@@ -124,11 +140,12 @@ async function predecessorText(row, key, origin) {
  * @param {ClockAndHash} clock @param {"edit" | "forget"} origin
  */
 export async function predecessorFact({ owner, namespace }, row, key, clock, origin) {
-  const fact = /** @satisfies {TextFact} */ ({
+  const text = key === null ? await keylessPredecessorText(row) : await predecessorText(row, key, origin);
+  const fact = text ? /** @satisfies {TextFact} */ ({
     owner, namespace, kind: "text", mode: key === null ? "exact" : "full", origin, actionId: "",
     sourceMemory: { id: row.id, createdAtMs: row.createdAtMs },
-    text: await predecessorText(row, key, origin),
-  });
+    text,
+  }) : /** @satisfies {IdentityFact} */ ({ owner, namespace, kind: "identity", origin, actionId: "", memoryId: row.id });
   const incarnation = await clock.sha256Hex(factIncarnationBody(fact));
   fact.actionId = origin === "edit" ? "edit:" + row.revision + ":" + incarnation : "forget:" + incarnation;
   validateSuppressionFact(fact);

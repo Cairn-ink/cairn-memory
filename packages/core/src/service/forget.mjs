@@ -13,7 +13,7 @@ import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 
 /** @param {Capabilities} flags @param {ForgetStep} step @param {Capability} capability */
 function enabled(flags, step, capability) {
-  return FORGET_STEP_CAPABILITIES[step]?.includes(capability) && flags[capability] === true;
+  return FORGET_STEP_CAPABILITIES[step]?.includes(capability) === true && flags[capability] === true;
 }
 
 /** @param {unknown} value */
@@ -28,7 +28,8 @@ async function similarCount({ memories, capabilities }, tx, scope, row, withKey)
   if (typeof memories.findDuplicates !== "function") return 0;
   const embedding = withKey && capabilities.vectorSuppression && capabilities.nearDuplicate
     ? row.embedding?.vector : undefined;
-  const [matches] = await memories.findDuplicates(tx, scope, [{ textHash: row.textHash, embedding }],
+  const query = withKey ? { textHash: row.textHash, embedding } : { textHash: row.textHash };
+  const [matches] = await memories.findDuplicates(tx, scope, [query],
     { nearDistance: SUPPRESSION_DISTANCE, excludeId: row.id });
   const ids = new Set();
   for (const match of matches) {
@@ -40,13 +41,16 @@ async function similarCount({ memories, capabilities }, tx, scope, row, withKey)
 }
 
 /** @param {StorageAdapter["hydrate"]} hydrate @param {Tx} tx @param {Scope} scope @param {MemoryRow} row
- * @param {readonly RawSpanFact[]} spans
+ * @param {readonly RawSpanFact[]} spans @param {boolean} resolvedEmptySpans
  */
-async function cardSources(hydrate, tx, scope, row, spans) {
+async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
   if (typeof hydrate?.hydrate !== "function") throw new CoreError("raw_lineage_unavailable");
   const items = await hydrate.hydrate(tx, { owner: scope.owner, namespaces: [scope.namespace] },
     [{ type: "memory", id: row.id, namespace: scope.namespace }], "read");
   const source = items.find(({ ref }) => ref.type === "memory" && ref.id === row.id && ref.namespace === scope.namespace);
+  // A confirmed empty span lookup can outlive the hydrated source. The memory
+  // and session selectors still invalidate their dependent cards.
+  if (source?.receipts === undefined && resolvedEmptySpans) return [];
   if (!Array.isArray(source?.receipts)) throw new CoreError("raw_lineage_unavailable");
   /** @type {Map<string, DocumentCardSourceMessage>} */
   const messages = new Map();
@@ -111,11 +115,11 @@ export function forgetMethod({ storage, clock }) {
       const removedSimilar = await similarCount(storage, tx, scope, row, key !== null);
 
       // lineage.resolve
-      const spans = enabled(capabilities, "lineage.resolve", "spanLineage")
-        ? await spanLineage?.resolveSpans(tx, scope, id) : [];
+      const resolveSpans = enabled(capabilities, "lineage.resolve", "spanLineage");
+      const spans = resolveSpans ? await spanLineage?.resolveSpans(tx, scope, id) : [];
       if (!Array.isArray(spans)) throw new CoreError("raw_lineage_unavailable");
       const hideCards = enabled(capabilities, "dependents.invalidate", "documentCards");
-      const messages = hideCards ? await cardSources(hydrate, tx, scope, row, spans) : [];
+      const messages = hideCards ? await cardSources(hydrate, tx, scope, row, spans, resolveSpans && spans.length === 0) : [];
 
       const fenceRaw = enabled(capabilities, "session.fence", "rawArchive");
       /** @type {Map<string, DocumentCardSession>} */
@@ -150,13 +154,15 @@ export function forgetMethod({ storage, clock }) {
       if (enabled(capabilities, "raw.purge", "rawArchive")) {
         if (!raw) throw new CoreError("capability_unavailable");
         if (closure?.length) await raw.eraseSessions(tx, scope, closure);
-        const facts = created ? [{ fact, incarnation, factId, epoch, createdAtMs }]
-          : await suppressions.factsFor(tx, scope, { memoryId: id });
-        const stored = facts === "ineligible" ? undefined : facts.find(candidate => candidate.factId === factId &&
-          candidate.incarnation === incarnation && candidate.fact.kind === "text" &&
-          candidate.fact.owner === owner && (candidate.fact.namespace ?? null) === namespace);
-        if (!stored) throw new CoreError("ineligible");
-        await raw.purgeWithheld(tx, scope, [stored]);
+        if (fact.kind === "text") {
+          const facts = created ? [{ fact, incarnation, factId, epoch, createdAtMs }]
+            : await suppressions.factsFor(tx, scope, { memoryId: id });
+          const stored = facts === "ineligible" ? undefined : facts.find(candidate => candidate.factId === factId &&
+            candidate.incarnation === incarnation && candidate.fact.kind === "text" &&
+            candidate.fact.owner === owner && (candidate.fact.namespace ?? null) === namespace);
+          if (!stored) throw new CoreError("ineligible");
+          await raw.purgeWithheld(tx, scope, [stored]);
+        }
       }
 
       // receipts.suppress

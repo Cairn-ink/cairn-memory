@@ -135,8 +135,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - Core supplies candidate `passages` before embedding and at finish. At capture admission and Raw import, Core omits `passages`, so only owner and namespace scope the returned text facts. Client, session and time candidates govern `blockedSession` and `blockedMessages`.
    - When neither side has a key or shingle evidence, capture matching is exact-only. This is the weaker protection available without a key.
 15. **Keyless forget.** Core follows `FORGET_POLICY.withoutKey` when the fingerprint capability is off, the provider is absent, or the selected lookup returns `null`. Lookup failures still surface for an existing row.
-   - The text fact uses `mode: "exact"`, `keyId: null` and canonical unkeyed digests. Core skips HMAC, shingles, vector evidence and vector neighbours in `removedSimilar`. Exact matches still count, and all enabled lineage and erasure steps keep their order in the same transaction.
-   - For a row that held a secret, Core hashes only redacted spellings. It applies redaction across normalization and masks the whole text if it cannot safely project the redaction. Keyless forget offers weaker protection because it cannot retain exact evidence of an unredacted spelling that still contains a secret.
+   - The text fact uses `mode: "exact"` and `keyId: null`. It uses the same prepared spellings as incoming candidates, including Core, hosted-v1 and engine-legacy SHA-256 aliases. For a plain row it also keeps the stored SHA-256 alias. Core skips HMAC, shingles, vector evidence and vector neighbours in `removedSimilar`. Exact matches still count.
+   - Core checks each spelling before hashing it. If redaction masked a secret value anywhere in the row, every spelling that still contains that value is excluded. When no safe spelling can be verified, Core writes an identity fact for the forgotten memory and still records any resolved span facts. In that case replays under a different identity rely on lineage for protection.
+   - Lineage and erasure keep their order in one transaction. An empty span result still allows erasure. Session fencing and proven-closure erasure apply as usual, and purge by text applies when there is a text fact.
 
 ### Topics addendum 4 — Cards in topics
 
