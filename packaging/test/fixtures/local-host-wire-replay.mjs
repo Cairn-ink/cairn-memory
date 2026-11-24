@@ -55,8 +55,9 @@ const bound = /^[A-Za-z0-9_-]{43}$/u;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const timestamp = /^\d{4}-\d{2}-\d{2}T\d\d:\d\d:\d\d\.\d{3}Z$/u;
 const uuidKeys = ['id', 'memoryId', 'receiptId', 'eventId'];
+const reservedPlaceholder = /^<(?:(?:uuid|snapshot|content-identity|ref-fence)-\d+|timestamp|work-metrics|owner-index-revision|tokens-in-wire-text)>$/u;
 
-function normalizer({ legacy = false } = {}) {
+function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
   const identities = new Map();
   function handle(kind, value) {
     if (!identities.has(kind)) identities.set(kind, new Map());
@@ -95,16 +96,24 @@ function normalizer({ legacy = false } = {}) {
     if (key === 'text' && path.at(-2) === 'content' && value.startsWith('{')) {
       return JSON.stringify(visit(JSON.parse(value), key, path));
     }
-    if (uuidKeys.includes(key)) {
+    const uuidField = uuidKeys.includes(key);
+    const timestampField = key === 'createdAt' || key === 'updatedAt';
+    const snapshotField = key === 'snapshot' || key === snapshotKey;
+    const contentIdentityField = key === 'contentIdentity';
+    const refFenceField = key === 'f' && path.at(-1) === 'ref';
+    if (!allowPlaceholders && (uuidField || timestampField || snapshotField || contentIdentityField || refFenceField)) {
+      assert.ok(!reservedPlaceholder.test(value), 'reserved normalization placeholder in ' + key);
+    }
+    if (uuidField) {
       if (uuid.test(value)) return handle('uuid', value);
       // Reserve the ordinal for a non-UUID SQLite memory ID without masking
       // it. Otherwise a memory ID difference renumbers every later receipt.
       if (['id', 'memoryId'].includes(key) && /^[0-9a-f]{32}$/u.test(value)) handle('uuid', value);
     }
-    if (['createdAt', 'updatedAt'].includes(key) && timestamp.test(value)) return '<timestamp>';
-    if ((key === 'snapshot' || key === snapshotKey) && bound.test(value)) return handle('snapshot', value);
-    if (key === 'contentIdentity' && bound.test(value)) return handle('content-identity', value);
-    if (key === 'f' && path.at(-1) === 'ref' && /^[A-Za-z0-9_-]{8}$/u.test(value)) return handle('ref-fence', value);
+    if (timestampField && timestamp.test(value)) return '<timestamp>';
+    if (snapshotField && bound.test(value)) return handle('snapshot', value);
+    if (contentIdentityField && bound.test(value)) return handle('content-identity', value);
+    if (refFenceField && /^[A-Za-z0-9_-]{8}$/u.test(value)) return handle('ref-fence', value);
     return value;
   }
   return visit;
@@ -184,7 +193,7 @@ export async function withStdio(entry, args, directory, work) {
 export async function compareWire(request, notify, count, { legacy = false } = {}) {
   const cases = Object.entries(golden.exchanges);
   cases.splice(2, 0, ['tools/list', { method: 'tools/list', response: { result: { tools: golden.toolsList } } }]);
-  const actual = normalizer({ legacy }), expected = normalizer();
+  const actual = normalizer({ legacy }), expected = normalizer({ allowPlaceholders: true });
   const replies = new Map(), differences = [];
   let matched = 0, lastIndex;
   for (const [label, item] of cases) {
@@ -199,7 +208,7 @@ export async function compareWire(request, notify, count, { legacy = false } = {
         const index = value(reply)?.indexRevision;
         assert.ok(Number.isSafeInteger(index) && index > 0, 'missing committed index revision');
         // Legacy advances once for the memory and again for its procedural tag.
-        // D3 groups both writes in a single advance.
+        // The candidate saves the memory and its procedural tag in one revision advance.
         const advance = label === 'forget repeated' ? 0 : (legacy && label === 'remember procedural' ? 2 : 1);
         if (lastIndex !== undefined) assert.equal(index, lastIndex + advance, 'per-run index revision');
         lastIndex = index;

@@ -6,7 +6,7 @@ import test from 'node:test';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildCoreLocalCandidate } from '../build-core-local.mjs';
 import { deriveRuntimeGraph } from '../core-local/import-graph.mjs';
-import { compareWire, golden, installCandidate, scopeArgs, snapshotKey, withStdio } from './fixtures/local-host-wire-replay.mjs';
+import { compareWire, diagnosticsKey, golden, installCandidate, scopeArgs, snapshotKey, withStdio } from './fixtures/local-host-wire-replay.mjs';
 
 const host = 'packaging/core-local/host.mjs';
 const cli = 'packaging/core-local/cli.mjs';
@@ -56,12 +56,36 @@ test('installed core-local candidate runs the 50-exchange SQLite round trip', as
       assert.equal((await call(request, 'fetch_memory_candidate_evidence', { snapshot })).error.code, 'snapshot_stale');
     });
   });
-  const args = ['--db', join(path, 'active.sqlite'), ...scopeArgs];
-  const comparison = await withStdio(installed.bin, args, path, (request, notify) =>
-    compareWire(request, notify, text => encoding.encode(text, [], []).length));
-  t.diagnostic(comparison.matched + ' of ' + comparison.total + ' candidate exchanges matched');
-  assert.equal(comparison.total, 50);
-  assert.deepEqual(comparison.differences, []);
+  const count = text => encoding.encode(text, [], []).length;
+  await t.test('unmodified candidate replay matches the golden', async t => {
+    const args = ['--db', join(path, 'active.sqlite'), ...scopeArgs];
+    const comparison = await withStdio(installed.bin, args, path, (request, notify) =>
+      compareWire(request, notify, count));
+    t.diagnostic(comparison.matched + ' of ' + comparison.total + ' candidate exchanges matched');
+    assert.equal(comparison.total, 50);
+    assert.equal(comparison.matched, 50);
+    assert.deepEqual(comparison.differences, []);
+  });
+  await t.test('inspect procedural cannot match by returning a literal UUID placeholder', async t => {
+    const args = ['--db', join(path, 'placeholder.sqlite'), ...scopeArgs];
+    const comparison = await withStdio(installed.bin, args, path, (request, notify) =>
+      compareWire(async (method, params, label) => {
+        const reply = await request(method, params);
+        if (label === 'inspect procedural') {
+          const block = reply.result.content[0];
+          const envelope = JSON.parse(block.text);
+          envelope.value.memory.id = '<uuid-6>';
+          block.text = JSON.stringify(envelope);
+          const budget = reply.result._meta?.[diagnosticsKey]?.budget;
+          if (budget) budget.used = count(block.text);
+        }
+        return reply;
+      }, notify, count));
+    t.diagnostic(comparison.matched + ' of ' + comparison.total + ' candidate exchanges matched with a literal placeholder');
+    assert.equal(comparison.total, 50);
+    assert.equal(comparison.matched, 49);
+    assert.deepEqual(comparison.differences, ['inspect procedural reserved normalization placeholder in id']);
+  });
 });
 
 test('the real runtime graph refuses startup composition and unapproved adapter capabilities', t => {
