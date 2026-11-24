@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import {
-  coreDigest, factIncarnationBody, fingerprintLegacyCapture, hostedV1Digest, userFingerprintKey,
+  coreDigest, factIncarnationBody, fingerprintLegacyCapture, hostedV1Digest, userFingerprintKey, withholdsAnyPassage,
 } from "../../core/src/index.mjs";
 import { captureMethods } from "../../core/src/service/capture.mjs";
 import {
@@ -187,12 +187,13 @@ test("review P1-5: legacy shingle evidence lets a comparable unrelated capture p
   await pool.query(`INSERT INTO suppressions (id, user_id, kind, text_hash, key_id, shingles, embedding)
     VALUES ('legacy-text', $1, 'text', $2, $3, $4, $5)`,
   [owner, (await hostedV1Digest(original)).value, key.id, legacy.shingles, JSON.stringify(vector)]);
-  const snapshot = (passages) => read(tx => store.snapshot(tx, scope, { passages }));
-  assert.deepEqual((await snapshot([{ digests: [await hostedV1Digest(unrelated)],
-    shingles: candidate.shingles, keyId: key.id }])).passages, []);
-  const { passages } = await snapshot();
-  assert.deepEqual(passages[0].fact.text.shingles, legacy.shingles);
-  assert.equal(passages[0].fact.text.keyId, key.id);
+  const candidates = [{ digests: [await hostedV1Digest(unrelated)], shingles: candidate.shingles, keyId: key.id }];
+  const { passages } = await read(tx => store.snapshot(tx, scope, { passages: candidates }));
+  assert.deepEqual(passages.map(({ factId }) => factId), ["legacy-text"]);
+  const [{ fact }] = passages;
+  assert.deepEqual(fact.text.shingles, legacy.shingles);
+  assert.equal(fact.text.keyId, key.id);
+  assert.equal(withholdsAnyPassage(candidates, [fact]), false);
 });
 
 test("review P1-6: hosted read sets and suppression scopes default to personal only", migrationDbTest, async (t) => {
