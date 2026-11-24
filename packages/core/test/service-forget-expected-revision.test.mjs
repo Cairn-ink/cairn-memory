@@ -141,15 +141,20 @@ test("forget accepts a null-prototype options record and treats null as omission
 for (const fingerprintKey of [true, false]) {
   const mode = fingerprintKey ? "keyed" : "keyless";
 
-  test(`forget with a stale revision makes zero port writes (${mode})`, async t => {
-    const { service, target, snapshot, writeCalls, calls, keyLookup } = await setup(t, fingerprintKey);
+  test(`forget with a stale revision reports the transaction's start revision and makes zero port writes (${mode})`, async t => {
+    const { service, storage, target, snapshot, writeCalls, calls, keyLookup } = await setup(t, fingerprintKey);
+    const get = t.mock.method(storage.memories, "get");
+    const indexRevision = t.mock.fn(async tx => tx.revision);
+    storage.memories.indexRevision = indexRevision;
     const before = snapshot();
 
     const result = await service.forget(scope, target.id, source, { expectedRevision: target.revision - 1 });
 
     assert.deepEqual(writeCalls(), [], "a stale forget must make zero port writes");
     assert.deepEqual(snapshot(), before);
-    assert.deepEqual(result, { status: "conflict" });
+    assert.deepEqual(result, { status: "conflict", indexRevision: before.revision });
+    assert.equal(indexRevision.mock.callCount(), 1);
+    assert.equal(indexRevision.mock.calls[0].arguments[0], get.mock.calls[0].arguments[0]);
     assert.equal(keyLookup.callCount(), 0);
     assert.deepEqual(calls.map(([method]) => method), ["run", "lock", "lock", "memories.get"]);
   });
@@ -236,6 +241,7 @@ for (const fingerprintKey of [true, false]) {
   test(`forget checks the transaction row after a concurrent correction (${mode})`, async t => {
     const { service, storage, hooks, calls, target, snapshot, writeCalls } =
       await setup(t, fingerprintKey, { externalKey: true });
+    storage.memories.indexRevision = async tx => tx.revision;
     let corrected;
     hooks.beforeRun = async () => {
       hooks.beforeRun = undefined;
@@ -251,7 +257,7 @@ for (const fingerprintKey of [true, false]) {
     const result = await service.forget(scope, target.id, source, { expectedRevision: target.revision });
 
     assert.deepEqual(writeCalls(), []);
-    assert.deepEqual(result, { status: "conflict" });
+    assert.deepEqual(result, { status: "conflict", indexRevision: corrected.revision });
     assert.equal(corrected.rows.find(({ id }) => id === target.id).revision, target.revision + 1);
     assert.deepEqual(snapshot(), corrected);
   });
