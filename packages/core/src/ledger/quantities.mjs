@@ -1,5 +1,7 @@
 /** @import { ExtractedQuantity, QuantityValidation } from './index.mjs' */
 
+export const QUANTITY_TEXT_FIELDS = Object.freeze(/** @type {const} */ (['measure', 'unit', 'category']));
+
 const fields = ['item', 'kind', 'measure', 'value', 'unit', 'group', 'category', 'period', 'comparator'];
 const kinds = ['record', 'goal'];
 const groups = ['food', 'transport', 'housing', 'shopping', 'bills', 'health', 'fitness', 'entertainment', 'work', 'other'];
@@ -43,7 +45,8 @@ function readQuantity(value, itemCount) {
   if (typeof copy.item !== 'number' || !Number.isSafeInteger(copy.item) || copy.item < 0 || copy.item >= itemCount ||
       !Number.isFinite(copy.value) || typeof copy.kind !== 'string' || !kinds.includes(copy.kind) ||
       typeof copy.group !== 'string' || !groups.includes(copy.group)) return null;
-  for (const text of [copy.measure, copy.unit, copy.category]) {
+  for (const field of QUANTITY_TEXT_FIELDS) {
+    const text = copy[field];
     if (typeof text !== 'string' || /[\uD800-\uDFFF]/u.test(text)) return null;
   }
   const validKind = copy.kind === 'record'

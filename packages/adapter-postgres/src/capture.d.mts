@@ -1,4 +1,5 @@
 import type { CaptureClaim, CaptureFinish, SourceFilter } from "../../core/src/ports/capture.d.ts";
+import type { Connection } from "./driver.mjs";
 
 export interface CaptureOptions {
   now?: () => number;
@@ -11,3 +12,7 @@ export interface CaptureOptions {
 }
 
 export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter & CaptureFinish;
+
+export function terminateDirectClaims(
+  query: Connection["query"], owner: string, source: { client: string; sessionId: string },
+): Promise<boolean>;

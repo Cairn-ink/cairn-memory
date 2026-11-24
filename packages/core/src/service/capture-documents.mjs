@@ -1,9 +1,11 @@
 import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
-import { writeLedgerQuantities } from "../ledger/index.mjs";
-import { sha256Hex } from "../privacy/fingerprint.mjs";
-import { receiptExcerpt } from "../privacy/text.mjs";
+import { reconcileLedgerQuantities } from "../ledger/index.mjs";
+import { QUANTITY_TEXT_FIELDS } from "../ledger/quantities.mjs";
+import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
+import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
+import { withholdsAnyPassage } from "../privacy/withholds.mjs";
 import {
   buildDocumentCard, detectCardAmendments, documentCardMemoryLinks, documentCardSearchText,
   documentCardVisible, routeDocumentMessages,
@@ -28,6 +30,7 @@ import { validWriteEmbedding } from "./writes.mjs";
  *   excludedSources: Set<string>,
  *   sourceKey: FingerprintKey | undefined,
  *   readSourcePassages: (tx: Tx, positions: number[]) => Promise<import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]>,
+ *   unchangedPositions: (tx: Tx, positions: number[]) => Promise<number[]>,
  *   selectWriteKey: (tx: Tx) => Promise<FingerprintKey>,
  *   filterSources: (positions: number[], passages: import("../ports/privacy.d.ts").SuppressionSnapshot["passages"],
  *     writeKey: FingerprintKey) => Promise<number[]>,
@@ -73,7 +76,7 @@ const readScope = ({ owner, namespace }) => ({ owner, namespaces: [namespace] })
  */
 export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbort) {
   const { storage, config, model, embedder, clock, gate, diagnostics } = deps;
-  const { capabilities, uow, suppressions, raw, hydrate, fence, pause } = storage;
+  const { capabilities, uow, suppressions, raw, hydrate, fence, pause, keys } = storage;
   const cards = capabilities.documentCards && config.documentCards?.enabled ? storage.documentCards : undefined;
   const skipExtraction = model === null;
   const ledger = !skipExtraction && capabilities.quantityLedger && config.quantityLedger?.enabled
@@ -108,6 +111,21 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         : await withheld(tx, key.scope, receipt)) === false;
     }));
     return messages.filter((_, index) => allowed[index]);
+  }
+
+  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @returns {Promise<(texts: readonly string[]) => Promise<boolean>>} */
+  async function readTextWithholding(tx, scope) {
+    const facts = (await suppressions.snapshot(tx, scope, {})).passages
+      .map(({ fact }) => fact).filter(({ origin }) => origin === "forget");
+    const fingerprintKey = facts.length && capabilities.fingerprintKey
+      ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
+    const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
+    return async texts => {
+      if (!facts.length) return false;
+      const passages = await Promise.all([...new Set(texts)].map(text =>
+        fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey, undefined, digesters)));
+      return withholdsAnyPassage(passages.flat(), facts);
+    };
   }
 
   /**
@@ -176,13 +194,19 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const written = (mapped ? surviving : []).map(({ receipts }, index) => ({
       ...result.memories[index], receipts, quantities: quantities?.get(receipts),
     }));
+    /** @type {ReturnType<typeof readTextWithholding> | undefined} */
+    let textWithholding;
     const canonicalSessionKey = cards && sessionKey({ client, sessionId });
     if (cards && canonicalSessionKey) {
       const cardSources = allowed.filter(({ id }) => !ambiguous.has(id) && (!embedder || screenedForEmbedding?.has(id)));
-      for (const { position } of routeDocumentMessages(cardSources).chosen) {
+      const { chosen } = routeDocumentMessages(cardSources);
+      for (const { position } of chosen) {
         const message = cardSources[position];
         const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card) continue;
+        // Whole-source and extracted-memory checks can miss an exact forget of one card sentence.
+        const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
+        if (await withholds(card.sentences.map(({ start, end }) => card.body.slice(start, end)))) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         const embedding = vectors?.get(documentCardSearchText(card));
@@ -243,9 +267,22 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           unresolved();
           continue;
         }
-        await writeLedgerQuantities(tx, scope, ledger, {
-          memoryId: id, textHash: row.memory.textHash, captureTimeMs: clock.nowMs(), quantities, citedReceipts,
+        const captureTimeMs = clock.nowMs();
+        const existingRows = await ledger.listForMemory(tx, scope, id);
+        const rows = reconcileLedgerQuantities({
+          memoryId: id, textHash: row.memory.textHash, captureTimeMs, quantities, citedReceipts, existingRows,
         });
+        if (!rows.length) continue;
+        const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
+        const permitted = [];
+        for (const quantityRow of rows) {
+          if (await withholds(QUANTITY_TEXT_FIELDS.map(field => quantityRow[field]))) {
+            emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_text_withheld");
+          } else {
+            permitted.push(quantityRow);
+          }
+        }
+        if (permitted.length) await ledger.put(tx, scope, permitted);
       }
     }
     return allowed;
@@ -356,6 +393,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
             if (state.paused || state.generation !== generation || caller?.aborted) return;
             const message = byMessage.get(amendment.sourceMessage.messageId);
             if (message && await correctionEligible(tx, message) && await canAmend(tx, cardId, message)) {
+              const withholds = await readTextWithholding(tx, scope);
+              if (await withholds([amendment.quote, amendment.sentence])) {
+                emitDiagnostic(diagnostics, "amendment", "core_finish", "amendment_text_withheld");
+                return;
+              }
               await cards.amend(tx, scope, cardId, amendment);
             }
           });
@@ -370,8 +412,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
   /** @param {CaptureContext} context */
   function forCapture(context) {
-    const { key, messages, excludedSources, sourceKey, readSourcePassages, selectWriteKey, filterSources,
-      abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation, signal } = context;
+    const { key, messages, excludedSources, sourceKey, readSourcePassages, unchangedPositions, selectWriteKey,
+      filterSources, abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation,
+      signal } = context;
     const { capture } = storage;
     const archive = capabilities.rawArchive ? raw : undefined;
     // Candidate preparation and embedding preserve the receipts array through finish.
@@ -410,7 +453,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       if (!cards || !embedder) return;
       const screened = await runAtGeneration(async tx => {
         const eligible = new Set(await readEligible(tx, key, messages));
-        const allowed = await currentSources(tx, positions.filter(position => eligible.has(position)));
+        // A deleted or edited conversation blanks or changes its stored slot. Withdraw it before card
+        // embedding, which maps positions back to the admitted copy.
+        const unchanged = await unchangedPositions(tx, positions.filter(position => eligible.has(position)));
+        const allowed = await currentSources(tx, unchanged);
         if (allowed === null) return abandonKeyMismatch(tx);
         if (allowed.length) await capture.assertEligible(tx, key, allowed);
         if (archive && await archive.archiveAllowed(tx, key) !== true) return [];
@@ -448,8 +494,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
       const result = await runAtGeneration(async tx => {
         checkAbort(signal, deadline);
-        await capture.assertEligible(tx, key, preEmbed);
-        const allowed = await currentSources(tx, preEmbed);
+        // The card write and the Raw archive map positions back to the admitted copy, so withdraw a
+        // blanked or changed slot first. A post-commit amendment check reads Raw instead.
+        const unchanged = await unchangedPositions(tx, preEmbed);
+        await capture.assertEligible(tx, key, unchanged);
+        const allowed = await currentSources(tx, unchanged);
         if (allowed === null) return abandonKeyMismatch(tx);
         checkAbort(signal, deadline);
         const result = await finish(tx, []);

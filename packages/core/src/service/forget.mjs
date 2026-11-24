@@ -109,7 +109,7 @@ export function forgetMethod({ storage, clock }) {
     conflicts, rationale, documentCards, quantityLedger, forgetLog, proceduralTags } = storage;
 
   /** @type {(...args: [...Parameters<Forget>, options?: ForgetOptions]) =>
-   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict" }>} */
+   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict", indexRevision?: number }>} */
   const forget = entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
@@ -138,7 +138,10 @@ export function forgetMethod({ storage, clock }) {
           ? memories.committedIndexRevision(tx) : memories.indexRevision?.(tx));
         return { status: "not_found", ...(indexRevision === undefined ? {} : { indexRevision }) };
       }
-      if (expectedRevision !== undefined && row.revision !== expectedRevision) return { status: "conflict" };
+      if (expectedRevision !== undefined && row.revision !== expectedRevision) {
+        const indexRevision = await memories.indexRevision?.(tx);
+        return { status: "conflict", ...(indexRevision === undefined ? {} : { indexRevision }) };
+      }
       if (keyResult?.error) throw keyResult.error;
       const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {

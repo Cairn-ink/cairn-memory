@@ -1,4 +1,5 @@
 import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
+import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
   copyFinishItems, copyReceipts, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
@@ -11,8 +12,9 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "lineageFenced">} RawLineage */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
- * occurredAtMs: ReadonlyArray<number | null>, proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
-/** @typedef {{key: CaptureKey, messages?: CaptureMessage[]} & (Lease | {status: "pending"} |
+ * messageIds: readonly string[], occurredAtMs: ReadonlyArray<number | null>,
+ * proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
+/** @typedef {{key: CaptureKey, messages?: CaptureMessage[], messageIds?: readonly string[]} & (Lease | {status: "pending"} |
  * {status: "finished", result: FinishResult} |
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
 
@@ -27,6 +29,11 @@ function assertClaimKey(claim, key) {
   if (claim && (claim.key.payloadDigest !== key.payloadDigest || claim.key.sessionId !== key.sessionId)) {
     throw new CoreError("event_payload_conflict");
   }
+}
+
+/** @param {State["deletedMessages"]} deletedMessages @param {CaptureKey} key @param {string} messageId */
+async function messageDeleted(deletedMessages, { scope, client, sessionId }, messageId) {
+  return deletedMessages.has(await receiptAddressKey(scope.namespace, { client, sessionId, messageId }));
 }
 
 /** @param {State} state @param {string} token @param {number} nowMs */
@@ -76,7 +83,6 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       return port.capture(tx, scope, () => {
         const copy = scope.copyKey();
         const copied = copyCaptureMessages(messages);
-        const occurredAtMs = copied.map((message) => message.occurredAtMs);
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new CoreError("invalid_input");
         const { leaseMs } = options;
         if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0) throw new CoreError("invalid_input");
@@ -97,13 +103,15 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
           const token = crypto.randomUUID();
           const admitted = previous?.messages;
+          const batch = admitted ?? copied;
           // An admitted event is claimed with its stored outbox, so its proofs come from those messages.
-          const proofMetadata = lineage && { proofs: await lineage.captureProofs(copy.scope, copy.client, admitted ?? copied) };
+          const proofMetadata = lineage && { proofs: await lineage.captureProofs(copy.scope, copy.client, batch) };
           if (previous?.status === "leased") state.activeTokens.delete(previous.token);
           state.claims.set(identity, {
             key: previous?.key ?? copy, messages: admitted, status: "leased", token,
             expiresAtMs: nowMs + leaseMs, dispatched: false,
-            occurredAtMs: admitted ? admitted.map((message) => message.occurredAtMs) : occurredAtMs,
+            messageIds: batch.map(({ id }) => id),
+            occurredAtMs: batch.map(({ occurredAtMs }) => occurredAtMs),
             ...proofMetadata,
           });
           state.activeTokens.set(token, identity);
@@ -135,7 +143,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const state = getState();
           if (state.abandonedTokens.has(token)) return;
           const { identity, claim } = liveClaim(state, token, now());
-          state.claims.set(identity, { key: claim.key, messages: claim.messages, status: "abandoned", failure: copy });
+          state.claims.set(identity, { key: claim.key, messages: claim.messages, messageIds: claim.messageIds,
+            status: "abandoned", failure: copy });
           state.activeTokens.delete(token);
           state.abandonedTokens.add(token);
           run.stateWritten = true;
@@ -216,7 +225,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             suppressedCount: suppressedItems.length, ...(suppressedItems.length > 0 && { suppressedItems }),
             duplicateCount, counters: policy.counters };
           const result = copyResult(stored, true);
-          state.claims.set(identity, { key: claim.key, messages: claim.messages, status: "finished", result: stored });
+          state.claims.set(identity, { key: claim.key, messages: claim.messages, messageIds: claim.messageIds,
+            status: "finished", result: stored });
           state.activeTokens.delete(token);
           run.finishes.add(stored);
           run.stateWritten = true;
@@ -237,7 +247,13 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         if (matcher.blocksSession(client, sessionId)) return [];
         if (lineage && lineage.lineageFenced(state, scope, key, await lineage.captureProofs(scope, client, copied))) return [];
         const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
-        return Array.from(occurredAtMs.keys()).filter((position) => !blocked.has(position));
+        const { deletedMessages } = state;
+        const positions = [];
+        for (const [position, { id }] of copied.entries()) {
+          if (blocked.has(position) || (deletedMessages.size > 0 && await messageDeleted(deletedMessages, key, id))) continue;
+          positions.push(position);
+        }
+        return positions;
       });
     },
 
@@ -263,7 +279,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           }
           selected.add(position);
         }
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           const claim = state.claims.get(captureIdentity(copy.client, copy.eventId));
           // Another namespace never holds this lease. Reject it before comparing the key, so the
@@ -282,6 +298,12 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const matcher = matchFacts(state.facts, scope);
           if (matcher.blocksSession(client, sessionId) || matcher.blockedMessages(client, sessionId, occurredAtMs).length) {
             throw new CoreError("suppressed");
+          }
+          const { deletedMessages } = state;
+          if (deletedMessages.size > 0) {
+            for (const position of selected) {
+              if (await messageDeleted(deletedMessages, claim.key, claim.messageIds[position])) throw new CoreError("suppressed");
+            }
           }
           if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
         };
@@ -307,7 +329,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             return { status: "rawReplay", result: copyResult(previous.result, run.finishes.has(previous.result)) };
           }
           if (previous) return { status: "duplicate" };
-          state.claims.set(identity, { key: copy, messages: batch, status: "pending" });
+          state.claims.set(identity, { key: copy, messages: batch, messageIds: batch.map(({ id }) => id), status: "pending" });
           run.stateWritten = true;
           return { status: "admitted" };
         };
