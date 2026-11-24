@@ -368,6 +368,10 @@ export async function detectCardAmendments(options) {
         count("verify_skipped_oversize");
         continue;
       }
+      if (options.canVerify && !await options.canVerify(card.id, sourceMessage)) {
+        count("verify_skipped_ineligible");
+        continue;
+      }
 
       const verified = await call("verify", signal => verify.call(model, verifyRequest, { signal }));
       if (!verified.ok) return { amendments: [], counters };
