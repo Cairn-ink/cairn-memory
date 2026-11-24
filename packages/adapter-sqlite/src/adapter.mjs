@@ -3,6 +3,9 @@ import { createCapturePorts } from "./capture.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
 import { createMemoryStore } from "./memories.mjs";
 import { createPauseStore } from "./pause.mjs";
+import { createRawStore } from "./raw.mjs";
+import { createRawLineage, createSpanLineage } from "./raw-lineage.mjs";
+import { createRawReads } from "./raw-read.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
@@ -18,13 +21,19 @@ export async function openSqliteAdapter(filename) {
 export function createSqliteAdapter({ uow, port, close, sessionHashKey }, { now } = {}) {
   const hashSessionKey = sessionHasher(sessionHashKey);
   const index = createIndexRevisions(uow, port);
+  const lineage = createRawLineage(sessionHashKey, hashSessionKey);
+  const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index);
+  const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey);
   const adapter = {
     name: "sqlite",
-    capabilities: capabilities({ rawSpans: true }),
+    capabilities: capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true }),
     uow: { run: index.run },
-    capture: createCapturePorts(port, hashSessionKey, index, now),
+    capture: createCapturePorts(port, hashSessionKey, index, lineage, now),
     memories: createMemoryStore(port, hashSessionKey, index.markDirty),
-    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey),
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs),
+    raw: { ...raw, ...reads },
+    spanLineage: createSpanLineage(port, hashSessionKey),
+    counters,
     suppressions: createSuppressionStore(port, hashSessionKey, index.markDirty),
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },

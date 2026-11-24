@@ -1,7 +1,7 @@
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
 // separate schema version sequence from the legacy engine.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 2;
+export const SQLITE_PHYSICAL_VERSION = 3;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -95,16 +95,19 @@ export const STORAGE_SCHEMA = `
     token TEXT UNIQUE,
     expires_at_ms INTEGER,
     dispatched INTEGER NOT NULL DEFAULT 0 CHECK (dispatched IN (0, 1)),
-    source_times TEXT,
+    source_positions TEXT,
+    source_proofs TEXT,
     failure_code TEXT,
     PRIMARY KEY (owner_id, client_key, event_key),
     CHECK ((status = 'leased') = (token IS NOT NULL)),
     CHECK ((status = 'leased') = (expires_at_ms IS NOT NULL)),
-    CHECK ((status = 'leased') = (source_times IS NOT NULL)),
+    CHECK ((status = 'leased') = (source_positions IS NOT NULL)),
+    CHECK ((status = 'leased') = (source_proofs IS NOT NULL)),
     CHECK ((status IN ('retryable', 'failed')) = (failure_code IS NOT NULL))
   ) STRICT, WITHOUT ROWID;
 
   CREATE INDEX cairn_capture_event ON cairn_capture_claims (owner_id, namespace_key, event_key);
+  CREATE INDEX cairn_capture_source ON cairn_capture_claims (owner_id, namespace_key, client_key, session_key);
 
   -- Keep admission insertion order for clientless failure status.
   CREATE TABLE cairn_capture_outbox (
@@ -133,6 +136,36 @@ export const STORAGE_SCHEMA = `
   CREATE TABLE cairn_index_revisions (
     owner_id TEXT PRIMARY KEY,
     revision INTEGER NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_raw_messages (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    session_key TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    occurred_at_ms INTEGER,
+    PRIMARY KEY (owner_id, namespace_key, client_key, session_key, message_key)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_raw_fences (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    session_hash TEXT NOT NULL,
+    PRIMARY KEY (owner_id, namespace_key, session_hash)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_raw_anchors (
+    owner_id TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    message_tag TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    session_tag TEXT NOT NULL,
+    session_hash TEXT NOT NULL,
+    proof TEXT NOT NULL,
+    PRIMARY KEY (owner_id, client_key, message_tag, namespace_key, session_tag, proof)
   ) STRICT, WITHOUT ROWID;
 `;
 

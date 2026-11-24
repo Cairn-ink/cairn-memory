@@ -1,8 +1,8 @@
 import type { FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type {
-  HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore, PauseStore, RawCandidates, ReadSnapshot,
-  SupersessionStore, SuppressionStore, VectorCandidates, VisibilityFence,
+  ConflictEdgeStore, HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore,
+  PauseStore, RawCandidates, ReadSnapshot, SupersessionStore, SuppressionStore, VectorCandidates, VisibilityFence,
 } from "../../core/src/ports/index.d.ts";
 import type { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs";
 import type { ConnectionSource, QueryResult } from "./driver.mjs";
@@ -65,4 +65,5 @@ export function createPostgresMemoryReads(options?: MemoryReadOptions | (MemoryR
   fence: VisibilityFence;
 };
 export function createPostgresPauseStore(): PauseStore;
-export function createPostgresSupersessionStore(options?: { allowNonNullNamespace?: boolean }): SupersessionStore;
+export function createPostgresSupersessionStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): SupersessionStore;
+export function createPostgresConflictEdgeStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): ConflictEdgeStore;
