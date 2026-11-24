@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   CoreError, coreDigest, engineLegacyDigest, factBlocksIncoming, factIncarnationBody, FORGET_STEPS,
@@ -111,7 +112,8 @@ function assertNoSecretDigests(fact, original, secretValues) {
   const unsafe = new Set(spellings.map(normalizeForHash)
     .filter(text => secrets.some(secret => text.includes(secret))).map(sha));
   assert.ok(unsafe.size > 0);
-  for (const { value } of fact.text?.digests ?? []) assert.ok(!unsafe.has(value));
+  assert.equal(fact.text?.digests.some(({ value }) => unsafe.has(value)) ?? false, false,
+    "the stored fact has a SHA-256 digest of a spelling that contains the masked value");
 }
 
 function repeatedPassword() {
@@ -144,16 +146,51 @@ test("K2 uses identity and lineage when a masked value survives every spelling",
   assert.deepEqual(fake.committed(scope.owner).facts, [identity, lineage]);
 });
 
-test("K2 also excludes a surviving password copy without the assignment's punctuation", async () => {
-  const { value, text } = repeatedPassword();
-  const original = text + ";";
-  const target = row(original);
-  const fake = setup(target);
-  supportIdentityFacts(fake);
-  assert.equal((await fake.service.forget(scope, target.id, source)).status, "forgotten");
-  const [stored] = fake.committed(scope.owner).facts;
-  assertNoSecretDigests(stored.fact, original, [value]);
-  assert.equal(stored.fact.kind, "identity");
+for (const [label, assignment, length] of [
+  ["parenthesised assignment", value => `(password=${value})`],
+  ["trailing semicolon", value => `password=${value};`],
+  ["quoted value", value => `password="${value}"`],
+  ["bracketed value", value => `password=[${value}]`],
+  ["trailing comma", value => `password=${value},`],
+  ["surrounding periods", value => `password=.${value}.`],
+  ["four-character run inside a longer value", value => `password=${"z".repeat(8)}!${value}~${"b".repeat(8)}`, 4],
+]) {
+  test(`K2b excludes a surviving password run with ${label}`, async () => {
+    const password = repeatedPassword().value;
+    const value = password.slice(0, length);
+    const original = `The database password is ${value}. Config: ${assignment(value)}`;
+    const target = { ...row(original), source: { kind: "capture", ...root } };
+    const fake = setup(target, { forgetting: { capabilities: { spanLineage: true, rawSpans: true }, spans: [span] } });
+    supportIdentityFacts(fake);
+    assert.equal((await fake.service.forget(scope, target.id, source)).status, "forgotten");
+    const { rows, facts } = fake.committed(scope.owner);
+    assert.deepEqual(rows, []);
+    for (const { fact } of facts) assertNoSecretDigests(fact, original, [value]);
+    assert.deepEqual(facts.map(({ fact }) => fact.kind), ["identity", "rawSpan"]);
+    const [identity, lineage] = facts.map(({ fact }) => fact);
+    assert.equal(identity.memoryId, target.id);
+    assert.deepEqual(lineage, { ...span, actionId: identity.actionId });
+  });
+}
+
+test("addendum 15 records the scope of keyless text purge and span suppression", async () => {
+  const doc = await readFile(new URL("../docs/PHASE0.md", import.meta.url), "utf8");
+  const addendum = doc.match(/^15\. \*\*Keyless forget\.\*\*[\s\S]*?(?=^### )/mu)?.[0] ?? "";
+  assert.match(addendum, /physically purges Raw messages.*exact text fact/u);
+  assert.match(addendum, /merely contain the forgotten text.*weaker protection/u);
+  assert.match(addendum, /span facts.*withholds.*from reads/u);
+  assert.match(addendum, /Physical deletion.*depends on the adapter/u);
+  assert.match(addendum, /proven-closure erasure apply as usual/u);
+  assert.match(addendum, /maximal runs.*masked value.*four characters/u);
+  assert.match(addendum, /any collected run/u);
+});
+
+test("the span lineage port documents how forget handles missing Raw rows and other doubt", async () => {
+  const types = await readFile(new URL("../src/ports/privacy.d.ts", import.meta.url), "utf8");
+  const port = types.match(/export interface SpanLineageStore \{[^}]+/u)?.[0] ?? "";
+  assert.match(port, /Returns \[\] when the memory's source Raw rows no longer exist/u);
+  assert.match(port, /forget still erases the memory/u);
+  assert.match(port, /Throws raw_lineage_unavailable on any other doubt/u);
 });
 
 function matches(stored, digest) {

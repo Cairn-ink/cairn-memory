@@ -122,7 +122,13 @@ function traceMasks(text, rules, secrets) {
         }
         if (rule === BEARER) secret = secret.replace(/^Bearer\s+/iu, "");
         if (rule === PEM) secret = secret.slice(secret.indexOf("-----", 5) + 5, secret.lastIndexOf("-----END")).trim();
-        if (secret && secret !== REPLACEMENT) secrets.add(secret);
+        if (!secret || secret === REPLACEMENT) continue;
+        secrets.add(secret);
+        // A masked assignment can include punctuation absent from a surviving copy.
+        for (const [run] of secret.matchAll(/[A-Za-z0-9_\-+/=.]{4,}/gu)) {
+          const trimmed = run.replace(/^[_\-+/=.]+|[_\-+/=.]+$/gu, "");
+          secrets.add(trimmed.length >= 4 ? trimmed : run);
+        }
       }
     }
     if (added.length) {
