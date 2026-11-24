@@ -1,7 +1,8 @@
 import { CoreError, factBlocksIncoming, validateSuppressionFact } from "../../core/src/index.mjs";
-import { factSlot } from "./facts.mjs";
 import { readReceipts, selectMemory } from "./memory-rows.mjs";
-import { matchesRowFact, readVisibilityFacts, rowFactCandidate, sessionBlocksIncoming } from "./memory-visibility.mjs";
+import {
+  decodeCoreFact, matchesRowFact, readVisibilityFacts, rowFactCandidate, rowVisibilityPolicy, sessionBlocksIncoming, usesSource,
+} from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { FactMatchPolicy, StoredFact, TextFact } from "../../core/src/index.mjs" */
@@ -12,7 +13,6 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 const MAX_FACTS = 4096;
 const MAX_POSITIONS = 16384;
 const MAX_COMPARISONS = 262144;
-const HEX64 = /^[0-9a-f]{64}$/u;
 const STORABLE = /^[^\u0000\uD800-\uDFFF]+$/u;
 
 const FACT_COLUMNS = `f.fact_id, f.action_id, f.kind, f.origin, f.mode, f.body, f.slot,
@@ -49,7 +49,7 @@ const SNAPSHOT_FACTS = `WITH hits AS (
 const TARGET_FACTS = `SELECT ${FACT_COLUMNS} FROM core_suppression_facts f
   WHERE ${FACT_SCOPE} AND (
     (f.kind = 'identity' AND (f.body ->> 'memoryId') COLLATE "C" = $3)
-    OR ($4 AND f.kind IN ('text', 'session'))
+    OR ($4 AND f.kind IN ('text', 'session', 'window'))
   )
   ORDER BY f.epoch LIMIT ${MAX_FACTS + 1}`;
 
@@ -61,23 +61,6 @@ function ineligible() {
 /** @param {unknown} value @param {number} [max] @returns {value is string} */
 function validString(value, max = 512) {
   return typeof value === "string" && value.length <= max && STORABLE.test(value);
-}
-
-/** @param {unknown} value @param {bigint} minimum */
-export function readEpoch(value, minimum) {
-  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]*)$/u.test(value)) throw new CoreError("internal_error");
-  const epoch = BigInt(value);
-  if (epoch < minimum || epoch > 9223372036854775807n) throw new CoreError("internal_error");
-  return epoch;
-}
-
-/** @param {unknown} value */
-export function readCreatedAtMs(value) {
-  if (typeof value !== "string" || !/^-?(?:0|[1-9][0-9]*)$/u.test(value)) throw new CoreError("internal_error");
-  const us = BigInt(value);
-  const ms = Number((us - (us < 0n ? 999n : 0n)) / 1000n);
-  if (!Number.isSafeInteger(ms)) throw new CoreError("internal_error");
-  return ms;
 }
 
 /** @param {unknown} object @param {PropertyKey} key */
@@ -130,8 +113,8 @@ function copyCandidates(candidates) {
   return { client, sessionId, occurredAtMs, passages };
 }
 
-/** @param {Tx} tx @param {Scope} scope */
-function readScope(tx, scope) {
+/** @param {Tx} tx @param {Scope} scope @param {boolean} allowNonNullNamespace */
+function readScope(tx, scope, allowNonNullNamespace) {
   requireLiveRun(tx);
   let owner;
   let namespace;
@@ -142,7 +125,7 @@ function readScope(tx, scope) {
     ineligible();
   }
   if (owner !== tx.owner) throw new CoreError("internal_error");
-  if (namespace !== null && !validString(namespace)) ineligible();
+  if (namespace !== null && (!allowNonNullNamespace || !validString(namespace))) ineligible();
   return { owner: tx.owner, namespace };
 }
 
@@ -150,12 +133,9 @@ function readScope(tx, scope) {
 function decodeFacts(rows, scope) {
   if (rows.length > MAX_FACTS) ineligible();
   return rows.map((row) => {
-    const fact = validateSuppressionFact({ ...row.body, owner: scope.owner, actionId: row.action_id });
-    if ((fact.namespace ?? null) !== scope.namespace || fact.kind !== row.kind || fact.origin !== row.origin ||
-      (fact.kind === "text" ? fact.mode : null) !== row.mode || factSlot(fact) !== row.slot ||
-      !validString(row.fact_id) || typeof row.incarnation !== "string" || !HEX64.test(row.incarnation)) ineligible();
-    return { fact, factId: row.fact_id, incarnation: row.incarnation,
-      epoch: readEpoch(row.epoch, 1n), createdAtMs: readCreatedAtMs(row.created_at_us) };
+    const stored = decodeCoreFact(row, scope.owner);
+    if ((stored.fact.namespace ?? null) !== scope.namespace) ineligible();
+    return stored;
   });
 }
 
@@ -166,14 +146,14 @@ async function legacyFacts(query, scope) {
   return scope.namespace === null ? facts : [];
 }
 
-/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression">} options */
-export function createSuppressionReads({ hashSessionKey, vectorSuppression = false }) {
-  const policy = { hashSessionKey, vectorSuppression, rowShingles: false };
-  const capture = /** @type {const} */ ({ ...policy, rowShingles: true, mode: "capture" });
+/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean}} options */
+export function createSuppressionReads({ hashSessionKey, vectorSuppression = false, allowNonNullNamespace = false }) {
+  const policy = rowVisibilityPolicy(hashSessionKey);
+  const capture = /** @type {const} */ ({ hashSessionKey, vectorSuppression, rowShingles: true, mode: "capture" });
 
   /** @type {SuppressionStore["snapshot"]} */
   async function snapshot(tx, scope, candidates) {
-    const scoped = readScope(tx, scope);
+    const scoped = readScope(tx, scope, allowNonNullNamespace);
     let copy;
     try {
       copy = copyCandidates(candidates);
@@ -223,7 +203,7 @@ export function createSuppressionReads({ hashSessionKey, vectorSuppression = fal
     let scoped;
     let memoryId;
     try {
-      scoped = readScope(tx, scope);
+      scoped = readScope(tx, scope, allowNonNullNamespace);
       memoryId = field(target, "memoryId");
     } catch (error) {
       if (error instanceof CoreError && error.code === "internal_error") throw error;
@@ -240,16 +220,15 @@ export function createSuppressionReads({ hashSessionKey, vectorSuppression = fal
         const { rows } = await query(TARGET_FACTS, [scoped.owner, scoped.namespace, memoryId, entry !== null]);
         const facts = decodeFacts(rows, scoped);
         if (!entry) return facts;
-        facts.push(...legacy.filter(({ fact }) => fact.kind === "text" || fact.kind === "session"));
+        facts.push(...legacy);
         if (facts.length > MAX_FACTS) ineligible();
         if (!facts.length) return facts;
         const row = await rowFactCandidate(entry, facts);
-        const hasSessions = facts.some(({ fact }) => fact.kind === "session");
-        const receipts = hasSessions
+        const receipts = facts.some(usesSource)
           ? (await readReceipts(query, scoped.owner, [memoryId], MAX_POSITIONS + 1)).get(memoryId) ?? []
           : [];
         if (receipts.length > MAX_POSITIONS || receipts.length * facts.length > MAX_COMPARISONS) ineligible();
-        return facts.filter(stored => matchesRowFact(stored, row, receipts, policy));
+        return facts.filter(stored => matchesRowFact(stored, row, receipts, policy, entry.memory));
       } catch {
         return "ineligible";
       }

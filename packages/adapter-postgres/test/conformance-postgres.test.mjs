@@ -5,12 +5,12 @@ import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
-import { capabilities, factIncarnationBody } from "@cairn-ink/core";
+import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, assertPostgresFingerprintRotation, createPostgresCapturePorts, createPostgresDigestGate,
+  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
   createPostgresFingerprintKeyProvider, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresPauseStore, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
+  createPostgresPauseStore, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
@@ -224,7 +224,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const hashSessionKey = (client, sessionId) =>
         createHmac("sha256", sessionKey).update(JSON.stringify([client, sessionId])).digest("hex");
       const suppressions = wrapSuppressions(createPostgresSuppressionStore({
-        sessionRefs: "hashed", hashSessionKey, vectorSuppression: true,
+        sessionRefs: "hashed", hashSessionKey, vectorSuppression: true, allowNonNullNamespace: true,
       }));
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
@@ -234,9 +234,9 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true, rawSpans: true, fingerprintKey,
       });
-      let provider = createPostgresFingerprintKeyProvider(fingerprintKey ? "test-secret-a" : null);
-      const keys = { userKey: (owner) => provider.userKey(owner) };
-      const memoryReads = createPostgresMemoryReads({ hashSessionKey });
+      const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
+      const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      const memoryReads = createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespace: true });
       // Exercise hydration's read filters on lexical matches for the memory cases.
       // The production lexical ranker and its own cases belong to the lexical lane.
       const lexical = {
@@ -252,7 +252,8 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           })), matched: items.length > 0 };
         },
       };
-      const owners = new Set();
+      /** @type {string[]} */
+      const harnessOwners = [];
       /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         hashSessionKey,
@@ -261,18 +262,16 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           return key ? [key.id] : [];
         }),
         async setFingerprintSecret(secret) {
-          const next = createPostgresFingerprintKeyProvider(secret);
-          for (const owner of owners) {
-            const [before, after] = await Promise.all([keys.userKey(owner), next.userKey(owner)]);
-            assert.ok(before && after);
-            await uow.run(owner, {}, (tx) => assertPostgresFingerprintRotation(tx, before.id, after.id));
-          }
-          provider = next;
+          assert.ok(fingerprintKey);
+          const key = await userFingerprintKey(secret, harnessOwners[0], HOSTED_FINGERPRINT_LABELS);
+          assert.ok(key);
+          for (const owner of harnessOwners) await keys.publish(owner, key.id);
         },
         async seedOwners(owner, otherOwner) {
           await beforeDeadline("Owner fixture setup", 4_000,
             () => pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]));
-          owners.add(owner).add(otherOwner);
+          harnessOwners.push(owner, otherOwner);
+          if (fingerprintKey) await harness.setFingerprintSecret("test-secret-a");
         },
         async dump() {
           const { rows } = await pool.query(dumpSql);
@@ -319,7 +318,7 @@ const selected = new Set([
   "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
   "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
-  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-5",
+  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5",
   "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
@@ -347,7 +346,6 @@ const notApplicable = {
     "K-KD-3", "K-KD-5",
   ],
   "snapshot.stateToken": ["K-ADM-7"],
-  "suppressions.snapshot (capture text)": ["K-SRC-4"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",

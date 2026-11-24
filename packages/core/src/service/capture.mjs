@@ -231,7 +231,7 @@ export function captureMethods(deps) {
       const payloadDigest = await clock.sha256Hex(JSON.stringify([client, sessionId, eventId,
         prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content.replace(/\s+/gu, " ").trim(), occurredAtMs])]));
       const key = { scope, client, sessionId, eventId, payloadDigest };
-      const fingerprintKey = capabilities.fingerprintKey ? await keys.userKey(scope.owner) : null;
+      const preparedKey = capabilities.fingerprintKey && !keys.userKeyForWrite ? await keys.userKey(scope.owner) : null;
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
         if (pauseResult(await pause.get(tx, scope.owner)).paused) return { status: "paused" };
         const session = { client, sessionId };
@@ -251,6 +251,8 @@ export function captureMethods(deps) {
         }
         const eligible = new Set(positions);
         const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+        const fingerprintKey = capabilities.fingerprintKey && keys.userKeyForWrite && matches
+          ? await keys.userKeyForWrite(tx) : preparedKey;
         const admitted = await Promise.all(incoming.map(async ({ message, originalContent }, index) => {
           const scrubbed = { ...message, content: "" };
           if (!eligible.has(index) || legacyKeyUnavailable) return scrubbed;
@@ -469,7 +471,9 @@ export function captureMethods(deps) {
           checkCaptureAbort(signal, deadline);
           await capture.assertEligible(tx, key, preEmbed.stillEligible);
           const snapshot = await readFacts(tx, embedded);
-          if (prepared.length && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
+          const currentKey = prepared.length
+            ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner)) : null;
+          if (prepared.length && currentKey?.id !== fingerprintKey?.id) {
             await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
             return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
           }

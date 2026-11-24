@@ -9,8 +9,10 @@ import type { ConnectionSource, QueryResult } from "./driver.mjs";
 
 export type { Connection, ConnectionSource, QueryResult } from "./driver.mjs";
 export { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
-export function createPostgresFingerprintKeyProvider(secret?: string | null): FingerprintKeyProvider;
-export function assertPostgresFingerprintRotation(tx: Tx, currentKeyId: string, nextKeyId: string): Promise<void>;
+export function createPostgresFingerprintKeyProvider(secret?: string | null, options?: {
+  uow?: UnitOfWork;
+  stagedSecrets?: readonly string[];
+}): Required<FingerprintKeyProvider> & { publish(owner: string, keyId: string): Promise<void> };
 
 export function createPostgresUnitOfWork(source: ConnectionSource): UnitOfWork;
 export function query(tx: Tx, text: string, values?: unknown[]): Promise<QueryResult>;
@@ -35,7 +37,7 @@ export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 export function factSlot(fact: SuppressionFact): string;
 type SessionHashOptions = Pick<FactMatchPolicy, "hashSessionKey">;
 export function createPostgresSuppressionStore(
-  options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed" },
+  options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed"; allowNonNullNamespace?: boolean },
 ): SuppressionStore;
 export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
 
@@ -50,7 +52,7 @@ export function backfillPostgresHostedDigests(uow: UnitOfWork, owner: string, op
   redactionVersion: number;
   macForText: (text: string) => string | Promise<string>;
 }): Promise<number>;
-export function createPostgresMemoryReads(options?: SessionHashOptions): {
+export function createPostgresMemoryReads(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): {
   recent: ListRecent;
   snapshot: ReadSnapshot;
   hydrate: HydrateItems;

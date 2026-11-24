@@ -8,7 +8,6 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @import { Query } from "./memory-rows.mjs" */
 
 const macPattern = "^[0-9a-f]{64}$";
-const keyIdPattern = /^[0-9a-f]{16}$/u;
 const maxRotationFacts = 4096;
 const validMac = `d->>'alg' = 'hmac' AND d->>'pipeline' IN ('core', 'hosted-v1', 'engine-legacy')
   AND jsonb_typeof(d->'keyId') = 'string' AND length(d->>'keyId') BETWEEN 1 AND 64
@@ -38,7 +37,7 @@ async function countMissingDigests(query, owner, keys, required) {
   return Number(row.count);
 }
 
-/** @param {readonly StoredFact[]} facts @param {string} [currentKeyId] */
+/** @param {readonly StoredFact[]} facts @param {string | null} [currentKeyId] */
 function requiredDomains(facts, currentKeyId) {
   const required = new Set();
   for (const { fact } of facts) {
@@ -66,17 +65,22 @@ export function createPostgresDigestGate(uow, keyIdsForOwner) {
   };
 }
 
+/** @param {Query} query @param {string} owner @returns {Promise<string | null>} */
+export async function readFingerprintKeyId(query, owner) {
+  const { rows: [state] } = await query("SELECT fingerprint_key_id FROM core_owner_state WHERE user_id = $1", [owner]);
+  return state?.fingerprint_key_id ?? null;
+}
+
 /**
- * Check coverage under the owner write lock. The host coordinates staging, active
- * writers and publication. Any live HMAC-only fact under a non-current key blocks rotation.
- * @param {Tx} tx @param {string} currentKeyId @param {string} nextKeyId
+ * Check staging and change the owner pointer in the same write transaction.
+ * K2 refuses publication when a live HMAC-only fact needs a non-current key.
+ * @param {Tx} tx @param {string} nextKeyId
  */
-export async function assertPostgresFingerprintRotation(tx, currentKeyId, nextKeyId) {
+export async function publishFingerprintKey(tx, nextKeyId) {
   requireLiveRun(tx, true);
-  if (typeof currentKeyId !== "string" || !keyIdPattern.test(currentKeyId) ||
-      typeof nextKeyId !== "string" || !keyIdPattern.test(nextKeyId)) invalid();
-  if (currentKeyId === nextKeyId) return;
   return runOperation(tx, async query => {
+    const currentKeyId = await readFingerprintKeyId(query, tx.owner);
+    if (currentKeyId === nextKeyId) return;
     let facts;
     try {
       facts = await readVisibilityFacts(query, tx.owner, { textOnly: true, limit: maxRotationFacts + 1 });
@@ -89,6 +93,8 @@ export async function assertPostgresFingerprintRotation(tx, currentKeyId, nextKe
     if (await countMissingDigests(query, tx.owner, [], required) !== 0) {
       throw new CoreError("fingerprint_key_mismatch");
     }
+    await query(`INSERT INTO core_owner_state (user_id, fingerprint_key_id) VALUES ($1, $2)
+      ON CONFLICT (user_id) DO UPDATE SET fingerprint_key_id = EXCLUDED.fingerprint_key_id`, [tx.owner, nextKeyId]);
   });
 }
 

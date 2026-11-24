@@ -141,6 +141,13 @@ count before enabling the adapter. For each fact, admission and visibility
 withhold candidates without a comparable MAC. MAC domains match on algorithm,
 key ID, and pipeline label.
 
+Configure the fingerprint provider with the unit of work and the secrets
+available for staging. Call `publish(owner, keyId)` to activate a configured key
+for one owner. Publication verifies stored digest coverage and updates the
+owner's key ID under the same lock that Core writers use to select their key.
+K2 also refuses publication while a live HMAC-only fact references a
+non-current key. Keep the active secret available on every writer.
+
 With the owner's memory writers paused, the host's cutover script can call
 `backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
 for each required hosted key. The callback receives stored text and returns the

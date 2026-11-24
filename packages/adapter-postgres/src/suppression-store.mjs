@@ -1,12 +1,13 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 import { buildFactStorage, canonicalDigests } from "./facts.mjs";
-import { createSuppressionReads, readCreatedAtMs, readEpoch } from "./suppression-read.mjs";
+import { readCreatedAtMs, readEpoch } from "./memory-visibility.mjs";
+import { createSuppressionReads } from "./suppression-read.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { SuppressionStore } from "../../core/src/ports/privacy.d.ts" */
 /** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
-/** @typedef {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {sessionRefs?: "plain" | "hashed"}} SuppressionOptions */
+/** @typedef {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {sessionRefs?: "plain" | "hashed", allowNonNullNamespace?: boolean}} SuppressionOptions */
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 const CREATED_AT_US = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us";

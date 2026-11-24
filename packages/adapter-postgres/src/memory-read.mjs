@@ -127,8 +127,8 @@ function scopeToken({ owner, keys, clients, since, until, hasWindow }, revision)
   return encode([owner, revision, namespaces, clients?.slice().sort(compareUtf8) ?? null, hasWindow ? [since, until] : null]);
 }
 
-/** @param {string} token */
-function validateToken(token) {
+/** @param {string} token @param {boolean} allowNonNullNamespace */
+function validateToken(token, allowNonNullNamespace) {
   const [owner, revision, keys, clients, bounds, ...extra] = decode(token);
   if (extra.length || !pgText(owner) || !owner || typeof revision !== "string" ||
       !/^(?:0|[1-9][0-9]{0,18})$/u.test(revision) || BigInt(revision) > 9223372036854775807n) {
@@ -139,7 +139,7 @@ function validateToken(token) {
         (bounds !== null && (!Array.isArray(bounds) || bounds.length !== 2))) throw new Error();
     const selection = copyReadScope(owner, { namespaces: keys.map(key => key === "" ? null : JSON.parse(key)),
       clients: clients === null ? undefined : /** @type {string[]} */ (clients),
-      window: bounds === null ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined } });
+      window: bounds === null ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined } }, allowNonNullNamespace);
     if (scopeToken(selection, revision) !== token) throw new Error();
   } catch {
     throw new CoreError("invalid_cursor");
@@ -154,32 +154,32 @@ function stateToken(tx, scope) {
   });
 }
 
-/** @param {Pick<FactMatchPolicy, "hashSessionKey">} [options]
+/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {allowNonNullNamespace?: boolean}} [options]
  * @returns {{ recent: ListRecent, snapshot: ReadSnapshot, hydrate: HydrateItems, fence: VisibilityFence }} */
-export function createPostgresMemoryReads({ hashSessionKey } = {}) {
+export function createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespace = false } = {}) {
   return {
     recent: {
       async recent(tx, scope, page) {
         guardOwner(tx, scope);
-        return memoryPage(tx, copyReadScope(tx.owner, scope), page, false, hashSessionKey);
+        return memoryPage(tx, copyReadScope(tx.owner, scope, allowNonNullNamespace), page, false, hashSessionKey);
       },
     },
     snapshot: {
       async stateToken(tx, scope) {
         guardOwner(tx, scope);
-        return stateToken(tx, copyReadScope(tx.owner, scope));
+        return stateToken(tx, copyReadScope(tx.owner, scope, allowNonNullNamespace));
       },
       async assertUnchanged(tx, scope, token) {
         guardOwner(tx, scope);
-        const selection = copyReadScope(tx.owner, scope);
-        validateToken(token);
+        const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
+        validateToken(token, allowNonNullNamespace);
         if (await stateToken(tx, selection) !== token) throw new CoreError("cursor_stale");
       },
     },
     hydrate: {
       async hydrate(tx, scope, refs, intent) {
         guardOwner(tx, scope);
-        const selection = copyReadScope(tx.owner, scope);
+        const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         const references = copyRefs(refs);
         if (intent !== "recall" && intent !== "read" && intent !== "export") invalid();
         return runOperation(tx, async (query) => {
@@ -191,7 +191,7 @@ export function createPostgresMemoryReads({ hashSessionKey } = {}) {
     fence: {
       async assertVisible(tx, scope, refs, intent) {
         guardOwner(tx, scope);
-        const selection = copyReadScope(tx.owner, scope);
+        const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         const references = copyRefs(refs);
         if (intent !== undefined && intent !== "read") invalid();
         return runOperation(tx, async (query) =>

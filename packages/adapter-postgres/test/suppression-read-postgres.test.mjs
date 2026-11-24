@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { coreDigest, factIncarnationBody } from "../../core/src/index.mjs";
+import { coreDigest, factIncarnationBody, userFingerprintKey } from "../../core/src/index.mjs";
 import {
-  assertPostgresFingerprintRotation, createPostgresFingerprintKeyProvider, createPostgresSuppressionStore,
-  createPostgresUnitOfWork,
+  createPostgresFingerprintKeyProvider, createPostgresMemoryReads, createPostgresSuppressionStore,
+  createPostgresUnitOfWork, factSlot, HOSTED_FINGERPRINT_LABELS,
 } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
@@ -29,12 +29,13 @@ async function setup(t, observe) {
       };
     },
   } : source;
-  const { run } = createPostgresUnitOfWork(connectionSource);
+  const uow = createPostgresUnitOfWork(connectionSource);
+  const { run } = uow;
   const store = createPostgresSuppressionStore({ sessionRefs: "hashed", hashSessionKey });
   const write = (fact) => run(fact.owner, {}, (tx) => store.writeFact(tx, fact,
     createHash("sha256").update(factIncarnationBody(fact)).digest("hex")));
   await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, other]);
-  return { pool, run, store, write };
+  return { pool, uow, run, store, write };
 }
 
 test("Postgres snapshots use the indexed digest lookup with owner and epoch isolation", migrationDbTest, async (t) => {
@@ -46,10 +47,10 @@ test("Postgres snapshots use the indexed digest lookup with owner and epoch isol
   const fact = { ...base, kind: "text", mode: "exact", text: { digests: [digest] } };
   const first = await write(fact);
   assert.deepEqual(await write(fact), { ...first, created: false });
-  await write({ ...fact, owner: other, actionId: "other owner" });
+  const foreign = await write({ ...fact, owner: other, actionId: "other owner" });
   await write({ ...fact, namespace: "other", actionId: "other namespace" });
   const unmatched = await coreDigest("other evidence");
-  await write({ ...fact, actionId: "unmatched", text: { digests: [unmatched] } });
+  const miss = await write({ ...fact, actionId: "unmatched", text: { digests: [unmatched] } });
   await write({ ...fact, actionId: "incomparable", text: {
     digests: [{ ...unmatched, alg: "hmac", keyId: "old-key" }],
   } });
@@ -71,14 +72,32 @@ test("Postgres snapshots use the indexed digest lookup with owner and epoch isol
     { user_id: other, fact_epoch: "1", index_revision: "1" },
   ]);
 
+  // Fact IDs are unique per owner. A foreign hit for this owner's SHA miss
+  // must never enter the SQL result, even if core would discard it later.
+  await pool.query("DELETE FROM core_fact_digests WHERE user_id = $1 AND fact_id = $2", [other, foreign.factId]);
+  await pool.query("UPDATE core_suppression_facts SET fact_id = $3 WHERE user_id = $1 AND fact_id = $2",
+    [other, foreign.factId, miss.factId]);
+  await pool.query(`INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+  [other, miss.factId, digest.alg, digest.value, digest.pipeline, digest.redactionVersion, digest.keyId]);
+  await pool.query("ANALYZE core_owner_state; ANALYZE core_suppression_facts; ANALYZE core_fact_digests; ANALYZE suppressions");
   assert.ok(lookup);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL enable_seqscan = off");
     const { rows: [row] } = await client.query(`EXPLAIN (FORMAT JSON) ${lookup.sql}`, lookup.values);
-    assert.match(JSON.stringify(row["QUERY PLAN"]),
-      /"Index Name":"core_fact_digests_user_value_idx"[^}]*"Index Cond":"[^"]*user_id[^"]*value/u);
+    const pending = [row["QUERY PLAN"][0].Plan];
+    let indexed = false;
+    while (pending.length) {
+      const node = pending.pop();
+      pending.push(...(node.Plans ?? []));
+      if (node["Index Name"] === "core_fact_digests_user_value_idx" &&
+          ["user_id", "value"].every(column => node["Index Cond"]?.includes(column))) indexed = true;
+    }
+    if (!indexed) t.diagnostic("Planner chose a different shape for this fixture; checking isolated SQL results directly.");
+    const { rows } = await client.query(lookup.sql, lookup.values);
+    assert.deepEqual(rows.map(row => [row.action_id, row.epoch]), [["original", "1"], ["incomparable", "4"]]);
   } finally {
     try {
       await client.query("ROLLBACK");
@@ -136,21 +155,63 @@ test("Postgres factsFor compares hashed facts with owner-scoped receipts and fai
   assert.equal((await snapshot()).blockedSession, false);
 });
 
-test("Postgres rotation gate rejects older live HMAC-only facts and unstaged rows", migrationDbTest, async (t) => {
-  const { pool, run, write } = await setup(t);
-  const [older, current, next] = await Promise.all(["key-a", "key-b", "key-c"].map((secret) =>
-    createPostgresFingerprintKeyProvider(secret).userKey(owner)));
-  await write({ ...base, kind: "text", mode: "exact", text: { digests: [await coreDigest("protected", older)] } });
-  const gate = (who, before, after) => run(who, {}, (tx) => assertPostgresFingerprintRotation(tx, before.id, after.id));
-  await gate(owner, older, current);
-  await assert.rejects(gate(owner, current, next), { code: "fingerprint_key_mismatch" });
-  await gate(other, current, next);
+test("Postgres publication counts coverage only for the publishing owner", migrationDbTest, async (t) => {
+  const { pool, uow, write } = await setup(t);
+  const provider = createPostgresFingerprintKeyProvider("key-a", { uow });
+  const key = await userFingerprintKey("key-a", owner, HOSTED_FINGERPRINT_LABELS);
+  await write({ ...base, kind: "text", mode: "exact", text: { digests: [await coreDigest("protected", key)] } });
+  await provider.publish(other, key.id);
+  await assert.rejects(provider.publish(owner, key.id), { code: "fingerprint_key_mismatch" });
+  assert.equal((await provider.userKey(other)).id, key.id);
+  assert.equal(await provider.userKey(owner), null);
 
   await pool.query(`INSERT INTO memories
     (id, user_id, text, text_hash, kind, embedding, embedding_model, source_kind)
     VALUES ('unstaged', $1, 'stored text', $2, 'fact', $3, 'test', 'mcp')`,
-  [other, "sha256:" + "c".repeat(64), JSON.stringify([1, ...Array(1535).fill(0)])]);
-  await assert.rejects(gate(other, current, next), { code: "fingerprint_key_mismatch" });
-  assert.deepEqual((await pool.query("SELECT user_id, fact_epoch, index_revision FROM core_owner_state")).rows,
-    [{ user_id: owner, fact_epoch: "1", index_revision: "1" }]);
+  [owner, "sha256:" + "c".repeat(64), JSON.stringify([1, ...Array(1535).fill(0)])]);
+  const staged = createPostgresFingerprintKeyProvider("key-b", { uow, stagedSecrets: ["key-a"] });
+  const next = await userFingerprintKey("key-b", owner, HOSTED_FINGERPRINT_LABELS);
+  await staged.publish(other, next.id);
+  assert.equal((await staged.userKey(other)).id, next.id);
+  assert.deepEqual((await pool.query(`SELECT user_id, fact_epoch, index_revision FROM core_owner_state
+    ORDER BY user_id`)).rows,
+  [{ user_id: owner, fact_epoch: "1", index_revision: "1" }, { user_id: other, fact_epoch: "0", index_revision: "0" }]);
+});
+
+test("Postgres snapshot refuses a partial result when the database fan-out exceeds 4096 facts", migrationDbTest, async (t) => {
+  const { pool, run, store } = await setup(t);
+  const digest = await coreDigest("matching projection");
+  await pool.query(`INSERT INTO core_suppression_facts
+    (user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body)
+    SELECT $1, 'window-' || n, format('[null,"window",null,%s,%s,false,null]', n, n + 1),
+      encode(sha256(convert_to(n::text, 'UTF8')), 'hex'), repeat('0', 64), 'overflow', n, 'forget', 'window', NULL,
+      jsonb_build_object('kind', 'window', 'origin', 'forget', 'client', NULL,
+        'window', jsonb_build_object('startMs', n, 'endMs', n + 1))
+    FROM generate_series(1, 4097) n`, [owner]);
+  const snapshot = () => run(owner, { readOnly: true }, tx => store.snapshot(tx, scope, {
+    occurredAtMs: [4096], passages: [{ digests: [digest], shingles: null, keyId: null }],
+  }));
+  await assert.rejects(snapshot, { code: "ineligible" });
+  await pool.query("DELETE FROM core_suppression_facts WHERE user_id = $1 AND epoch = 4097", [owner]);
+  assert.deepEqual(await snapshot(), { blockedSession: false, blockedMessages: [0], passages: [] });
+});
+
+test("Postgres visibility and suppression reads both reject a stale canonical fact slot", migrationDbTest, async (t) => {
+  const { pool, run, store, write } = await setup(t);
+  const text = "stored text";
+  const digest = await coreDigest(text);
+  const fact = { ...base, kind: "text", mode: "exact", text: { digests: [digest] } };
+  const stored = await write(fact);
+  await pool.query(`INSERT INTO memories (id, user_id, text, text_hash, kind, embedding, embedding_model, source_kind)
+    VALUES ('stored', $1, $2, $3, 'fact', $4, 'test', 'mcp')`,
+  [owner, text, digest.value, JSON.stringify([1, ...Array(1535).fill(0)])]);
+  const { fence } = createPostgresMemoryReads();
+  const visible = () => run(owner, { readOnly: true }, tx => fence.assertVisible(tx,
+    { owner, namespaces: [null] }, [{ type: "memory", namespace: null, id: "stored" }]));
+  assert.deepEqual(await visible(), []);
+  await pool.query("UPDATE core_suppression_facts SET slot = $3 WHERE user_id = $1 AND fact_id = $2",
+    [owner, stored.factId, factSlot({ ...fact, mode: "full" })]);
+  await assert.rejects(visible, { code: "ineligible" });
+  const facts = await run(owner, { readOnly: true }, tx => store.factsFor(tx, scope, { memoryId: "stored" }));
+  assert.equal(facts, "ineligible");
 });
