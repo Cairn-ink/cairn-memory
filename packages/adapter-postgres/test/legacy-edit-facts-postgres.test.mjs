@@ -9,7 +9,7 @@ import { createMemoryService } from "../../core/src/service/index.mjs";
 import {
   createPostgresCapturePorts, createPostgresPauseStore,
   createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresSuppressionStore, createPostgresUnitOfWork, legacySuppressionToFact,
+  createPostgresSuppressionStore, createPostgresUnitOfWork, factSlot, legacySuppressionToFact, legacySuppressionsToFacts,
 } from "../src/index.mjs";
 import { readVisibilityFacts } from "../src/memory-visibility.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
@@ -40,12 +40,14 @@ async function fixture(t) {
   await pool.query("INSERT INTO users (id) VALUES ($1)", [owner]);
   await pool.query("INSERT INTO core_owner_state (user_id, legacy_facts_ready) VALUES ($1, true)", [owner]);
 
-  async function memory(id, text, { kind = "web", created = later, digests = [], vector = close, logicalMs = null } = {}) {
+  async function memory(id, text, {
+    kind = "web", created = later, textHash, digests = [], vector = close, logicalMs = null,
+  } = {}) {
     const { value } = await hostedV1Digest(text);
     await pool.query(`INSERT INTO memories (id, user_id, text, text_hash, kind, embedding, embedding_model,
       source_kind, created_at, updated_at, core_digests, core_created_at_ms)
       VALUES ($1, $2, $3, $4, 'fact', $5, $6, $7, $8, $9, $10, $11)`,
-    [id, owner, text, value, JSON.stringify(vector), model, kind, created, later, JSON.stringify(digests), logicalMs]);
+    [id, owner, text, textHash ?? value, JSON.stringify(vector), model, kind, created, later, JSON.stringify(digests), logicalMs]);
   }
 
   async function legacyText(origin, text = original, {
@@ -93,8 +95,7 @@ async function fixture(t) {
   }
 
   async function copyFacts() {
-    for (const row of await legacyRows()) {
-      const fact = legacySuppressionToFact(row, owner);
+    for (const fact of legacySuppressionsToFacts(await legacyRows(), owner)) {
       const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
       await uow.run(owner, {}, tx => suppressions.writeFact(tx, fact, incarnation));
     }
@@ -104,18 +105,33 @@ async function fixture(t) {
   return { pool, uow, memory, memoryStore, suppressions, legacyText, visible, exactResaveIsBlocked, legacyRows, copyFacts };
 }
 
-test("legacy edit facts hide exact SHA and HMAC aliases and leave a captured edit replacement visible", migrationDbTest, async t => {
+test("legacy edit facts hide physical SHA and HMAC matches and keep alias-only and replacement rows visible", migrationDbTest, async t => {
   const f = await fixture(t);
   await f.legacyText("edit", original, { textHmac: mac.value, key: keyId, shingles: ["ab"] });
+  const physicalMac = "c".repeat(64);
+  const physicalHash = `hmac:${physicalMac}`;
+  await f.legacyText("edit", original, { id: "keyed-edit", textHash: physicalHash, key: keyId });
   await f.memory("replacement", "Notebook goes on the middle shelf", { kind: "plugin" });
   await f.exactResaveIsBlocked(original);
   await f.exactResaveIsBlocked("Notebook keyed alias", [mac]);
   await f.memory("sha-hit", original);
   await f.memory("mac-hit", "Notebook keyed alias", { digests: [mac] });
-  const ids = ["replacement", "sha-hit", "mac-hit"];
-  await f.visible(ids, ["replacement"]);
+  await f.memory("physical-mac-hit", "Notebook physical hash", { textHash: physicalHash, digests: [mac] });
+  const ids = ["replacement", "sha-hit", "mac-hit", "physical-mac-hit"];
+  await f.visible(ids, ["replacement", "mac-hit"]);
   await f.copyFacts();
-  await f.visible(ids, ["replacement"]);
+  await f.visible(ids, ["replacement", "mac-hit"]);
+});
+
+test("a physical HMAC match hides a later explicit row under a full fact even when its digest aliases miss", migrationDbTest, async t => {
+  const f = await fixture(t);
+  const textHash = `hmac:${"c".repeat(64)}`;
+  await f.legacyText("forget", original, { textHash, key: keyId });
+  await f.memory("physical-hit", "Notebook physical hash", { textHash, digests: [mac] });
+  await f.memory("physical-miss", "Notebook different hash", { digests: [mac] });
+  await f.visible(["physical-hit", "physical-miss"], ["physical-miss"]);
+  await f.copyFacts();
+  await f.visible(["physical-hit", "physical-miss"], ["physical-miss"]);
 });
 
 for (const origin of ["forget", "correct", "backfill", null]) {
@@ -160,8 +176,9 @@ test("public converter agrees with the read union for every legacy kind and pres
   }
   assert.equal(byId.size, 5);
   assert.deepEqual(byId.get("edit").fact.text, { digests: [mac] });
+  assert.equal(byId.get("edit").fact.legacyTextHash, `hmac:${mac.value}`);
   assert.equal(byId.get("forget").fact.explicitSaveExemptAfterUs, cutoffUs);
-  assert.equal(byId.get("null-origin").fact.explicitSaveExemptAfterUs, undefined);
+  assert.equal(byId.get("null-origin").fact.explicitSaveExemptAfterUs, "infinity");
   assert.deepEqual(byId.get("source").fact.session, { client: "example-client", sessionId: "example-source" });
   assert.deepEqual(byId.get("range").fact.window, { startMs: 1735689600000, endMs: 1735689600001 });
 });
@@ -194,6 +211,63 @@ test("the core exemption has a strict format and preserves shingle matching for 
   assert.equal(factHidesRow(stored, { ...row, type: "raw" }), true);
 });
 
+test("core and the Postgres snapshot restrict exempting cutoffs to full forget, correct, and backfill facts", async () => {
+  const fact = { ...scope, actionId: "test", kind: "text", mode: "full",
+    text: { digests: [await hostedV1Digest(original)] } };
+  for (const origin of ["forget", "correct", "backfill", "edit", "import"]) {
+    for (const explicitSaveExemptAfterUs of ["0", "-infinity", "infinity"]) {
+      const candidate = { ...fact, origin, explicitSaveExemptAfterUs };
+      if (explicitSaveExemptAfterUs !== "infinity" && (origin === "edit" || origin === "import")) {
+        assert.throws(() => validateSuppressionFact(candidate), { code: "invalid_input" });
+        assert.throws(() => factSlot(candidate), { code: "invalid_input" });
+      } else {
+        assert.equal(validateSuppressionFact(candidate), candidate);
+        assert.equal(typeof factSlot(candidate), "string");
+      }
+    }
+  }
+  for (const other of [{ ...fact, mode: "exact" }, { ...scope, actionId: "test", kind: "identity", memoryId: "memory" }]) {
+    const candidate = { ...other, origin: "forget", explicitSaveExemptAfterUs: "infinity" };
+    assert.throws(() => validateSuppressionFact(candidate), { code: "invalid_input" });
+    assert.throws(() => factSlot(candidate), { code: "invalid_input" });
+  }
+});
+
+for (const cutoff of ["-infinity", "infinity"]) {
+  test(`a legacy ${cutoff} cutoff has strict read and write boundaries and leaves edit matching exact`, migrationDbTest, async t => {
+    const f = await writeFixture(t, { keyed: false });
+    await f.legacyText("forget", forgottenSentence, { created: cutoff });
+    await f.legacyText("edit", original, { id: "edit", created: cutoff });
+    await f.memory("finite", "Notebook is near the lantern");
+    await f.memory("equal", "Notebook is near the light", { created: cutoff, logicalMs: cutoff === "-infinity" ? 0 : cutoffMs });
+    await f.memory("edited", original, { vector: far });
+    const ids = ["finite", "equal", "edited"];
+    const wanted = cutoff === "-infinity" ? ["finite"] : [];
+    await f.visible(ids, wanted);
+    await f.copyFacts();
+    await f.visible(ids, wanted);
+    const status = cutoff === "-infinity" ? "saved" : "suppressed";
+    assert.equal((await f.service.save(scope, nearSentence, web)).status, status);
+    assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, status === "saved" ? 4 : 3);
+  });
+}
+
+test("copying repeated forgets retains the latest cutoff per slot regardless of row order", migrationDbTest, async t => {
+  const f = await fixture(t);
+  await f.legacyText("forget");
+  await f.legacyText("forget", original, { id: "later-forget", created: "2025-01-01T00:00:00.000600Z" });
+  await f.memory("between", "Notebook is on the middle shelf");
+  await f.visible(["between"], []);
+  const rows = await f.legacyRows();
+  const facts = legacySuppressionsToFacts(rows, owner);
+  assert.equal(facts.length, 1);
+  assert.deepEqual(legacySuppressionsToFacts(rows.reverse(), owner), facts);
+  assert.equal(facts[0].explicitSaveExemptAfterUs, "1735689600000600");
+  await f.copyFacts();
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM core_suppression_facts")).rows[0].count, 1);
+  await f.visible(["between"], []);
+});
+
 const web = { kind: "web", client: null, sessionId: null };
 const mcp = { ...web, kind: "mcp" };
 const forgottenSentence = "The lantern is stored in the cellar.";
@@ -202,9 +276,9 @@ const unrelatedSentence = "A bicycle needs new tires.";
 const cutoffMs = Number(BigInt(cutoffUs) / 1000n);
 const far = [0, 1, ...Array(1534).fill(0)];
 
-async function writeFixture(t) {
+async function writeFixture(t, { keyed = true } = {}) {
   const f = await fixture(t);
-  const key = await userFingerprintKey("fixture secret", owner, coreFingerprintLabels);
+  const key = keyed ? await userFingerprintKey("fixture secret", owner, coreFingerprintLabels) : null;
   const reads = createPostgresMemoryReads();
   let now = cutoffMs + 1;
   const unused = () => assert.fail("unexpected dependency call");
@@ -221,9 +295,9 @@ async function writeFixture(t) {
     gate: { async assertOpen() {} }, tokens: { countTokens: unused },
     clock: { nowMs: () => now, monotonicMs: unused, sha256Hex: input => createHash("sha256").update(input).digest("hex"), hmacHex: unused },
   });
-  const shingles = await passageShingles(forgottenSentence, key, coreFingerprintLabels);
+  const shingles = key && await passageShingles(forgottenSentence, key, coreFingerprintLabels);
   return { ...f, service, setClock: ms => { now = ms; },
-    forget: (origin = "forget", created) => f.legacyText(origin, forgottenSentence, { key: key.id, shingles, created }),
+    forget: (origin = "forget", created) => f.legacyText(origin, forgottenSentence, { key: key?.id ?? null, shingles, created }),
     fence: id => f.uow.run(owner, { readOnly: true }, tx => reads.fence.assertVisible(tx, readSet, [ref(id)])),
   };
 }
@@ -248,12 +322,49 @@ test("later explicit saves still withhold an exact re-save and multi-sentence co
   await f.forget();
   const cases = [
     ["exact re-save", forgottenSentence],
-    ["exact sentence", `A journal entry follows. ${forgottenSentence}`],
     ["multi-sentence shingle containment", `A journal entry follows. The note reads: ${forgottenSentence}`],
   ];
   for (const [label, text] of cases) {
     assert.equal((await f.service.save(scope, text, web)).status, "suppressed", label);
   }
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
+});
+
+test("a lowercase exact sentence is withheld under a keyless SHA-only legacy forget", migrationDbTest, async t => {
+  const f = await writeFixture(t, { keyed: false });
+  await f.forget();
+  const text = `A journal entry follows. ${forgottenSentence.toLowerCase()}`;
+  for (const source of [web, mcp]) {
+    assert.equal((await f.service.save(scope, text, source)).status, "suppressed");
+  }
+  await f.copyFacts();
+  for (const source of [web, mcp]) {
+    assert.equal((await f.service.save(scope, text, source)).status, "suppressed");
+  }
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
+});
+
+test("an explicit duplicate cannot use the insert exemption to attach a receipt or advance recency", migrationDbTest, async t => {
+  const f = await writeFixture(t);
+  await f.memory("duplicate", nearSentence, { kind: "plugin", created: earlier, vector: far });
+  await f.forget();
+  assert.deepEqual(await f.fence("duplicate"), [ref("duplicate")]);
+  const updatedAt = () => f.pool.query("SELECT updated_at::text FROM memories WHERE id = 'duplicate'");
+  const before = (await updatedAt()).rows;
+  const receipt = { client: "fixture", sessionId: "source", messageId: "message", role: "user", occurredAtMs: cutoffMs + 1 };
+  assert.equal((await f.service.save(scope, nearSentence, web, "fact", { receipt })).status, "suppressed");
+  assert.deepEqual((await updatedAt()).rows, before);
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM core_memory_receipts")).rows[0].count, 0);
+  assert.deepEqual(await f.fence("duplicate"), [ref("duplicate")]);
+});
+
+test("a null-origin SHA-only fact blocks a later explicit vector match before and after copying", migrationDbTest, async t => {
+  const f = await writeFixture(t, { keyed: false });
+  await f.forget(null);
+  assert.equal((await f.service.save(scope, nearSentence, web)).status, "suppressed");
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
+  await f.copyFacts();
+  assert.equal((await f.service.save(scope, nearSentence, web)).status, "suppressed");
   assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
 });
 

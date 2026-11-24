@@ -43,7 +43,9 @@ export interface IdentityFact extends FactBase {
 export interface TextFact extends FactBase {
   kind: "text";
   mode: FactMode;
-  /** Full mode only. Canonical integer epoch microseconds. Later physical mcp/web saves skip vector matching. */
+  /** Physical hash preserved when copying a hosted legacy suppression. */
+  legacyTextHash?: string;
+  /** Full mode only. Epoch microseconds, "-infinity", or "infinity". Only forget, correct, and backfill can exempt later saves. */
   explicitSaveExemptAfterUs?: string;
   text: {
     /** Non-empty, deduped by (alg, value) for old digests and by signing domain, pipeline, version and value for labelled MACs. */

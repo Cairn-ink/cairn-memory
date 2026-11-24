@@ -102,7 +102,7 @@ function matchReader() {
         fact: (value) => record(value, [
           "kind", "origin", "owner", "namespace", "actionId", "memoryId", "throughRevision", "mode", "client",
           "unknownTime", "anchor", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16", "contentDigest",
-          "explicitSaveExemptAfterUs",
+          "explicitSaveExemptAfterUs", "legacyTextHash",
         ], {
           text: (value) => record(value, ["keyId"], { ...passageLists, embedding: (value) => list(value, scalar) }),
           sourceMemory: incarnation,
@@ -286,6 +286,13 @@ function windowMatches(fact, client, time) {
   return fact.client !== null && !nonempty(client) ? "ineligible" : true;
 }
 
+/** @param {bigint | "-Infinity" | "Infinity" | undefined} createdAtUs @param {string} cutoff */
+function isAfterExplicitSaveCutoff(createdAtUs, cutoff) {
+  if (createdAtUs === undefined || createdAtUs === "-Infinity" || cutoff === "infinity") return false;
+  if (createdAtUs === "Infinity") return true;
+  return typeof createdAtUs === "bigint" && (cutoff === "-infinity" || createdAtUs > BigInt(cutoff));
+}
+
 /** @param {SuppressionFact} fact @param {FactMatchRow} row @param {FactMatchPolicy} policy @returns {FactMatchResult} */
 function hidesRow(fact, row, policy) {
   const scoped = scopeMatches(fact, row?.scope);
@@ -301,7 +308,7 @@ function hidesRow(fact, row, policy) {
       const cutoff = fact.explicitSaveExemptAfterUs;
       const exempt = cutoff !== undefined && row.type !== "raw" &&
         (row.sourceKind === "mcp" || row.sourceKind === "web") &&
-        (row.createdAtUs === "Infinity" || typeof row.createdAtUs === "bigint" && row.createdAtUs > BigInt(cutoff));
+        isAfterExplicitSaveCutoff(row.createdAtUs, cutoff);
       return matchPassages([row], fact, policy, undefined, undefined, exempt);
     }
     case "session":
@@ -329,7 +336,7 @@ function blocksIncoming(fact, incoming, policy) {
       const cutoff = fact.explicitSaveExemptAfterUs;
       const createdAtUs = incoming.explicitSaveCreatedAtUs;
       const skipVector = explicit !== undefined && (cutoff === undefined ||
-        (incoming.sourceMemory == null && typeof createdAtUs === "bigint" && createdAtUs > BigInt(cutoff)));
+        (incoming.sourceMemory == null && typeof createdAtUs === "bigint" && isAfterExplicitSaveCutoff(createdAtUs, cutoff)));
       return matchPassages(incoming.passages, fact, policy, explicit, incoming.sourceMemory, skipVector);
     }
     case "session":

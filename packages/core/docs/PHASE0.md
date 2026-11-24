@@ -797,11 +797,13 @@ The MCP host uses these status mappings.
 
 ## Addendum 19 — Legacy explicit-save parity
 
-A full text suppression fact may persist `explicitSaveExemptAfterUs` as a
-canonical integer string of microseconds since the Unix epoch. The matcher
-skips vector matching for a memory with physical source kind `mcp` or `web`
-and a physical creation time strictly later than that timestamp. Exact digests
-and any containment checks enabled by the caller still apply. On writes, only
-a new `mcp` or `web` save qualifies, using the server clock in the save
-transaction. When the field is absent, full text matching follows the caller's
-existing policy.
+A full text suppression fact with origin `forget`, `correct`, or `backfill`
+may persist `explicitSaveExemptAfterUs` as a canonical integer string of epoch
+microseconds or as `-infinity`. The matcher skips vector matching for physical
+`mcp` or `web` memories with a creation time strictly later than that cutoff.
+Any full text fact may use `infinity` to keep vector matching enabled at every
+timestamp. Exact digests and any containment checks enabled by the caller
+still apply. On writes, only an explicit save that inserts a new physical row
+can qualify, using the server clock in the save transaction. Duplicate touches
+use full matching for cutoff-bearing facts. When the field is absent, full text
+matching follows the caller's existing policy.

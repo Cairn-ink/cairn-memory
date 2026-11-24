@@ -80,9 +80,12 @@ receipts, raw data, lineage, or facts. This is the value returned as
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
 reference can be indexed together.
 
-Use `legacySuppressionToFact(row, owner)` to convert legacy suppressions before
-copying them into `core_suppression_facts`. The live read union uses the same
-converter. This query projects the row shape the converter expects.
+Use `legacySuppressionsToFacts(rows, owner)` to convert an owner's legacy rows
+before writing it into `core_suppression_facts`. The batch helper calls
+`legacySuppressionToFact(row, owner)`, which the live read union also uses.
+The batch helper emits one fact per storage slot and keeps the latest cutoff
+when repeated suppressions share a slot. This query projects the expected row
+shape.
 
 ```sql
 SELECT kind, origin, client, session_id, text_hash, text_hmac, key_id,
@@ -93,15 +96,16 @@ SELECT kind, origin, client, session_id, text_hash, text_hmac, key_id,
 FROM suppressions WHERE user_id = $1
 ```
 
-The helper returns a validated fact with the supplied owner and `actionId: "legacy"`.
-The copy still supplies storage IDs and epochs. Text rows with `origin = 'edit'`
-use exact mode with their stored digest aliases. Text rows with origin `forget`,
-`correct`, or `backfill` use full mode and exempt physical `mcp` or `web` memories
-created strictly after the suppression from vector matching. Reads also check
-exact digests. On writes, the exemption applies only to new explicit saves and
-uses the server clock for the save transaction. Exact passage and applicable
-shingle containment checks still run. Text rows with a null origin use full
-mode without a timestamp exemption.
+The helper returns validated facts with the supplied owner and `actionId: "legacy"`.
+The copy supplies storage IDs and epochs. A read matches a legacy edit by
+physical `text_hash` equality alone. Full legacy facts also use digest and
+vector matching. For `forget`, `correct`, and `backfill`, physical `mcp` and
+`web` memories created strictly after the cutoff skip vector matching. A cutoff
+of `-infinity` exempts later timestamps, while `infinity` keeps vector matching
+enabled at every timestamp. Null-origin text suppressions use `infinity`.
+On writes, only a new physical row can qualify, using the server clock in the
+save transaction. Duplicate touches use the full legacy vector policy. Exact
+passage and applicable shingle containment checks also run.
 
 The slot helper and insert builder in `src/facts.mjs` snapshot the fact before
 running core validation and the adapter's storage checks. They derive all
