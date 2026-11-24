@@ -6,12 +6,14 @@ import { checkSourceLineage, createCaptureProofs, filterSources } from "./captur
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
+import { readVisibilityFacts } from "./memory-visibility.mjs";
+import { createImportTextFilter, copyWithheldPositions, rawSpanFilter } from "./raw-import.mjs";
 import { LATE_PROVEN_CLOSURE, MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
 import { purgeRawText, scrubLedger } from "./raw-purge.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { Scope } from "../../core/src/ports/common.d.ts" */
-/** @import { RawCapture } from "../../core/src/ports/capture.d.ts" */
+/** @import { CaptureMessage, RawCapture } from "../../core/src/ports/capture.d.ts" */
 /** @import { RawStore, SessionLineageStore, ProvenClosure } from "../../core/src/ports/privacy.d.ts" */
 /** @import { StoredFact, TextFact } from "../../core/src/suppression-fact.mjs" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
@@ -20,7 +22,7 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {{client: string, sessionId: string}} Session */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 /** @typedef {Connection["query"]} Query */
-/** @typedef {Omit<RawCapture, "archive"> & RawStore & {
+/** @typedef {Omit<Required<RawCapture>, "archive"> & RawStore & {
  *   archive: (...args: Parameters<RawCapture["archive"]>) => Promise<{ archived: number, withheld?: number }>,
  * }} PostgresRaw */
 
@@ -111,6 +113,29 @@ function rawScope(scope) {
   return scope;
 }
 
+/** @param {readonly CaptureMessage[]} messages */
+function copyArchiveMessages(messages) {
+  const batch = copyMessages(messages);
+  for (const { id, content } of batch) {
+    identifier(id);
+    if (!pgText(content)) throw new CoreError("invalid_input");
+  }
+  return batch;
+}
+
+/** @param {CaptureMessage} message @param {string | null} occurred_at */
+function archiveRecord({ id, role, content }, occurred_at) {
+  return { id: crypto.randomUUID(), message_id: id, role, content, occurred_at };
+}
+
+/** @param {Query} query @param {{scope: Scope} & Session} source @param {ReturnType<typeof archiveRecord>[]} records */
+async function archiveRecords(query, { scope, client, sessionId }, records) {
+  if (!records.length) return 0;
+  const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
+  if (rows.length) await advanceIndex(query, scope.owner);
+  return rows.length;
+}
+
 /** @param {RawOptions} options @returns {{ raw: PostgresRaw, sessionLineage: SessionLineageStore }} */
 export function createPostgresRawPorts(options) {
   const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
@@ -164,11 +189,7 @@ export function createPostgresRawPorts(options) {
       return pauseLockedWrite(tx, () => {
         const capture = copyKey(tx, key);
         rawScope(capture.scope);
-        const batch = copyMessages(messages);
-        for (const { id, content } of batch) {
-          identifier(id);
-          if (!pgText(content)) throw new CoreError("invalid_input");
-        }
+        const batch = copyArchiveMessages(messages);
         return async (query) => {
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
           // An unrepresentable time cannot be archived as an unknown time.
@@ -190,16 +211,45 @@ export function createPostgresRawPorts(options) {
               return eligible.has(JSON.stringify([id, content]));
             });
           }
+          const facts = await readVisibilityFacts(query, scope.owner, { rawSpans: true });
+          const spanBlocked = rawSpanFilter(facts, capture, hashSessionKey);
           const records = positions.flatMap((index) => {
             const occurred_at = hostedTimes[index];
-            if (occurred_at === undefined) return [];
-            const { id, role, content } = batch[index];
-            return [{ id: crypto.randomUUID(), message_id: id, role, content, occurred_at }];
+            if (occurred_at === undefined || spanBlocked(batch[index])) return [];
+            return [archiveRecord(batch[index], occurred_at)];
           });
-          if (!records.length) return result;
-          const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
-          if (rows.length) await advanceIndex(query, scope.owner);
-          return { ...result, archived: rows.length };
+          return { ...result, archived: await archiveRecords(query, capture, records) };
+        };
+      });
+    },
+
+    importArchive(tx, scope, session, messages, options) {
+      return pauseLockedWrite(tx, () => {
+        const source = { scope: rawScope(copyScope(tx, scope)), ...copySession(session) };
+        const batch = copyArchiveMessages(messages);
+        const withheld = copyWithheldPositions(options, batch.length);
+        return async (query) => {
+          const counts = { archived: 0, existing: 0, withheld: batch.length };
+          if (!batch.length) return counts;
+          const times = batch.map(({ occurredAtMs }) => occurredAtMs);
+          const proofs = await captureProofs(source, batch);
+          const positions = await filterSources(query, source, times, proofs, "import", captureProofs, hashSessionKey);
+          if (!positions.length) return counts;
+
+          const facts = await readVisibilityFacts(query, source.scope.owner, { rawSpans: true });
+          const spanBlocked = rawSpanFilter(facts, source, hashSessionKey);
+          const textBlocked = createImportTextFilter(facts, source.scope, fingerprintKeys);
+          const records = [];
+          for (const position of positions) {
+            if (withheld.has(position)) continue;
+            const message = batch[position];
+            const { content, occurredAtMs } = message;
+            const occurredAt = occurredAtMs === null ? null : hostedTime(occurredAtMs);
+            if ((occurredAtMs !== null && occurredAt === null) || spanBlocked(message) || await textBlocked(content)) continue;
+            records.push(archiveRecord(message, occurredAt));
+          }
+          const archived = await archiveRecords(query, source, records);
+          return { archived, existing: records.length - archived, withheld: batch.length - records.length };
         };
       });
     },

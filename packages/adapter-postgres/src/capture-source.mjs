@@ -169,7 +169,7 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
 
 /**
  * @param {Connection["query"]} query @param {Source} source
- * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert" | "raw"} mode
+ * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert" | "raw" | "import"} mode
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
  */
 export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey) {
@@ -182,6 +182,7 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
     factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
   if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
+  // Import supplies fresh proofs. A comparable proof for edited content can rule out an ID match.
   const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey, mode === "raw");
   if (verdict === "allowed") return positions;
   if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");

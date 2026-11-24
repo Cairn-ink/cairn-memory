@@ -1,18 +1,20 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
+import { copyFinishItems, finishMemories, readIndexRevision } from "./capture-finish.mjs";
 import {
   clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources } from "./capture-source.mjs";
+import { createPostgresMemoryStore } from "./memory-store.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
-/** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
+/** @import { CaptureClaim, CaptureFinish, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
 /** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
 /** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
-/** @typedef {Required<CaptureClaim> & SourceFilter} CapturePorts */
+/** @typedef {Required<CaptureClaim> & SourceFilter & CaptureFinish} CapturePorts */
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{
  *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
@@ -60,6 +62,10 @@ const WAS_ABANDONED = `SELECT 1 FROM capture_events WHERE user_id = $1 AND core_
 const ABANDON = `UPDATE capture_events SET core_lease_token = NULL, core_lease_expires_at_ms = NULL,
     core_lease_sources = NULL, core_dispatched = false, core_failure_code = $3,
     core_abandoned_tokens = array_append(core_abandoned_tokens, $2::uuid) WHERE ${TOKEN}`;
+const COMPLETE = `UPDATE capture_events SET status = 'completed', memory_count = GREATEST(memory_count, $3),
+    core_result = $4::jsonb, core_lease_token = NULL, core_lease_expires_at_ms = NULL,
+    core_lease_sources = NULL, core_dispatched = false, core_failure_code = NULL
+  WHERE ${TOKEN} AND status = 'pending' RETURNING 1`;
 
 /** @param {Pick<CaptureKey, "scope" | "client" | "eventId">} key */
 function identity({ scope, client, eventId }) {
@@ -115,18 +121,22 @@ async function reserveEvent(query, key, batch) {
   return concurrent;
 }
 
-/** @param {Query} query @param {string} owner @param {string} token @param {() => number} now */
-async function requireLiveToken(query, owner, token, now) {
+/** @param {Query} query @param {string} owner @param {string} token @param {() => number} now @param {string} [columns] */
+async function requireLiveToken(query, owner, token, now, columns = "") {
   const { rows: [row] } = await query(`SELECT core_lease_expires_at_ms::text, core_dispatched
+    ${columns}
     FROM capture_events WHERE ${TOKEN} FOR UPDATE`, [owner, token]);
-  if (!row || !hasLiveLease(row, clockMs(now()))) throw new CoreError("stale_admission");
-  return row;
+  if (!row) throw new CoreError("stale_admission");
+  const nowMs = now();
+  if (!hasLiveLease(row, clockMs(nowMs))) throw new CoreError("stale_admission");
+  return { row, nowMs };
 }
 
 /** @param {CaptureOptions} options @returns {CapturePorts} */
 export function createPostgresCapturePorts(options) {
-  const { now = Date.now, lineageSecret, hashSessionKey } = options ?? {};
+  const { now = Date.now, lineageSecret, hashSessionKey, nearDuplicate, allowNonNullNamespace } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
+  const memories = createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace, hashSessionKey });
 
   return {
     async claim(tx, key, messages, options) {
@@ -163,7 +173,7 @@ export function createPostgresCapturePorts(options) {
         const lease = readToken(token);
         return async (query) => {
           if (lease === null) throw new CoreError("stale_admission");
-          const row = await requireLiveToken(query, tx.owner, lease, now);
+          const { row } = await requireLiveToken(query, tx.owner, lease, now);
           if (!row.core_dispatched) {
             await query(`UPDATE capture_events SET core_dispatched = true WHERE ${TOKEN}`, [tx.owner, lease]);
           }
@@ -184,6 +194,48 @@ export function createPostgresCapturePorts(options) {
           await requireLiveToken(query, tx.owner, lease, now);
           await query(ABANDON, [...params, retryable ? null : code]);
         };
+      });
+    },
+
+    async finish(tx, token, items) {
+      const { scope, source, batch, lease, revision, nowMs } = await pauseLockedWrite(tx, () => {
+        const lease = readToken(token);
+        const batch = copyFinishItems(items);
+        return async (query) => {
+          if (lease === null) throw new CoreError("stale_admission");
+          const { row, nowMs } = await requireLiveToken(query, tx.owner, lease, now,
+            `, status, core_namespace, client, session_id, core_admitted, core_lease_sources, raw_request, core_outbox_metadata`);
+          if (row.status !== "pending" || !row.core_lease_sources) throw new CoreError("stale_admission");
+          const scope = { owner: tx.owner, namespace: row.core_namespace };
+          const source = { kind: /** @type {const} */ ("capture"), client: row.client, sessionId: row.session_id };
+          if (row.core_admitted) {
+            const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
+            const proofs = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources).proofs;
+            const currentProofs = await captureProofs({ scope, client: row.client }, current);
+            const blankIds = new Set(current.filter(({ content }) => !content).map(({ id }) => id));
+            if ((batch.length > 0 && blankIds.size > 0 && current.every(({ content }) => !content)) ||
+                !proofs || !currentProofs || proofs.length !== currentProofs.length ||
+                currentProofs.some((proof, i) => proof.message_mac !== proofs[i].message_mac || proof.content_mac !== proofs[i].content_mac) ||
+                batch.some(({ receipts }) => receipts.some((receipt) => receipt.client === source.client &&
+                  receipt.sessionId === source.sessionId && blankIds.has(receipt.messageId)))) {
+              throw new CoreError("suppressed");
+            }
+          }
+          return { scope, source, batch, lease, revision: await readIndexRevision(query, tx.owner), nowMs };
+        };
+      });
+
+      const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories, hashSessionKey);
+      return runOperation(tx, async (query) => {
+        const current = await readIndexRevision(query, tx.owner);
+        // The memory store bumps per write. A capture publishes one revision for its whole batch.
+        result.indexRevision = Math.min(current, revision + 1);
+        if (current !== result.indexRevision) {
+          await query("UPDATE core_owner_state SET index_revision = $2 WHERE user_id = $1", [tx.owner, result.indexRevision]);
+        }
+        const completed = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
+        if (completed.rows.length !== 1) throw new CoreError("stale_admission");
+        return result;
       });
     },
 
