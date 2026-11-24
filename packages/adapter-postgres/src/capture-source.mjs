@@ -1,73 +1,26 @@
 import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
+import { CHECK_LINEAGE, LEGACY_EVENTS } from "./raw-lineage-query.mjs";
 
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { StoredFact } from "../../core/src/suppression-fact.mjs" */
+/** @import { Scope } from "../../core/src/ports/common.d.ts" */
 /** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 
-const MAX_LINEAGE_SESSIONS = 1_000;
-const MAX_LINEAGE_VERTICES = 20_000;
-// Traverse sessions and proof pairs separately so each pair is expanded only once.
-/** @param {string} client @param {boolean} [ordered] */
-function lineageVertices(client, ordered = false) {
-  const session = ordered ? "l.session_id BETWEEN v.session_id AND v.session_id" : "l.session_id = v.session_id";
-  const ids = ordered ? `ORDER BY l.session_id, l.message_mac, l.content_mac LIMIT ${MAX_LINEAGE_VERTICES + 1}` : "";
-  const peers = ordered ? `ORDER BY l.session_id LIMIT ${MAX_LINEAGE_VERTICES + 1}` : "";
-  return `vertices(session_id, message_mac, content_mac) AS (
-    SELECT session_id, message_mac, content_mac FROM roots
-    UNION
-    SELECT next.session_id, next.message_mac, next.content_mac
-    FROM vertices v CROSS JOIN LATERAL (
-      (SELECT NULL::text, l.message_mac, l.content_mac
-      FROM capture_raw_lineage l
-      WHERE l.user_id = $1 AND l.client = ${client} AND ${session} AND l.content_mac IS NOT NULL ${ids})
-      UNION ALL
-      (SELECT l.session_id, NULL::text, NULL::text
-      FROM capture_raw_lineage l
-      WHERE v.session_id IS NULL AND l.user_id = $1 AND l.client = ${client}
-        AND l.message_mac = v.message_mac AND l.content_mac = v.content_mac ${peers})
-    ) AS next(session_id, message_mac, content_mac)
-  ), bounded AS MATERIALIZED (SELECT * FROM vertices LIMIT ${MAX_LINEAGE_VERTICES + 1})`;
-}
-
-const EXCEEDED = `(SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
-  OR (SELECT count(session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS}`;
-
-const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
-    SELECT session_id FROM capture_raw_fences WHERE user_id = $1 AND client = $2
-    UNION SELECT unnest($4::text[])
-  ), incoming AS (
-    SELECT * FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
-  ), roots(session_id, message_mac, content_mac) AS (
-    SELECT $3::text, NULL::text, NULL::text WHERE $6::boolean OR EXISTS (SELECT 1 FROM fences)
-    UNION ALL
-    SELECT NULL::text, incoming.message_mac, incoming.content_mac
-    FROM incoming WHERE incoming.content_mac IS NOT NULL AND ($6::boolean OR EXISTS (SELECT 1 FROM fences))
-  ), ${lineageVertices("$2")},
-  uncertain AS NOT MATERIALIZED (
-    SELECT l.session_id FROM capture_raw_lineage l
-    WHERE l.user_id = $1 AND l.client = $2 AND EXISTS (
-      SELECT 1 FROM incoming WHERE incoming.message_mac = l.message_mac
-        AND (incoming.content_mac IS NULL OR l.content_mac IS NULL)
-    )
-  )
-  SELECT EXISTS (SELECT 1 FROM bounded JOIN fences USING (session_id)) AS fenced,
-    ${EXCEEDED} AS exceeded,
-    EXISTS (SELECT 1 FROM uncertain JOIN fences USING (session_id)) AS withheld,
-    ARRAY(
-      SELECT session_id FROM bounded WHERE $6::boolean AND session_id <> $3
-      UNION
-      SELECT session_id FROM uncertain WHERE $6::boolean AND session_id <> $3
-    ) AS hash_candidates`;
+const ANCESTOR_SESSION_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
+  WHERE user_id = $1 AND kind = 'session' AND body #>> '{session,client}' = $2`;
 
 const encoder = new TextEncoder();
 
 /** @param {string} secret */
 export function createCaptureProofs(secret) {
+  if (typeof secret !== "string" || secret.length === 0) throw new CoreError("invalid_input");
   /** @type {Promise<CryptoKey> | undefined} */
   let key;
+  /** @type {Promise<string> | undefined} */
+  let keyId;
   /** @param {string} value */
   async function sign(value) {
     key ??= crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -76,7 +29,7 @@ export function createCaptureProofs(secret) {
   }
 
   /** @param {Pick<CaptureKey, "scope" | "client">} capture @param {readonly Pick<CaptureMessage, "id" | "content">[]} messages @returns {Promise<Proof[] | null>} */
-  return async ({ scope: { owner }, client }, messages) => {
+  const proofs = async ({ scope: { owner }, client }, messages) => {
     if (!messages.length) return [];
     try {
       return await Promise.all(messages.map(async ({ id, content }) => ({
@@ -88,7 +41,188 @@ export function createCaptureProofs(secret) {
       return null;
     }
   };
+  return Object.assign(proofs, { sign, keyId: () => keyId ??= sign("\0cairn:w1a:raw-lineage") });
 }
+
+/** @typedef {{client: string, sessionId: string, scope: Scope}} Source */
+/** @typedef {ReturnType<typeof createCaptureProofs>} Signer */
+
+/** @param {Connection["query"]} query @param {Source} source */
+async function readAncestorFacts(query, { scope, client }) {
+  const { rows } = await query(ANCESTOR_SESSION_FACTS, [scope.owner, client]);
+  return /** @type {StoredFact[]} */ (rows.map(({ kind, body, action_id: actionId }) => {
+    if (body?.kind !== kind) throw new CoreError("suppressed");
+    return { fact: { ...body, owner: scope.owner, actionId } };
+  }));
+}
+
+/**
+ * @param {Connection["query"]} query @param {Source} source @param {Signer} signer
+ * @param {string} fences @param {boolean} hashes @param {boolean} useCoreLedger
+ */
+async function legacyProofs(query, { scope, client, sessionId }, signer, fences, hashes, useCoreLedger) {
+  const keyId = await signer.keyId().catch(() => null);
+  if (keyId === null) return null;
+  const incoming = [];
+  const ancestors = [];
+  let after = "0";
+  for (;;) {
+    const { rows } = await query(LEGACY_EVENTS,
+      [scope.owner, client, scope.namespace, sessionId, after, keyId, fences, hashes, "content:" + keyId]);
+    if (!rows.length) return { incoming, ancestors };
+    for (const row of rows) {
+      const own = row.session_id === sessionId && row.core_namespace === scope.namespace;
+      // Explicit capture proofs already describe the positions in a Core outbox.
+      if (own && !row.untagged && !useCoreLedger) continue;
+      try {
+        const request = typeof row.raw_request === "string" ? JSON.parse(row.raw_request) : row.raw_request;
+        for (const { id } of request.messages) {
+          if (typeof id !== "string") return null;
+          const message_mac = await signer.sign(id);
+          if (own) {
+            incoming.push({ message_mac, content_mac: null });
+          } else {
+            ancestors.push({ session_id: row.session_id, namespace: row.core_namespace, untagged: row.untagged, message_mac });
+          }
+        }
+      } catch {
+        return null;
+      }
+    }
+    after = rows.at(-1).arrival_order;
+  }
+}
+
+/**
+ * @param {Connection["query"]} query @param {Source} source @param {Proof[] | null} proofs
+ * @param {{incoming: StoredFact[], ancestors?: StoredFact[]}} facts
+ * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ * @param {boolean} raw
+ * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
+ */
+async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey, raw) {
+  if (proofs === null) return "unknown";
+  const { scope, client, sessionId } = source;
+  const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
+  for (const stored of incoming) {
+    if (stored.fact.kind !== "session") continue;
+    const applies = factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, policy);
+    if (applies === true) return "suppressed";
+    if (applies !== false) return "session-unknown";
+  }
+
+  // Ancestor matching needs Core session facts in their own namespaces. An
+  // incoming-scope visibility read can omit a plain fact for the same session ID.
+  // The lineage SQL's FENCES still reads legacy session suppressions directly.
+  ancestors ??= await readAncestorFacts(query, source);
+  const fences = [];
+  const hashes = [];
+  for (const stored of ancestors) {
+    const { fact } = stored;
+    if (fact.kind !== "session") continue;
+    const ancestorScope = { owner: scope.owner, namespace: fact.namespace ?? null };
+    if ("sessionKeyHash" in fact.session) {
+      hashes.push(stored);
+    } else if (factBlocksIncoming(stored, { scope: ancestorScope, passages: [], session: fact.session }, policy) !== false) {
+      fences.push({ session_id: fact.session.sessionId, namespace: ancestorScope.namespace, wildcard: true });
+    }
+  }
+
+  const encoded = JSON.stringify(fences);
+  const hasHashes = hashes.length > 0;
+  const legacy = await legacyProofs(query, source, signer, encoded, hasHashes, raw || !proofs.length);
+  if (!legacy) return "unknown";
+  const { rows: [lineage] } = await query(CHECK_LINEAGE, [scope.owner, client, scope.namespace, sessionId,
+    JSON.stringify([...proofs, ...legacy.incoming]), encoded, hasHashes, raw, JSON.stringify(legacy.ancestors)]);
+  if (!lineage || lineage.exceeded) return "unknown";
+  if (lineage.direct || lineage.proven) return "proven";
+  if (lineage.fenced) return "id-only";
+  let weak = false;
+  for (const [id, namespace, unscoped, proven] of lineage.hash_candidates) {
+    for (const stored of hashes) {
+      const factNamespace = stored.fact.namespace ?? null;
+      if (!unscoped && namespace !== factNamespace) continue;
+      const match = factBlocksIncoming(stored, {
+        scope: { owner: scope.owner, namespace: factNamespace }, passages: [], session: { client, sessionId: id },
+      }, policy);
+      if (match === "ineligible") return "unknown";
+      if (match === true) {
+        if (proven) return "proven";
+        weak = true;
+      }
+    }
+  }
+  if (weak) return "id-only";
+  // The hosted Raw gate follows an ID match with proven edges. Evaluate each
+  // reachable component under the same bounds, so unrelated weak matches do
+  // not consume another component's session budget.
+  if (raw) {
+    for (const [id, namespace] of lineage.weak_roots) {
+      const ancestor = { scope: { owner: scope.owner, namespace }, client, sessionId: id };
+      const result = await lineageVerdict(query, ancestor, [], { incoming: ancestors, ancestors }, signer, hashSessionKey, false);
+      if (result === "unknown" || result === "session-unknown") return "unknown";
+      if (result === "proven" || result === "suppressed") return "id-only";
+    }
+  }
+  return "allowed";
+}
+
+/**
+ * @param {Connection["query"]} query @param {Source} source
+ * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert" | "raw"} mode
+ * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ */
+export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey) {
+  const { scope, client, sessionId } = source;
+  const facts = await readVisibilityFacts(query, scope.owner, { source });
+  const candidate = { scope, passages: [], session: { client, sessionId } };
+  const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
+  const windows = facts.filter(({ fact }) => fact.kind === "window");
+  const positions = Array.from(times.keys()).filter((position) => !windows.some((stored) =>
+    factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
+  if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
+
+  const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey, mode === "raw");
+  if (verdict === "allowed") return positions;
+  if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
+  return [];
+}
+
+/**
+ * @param {Connection["query"]} query @param {Source} source
+ * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [raw]
+ */
+export async function checkSourceLineage(query, source, signer, hashSessionKey, raw = true) {
+  const incoming = await readVisibilityFacts(query, source.scope.owner, { source });
+  return lineageVerdict(query, source, [], { incoming }, signer, hashSessionKey, raw);
+}
+
+const MAX_LINEAGE_SESSIONS = 1_000;
+const MAX_LINEAGE_VERTICES = 20_000;
+// Traverse sessions and proof pairs separately so each pair is expanded only once.
+/** @param {string} client */
+function readLineageVertices(client) {
+  return `vertices(session_id, message_mac, content_mac) AS (
+    SELECT session_id, message_mac, content_mac FROM roots
+    UNION
+    SELECT next.session_id, next.message_mac, next.content_mac
+    FROM vertices v CROSS JOIN LATERAL (
+      (SELECT NULL::text, l.message_mac, l.content_mac
+      FROM capture_raw_lineage l
+      WHERE l.user_id = $1 AND l.client = ${client} AND l.session_id BETWEEN v.session_id AND v.session_id AND l.content_mac IS NOT NULL
+        ORDER BY l.session_id, l.message_mac, l.content_mac LIMIT ${MAX_LINEAGE_VERTICES + 1})
+      UNION ALL
+      (SELECT l.session_id, NULL::text, NULL::text
+      FROM capture_raw_lineage l
+      WHERE v.session_id IS NULL AND l.user_id = $1 AND l.client = ${client}
+        AND l.message_mac = v.message_mac AND l.content_mac = v.content_mac
+        ORDER BY l.session_id LIMIT ${MAX_LINEAGE_VERTICES + 1})
+    ) AS next(session_id, message_mac, content_mac)
+  ), bounded AS MATERIALIZED (SELECT * FROM vertices LIMIT ${MAX_LINEAGE_VERTICES + 1})`;
+}
+
+const EXCEEDED = `(SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
+  OR (SELECT count(session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS}`;
 
 /**
  * @param {Set<string>} hashes @param {CaptureOptions["hashSessionKey"]} hashSessionKey
@@ -101,73 +235,6 @@ function withholdsHashedAncestor(hashes, hashSessionKey, client, sessionId) {
   } catch {
     return true;
   }
-}
-
-/**
- * @param {Connection["query"]} query @param {CaptureKey} key
- * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert"} mode
- * @param {CaptureOptions["hashSessionKey"]} hashSessionKey
- */
-export async function filterSources(query, key, times, proofs, mode, hashSessionKey) {
-  const { scope, client, sessionId } = key;
-  const facts = await readVisibilityFacts(query, scope.owner, { source: key });
-  /** @type {StoredFact[]} */
-  const windows = [];
-  /** @type {Set<string>} */
-  const fencedSessions = new Set();
-  /** @type {Set<string>} */
-  const fencedSessionHashes = new Set();
-  const candidate = { scope, passages: [], session: { client, sessionId } };
-  const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
-  for (const stored of facts) {
-    const { fact } = stored;
-    if (fact.kind === "window") {
-      windows.push(stored);
-    } else if (fact.kind === "session") {
-      if (factBlocksIncoming(stored, candidate, policy) !== false) {
-        if (mode === "assert") throw new CoreError("suppressed");
-        return [];
-      }
-      const ancestor = fact.session;
-      // Shared lineage identifies ancestors by owner, client and session. Test the
-      // session facts in their own scope, keeping direct checks in the incoming scope.
-      if (ancestor.client === client && "sessionId" in ancestor && ancestor.sessionId !== sessionId &&
-          factBlocksIncoming(stored, {
-            ...candidate, scope: { owner: scope.owner, namespace: fact.namespace ?? null }, session: ancestor,
-          }, policy) !== false) {
-        fencedSessions.add(ancestor.sessionId);
-      } else if (ancestor.client === client && "sessionKeyHash" in ancestor) {
-        fencedSessionHashes.add(ancestor.sessionKeyHash);
-      }
-    }
-  }
-
-  const positions = Array.from(times.keys()).filter((position) => !windows.some((stored) =>
-    factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
-  if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
-
-  if (await lineageWithheld(query, key, proofs, fencedSessions, fencedSessionHashes, hashSessionKey)) {
-    if (mode === "assert") throw new CoreError("lineage_fenced");
-    return [];
-  }
-  return positions;
-}
-
-/**
- * @param {Connection["query"]} query @param {Pick<CaptureKey, "scope" | "client" | "sessionId">} key
- * @param {Proof[] | null} proofs @param {Set<string>} fencedSessions @param {Set<string>} fencedSessionHashes
- * @param {CaptureOptions["hashSessionKey"]} hashSessionKey
- */
-export async function lineageWithheld(query, { scope, client, sessionId }, proofs, fencedSessions, fencedSessionHashes, hashSessionKey) {
-  // Signing failures and older leases can leave proofs unavailable.
-  if (proofs === null) return true;
-  const { rows: [lineage] } = await query(CHECK_LINEAGE, [
-    scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs), fencedSessionHashes.size > 0,
-  ]);
-  // Check every returned hash candidate, including ID-only matches outside the traversal.
-  return lineage?.fenced !== false || lineage.withheld !== false || lineage.exceeded !== false ||
-    lineage.hash_candidates.some((/** @type {string} */ id) =>
-      withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id));
 }
 
 // Discover clients from the fences and facts, including in an unfiltered raw read.
@@ -191,7 +258,7 @@ const READ_LINEAGE = `WITH fences AS MATERIALIZED (
           AND l.message_mac = a.message_mac AND l.content_mac = a.content_mac AND l.session_id <> a.session_id
         LIMIT 1
       ) peer WHERE a.content_mac IS NOT NULL
-    ), ${lineageVertices("c.client", true)}, proofs AS MATERIALIZED (
+    ), ${readLineageVertices("c.client")}, proofs AS MATERIALIZED (
       SELECT message_mac, content_mac, true AS anchor FROM anchors
       UNION
       SELECT message_mac, content_mac, false FROM bounded WHERE session_id IS NULL

@@ -40,6 +40,8 @@ export function createPostgresSuppressionStore(
   options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed"; allowNonNullNamespace?: boolean },
 ): SuppressionStore;
 export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
+export { createPostgresRawPorts } from "./raw.mjs";
+export type { RawOptions } from "./raw-options.mjs";
 
 export function createPostgresMemoryStore(
   options?: SessionHashOptions & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
