@@ -1,4 +1,4 @@
-import type { CaptureClaim, SourceFilter } from "../../core/src/ports/capture.d.ts";
+import type { CaptureClaim, CaptureFinish, SourceFilter } from "../../core/src/ports/capture.d.ts";
 
 export interface CaptureOptions {
   now?: () => number;
@@ -6,6 +6,8 @@ export interface CaptureOptions {
   lineageSecret: string;
   /** Host-supplied synchronous hash of a plain session reference. Null means unavailable. */
   hashSessionKey?: (client: string, sessionId: string) => string | null;
+  nearDuplicate?: boolean;
+  allowNonNullNamespace?: boolean;
 }
 
-export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter;
+export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter & CaptureFinish;
