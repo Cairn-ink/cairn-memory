@@ -130,6 +130,11 @@ const concurrentIndexes = {
     table: "capture_events",
     definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
   },
+  "0021_core_raw_owner_time_idx.concurrent.sql": {
+    name: "raw_messages_user_time_id_idx",
+    table: "raw_messages",
+    definition: 'CREATE INDEX raw_messages_user_time_id_idx ON public.raw_messages USING btree (user_id, occurred_at, id COLLATE "C")',
+  },
 };
 
 async function readMigrations() {
@@ -451,6 +456,12 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
   const prepare = (run) => async (ctx) => {
     // runCase generates these IDs after open(), so seed both together at the case entry point.
     await ctx.harness.seedOwners(ctx.owner, ctx.otherOwner);
+    // Equal lexical text in two namespaces needs distinct fixture hashes on hosted.
+    if (testCase.id === "K-RET-1") {
+      let fixture = 0;
+      const hash = ctx.hash;
+      ctx = { ...ctx, hash: (text) => hash(JSON.stringify([text, fixture++])) };
+    }
     return beforeDeadline("Conformance case", 40_000, () => run(ctx));
   };
   const prepared = { ...testCase, run: prepare(testCase.run) };
@@ -466,7 +477,10 @@ for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   const name = `${factory.name} conformance ${testCase.id} ${testCase.title}`;
   // K-HYD-2 contains assertions even though the kit marks the supersession suite pending.
   const prepared = testCase.id === "K-HYD-2" ? { ...testCase, pending: undefined } : testCase;
-  test(name, options, (t) => runPreparedCase(factory, prepared, t));
+  // The primary cases cover the memory ports. Their semantic follow-ups belong to the vector lane.
+  const memoryOnly = ["K-HIDE-2", "K-HIDE-3", "K-WRITE-1"].includes(testCase.id);
+  test(name, options, (t) => runPreparedCase(factory,
+    memoryOnly ? { ...prepared, followUp: undefined } : prepared, t));
 }
 
 test("Postgres conformance K-FACT-6 detects a bypassed foreign-owner guard", options, async (t) => {

@@ -16,14 +16,16 @@ import { runOperation } from "./uow.mjs";
 
 const PAGE_BATCH_SIZE = 128;
 
-/** @param {string} cursor @returns {PageKey} */
-function pageAfter(cursor) {
-  const [us, id, ...extra] = decode(cursor);
-  if (extra.length || typeof us !== "string" || !/^(?:0|-?[1-9][0-9]{0,18})$/u.test(us) || !pgText(id) || !id) {
+/** @param {string} cursor @param {string} owner @returns {PageKey} */
+function pageAfter(cursor, owner) {
+  const [cursorOwner, us, id, ...extra] = decode(cursor);
+  if (extra.length || !pgText(cursorOwner) || typeof us !== "string" ||
+      !/^(?:0|-?[1-9][0-9]{0,18})$/u.test(us) || !pgText(id) || !id) {
     throw new CoreError("invalid_cursor");
   }
   const updatedAtUs = BigInt(us);
   if (updatedAtUs < -210866803200000000n || updatedAtUs > 9223372036854775807n) throw new CoreError("invalid_cursor");
+  if (cursorOwner !== owner) throw new CoreError("cursor_stale");
   return { id, updatedAtUs };
 }
 
@@ -33,7 +35,7 @@ export function memoryPage(tx, scope, page, historical, hashSessionKey) {
   if (!page || typeof page !== "object") invalid();
   const { cursor, limit } = page;
   if (!Number.isSafeInteger(limit) || limit < 1) invalid();
-  const start = cursor === null ? null : pageAfter(cursor);
+  const start = cursor === null ? null : pageAfter(cursor, scope.owner);
 
   return runOperation(tx, async (query) => {
     let after = start;
@@ -58,7 +60,7 @@ export function memoryPage(tx, scope, page, historical, hashSessionKey) {
     const hasMore = items.length > limit;
     if (hasMore) items.pop();
     const last = items.at(-1);
-    return { items, nextCursor: hasMore && last ? encode([last.updatedAtUs.toString(), last.id]) : null };
+    return { items, nextCursor: hasMore && last ? encode([scope.owner, last.updatedAtUs.toString(), last.id]) : null };
   });
 }
 

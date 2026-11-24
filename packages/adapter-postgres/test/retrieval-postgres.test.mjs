@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { factIncarnationBody } from "../../core/src/index.mjs";
+import { factIncarnationBody, fingerprintLegacyCapture, userFingerprintKey } from "../../core/src/index.mjs";
 import { createCaptureProofs } from "../src/capture-source.mjs";
+import { HOSTED_FINGERPRINT_LABELS } from "../src/fingerprint-labels.mjs";
 import {
-  createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresRawReads, createPostgresSuppressionStore,
+  createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresRawReads, createPostgresSuppressionStore,
   createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
@@ -173,6 +174,92 @@ test("Postgres applies the same raw lineage visibility during search, list, and 
   });
 });
 
+async function assertRawVisibility(t, uow, options, term, visible, withheld) {
+  const raw = createPostgresRawReads(options);
+  const { fence } = createPostgresMemoryReads(options);
+  const expected = visible.map(id => rawRef(id));
+  const refs = [...visible, ...withheld].map(id => rawRef(id));
+  const read = (fn) => uow.run(owner, { readOnly: true }, fn);
+  await t.test("search", () => read(async tx => {
+    const { segments } = await raw.raw(tx, personal, term, "search", { limit: 20 });
+    assert.deepEqual(new Set(segments.map(({ ref }) => ref)), new Set(expected));
+  }));
+  await t.test("list", () => read(async tx => {
+    const { items } = await raw.listRaw(tx, personal, { limit: 20, cursor: null });
+    assert.deepEqual(new Set(items.map(({ ref }) => ref)), new Set(expected));
+  }));
+  await t.test("fence", () => read(async tx => {
+    assert.deepEqual(await fence.assertVisible(tx, personal, refs), expected);
+  }));
+}
+
+test("P1-1 raw reads exclude forgotten receipts without a surviving memory", migrationDbTest, async (t) => {
+  const { pool, uow } = await setup(t);
+  await addRaw(pool, "forgotten", { messageId: "shared" });
+  await addRaw(pool, "other-session", { session: "elsewhere", messageId: "shared" });
+  await addRaw(pool, "other-client", { client: "two", messageId: "shared" });
+  await addRaw(pool, "active");
+  await pool.query(`INSERT INTO core_memory_receipts
+    (user_id, memory_id, client, session_id, message_id, role, forgotten_at)
+    VALUES ($1, 'deleted', 'one', 'open', 'shared', 'user', now()),
+      ($1, 'live', 'one', 'open', 'active', 'user', NULL),
+      ($2, 'deleted', 'two', 'open', 'shared', 'user', now())`, [owner, otherOwner]);
+  await assertRawVisibility(t, uow, rawOptions, "cedar", ["other-session", "other-client", "active"], ["forgotten"]);
+});
+
+test("P1-2 raw reads match legacy keyed shingle containment", migrationDbTest, async (t) => {
+  const { pool, uow } = await setup(t);
+  const passage = "cedar garden notebook delivery";
+  const key = await userFingerprintKey("fixture-fingerprint-secret", owner, HOSTED_FINGERPRINT_LABELS);
+  const { text_hmac, shingles, key_id } = await fingerprintLegacyCapture(passage, key, HOSTED_FINGERPRINT_LABELS);
+  await addRaw(pool, "contained", { content: `before ${passage} after` });
+  await addRaw(pool, "exact", { content: passage });
+  await addRaw(pool, "visible", { content: "cedar fence" });
+  await pool.query("INSERT INTO core_owner_state (user_id, legacy_facts_ready) VALUES ($1, true)", [owner]);
+  await pool.query(`INSERT INTO suppressions (id, user_id, kind, text_hash, text_hmac, shingles, key_id, embedding)
+    VALUES ('legacy', $1, 'text', $2, $3, $4, $5, $6::vector)`,
+  [owner, `hmac:${text_hmac}`, text_hmac, shingles, key_id, embedding(0)]);
+  await assertRawVisibility(t, uow, { ...rawOptions, fingerprintKeys: () => [key] },
+    "cedar", ["visible"], ["contained", "exact"]);
+});
+
+test("P1-3 raw lineage withholds the whole session for ID-only and full proofs", migrationDbTest, async (t) => {
+  const { pool, uow } = await setup(t);
+  const proofs = createCaptureProofs(lineageSecret);
+  const [idOnly, full] = await proofs({ scope: personal, client: "one" },
+    [{ id: "id-only", content: "maple" }, { id: "full", content: "maple" }]);
+  await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    VALUES ($1, 'one', 'closed', $2, NULL), ($1, 'one', 'closed', $4, $5),
+      ($1, 'one', 'recorded-child', $2, $3)`,
+  [owner, idOnly.message_mac, idOnly.content_mac, full.message_mac, full.content_mac]);
+  await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, 'one', 'closed')", [owner]);
+  await addRaw(pool, "recorded-sibling", { session: "recorded-child" });
+  await addRaw(pool, "full-copy", { session: "full-child", messageId: "full", content: "maple", us: null });
+  await addRaw(pool, "full-sibling", { session: "full-child" });
+  await addRaw(pool, "id-copy", { session: "id-child", messageId: "id-only", content: "maple", us: null });
+  await addRaw(pool, "id-sibling", { session: "id-child" });
+  await addRaw(pool, "visible");
+  await assertRawVisibility(t, uow, rawOptions, "cedar", ["visible"],
+    ["recorded-sibling", "full-sibling", "id-sibling"]);
+});
+
+test("Postgres recent and memory export cursors are bound to their owner", migrationDbTest, async (t) => {
+  const { pool, uow } = await setup(t);
+  await addMemory(pool, "first", { time: 20 });
+  await addMemory(pool, "second");
+  await addMemory(pool, "foreign", { user: otherOwner });
+  const { recent } = createPostgresMemoryReads();
+  const { exportPage } = createPostgresMemoryStore();
+  for (const read of [
+    (tx, cursor) => recent.recent(tx, { owner: tx.owner, namespaces: [null] }, { cursor, limit: 1 }),
+    (tx, cursor) => exportPage(tx, { owner: tx.owner, namespace: null }, { cursor, limit: 1 }),
+  ]) {
+    const { nextCursor } = await uow.run(owner, { readOnly: true }, tx => read(tx, null));
+    assert.ok(nextCursor);
+    await assert.rejects(uow.run(otherOwner, { readOnly: true }, tx => read(tx, nextCursor)), { code: "cursor_stale" });
+  }
+});
+
 function indexNames(plan) {
   return [plan["Index Name"], ...(plan.Plans ?? []).flatMap(indexNames)].filter(Boolean);
 }
@@ -228,7 +315,8 @@ test("Postgres retrieval plans use hosted search and scoped indexes on populated
   assert.ok(plans.get("lexical").includes("memories_text_idx"), JSON.stringify([...plans]));
   assert.ok(plans.get("raw").includes("raw_messages_content_idx"), JSON.stringify([...plans]));
   assert.ok(plans.get("raw").includes("capture_raw_fences_user_id_client_session_id_pk"), JSON.stringify([...plans]));
-  assert.ok(plans.get("vector").some(name => name.startsWith("memories_user_")), JSON.stringify([...plans]));
+  assert.ok(plans.get("vector").some(name => name === "memories_embedding_idx" || name.startsWith("memories_user_")),
+    JSON.stringify([...plans]));
   assert.ok(plans.get("receipts").some(name => name.startsWith("core_memory_receipts_")), JSON.stringify([...plans]));
   t.diagnostic(JSON.stringify(Object.fromEntries(plans)));
 });

@@ -190,8 +190,8 @@ export async function readVisibility(query, owner, hashSessionKey) {
     return namespaces.flatMap(namespace => byNamespace.get(namespace) ?? []);
   }
 
-  /** @param {readonly Scope["namespace"][]} namespaces @param {{exact?: boolean, distance?: boolean}} [options] */
-  function candidateColumns(namespaces, { exact, distance } = {}) {
+  /** @param {readonly Scope["namespace"][]} namespaces @param {{exact?: boolean, distance?: boolean, skipEmbedding?: boolean}} [options] */
+  function candidateColumns(namespaces, { exact, distance, skipEmbedding } = {}) {
     const facts = selectedFacts(namespaces);
     const textFacts = facts.flatMap(({ fact }) => fact.kind === "text" ? [fact] : []);
     const aliases = textFacts.some(fact => fact.text.digests.some(d => d.alg === "sha256"));
@@ -201,7 +201,7 @@ export async function readVisibility(query, owner, hashSessionKey) {
     if (textFacts.length) columns.push("core_digests");
     if (aliases) columns.push("text");
     if (facts.some(usesSource)) columns.push("source_client", "source_session_id", `${CREATED_MS}::text AS created_ms`);
-    if (vector || distance) columns.push("embedding::text");
+    if (!skipEmbedding && (vector || distance)) columns.push("embedding::text");
     return columns.join(", ");
   }
 

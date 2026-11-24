@@ -1,5 +1,6 @@
 import { CoreError, tokenizeT1 } from "../../core/src/index.mjs";
 import { copyReadScope, guardOwner, inputText, invalid, pgText } from "./memory-input.mjs";
+import { timestampUs } from "./memory-rows.mjs";
 import { createRawVisibility } from "./raw-visibility.mjs";
 import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
 import { runOperation } from "./uow.mjs";
@@ -14,10 +15,13 @@ const OCCURRED_US = "(EXTRACT(EPOCH FROM r.occurred_at) * 1000000)::bigint";
 const COLUMNS = `r.id, r.client, r.session_id, r.message_id, r.role, r.content, ${OCCURRED_US}::text AS occurred_us`;
 const FILTER = `r.user_id = $1 AND ($2::text[] IS NULL OR r.client = ANY($2))
   AND (NOT $3::boolean OR r.occurred_at IS NOT NULL)
-  AND ($4::bigint IS NULL OR ${OCCURRED_US}::numeric >= $4::numeric * 1000)
-  AND ($5::bigint IS NULL OR ${OCCURRED_US}::numeric < $5::numeric * 1000)
+  AND ($4::bigint IS NULL OR r.occurred_at >= ${timestampUs("($4::bigint * 1000)")})
+  AND ($5::bigint IS NULL OR r.occurred_at < ${timestampUs("($5::bigint * 1000)")})
   AND NOT EXISTS (SELECT 1 FROM capture_raw_fences f
-    WHERE f.user_id = r.user_id AND f.client = r.client AND f.session_id = r.session_id)`;
+    WHERE f.user_id = r.user_id AND f.client = r.client AND f.session_id = r.session_id)
+  AND NOT EXISTS (SELECT 1 FROM core_memory_receipts m
+    WHERE m.user_id = r.user_id AND m.client = r.client AND m.session_id = r.session_id
+      AND m.message_id = r.message_id AND m.forgotten_at IS NOT NULL)`;
 
 /** @param {ReadSet} scope */
 function params({ owner, clients, hasWindow, since, until }) {
@@ -36,7 +40,7 @@ function pageAfter(cursor) {
   const [token, us, id, ...extra] = decode(cursor);
   if (extra.length || typeof token !== "string" || !pgText(id) || !id ||
       (us !== null && (typeof us !== "string" || !/^(?:0|-?[1-9][0-9]{0,18})$/u.test(us) ||
-        BigInt(us) < -9223372036854775808n || BigInt(us) > 9223372036854775807n))) {
+        BigInt(us) < -210866803200000000n || BigInt(us) > 9223372036854775807n))) {
     throw new CoreError("invalid_cursor");
   }
   validateToken(token, true);
@@ -65,11 +69,7 @@ export function createPostgresRawReads(options) {
           FROM raw_messages r WHERE ${FILTER} AND r.content &@~ pgroonga_query_escape($6)
           ORDER BY score DESC, r.occurred_at DESC NULLS LAST, r.id COLLATE "C" DESC LIMIT $7 OFFSET $8`,
         [...params(selection), text, batchSize, offset]);
-        for (const row of rows) {
-          const item = segment(row);
-          if (await visible(item)) segments.push(item);
-          if (segments.length === limit) break;
-        }
+        segments.push(...(await visible(rows.map(segment))).slice(0, limit - segments.length));
         if (rows.length < batchSize) break;
       }
       return { segments, coverage };
@@ -88,27 +88,39 @@ export function createPostgresRawReads(options) {
       if (start && start.token !== token) throw new CoreError("cursor_stale");
       if (!selection.keys.includes(null)) return { items: [], nextCursor: null };
       const visible = await readVisibility(query, selection.owner);
-      let us = start?.us ?? null;
-      let id = start?.id ?? null;
-      let nextCursor = null;
       const items = [];
       const batchSize = Math.min(BATCH_SIZE, limit + 1);
-      while (items.length <= limit) {
-        const { rows } = await query(`SELECT ${COLUMNS} FROM raw_messages r WHERE ${FILTER}
-          AND ($7::text IS NULL OR
-            ($6::bigint IS NOT NULL AND (r.occurred_at IS NULL OR ${OCCURRED_US} > $6))
-            OR (${OCCURRED_US} IS NOT DISTINCT FROM $6 AND r.id COLLATE "C" > $7))
-          ORDER BY r.occurred_at, r.id COLLATE "C" LIMIT $8`,
-        [...params(selection), us, id, batchSize]);
-        for (const row of rows) {
-          const item = segment(row);
-          if (!await visible(item)) continue;
-          if (items.length === limit) return { items, nextCursor };
-          items.push(item);
-          if (items.length === limit) nextCursor = encode([token, row.occurred_us, row.id]);
+      let nextCursor = null;
+      // Separate the NULL tail so dated continuations are always a single index range.
+      for (const unknown of [false, true]) {
+        if (unknown ? selection.hasWindow : start?.us === null) continue;
+        let after = start && (start.us === null) === unknown ? start : null;
+        for (;;) {
+          const values = [...params(selection), batchSize];
+          let continuation = "";
+          if (after) {
+            if (unknown) {
+              continuation = 'AND r.id COLLATE "C" > $7';
+              values.push(after.id);
+            } else {
+              continuation = `AND (r.occurred_at, r.id COLLATE "C") > (${timestampUs("$7")}, $8::text COLLATE "C")`;
+              values.push(after.us, after.id);
+            }
+          }
+          const { rows } = await query(`SELECT ${COLUMNS} FROM raw_messages r WHERE ${FILTER}
+            AND r.occurred_at IS ${unknown ? "" : "NOT "}NULL ${continuation}
+            ORDER BY r.occurred_at, r.id COLLATE "C" LIMIT $6`, values);
+          const checked = await visible(rows.map(segment));
+          const byId = new Map(rows.map(row => [row.id, row]));
+          for (const item of checked) {
+            if (items.length === limit) return { items, nextCursor };
+            items.push(item);
+            if (items.length === limit) nextCursor = encode([token, byId.get(item.ref.id).occurred_us, item.ref.id]);
+          }
+          if (rows.length < batchSize) break;
+          const last = rows.at(-1);
+          after = { token, us: last.occurred_us, id: last.id };
         }
-        if (rows.length < batchSize) break;
-        ({ occurred_us: us, id } = rows.at(-1));
       }
       return { items, nextCursor: null };
     });
@@ -128,9 +140,7 @@ export function createRawRefReader(options) {
       [...params(scope), ids]);
     if (!rows.length) return visibleIds;
     const visible = await readVisibility(query, scope.owner);
-    for (const row of rows) {
-      if (await visible(segment(row))) visibleIds.add(row.id);
-    }
+    for (const item of await visible(rows.map(segment))) visibleIds.add(item.ref.id);
     return visibleIds;
   };
 }

@@ -133,6 +133,14 @@ remain authoritative until the final per-owner reconciliation. Set migration
 copying all remaining facts for that owner. Receipt-less rows use their stored
 source and creation/write times for session and window checks.
 
+State tokens assume all writers advance `core_owner_state` in the same
+transaction as retrieval-affecting changes. Legacy hosted writers must do so
+before this adapter serves reads, including shadow reads.
+
+Vector recall applies full visibility checks to bounded candidate pages.
+Its coverage counts include unchecked rows. An unchecked row with a missing
+model match keeps coverage incomplete so Core can use lexical ranking.
+
 `createPostgresDigestGate(uow, keyIdsForOwner)` returns
 `rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
 The gate counts each row missing evidence for an accepted key or for any live
