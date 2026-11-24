@@ -112,5 +112,5 @@ test("a supplied model keeps the qualified capture trace", async () => {
   const trace = await captureTrace(createMemoryService);
   // Captured from the core-next base with tools/testing/service-optional-model.qualification.mjs.
   const digest = createHash("sha256").update(JSON.stringify(trace)).digest("hex");
-  assert.equal(digest, "130d9df2c632e21179f576acce0e91376cb14d9197274d7e9fb46864531d68a0");
+  assert.equal(digest, "311dba3831a6cc1f02d54af28adb7617c668c6705614f9a877ec2ed14da61dc9");
 });

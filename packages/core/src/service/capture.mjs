@@ -625,7 +625,8 @@ export function captureMethods(deps) {
         });
         const preEmbed = await runAtGeneration(async tx => {
           const eligible = new Set(await readEligible(tx, key, admittedMessages));
-          const stillEligible = positions.filter(position => eligible.has(position));
+          const current = await readCurrentMessages(tx);
+          const stillEligible = positions.filter(position => eligible.has(position) && sourceUnchanged(current, position));
           const eligibleIds = new Set(stillEligible.map(position => admittedMessages[position].id));
           if (prepared.length && keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== fingerprintKey?.id) {
             return abandonKeyMismatch(tx);
