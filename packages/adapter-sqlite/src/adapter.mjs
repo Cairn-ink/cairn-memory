@@ -1,6 +1,7 @@
 import { assertAdapterCapabilities, capabilities } from "@cairn-ink/core";
 import { createMemoryStore } from "./memories.mjs";
 import { createPauseStore } from "./pause.mjs";
+import { createRetrievalPorts } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
 
@@ -19,6 +20,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey }) {
     capabilities: capabilities({ rawSpans: true }),
     uow,
     memories: createMemoryStore(port, hashSessionKey),
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey),
     suppressions: createSuppressionStore(port, hashSessionKey),
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },
