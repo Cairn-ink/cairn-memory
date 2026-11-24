@@ -1,4 +1,4 @@
-import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
+import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
   copyFinishItems, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
@@ -65,10 +65,11 @@ function copyResult(stored, pending) {
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {boolean} embeddingRequiredOnInsert
  * @param {RawLineage} [lineage]
+ * @param {boolean} [retainReceipts]
  * @returns {import("./index.d.mts").MemoryAdapter["capture"]}
  */
 export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert,
-  lineage) {
+  lineage, retainReceipts = false) {
   return {
     async claim(tx, key, messages, options) {
       const scope = admissionScope(tx, key);
@@ -152,7 +153,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const writeTimeUs = BigInt(nowMs) * 1000n;
           const state = getState();
           const { identity, claim } = liveClaim(state, token, nowMs);
-          const { scope, client, sessionId } = claim.key;
+          const { scope, client, sessionId, eventId } = claim.key;
           /** @type {SourceRef} */
           const source = { kind: "capture", client, sessionId };
           const queries = batch.map(({ row }) => ({
@@ -165,8 +166,18 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           /** @type {number[]} */
           const suppressedItems = [];
           let duplicateCount = 0;
+          const sources = retainReceipts ? new Map(claim.messages?.map(message => [message.id, message])) : undefined;
 
-          for (const [position, { row, receipts }] of batch.entries()) {
+          for (const [position, { row, receipts: sourceRefs }] of batch.entries()) {
+            const receipts = sources ? sourceRefs.map(({ client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs }) => {
+              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs };
+              const retained = sources.get(messageId);
+              if (!retained?.content || sourceClient !== client || sourceSession !== sessionId || role !== retained.role) {
+                return link;
+              }
+              const excerpt = receiptExcerpt(cleanContent(retained.content));
+              return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt, captureEventId: eventId }) };
+            }) : sourceRefs;
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {
               case "suppressed":

@@ -10,3 +10,4 @@ export declare function prepareHostedCaptureText(text: string): string;
 export declare function normalizeForHash(text: string): string;
 /** New-content pipeline: clean, NFKC, mask, collapse whitespace, then trim. */
 export declare function prepareCoreText(raw: string): string;
+export declare function receiptExcerpt(text: string): string;

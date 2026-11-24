@@ -3,11 +3,15 @@ export type Capability =
   | "orderedCapture" | "stagedEvidence" | "placement" | "relations" | "cards" | "documentCards" | "episodes"
   | "spanLineage" | "sessionLineage" | "rawSpans" | "rawArchive" | "rawWindowHide"
   | "supersession" | "conflictEdges" | "semanticRetrieval" | "forgetLog"
-  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch";
+  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch"
+  | "contextRead" | "contextRawRead" | "inspect";
 
-export type Capabilities = Readonly<Record<Capability, boolean>>;
+type OptionalReadCapability = "contextRead" | "contextRawRead" | "inspect";
+export type Capabilities = Readonly<Record<Exclude<Capability, OptionalReadCapability>, boolean> &
+  Partial<Record<OptionalReadCapability, boolean>>>;
 
-export declare const CAPABILITIES: readonly Capability[];
+export declare const CAPABILITIES: readonly Exclude<Capability, OptionalReadCapability>[];
+export declare const READ_CONTRACT_CAPABILITIES: readonly OptionalReadCapability[];
 /** Unknown names throw invalid_input; unset names are false. */
 export declare function capabilities(flags: Partial<Record<Capability, boolean>>): Capabilities;
 /** Throws capability_unavailable when the flag is not true. */
@@ -17,5 +21,10 @@ export declare const OPTIONAL_PORTS: Readonly<
   Record<"vector" | "raw" | "staged" | "placement" | "relations" | "causal" | "supersession" | "conflicts" | "forgetLog" | "sessionLineage" | "spanLineage", Capability>
   & { documentCards: "documentCards"; documentCardCandidates: "documentCardSearch"; quantityLedger: "quantityLedger"; rationale: "rationaleEdges" }
 >;
+export declare function assertReadContractCapabilities(adapter: {
+  capabilities: Capabilities;
+  contextRead?: { raw?: object };
+  inspect?: object;
+}): void;
 /** Throws capability_unavailable unless optional ports match their flags and documentCardSearch implies documentCards. */
 export declare function assertAdapterCapabilities(adapter: { capabilities: Capabilities } & Record<string, unknown>): void;
