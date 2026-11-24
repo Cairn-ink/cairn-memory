@@ -43,7 +43,11 @@ export function prepareCoreText(raw) {
  * @param {string} text
  */
 export function receiptExcerpt(text) {
-  const clean = redactCore(text.normalize("NFKC")).replace(/\s+/gu, " ").trim();
+  const normalized = redactCore(text.normalize("NFKC")).replace(/\s+/gu, " ");
+  const clean = normalized.trim();
+  // Legacy boundedText appends whole code points after trimming (core/validation.mjs:37–58).
+  // A saved excerpt can end at 800 units, or 799 before a supplementary code point.
+  if ((text.length === 799 || text.length === 800) && text === clean + " ") return text;
   if (clean.length <= 800) return clean;
   const last = clean.charCodeAt(799);
   const next = clean.charCodeAt(800);

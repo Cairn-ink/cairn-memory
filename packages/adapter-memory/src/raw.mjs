@@ -6,8 +6,10 @@ import { prepareMessageContent } from "../../core/src/service/capture.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
 import { invalidateRationaleSources } from "./rationale.mjs";
+import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { withinWindow } from "./retrieval-window.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
+import { advanceRawInspectEpoch } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, snapshotArray, validateLimit,
   writeNamespace } from "./validation.mjs";
 
@@ -217,6 +219,15 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return !facts.some((stored) => stored.fact.kind === "session" && factHidesRow(stored, row, policy) !== false);
   }
 
+  /** @param {AnchorSession} anchor @param {readonly CaptureProof[]} proofs */
+  function matchesAnchor(anchor, proofs) {
+    return proofs.some(({ id, digest }) => {
+      const recorded = anchor.messages.get(id);
+      // Either scrubbed slot leaves only its ID available for comparison.
+      return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
+    });
+  }
+
   /** @param {State} state @param {Scope} scope @param {Session} session
    * @param {readonly CaptureProof[] | null | undefined} proofs
    */
@@ -226,12 +237,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     if (!sessions) return false;
     for (const anchor of sessions.values()) {
       if (anchor.sessionId === session.sessionId) continue;
-      const matches = proofs.some(({ id, digest }) => {
-        const recorded = anchor.messages.get(id);
-        // Either scrubbed slot leaves only its ID available for comparison.
-        return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
-      });
-      if (matches) {
+      if (matchesAnchor(anchor, proofs)) {
         const sourceScope = { owner: scope.owner, namespace: anchor.namespace };
         const source = { client: session.client, sessionId: anchor.sessionId };
         if (!allowsArchive(state, sourceScope, source, scopedFacts(state, sourceScope))) return true;
@@ -327,6 +333,27 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return visible;
   }
 
+  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt */
+  async function receiptSourcesVisible(state, scope, receipt) {
+    const { client, sessionId, messageId, role } = receipt;
+    const archived = await findVisibleSource(state, scope, receipt);
+    if (!archived?.content || archived.role !== role) return false;
+    const roots = state.rawAnchors.get(client);
+    if (!roots) return true;
+    const proofs = await captureProofs(scope, client, [{ id: messageId, content: archived.content }]);
+    if (!proofs) return false;
+    for (const root of roots.values()) {
+      if (root.namespace === scope.namespace && root.sessionId === sessionId) continue;
+      if (!matchesAnchor(root, proofs)) continue;
+      const target = { owner: scope.owner, namespace: root.namespace };
+      const source = { client, sessionId: root.sessionId, messageId };
+      const row = await findVisibleSource(state, target, source);
+      if (!row?.content || row.role !== role ||
+          (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(target.namespace, source)))) return false;
+    }
+    return true;
+  }
+
   /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
   async function visibleRawRefs(state, selection, refs) {
     /** @type {State["rawRows"]} */
@@ -354,12 +381,14 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           if (slots.has(sessionSlot(row.ref.namespace, row))) {
             state.rawRows.delete(id);
             state.rawConflicts.delete(id);
+            state.receiptDenials.add(await receiptAddressKey(namespace, row));
             deleted.push(row);
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
         const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
           (key) => slots.has(sessionSlot(namespace, key))) : 0;
+        if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
         if (ledgerBlanked) run.stateWritten = true;
         return { rawDeleted: deleted.length, ledgerBlanked };
@@ -376,7 +405,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         const copied = copyCaptureMessages(messages);
         return async (getState, _markDirty, run) => {
           if (!copied.length) return;
-          const { rawAnchors } = getState();
+          const state = getState();
+          const { rawAnchors } = state;
           const proofs = await captureProofs(selection, client, copied);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const sessions = rawAnchors.get(client) ?? new Map();
@@ -387,6 +417,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             if (recorded.has(digest)) continue;
             recorded.add(digest);
             anchor.messages.set(id, recorded);
+            advanceRawInspectEpoch(state);
             run.stateWritten = true;
           }
           sessions.set(slot, anchor);
@@ -438,6 +469,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             state.rawRows.set(entry.ref.id, entry);
             archived++;
           }
+          if (newConflict || archived) advanceRawInspectEpoch(state);
           if (newConflict && !archived) markDirty();
           if (archived) advanceRevision(run);
           return { archived };
@@ -481,6 +513,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               counts.existing++;
               if (previous.content !== entry.content && recordRationaleConflict(state, id)) {
                 // The rationale guard changed, while the Raw index stayed the same.
+                advanceRawInspectEpoch(state);
                 run.stateWritten = true;
               }
             } else {
@@ -488,7 +521,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               counts.archived++;
             }
           }
-          if (counts.archived) advanceRevision(run);
+          if (counts.archived) {
+            advanceRawInspectEpoch(state);
+            advanceRevision(run);
+          }
           return counts;
         };
       });
@@ -529,9 +565,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, scope, "conditional", () => {
         const slot = sessionSlot(writeNamespace(scope), copySession(session));
         return (getState, _markDirty, run) => {
-          const { rawFences } = getState();
+          const state = getState();
+          const { rawFences } = state;
           if (rawFences.has(slot)) return;
           rawFences.add(slot);
+          advanceRawInspectEpoch(state);
           advanceRevision(run);
         };
       });
@@ -560,6 +598,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             if (row.ref.namespace === target.namespace && await matches(row)) {
               state.rawRows.delete(id);
               state.rawConflicts.delete(id);
+              state.receiptDenials.add(await receiptAddressKey(target.namespace, row));
               if (hasEdges) deleted.push(row);
               rawDeleted++;
             }
@@ -573,6 +612,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const ledgerBlanked = await blankCaptureMessages(state, target.namespace,
             ({ client, sessionId }, { id, content, occurredAtMs }) =>
               matches({ client, sessionId, messageId: id, content, occurredAtMs }));
+          if (rawDeleted || ledgerBlanked) advanceRawInspectEpoch(state);
           if (rawDeleted) advanceRevision(run);
           if (ledgerBlanked) run.stateWritten = true;
           return { rawDeleted, ledgerBlanked };
@@ -594,6 +634,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, seedClientlessRaw,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

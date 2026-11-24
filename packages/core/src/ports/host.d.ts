@@ -217,8 +217,9 @@ export interface InspectMemoryMetadata {
 export interface InspectReceipt extends Receipt {
   id: string;
   excerpt: string;
-  /** Receipt source event and receipt insertion time, respectively. */
+  /** Legacy alias for the source message ID. */
   eventId: string;
+  /** Receipt insertion time, distinct from the source event time. */
   createdAtMs: number;
 }
 
@@ -260,7 +261,7 @@ export interface InspectItemEvidence {
     procedural: boolean;
     origin: Origin | null;
     anchors: readonly { receiptId: string; digest: string; start: number; end: number }[];
-  };
+  } | null;
   supersession?: ContextReadFields;
 }
 
@@ -497,7 +498,8 @@ export interface ContextReadStore extends ReadIdentityPort {
   snapshotState(tx: Tx, readSet: ContextReadSet, types: readonly ContextReadType[]): Promise<
     readonly { memory: number; card?: number; lineage?: string }[]
   >;
-  /** One slot per ref. Null means missing or denied. Visible rows carry their actual revisions. */
+  /** One slot per ref. Null means missing or denied. Visible rows carry their actual revisions.
+   * Withhold unsafe receipts and any qualification they anchor inside this read transaction. */
   evidence(tx: Tx, readSet: ContextReadSet, refs: readonly ContextReadRef[],
     intent: ContextReadIntent): Promise<readonly (ContextEvidenceRow | null)[]>;
   readonly raw?: ContextRawReadStore;

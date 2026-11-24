@@ -81,9 +81,6 @@ export interface Receipt {
   id?: string;
   /** For explicit writes, the saved text. */
   excerpt?: string;
-  /** Source event and retention time, when the receipt store preserves them. */
-  eventId?: string;
-  createdAtMs?: number;
 }
 
 /** A content-free diagnostic event (no text, ids, hashes or keys). */

@@ -62,7 +62,7 @@ async function insert(ctx, scope, text, receipts = []) {
   return { type: /** @type {const} */ ("memory"), scope, id, revision };
 }
 
-/** @param {number} number @returns {Receipt} */
+/** @param {number} number @returns {Receipt & {eventId: string, createdAtMs: number}} */
 function receipt(number) {
   return { id: "receipt-" + String(number).padStart(2, "0"), client: "fixture-client", sessionId: "fixture-session",
     eventId: "event-" + number, messageId: "message-" + number, role: "user",
@@ -288,6 +288,52 @@ export const CONTEXT_READ_CASES = [
       await rejects(() => contextRead.observeIndex(ended, selection, find), "internal_error");
       await rejects(() => storage.uow.run(ctx.otherOwner, { readOnly: true }, tx => contextRead.snapshotState(tx, selection, ["memory"])),
         "internal_error");
+    },
+  },
+  {
+    id: "T-CONTEXT-READ-5",
+    title: "fetch withholds the only receipt of a visible Memory after a source fence",
+    needs: ["contextRead", "rawArchive"],
+    async run(ctx) {
+      const adapter = contextStorage(ctx);
+      const raw = ctx.adapter.raw;
+      check(raw, "Raw archive port required");
+      const { raw: rawSearch, ...memoryReads } = adapter.contextRead;
+      const unreachable = () => { throw new Error("Fetch must not search Raw"); };
+      const services = [
+        contextReadTestService({ ...adapter, capabilities: { ...adapter.capabilities, contextRawRead: false },
+          contextRead: memoryReads }),
+        contextReadTestService({ ...adapter, capabilities: { ...adapter.capabilities, contextRawRead: true },
+          contextRead: { ...memoryReads, raw: rawSearch ?? { search: unreachable, revalidate: unreachable } } }),
+      ];
+      const scope = ctx.scope("project\0fenced-evidence");
+      const selection = readSet(scope);
+      const retained = receipt(1);
+      const { client, messageId, role, occurredAtMs, excerpt } = retained;
+      const root = { client, sessionId: "original-source-session" };
+      await adapter.uow.run(ctx.owner, { pauseLock: true }, async tx => {
+        const batch = [{ id: messageId, role, occurredAtMs, content: excerpt ?? "" }];
+        for (const [index, { sessionId }] of [root, retained].entries()) {
+          const key = { scope, client, sessionId, eventId: "archive-event-" + index, payloadDigest: "a".repeat(64) };
+          await raw.recordLineage(tx, key, batch);
+          equal((await raw.archive(tx, key, batch)).archived, 1, "Archive both the original turn and its fork");
+        }
+      });
+      const ref = await insert(ctx, scope, "A visible Memory with one receipt", [retained]);
+      const before = await Promise.all(services.map(service => service.fetchEvidence(selection, { refs: [ref], intent: current })));
+      await adapter.uow.run(ctx.owner, { pauseLock: true }, tx => raw.fenceSession(tx, scope, root));
+      for (const [index, service] of services.entries()) {
+        const initial = before[index].items[0];
+        check(initial.type === "memory" && initial.provenance.sources.length === 1, "Fixture has one retained receipt");
+        const after = await service.fetchEvidence(selection, { refs: [ref], intent: current });
+        const item = after.items[0];
+        check(item.type === "memory" && item.text === initial.text, "A fenced receipt leaves the Memory visible");
+        equal(item.provenance.sources, [], "Withhold receipt ID and content identity");
+        equal(item.provenance.receiptMetadata, [], "Withhold receipt metadata");
+        equal(item.provenance.coverage, { status: "budget_exhausted", included: 0, omitted: 1 }, "Count the withheld receipt");
+        check(!excerpt || !JSON.stringify(item).includes(excerpt), "Fenced excerpt is absent from delivery");
+        await rejects(() => service.fetchEvidence(selection, { snapshot: before[index].snapshot }), "snapshot_stale");
+      }
     },
   },
 ];

@@ -8,6 +8,7 @@ import { createPauseStore } from "./pause.mjs";
 import { createRawStore } from "./raw.mjs";
 import { createRawLineage, createSpanLineage } from "./raw-lineage.mjs";
 import { createRawReads } from "./raw-read.mjs";
+import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
@@ -33,7 +34,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw),
     memories: createMemoryStore(port, hashSessionKey, index.markDirty),
-    inspect: createInspectStore(port, hashSessionKey),
+    inspect: createInspectStore(port, hashSessionKey, createReceiptReadSafety(hashSessionKey, lineage, migratedRaw)),
     ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),

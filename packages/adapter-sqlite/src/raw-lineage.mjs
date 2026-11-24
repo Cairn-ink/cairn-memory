@@ -1,13 +1,13 @@
 import { createHmac } from "node:crypto";
 import { CoreError, factHidesRow } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
-import { readRawRow } from "./raw-rows.mjs";
+import { decodeRawRow, rawScopeWhere, readRawRow } from "./raw-rows.mjs";
 import { scopeKey, sha256, validateId } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
 /** @import { RawSpanFact } from "@cairn-ink/core" */
 /** @import { CaptureMessage, Scope, SpanLineageStore } from "@cairn-ink/core/ports" */
-/** @import { Session } from "./raw-rows.mjs" */
+/** @import { RawRow, Session } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @typedef {[messageTag: string, proof: string]} Proof */
@@ -46,6 +46,24 @@ export function createRawLineage(storeKey, hashSession) {
     });
   }
 
+  /** @param {Connection} db @param {string} owner @param {string} client
+   * @param {readonly Proof[]} candidates @param {string | null} excludedSession
+   */
+  function* matchingAnchors(db, owner, client, candidates, excludedSession) {
+    const find = db.prepare(`SELECT DISTINCT namespace_key, session_hash FROM cairn_raw_anchors
+      WHERE owner_id = ? AND client_key = ? AND message_tag = ? AND (? IS NULL OR session_tag <> ?)
+        AND (? = '' OR proof = '' OR proof = ?)`);
+    const seen = new Set();
+    for (const [messageTag, proof] of candidates) {
+      for (const row of find.iterate(owner, JSON.stringify(client), messageTag, excludedSession, excludedSession, proof, proof)) {
+        const key = JSON.stringify([row.namespace_key, row.session_hash]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        yield { scope: { owner, namespace: decodeJson(row.namespace_key) }, sessionHash: String(row.session_hash) };
+      }
+    }
+  }
+
   return {
     proofs,
 
@@ -68,22 +86,29 @@ export function createRawLineage(storeKey, hashSession) {
       if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return true;
       const { owner } = scope;
       const sessionTag = tag(["raw-lineage-session", owner, client, sessionId]);
-      const find = db.prepare(`SELECT DISTINCT namespace_key, session_hash FROM cairn_raw_anchors
-        WHERE owner_id = ? AND client_key = ? AND message_tag = ? AND session_tag <> ?
-          AND (? = '' OR proof = '' OR proof = ?)`);
-      const checked = new Set();
-      for (const [messageTag, proof] of candidates) {
-        for (const row of find.iterate(owner, JSON.stringify(client), messageTag, sessionTag, proof, proof)) {
-          const identity = JSON.stringify([row.namespace_key, row.session_hash]);
-          if (checked.has(identity)) continue;
-          checked.add(identity);
-          // Only source eligibility consults ancestors across namespaces, and
-          // each ancestor is evaluated under the scope where it was recorded.
-          const sourceScope = { owner, namespace: decodeJson(row.namespace_key) };
-          if (!allowsRawSession(db, sourceScope, client, String(row.session_hash))) return true;
-        }
+      for (const root of matchingAnchors(db, owner, client, candidates, sessionTag)) {
+        if (!allowsRawSession(db, root.scope, client, root.sessionHash)) return true;
       }
       return false;
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {RawRow} source
+     * @param {(scope: Scope, row: RawRow) => boolean} visible
+     */
+    receiptRootsVisible(db, scope, { client, sessionId, message }, visible) {
+      const candidates = proofs(scope.owner, client, [message]);
+      const direct = hashSession(scope, client, sessionId);
+      const rowsForMessage = db.prepare(`SELECT * FROM cairn_raw_messages WHERE ${rawScopeWhere}
+        AND client_key = ? AND message_key = ?`);
+      for (const root of matchingAnchors(db, scope.owner, client, candidates, null)) {
+        const target = root.scope;
+        if (target.namespace === scope.namespace && root.sessionHash === direct) continue;
+        if (hasRawFence(db, target, root.sessionHash)) return false;
+        const rows = rowsForMessage.all(...scopeKey(target), JSON.stringify(client), JSON.stringify(message.id))
+          .map(decodeRawRow).filter(row => hashSession(target, client, row.sessionId) === root.sessionHash);
+        if (rows.length !== 1 || !visible(target, rows[0])) return false;
+      }
+      return true;
     },
   };
 }

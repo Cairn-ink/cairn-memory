@@ -4,6 +4,7 @@ import { copyWindow } from "./retrieval-window.mjs";
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
+/** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateMerge} DuplicateMerge */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
 /** @typedef {Omit<DuplicateQuery, "embedding"> & {embedding?: number[] | null}} CanonicalQuery */
@@ -323,28 +324,26 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 
-/** @param {readonly Receipt[]} receipts */
+/** @param {readonly StoredReceipt[]} receipts */
 export function copyReceipts(receipts) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
-    const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, eventId, createdAtMs } = receipt;
+    const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
         (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
-    if ((id !== undefined && !nonempty(id)) || (eventId !== undefined && !nonempty(eventId)) ||
+    if ((id !== undefined && !nonempty(id)) ||
         (createdAtMs !== undefined && (!Number.isSafeInteger(createdAtMs) || createdAtMs < 0))) invalid();
     if (excerpt !== undefined) {
       if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt)) invalid();
-      const normalized = receiptExcerpt(excerpt);
-      // Legacy truncation can end on a single space immediately before the cutoff.
-      if (excerpt !== normalized && (excerpt.length < 799 || excerpt !== normalized + " ")) invalid();
+      if (excerpt !== receiptExcerpt(excerpt)) invalid();
     }
     return { client, sessionId, messageId, role, occurredAtMs,
-      ...(id !== undefined && { id }), ...(eventId !== undefined && { eventId }),
+      ...(id !== undefined && { id }),
       ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }) };
   });
 }
 
-/** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts */
+/** @param {readonly StoredReceipt[]} previous @param {readonly StoredReceipt[]} receipts */
 export function attachReceipts(previous, receipts) {
   /** @param {Receipt} receipt */
   const key = (receipt) => JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]);

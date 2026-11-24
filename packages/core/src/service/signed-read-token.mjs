@@ -31,33 +31,29 @@ function digestBytes(hex) {
   return Uint8Array.from(hex.match(/../gu) ?? [], byte => Number.parseInt(byte, 16));
 }
 
+/** @param {Uint8Array} expected @param {Uint8Array} presented */
+export function equalReadTags(expected, presented) {
+  const length = expected.length;
+  if (length !== presented.length) return false;
+  let difference = 0;
+  for (let index = 0; index < length; index++) {
+    difference |= expected[index] ^ presented[index];
+  }
+  return difference === 0;
+}
+
 /** @param {ReadTokenIdentity["cursorKey"]} cursorKey @param {ClockAndHash} [clock] */
 export function signedReadToken(cursorKey, clock) {
   /** @type {Promise<CryptoKey> | undefined} */
   let importedKey;
   const key = cursorKey instanceof Uint8Array
-    ? () => importedKey ??= globalThis.crypto.subtle.importKey("raw", new Uint8Array(cursorKey), algorithm, false, ["sign", "verify"])
+    ? () => importedKey ??= globalThis.crypto.subtle.importKey("raw", new Uint8Array(cursorKey), algorithm, false, ["sign"])
     : () => cursorKey;
 
   /** @param {string} value */
   async function sign(value) {
     if (clock) return digestBytes(await clock.hmacHex(cursorKey, value));
     return new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", await key(), encoder.encode(value)));
-  }
-
-  /** @param {string} value @param {Uint8Array<ArrayBuffer>} signature */
-  async function verify(value, signature) {
-    const signingKey = await key();
-    if (signingKey.usages.includes("verify") || !clock) {
-      return globalThis.crypto.subtle.verify("HMAC", signingKey, signature, encoder.encode(value));
-    }
-    // Legacy inspect accepts opaque sign-only handles. Compare the two MACs
-    // through the platform's constant-time verifier under a fresh key.
-    const comparisonKey = /** @type {CryptoKey} */ (
-      await globalThis.crypto.subtle.generateKey(algorithm, false, ["sign", "verify"])
-    );
-    const expected = await globalThis.crypto.subtle.sign("HMAC", comparisonKey, await sign(value));
-    return globalThis.crypto.subtle.verify("HMAC", comparisonKey, expected, signature);
   }
 
   return {
@@ -74,7 +70,7 @@ export function signedReadToken(cursorKey, clock) {
     async decode(token, bind = body => body) {
       const [body, signature, extra] = token.split(".");
       if (!body || !base64url.test(body) || !isReadMac(signature) || extra !== undefined ||
-          !await verify(bind(body), decodeBytes(signature))) return undefined;
+          !equalReadTags(await sign(bind(body)), decodeBytes(signature))) return undefined;
       try {
         return JSON.parse(decoder.decode(decodeBytes(body)));
       } catch {

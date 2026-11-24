@@ -176,8 +176,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
                 return link;
               }
               const excerpt = receiptExcerpt(cleanContent(retained.content));
-              return { ...link, occurredAtMs: retained.occurredAtMs, eventId: claim.key.eventId,
-                createdAtMs: nowMs, ...(excerpt && { excerpt }) };
+              return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt }) };
             }) : sourceRefs;
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {

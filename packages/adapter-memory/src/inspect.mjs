@@ -4,32 +4,36 @@ import { advanceInspectEpoch } from "./unit-of-work.mjs";
 /** @import { ContextReadFields, InspectItemEvidence, InspectMemoryMetadata, InspectReceipt, InspectStore,
  * Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
+/** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @typedef {Pick<InspectItemEvidence, "procedural" | "qualification">} StoredInspectEvidence */
-/** @typedef {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} Policy */
 
 const encoder = new TextEncoder();
 
 /** @param {Pick<StorageAdapter<StoredDocumentCardRecord>, "placement" | "supersession" | "conflicts">} related
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
+ * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} receiptReadSafety
  */
-export function createInspectStore(related, { port, runSeed, readTokenIdentity }, matchFacts) {
+export function createInspectStore(related, { port, runSeed, readTokenIdentity }, matchFacts, receiptReadSafety) {
   /** @param {State} state @param {Scope} scope @param {number} [expectedEpoch] */
   function epochOf(state, scope, expectedEpoch) {
-    const epoch = state.inspectEpochs.get(scope.namespace) ?? 1;
+    const epoch = (state.inspectEpochs.get(scope.namespace) ?? 1) + state.rawInspectEpoch;
+    if (!Number.isSafeInteger(epoch)) throw new CoreError("internal_error");
     if (expectedEpoch !== undefined && expectedEpoch !== epoch) throw new CoreError("cursor_stale");
     return epoch;
   }
 
-  /** @param {Entry} entry @param {Policy} policy @returns {(InspectReceipt & { position: number })[]} */
-  function visibleReceipts({ receipts, inspectReceiptPositions }, policy) {
-    return receipts.flatMap(receipt => {
-      const { id, excerpt, client, sessionId, messageId, eventId, role, occurredAtMs, createdAtMs } = receipt;
+  /** @param {State} state @param {Scope} scope @param {Entry} entry @param {Policy} policy */
+  async function visibleReceipts(state, scope, { receipts, inspectReceiptPositions, receiptKeys }, policy) {
+    /** @type {(InspectReceipt & { position: number })[]} */
+    const visible = [];
+    for (const receipt of receipts) {
       const position = inspectReceiptPositions?.get(receipt);
-      if (position === undefined || id === undefined || excerpt === undefined || eventId === undefined ||
-          createdAtMs === undefined || policy.blockedMessages(client, sessionId, [occurredAtMs]).length) return [];
-      return [{ id, createdAtMs, position, excerpt, client, sessionId, messageId, eventId, role, occurredAtMs }];
-    });
+      if (position === undefined) continue;
+      const safe = await receiptReadSafety(state, scope, receipt, receiptKeys?.get(receipt), policy);
+      if (safe) visible.push({ ...safe, position });
+    }
+    return visible;
   }
 
   /** @param {State} state @param {Entry} entry @param {number} receiptCount @returns {InspectMemoryMetadata} */
@@ -41,11 +45,12 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
       filing: { status: filed ? "filed" : "unfiled" }, receiptCount, createdAtMs, updatedAtMs };
   }
 
-  /** @param {unknown} anchors @param {readonly InspectReceipt[]} receipts */
-  async function anchorsVisible(anchors, receipts) {
-    if (!Array.isArray(anchors) || anchors.length > 4) return false;
+  /** @param {unknown} anchors @param {readonly InspectReceipt[]} receipts @param {Set<string | undefined>} storedIds */
+  async function anchorsVisible(anchors, receipts, storedIds) {
+    if (!Array.isArray(anchors) || anchors.length > 4 ||
+        anchors.some(anchor => !anchor || typeof anchor.receiptId !== "string")) return false;
+    if (anchors.some(({ receiptId }) => storedIds.has(receiptId) && !receipts.some(receipt => receipt.id === receiptId))) return null;
     for (const anchor of anchors) {
-      if (!anchor || typeof anchor.receiptId !== "string") return false;
       const excerpt = receipts.find(receipt => receipt.id === anchor.receiptId)?.excerpt;
       if (excerpt === undefined || !Number.isInteger(anchor.start) || !Number.isInteger(anchor.end) ||
           anchor.start < 0 || anchor.start >= anchor.end || anchor.end > excerpt.length) return false;
@@ -63,7 +68,7 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
     identity: readTokenIdentity,
 
     async list(tx, scope, { states, limit, after, expectedEpoch }) {
-      return port(tx, scope, false, state => {
+      return port(tx, scope, false, async state => {
         const epoch = epochOf(state, scope, expectedEpoch);
         const policy = matchFacts(state.facts, scope);
         const entries = Array.from(state.rows.get(scope.namespace)?.values() ?? []);
@@ -73,23 +78,24 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
             (!after || row.updatedAtUs < after.updatedAtUs ||
               row.updatedAtUs === after.updatedAtUs && compareUtf8(row.id, after.id) > 0) && !policy.hides(entry);
         }).sort(({ row: a }, { row: b }) => compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(a.id, b.id));
-        return {
-          epoch,
-          rows: rows.slice(0, limit + 1).map(entry => ({
-            ...metadata(state, entry, visibleReceipts(entry, policy).length),
+        const page = [];
+        for (const entry of rows.slice(0, limit + 1)) {
+          page.push({
+            ...metadata(state, entry, (await visibleReceipts(state, scope, entry, policy)).length),
             updatedAtUs: entry.row.updatedAtUs,
-          })),
-        };
+          });
+        }
+        return { epoch, rows: page };
       });
     },
 
     async item(tx, scope, memoryId, { limit, after, expectedEpoch, includeQualification }) {
-      const snapshot = await port(tx, scope, false, state => {
+      const snapshot = await port(tx, scope, false, async state => {
         const epoch = epochOf(state, scope, expectedEpoch);
         const entry = state.rows.get(scope.namespace)?.get(memoryId);
         const policy = matchFacts(state.facts, scope);
         if (!entry || policy.hides(entry)) return { epoch, item: null, nextAnchor: null };
-        const retained = visibleReceipts(entry, policy);
+        const retained = await visibleReceipts(state, scope, entry, policy);
         retained.sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.id, b.id));
 
         let offset = 0;
@@ -103,30 +109,31 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
         const nextAnchor = page.length > limit ? { row: page[limit - 1].position } : null;
         const receipts = page.slice(0, limit).map(({ position: _position, ...receipt }) => receipt);
         const memory = { ...metadata(state, entry, retained.length), text: entry.row.text };
-        return { epoch, nextAnchor, item: { memory, receipts }, retained,
-          evidence: structuredClone(entry.inspectEvidence) };
+        const storedIds = new Set(entry.receipts.map(receipt => receipt.id));
+        const { qualification: storedQualification, procedural: storedProcedural } = entry.inspectEvidence ?? {};
+        const qualification = includeQualification && storedQualification &&
+          await anchorsVisible(storedQualification.anchors, retained, storedIds) ? structuredClone(storedQualification) : null;
+        const proceduralSafety = storedProcedural ? await anchorsVisible(storedProcedural.anchors, retained, storedIds) : undefined;
+        const procedural = proceduralSafety ? structuredClone(storedProcedural) : proceduralSafety === null ? null : undefined;
+        return { epoch, nextAnchor, item: { memory, receipts, qualification, procedural } };
       });
       if (!snapshot.item) return { epoch: snapshot.epoch, item: null, nextAnchor: null };
-      const { epoch, nextAnchor, item, evidence, retained } = snapshot;
+      const { epoch, nextAnchor, item: { qualification, procedural, ...item } } = snapshot;
       const placements = (await related.placement?.forMemory(tx, scope, memoryId) ?? []).map(id => ({ id }));
       const conflicts = (await related.conflicts?.list(tx, scope, memoryId) ?? []).map(edge => ({ ...edge }));
-      const qualification = includeQualification && evidence?.qualification &&
-        await anchorsVisible(evidence.qualification.anchors, retained) ? evidence.qualification : null;
-      const procedural = evidence?.procedural && await anchorsVisible(evidence.procedural.anchors, retained)
-        ? evidence.procedural : undefined;
 
       /** @type {ContextReadFields | undefined} */
       let supersession;
       if (item.memory.state === "historical") {
         const links = await related.supersession?.read(tx, scope, memoryId);
-        supersession = await port(tx, scope, false, state => {
+        supersession = await port(tx, scope, false, async state => {
           const link = state.relations.get(scope.namespace)?.supersessions.get(memoryId);
           const replacement = links?.supersededBy && state.rows.get(scope.namespace)?.get(links.supersededBy);
           if (!link || !replacement || replacement.row.revision < link.replacement.revision) {
             return { previousRevision: link?.previous.revision ?? null, replacement: null, receiptIds: [], evidenceAvailable: false };
           }
           const policy = matchFacts(state.facts, scope);
-          const visibleIds = new Set(visibleReceipts(replacement, policy).map(receipt => receipt.id));
+          const visibleIds = new Set((await visibleReceipts(state, scope, replacement, policy)).map(receipt => receipt.id));
           const receiptIds = link.receiptIds.filter(id => visibleIds.has(id));
           return {
             previousRevision: link.previous.revision,
@@ -139,7 +146,7 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
       return {
         epoch, nextAnchor,
         item: { ...item, placements, conflicts, ...(includeQualification && { qualification }),
-          ...(procedural && { procedural }), ...(supersession && { supersession }) },
+          ...(procedural !== undefined && { procedural }), ...(supersession && { supersession }) },
       };
     },
   };

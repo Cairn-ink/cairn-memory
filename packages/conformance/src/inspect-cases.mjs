@@ -293,4 +293,89 @@ export const INSPECT_CASES = [
         "capability_unavailable");
     },
   },
+  {
+    id: "K-INSPECT-7", title: "inspect withholds a fenced receipt and invalidates earlier receipt cursors",
+    needs: ["inspect", "rawArchive"],
+    requests: { supersession: true },
+    async run(ctx) {
+      const { adapter, harness, owner } = ctx;
+      const raw = adapter.raw;
+      check(raw && harness.seedInspectEvidence, "Fenced receipt fixtures");
+      const scope = ctx.scope("personal\0");
+      const retained = receipt("fenced-turn", "An excerpt from the fenced conversation");
+      const safe = { ...receipt("safe-turn", "Independent receipt"), sessionId: "safe-session" };
+      /** @param {Receipt} sourceReceipt */
+      async function archive({ client, sessionId, messageId, role, occurredAtMs, excerpt }) {
+        await adapter.uow.run(owner, { pauseLock: true }, tx => raw?.archive(tx,
+          { scope, client, sessionId, eventId: "archive-" + messageId, payloadDigest: "a".repeat(64) },
+          [{ id: messageId, role, occurredAtMs, content: excerpt ?? "" }]) ?? Promise.resolve());
+      }
+      await archive(retained);
+      await archive(safe);
+      const memory = await insert(ctx, scope, "Visible body with one receipt", 1, [retained]);
+      const paged = await insert(ctx, scope, "Visible body with paged receipts", 2, [safe]);
+      await adapter.uow.run(owner, {}, tx => adapter.memories.touchDuplicate(tx, scope, paged.id, [retained], { confidence: 0.4 }, 3));
+      const before = await detail(adapter, scope, memory.id);
+      equal(before.memory.receiptCount, 1, "Fixture starts with one visible receipt");
+      const stored = before.receipts[0];
+      const digest = await clock.sha256Hex(stored.excerpt);
+      const anchors = [{ receiptId: stored.id, digest, start: 0, end: 2 }];
+      await harness.seedInspectEvidence(scope, memory.id, {
+        qualification: { anchors },
+        procedural: { tagRevision: 1, procedural: true, origin: "explicit", anchors },
+      });
+      const inspect = keyless(adapter);
+      const preFence = await inspect(scope, { memoryId: memory.id, includeQualification: true });
+      check(preFence.mode === "item" && preFence.qualification && preFence.procedural, "Both anchors are initially visible");
+
+      const previous = await insert(ctx, scope, "Historical body for a supersession link", 0);
+      const supersession = adapter.supersession;
+      if (supersession) {
+        await adapter.uow.run(owner, {}, async tx => {
+          await supersession.record(tx, scope, { previous: { id: previous.id, revision: previous.revision },
+            replacement: { id: memory.id, revision: memory.revision } }, [stored.id], 4);
+          await supersession.markHistorical(tx, scope, previous.id, 4);
+        });
+        equal((await detail(adapter, scope, previous.id)).supersession?.receiptIds, [stored.id], "Supersession starts with evidence");
+      }
+      const page = await inspect(scope, { memoryId: paged.id, receiptLimit: 1 });
+      check(page.mode === "item" && page.nextReceiptCursor, "Expected pre-fence continuation");
+      const store = adapter.inspect;
+      check(store, "Inspect store required");
+      const { nextAnchor } = await adapter.uow.run(owner, { readOnly: true }, tx =>
+        store.item(tx, scope, paged.id, { limit: 1, includeQualification: false }));
+      check(nextAnchor, "Expected a stored receipt anchor");
+
+      await adapter.uow.run(owner, { pauseLock: true }, tx => raw.fenceSession(tx, scope, retained));
+      await rejects(() => inspect(scope, { memoryId: paged.id, receiptLimit: 1, receiptCursor: page.nextReceiptCursor ?? "" }), "cursor_stale");
+      const continuation = await adapter.uow.run(owner, { readOnly: true }, tx =>
+        store.item(tx, scope, paged.id, { limit: 1, includeQualification: false, after: nextAnchor }));
+      equal(continuation.item?.receipts, [], "The continuation independently applies read safety");
+      const item = await inspect(scope, { memoryId: memory.id, includeQualification: true });
+      check(item.mode === "item", "Memory stays visible after its source fence");
+      equal([item.receipts, item.memory.receiptCount, item.qualification, item.procedural], [[], 0, null, null],
+        "Fenced source withheld from the page, count and stored anchors");
+      const list = await inspect(scope, {});
+      check(list.mode === "list", "List discriminator");
+      equal(list.memories.find(r => r.id === memory.id)?.receiptCount, 0, "List excludes fenced receipts from counts");
+      const filtered = await detail(adapter, scope, paged.id);
+      equal(filtered.receipts.map(r => r.excerpt), [safe.excerpt], "Fresh paging still filters a fenced source");
+      if (supersession) {
+        const historical = (await detail(adapter, scope, previous.id)).supersession;
+        equal([historical?.receiptIds, historical?.evidenceAvailable], [[], false], "Supersession withholds fenced evidence");
+      }
+
+      // Deletion alone must also stale cursors and withhold the archived source.
+      const second = { ...safe, messageId: "second-safe-turn", sessionId: "second-safe-session" };
+      await archive(second);
+      await adapter.uow.run(owner, {}, tx => adapter.memories.touchDuplicate(tx, scope, paged.id, [second], { confidence: 0.4 }, 5));
+      const preDelete = await inspect(scope, { memoryId: paged.id, receiptLimit: 1 });
+      check(preDelete.mode === "item" && preDelete.nextReceiptCursor, "Expected pre-delete continuation");
+      await adapter.uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, second));
+      await rejects(() => inspect(scope, { memoryId: paged.id, receiptLimit: 1, receiptCursor: preDelete.nextReceiptCursor ?? "" }), "cursor_stale");
+      equal((await detail(adapter, scope, paged.id)).receipts.map(r => r.messageId), [safe.messageId], "Deleted archive source is withheld");
+      await archive(second);
+      equal((await detail(adapter, scope, paged.id)).receipts.map(r => r.messageId), [safe.messageId], "A replay cannot restore deleted receipt evidence");
+    },
+  },
 ];

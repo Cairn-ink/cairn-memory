@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { receiptAddressDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 
 /** @import { TextDigest } from "@cairn-ink/core" */
@@ -62,6 +63,19 @@ export function clearReceipts(db, scope, id) {
     .run(...scopeKey(scope), id);
 }
 
+/** @param {Connection} db @param {Scope} scope @param {string} id */
+export function suppressReceiptSources(db, scope, id) {
+  const rows = db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
+    WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?`).all(...scopeKey(scope), id);
+  const insert = db.prepare(`INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING`);
+  for (const { body, legacy_receipt_key } of rows) {
+    const receipt = /** @type {import("./receipt-identity.mjs").StoredReceipt} */ (decodeJson(body));
+    const key = receipt.receiptKey ?? legacy_receipt_key;
+    insert.run(...scopeKey(scope), receiptAddressDenial(receipt));
+    if (typeof key === "string") insert.run(...scopeKey(scope), receiptIdentityDenial(key));
+  }
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts @param {number} nowMs */
 export function attachReceipts(db, scope, id, receipts, nowMs) {
   if (!receipts.length) return;
@@ -75,8 +89,9 @@ export function attachReceipts(db, scope, id, receipts, nowMs) {
   let ordinal = Number(select.get(...keys)?.last);
   const createdAtUs = BigInt(nowMs) * 1000n;
   for (const { excerpt, ...receipt } of receipts) {
+    const storedReceipt = { ...receipt, ...(excerpt !== undefined && { receiptKey: receiptIdentityKey({ ...receipt, excerpt }) }) };
     const stored = insert.run(...keys, ++ordinal,
-      JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]), JSON.stringify(receipt));
+      JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]), JSON.stringify(storedReceipt));
     if (stored.changes) insertInspect.run(...keys, ordinal, randomUUID(), excerpt ?? null, createdAtUs);
   }
 }

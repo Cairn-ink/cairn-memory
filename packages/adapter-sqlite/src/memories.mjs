@@ -1,5 +1,5 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
-import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
+import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import {
   copyReceipts, encodeContent, invalidInput, scopeKey, validateBatch, validateId, validateMerge, validateSource, writeTime,
@@ -264,6 +264,7 @@ export function createMemoryStore(port, hashSession, markDirty) {
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
         if (changes === 0) return false;
+      suppressReceiptSources(db, scope, id);
         clearReceipts(db, scope, id);
         markDirty?.(db, tx);
         return true;

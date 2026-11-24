@@ -156,7 +156,7 @@ export function copyReceipts(receipts) {
         (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalidInput();
     if (excerpt !== undefined && (typeof excerpt !== "string" || !excerpt ||
         /[\u0000\uD800-\uDFFF]/u.test(excerpt) || excerpt.length > 800 ||
-        receiptExcerpt(excerpt) !== excerpt.trimEnd())) invalidInput();
+        receiptExcerpt(excerpt) !== excerpt)) invalidInput();
     return { client, sessionId, messageId, role, occurredAtMs, ...(excerpt !== undefined && { excerpt }) };
   });
 }

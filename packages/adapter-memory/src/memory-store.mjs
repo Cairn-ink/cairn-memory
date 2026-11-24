@@ -1,11 +1,12 @@
-import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8, receiptExcerpt } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { advanceInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
+import { receiptAddressKey, receiptExcerptDenial, receiptIdentityKey } from "./receipt-read-safety.mjs";
+import { advanceInspectEpoch, advanceRawInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -18,6 +19,7 @@ export { writeTime };
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
 /** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
+/** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @typedef {import("./unit-of-work.mjs").Entry} Entry */
@@ -102,9 +104,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
   }
 
   /** @param {import("./unit-of-work.mjs").State} state @param {Entry} entry
-   * @param {Receipt[]} incoming @param {number} createdAtMs
+   * @param {StoredReceipt[]} incoming @param {number} createdAtMs
    */
-  function appendReceipts(state, entry, incoming, createdAtMs) {
+  async function appendReceipts(state, entry, incoming, createdAtMs) {
     const receipts = attachReceipts(entry.receipts, incoming);
     for (const receipt of receipts.slice(entry.receipts.length)) {
       if (capabilities.inspect) {
@@ -112,10 +114,10 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         if (!Number.isSafeInteger(position)) throw new CoreError("internal_error");
         (entry.inspectReceiptPositions ??= new Map()).set(receipt, position);
       }
-      if (receipt.excerpt !== undefined && (capabilities.inspect || (capabilities.contextRead && receipt.eventId !== undefined))) {
+      if (receipt.excerpt !== undefined && (capabilities.inspect || capabilities.contextRead)) {
         receipt.id = capabilities.inspect ? crypto.randomUUID() : (receipt.id ?? crypto.randomUUID());
-        receipt.eventId ??= receipt.messageId;
         receipt.createdAtMs ??= createdAtMs;
+        (entry.receiptKeys ??= new Map()).set(receipt, await receiptIdentityKey(receipt));
       }
     }
     entry.receipts = receipts;
@@ -154,7 +156,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: [],
             };
-            appendReceipts(state, entry, incoming, nowMs);
+            await appendReceipts(state, entry, incoming, nowMs);
             entries.set(id, entry);
             advanceInspectEpoch(state, namespace);
             markDirty();
@@ -170,7 +172,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           validateTime(nowMs);
           const incoming = copyReceipts(receipts);
           const namespace = writeNamespace(scope);
-          return (getState, markDirty) => {
+          return async (getState, markDirty) => {
             const state = getState();
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
@@ -182,7 +184,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
             }
             Object.assign(row, writeTime(nowMs));
-            appendReceipts(state, entry, incoming, nowMs);
+            await appendReceipts(state, entry, incoming, nowMs);
             if (changed || incoming.length) invalidateRationale(state, namespace, id);
             advanceInspectEpoch(state, namespace);
             markDirty();
@@ -300,7 +302,8 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           if (incoming !== null) {
             entry.receipts = [];
             entry.inspectReceiptPositions?.clear();
-            appendReceipts(state, entry, incoming, nowMs);
+            entry.receiptKeys?.clear();
+            await appendReceipts(state, entry, incoming, nowMs);
           }
           delete entry.inspectEvidence;
           invalidateRationale(state, namespace, id);
@@ -321,11 +324,28 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           eraseRelations(state, namespace, id);
           const entries = state.rows.get(namespace);
-          if (!entries?.delete(id)) return false;
+          const entry = entries?.get(id);
+          if (!entries || !entry) return false;
+          if (capabilities.inspect || capabilities.contextRead) {
+            // Retain only opaque suppression coordinates before erasing the source links.
+            for (const receipt of entry.receipts) {
+              state.receiptDenials.add(await receiptAddressKey(namespace, receipt));
+              const key = entry.receiptKeys?.get(receipt);
+              if (key) state.receiptDenials.add(JSON.stringify([namespace, key]));
+            }
+            if (entry.receipts.length && state.rawAnchors.size) advanceRawInspectEpoch(state);
+            // An explicit save may have retained the full source text without a
+            // receipt. Carry a digest of its normalized cutoff through erase.
+            if (entry.row.text.length > 800) {
+              const excerpt = receiptExcerpt(entry.row.text);
+              if (excerpt.length >= 799) state.receiptDenials.add(await receiptExcerptDenial(namespace, excerpt));
+            }
+          }
+          entries.delete(id);
           invalidateRationale(state, namespace, id);
           if (!entries.size) state.rows.delete(namespace);
           dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });

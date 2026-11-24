@@ -1,7 +1,9 @@
-import { allDigests, canonicalKey, compareUtf8, CoreError, coreDigest, createBM25 } from "@cairn-ink/core";
+import { canonicalKey, compareUtf8, CoreError, createBM25 } from "@cairn-ink/core";
+import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 
 /** @import { ContextEvidenceRow, ContextIndexObservation, ContextReadSelection, ContextReadSet, ContextReadStore,
-  Counters, InspectReceipt, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
+  Counters, InspectReceipt, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @typedef {{ binding: string, index: ReturnType<typeof createBM25<ReturnType<typeof documentsFor>[number]>>,
  * ids: ReadonlySet<string>, observation: ContextIndexObservation }} Publication */
@@ -40,12 +42,6 @@ function eligible(entry, intent, policy) {
   return (intent === "history" || !entry.row.historical) && !policy.hides(entry);
 }
 
-/** @param {Receipt} receipt @returns {receipt is InspectReceipt} */
-function retained(receipt) {
-  return receipt.id !== undefined && receipt.excerpt !== undefined &&
-    receipt.eventId !== undefined && receipt.createdAtMs !== undefined;
-}
-
 /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
 function projectionKey(readSet, { types, intent }) {
   return JSON.stringify([readSet.owner, readSet.namespaces, types, intent]);
@@ -54,10 +50,11 @@ function projectionKey(readSet, { types, intent }) {
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {import("./privacy.mjs").RingKeys} ringKeys
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["receiptSourcesVisible"]} [rawSourcesVisible]
  * @returns {ContextReadStore} */
-export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, rawSourceVisible) {
+export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, rawSourcesVisible) {
   enableContextEpochs();
+  const receiptReadSafety = createReceiptReadSafety(ringKeys, rawSourcesVisible);
   /** @type {Map<string, Publication>} */
   const projections = new Map();
   /** @type {WeakMap<Tx, Map<string, Publication | undefined>>} */
@@ -77,7 +74,7 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
   }
 
   /** @param {State} state @param {Scope} scope @param {Entry} entry
-   * @param {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} policy */
+   * @param {Policy} policy */
   async function receiptEvidence(state, scope, entry, policy) {
     const ordered = [...entry.receipts].sort((a, b) =>
       (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0) || compareUtf8(a.id ?? "", b.id ?? ""));
@@ -85,20 +82,11 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
     /** @type {InspectReceipt[]} */
     const receipts = [];
     let visible = 0;
-    const useDigests = policy.textFacts.length > 0;
-    const keys = useDigests ? await ringKeys(scope.owner) : [];
     for (const receipt of prefix) {
-      if (!retained(receipt)) continue;
-      const digests = useDigests ? await allDigests(receipt.excerpt) : [];
-      for (const key of keys) digests.push(await coreDigest(receipt.excerpt, key));
-      if (policy.withholdsRaw(receipt, digests)) continue;
-      const { client, sessionId, messageId } = receipt;
-      if (state.rawFences.has(JSON.stringify([scope.namespace, client, sessionId]))) continue;
-      const rawKey = JSON.stringify([scope.owner, scope.namespace, client, sessionId, messageId]);
-      if (state.rawConflicts.has(rawKey) ||
-          (rawSourceVisible && !await rawSourceVisible(state, scope, receipt))) continue;
+      const safe = await receiptReadSafety(state, scope, receipt, entry.receiptKeys?.get(receipt), policy);
+      if (!safe) continue;
       visible++;
-      if (receipts.length < 16) receipts.push(receipt);
+      if (receipts.length < 16) receipts.push(safe);
     }
     const exhausted = prefix.length > 16;
     /** @type {import("@cairn-ink/core/ports").ContextReceiptCoverage} */

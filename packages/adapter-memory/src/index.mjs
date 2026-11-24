@@ -10,6 +10,7 @@ import { createFactStore, createFingerprintProvider, createPauseStore } from "./
 import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
+import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
@@ -39,6 +40,7 @@ export function createMemoryAdapter(options = {}) {
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
+  const receiptReadSafety = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
@@ -50,7 +52,7 @@ export function createMemoryAdapter(options = {}) {
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
   const inspect = flags.inspect ? createInspectStore({ placement,
     supersession: flags.supersession ? supersession : undefined,
-    conflicts: flags.conflictEdges ? conflicts : undefined }, work, matchFacts) : undefined;
+    conflicts: flags.conflictEdges ? conflicts : undefined }, work, matchFacts, receiptReadSafety) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -63,7 +65,7 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
-    ...(flags.contextRead && { contextRead: createContextReadStore(work, matchFacts, ringKeys, archive?.sourceVisible) }),
+    ...(flags.contextRead && { contextRead: createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),

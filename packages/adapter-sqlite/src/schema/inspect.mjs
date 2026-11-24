@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { CoreError } from "@cairn-ink/core";
+import { CoreError, receiptExcerpt } from "@cairn-ink/core";
+import { decodeJson } from "../memory-rows.mjs";
+import { receiptIdentityKey } from "../receipt-identity.mjs";
 import { scopeKey } from "../storage-values.mjs";
 
 /** @import { Connection } from "../storage-values.mjs" */
 /** @import { LegacyInput } from "../legacy/migration-input.mjs" */
+/** @import { StoredReceipt } from "../receipt-identity.mjs" */
 
 export const INSPECT_TABLES = Object.freeze([
   "cairn_inspect_identity", "cairn_inspect_epochs", "cairn_inspect_receipts",
@@ -81,6 +84,36 @@ function epochTriggers(table) {
 const triggers = ["cairn_memories", "cairn_receipts", "cairn_suppression_facts", "cairn_legacy_denials",
   "cairn_inspect_evidence"].map(epochTriggers).join("");
 
+// An empty namespace key is reserved for Raw changes that can affect forks
+// in other namespaces. Ordinary inspect epochs retain their existing binding.
+export const RAW_INSPECT_EPOCH_KEY = "";
+
+/** @param {string} table @param {boolean} crossScopeOnly */
+function rawEpochTriggers(table, crossScopeOnly) {
+  return ["INSERT", "UPDATE", "DELETE"].map(operation => {
+    const row = operation === "DELETE" ? "OLD" : "NEW";
+    return `
+      CREATE TRIGGER IF NOT EXISTS ${table}_inspect_raw_${operation.toLowerCase()} AFTER ${operation} ON ${table}
+        ${crossScopeOnly ? `WHEN EXISTS (SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ${row}.owner_id)` : ""}
+      BEGIN
+        INSERT INTO cairn_inspect_epochs VALUES (${row}.owner_id, '${RAW_INSPECT_EPOCH_KEY}', 1)
+          ON CONFLICT (owner_id, namespace_key) DO UPDATE SET epoch = epoch + 1;
+      END;
+    `;
+  }).join("");
+}
+
+const rawTriggers = ["cairn_raw_fences", "cairn_raw_messages", "cairn_raw_anchors"].map(table => rawEpochTriggers(table, false)).join("") +
+  ["cairn_suppression_facts", "cairn_legacy_denials"].map(table => rawEpochTriggers(table, true)).join("");
+
+/** @param {Connection} db */
+export function upgradeInspectEpochTriggers(db) {
+  if (db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' AND name = 'cairn_raw_fences_inspect_raw_insert'").get()) return;
+  db.exec(rawTriggers);
+  db.prepare(`INSERT INTO cairn_inspect_epochs
+    SELECT DISTINCT owner_id, ?, 1 FROM cairn_inspect_epochs WHERE true ON CONFLICT DO NOTHING`).run(RAW_INSPECT_EPOCH_KEY);
+}
+
 /** @param {string} date */
 function legacyTimeUs(date) {
   const parsed = Date.parse(date);
@@ -98,17 +131,27 @@ export function installInspectSchema(db, source) {
   db.exec(schema);
   db.prepare("INSERT INTO cairn_inspect_identity VALUES (1, ?)").run(source?.cursorSecret ?? randomBytes(32).toString("hex"));
 
-  const legacyReceipts = db.prepare(`SELECT owner_id, namespace_key, memory_id, ordinal,
-    json_extract(body, '$.legacy.id') AS id, json_extract(body, '$.legacy.excerpt') AS excerpt,
-    json_extract(body, '$.legacy.createdAt') AS created_at FROM cairn_receipts
+  const legacyReceipts = db.prepare(`SELECT owner_id, namespace_key, memory_id, ordinal, body, legacy_receipt_key
+    FROM cairn_receipts
     WHERE json_type(body, '$.legacy.id') = 'text' AND json_type(body, '$.legacy.excerpt') = 'text'
       AND json_type(body, '$.legacy.createdAt') = 'text'`);
   const receipt = db.prepare("INSERT INTO cairn_inspect_receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-  for (const row of legacyReceipts.iterate()) {
-    const id = String(row.id);
+  const updateReceipt = db.prepare(`UPDATE cairn_receipts SET body = ?
+    WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? AND ordinal = ?`);
+  for (const row of legacyReceipts.all()) {
+    const body = /** @type {StoredReceipt & {legacy: NonNullable<StoredReceipt["legacy"]>}} */ (decodeJson(row.body));
+    const { id, excerpt: original, createdAt } = body.legacy;
+    const key = body.receiptKey ?? row.legacy_receipt_key;
+    const hasIdentity = key === receiptIdentityKey({ ...body, excerpt: original });
+    const excerpt = receiptExcerpt(original);
+    const coordinates = [row.owner_id, row.namespace_key, row.memory_id, row.ordinal];
+    if (excerpt !== original) {
+      body.legacy.excerpt = excerpt;
+      if (hasIdentity) body.receiptKey = receiptIdentityKey({ ...body, excerpt });
+      updateReceipt.run(JSON.stringify(body), ...coordinates);
+    }
     const position = source?.receiptPositions.get(id) ?? null;
-    receipt.run(position, row.owner_id, row.namespace_key, row.memory_id, row.ordinal,
-      id, row.excerpt, legacyTimeUs(String(row.created_at)));
+    receipt.run(position, ...coordinates, id, hasIdentity ? excerpt : null, legacyTimeUs(createdAt));
   }
 
   if (source) {
@@ -119,5 +162,5 @@ export function installInspectSchema(db, source) {
     }
     for (const { scope, value } of source.epochs) epoch.run(...scopeKey(scope), value);
   }
-  db.exec(triggers);
+  db.exec(triggers + rawTriggers);
 }

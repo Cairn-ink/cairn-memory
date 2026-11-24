@@ -1,5 +1,6 @@
-import { normalizeForHash, prepareCoreText } from "@cairn-ink/core";
+import { normalizeForHash, prepareCoreText, receiptExcerpt } from "@cairn-ink/core";
 import { legacyIdentifier, refuse } from "../legacy/migration-input.mjs";
+import { receiptIdentityKey } from "../receipt-identity.mjs";
 import { encodeContent, scopeKey, sha256 } from "../storage-values.mjs";
 
 /** @import { SQLInputValue } from "node:sqlite" */
@@ -157,8 +158,10 @@ export function planMigration(source) {
     const sourceKey = state.addresses.has(eventKey) ? JSON.stringify([client, sessionId, messageId, id]) : eventKey;
     state.addresses.add(eventKey);
     receiptOrder.set(row.memory_id, state);
-    const body = { client, sessionId, messageId, role: row.role, occurredAtMs: null,
-      legacy: { id, excerpt: row.excerpt, createdAt: row.created_at } };
+    const excerpt = receiptExcerpt(row.excerpt);
+    const address = { client, sessionId, messageId, role: row.role };
+    const body = { ...address, occurredAtMs: null, legacy: { id, excerpt, createdAt: row.created_at },
+      ...(excerpt !== row.excerpt && { receiptKey: receiptIdentityKey({ ...address, excerpt }) }) };
     receiptRows.push([...keys, row.memory_id, ++state.ordinal, sourceKey, row.receipt_key, JSON.stringify(body)]);
   }
   const epochs = Array.from(owners, ([owner, state]) =>

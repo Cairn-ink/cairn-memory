@@ -1,14 +1,18 @@
 import { CoreError } from "@cairn-ink/core";
 import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
+import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
 /** @import { ContextReadFields, InspectMemoryMetadata, InspectReceipt, InspectReceiptAnchor, InspectStore,
- * MemoryRow, Receipt, Scope } from "@cairn-ink/core/ports" */
+ * MemoryRow, Scope } from "@cairn-ink/core/ports" */
 /** @import { SQLInputValue, SQLOutputValue } from "node:sqlite" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
-/** @typedef {ReturnType<typeof scopedSuppression>} Policy */
+/** @import { Policy } from "./receipt-read-safety.mjs" */
+/** @import { StoredReceipt } from "./receipt-identity.mjs" */
+/** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
+/** @typedef {(row: Record<string, SQLOutputValue>) => RetainedReceipt | null} ReceiptProjector */
 /** @typedef {{ receipt: InspectReceipt, position: number }} RetainedReceipt */
 /** @typedef {NonNullable<Awaited<ReturnType<InspectStore["item"]>>["item"]>["procedural"]} Procedural */
 
@@ -18,9 +22,12 @@ const maxSqlTime = 9223372036854775807n;
 
 /** @param {Connection} db @param {Scope} scope @param {number} [expectedEpoch] */
 function readEpoch(db, scope, expectedEpoch) {
-  const result = db.prepare("SELECT epoch FROM cairn_inspect_epochs WHERE owner_id = ? AND namespace_key = ?")
-    .get(...scopeKey(scope));
-  const epoch = Number(result?.epoch ?? 1);
+  const [owner, namespace] = scopeKey(scope);
+  const rows = db.prepare(`SELECT namespace_key, epoch FROM cairn_inspect_epochs
+    WHERE owner_id = ? AND namespace_key IN (?, ?)`).all(owner, namespace, RAW_INSPECT_EPOCH_KEY);
+  const epoch = Number(rows.find(row => row.namespace_key === namespace)?.epoch ?? 1) +
+    Number(rows.find(row => row.namespace_key === RAW_INSPECT_EPOCH_KEY)?.epoch ?? 0);
+  if (!Number.isSafeInteger(epoch)) throw new CoreError("storage_error");
   if (expectedEpoch !== undefined && expectedEpoch !== epoch) throw new CoreError("cursor_stale");
   return epoch;
 }
@@ -36,31 +43,33 @@ function resolveReceiptAnchor(db, scope, id, anchor) {
   return { time: BigInt(String(row.time)), id: String(row.id) };
 }
 
-/** @param {Record<string, SQLOutputValue>} row @param {Policy} policy @returns {RetainedReceipt | null} */
-function projectReceipt({ body, legacy_receipt_key, id, excerpt, position, time }, policy) {
-  if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt) ||
-      typeof id !== "string" || !id) return null;
-  const { client, sessionId, messageId, role, occurredAtMs } = /** @type {Receipt} */ (decodeJson(body));
-  if (policy.withholdsReceipt({ client, sessionId, messageId, role, occurredAtMs,
-    ...(legacy_receipt_key && { legacyReceiptKey: String(legacy_receipt_key) }) })) return null;
-  const createdAtMs = Number(BigInt(String(time)) / 1000n);
-  return {
-    position: Number(position),
-    receipt: { id, excerpt, client, sessionId, messageId, eventId: messageId, role, occurredAtMs, createdAtMs },
+/** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety
+ * @returns {ReceiptProjector}
+ */
+function receiptProjector(db, scope, policy, receiptReadSafety) {
+  return ({ body, legacy_receipt_key, id, excerpt, position, time }) => {
+    if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt) ||
+        typeof id !== "string" || !id) return null;
+    const { client, sessionId, messageId, role, occurredAtMs, receiptKey } = /** @type {StoredReceipt} */ (decodeJson(body));
+    const source = { client, sessionId, messageId, role, occurredAtMs, excerpt };
+    const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
+    if (!receiptReadSafety(db, scope, policy, source, receiptKey ?? legacyKey, legacyKey)) return null;
+    const createdAtMs = Number(BigInt(String(time)) / 1000n);
+    return { position: Number(position), receipt: { ...source, id, eventId: messageId, createdAtMs } };
   };
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @param {Policy} policy
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project
  * @param {{ time: bigint, id: string }} [after]
  */
-function* visibleReceipts(db, scope, id, policy, after) {
+function* visibleReceipts(db, scope, id, project, after) {
   const records = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE ${receiptScope} AND i.excerpt IS NOT NULL ${after ? "AND (i.created_at_us, i.id) > (?, ?)" : ""}
     ORDER BY i.created_at_us ASC, i.id ASC`).iterate(...scopeKey(scope), id, ...(after ? [after.time, after.id] : []));
   for (const record of records) {
-    const visible = projectReceipt(record, policy);
+    const visible = project(record);
     if (visible) yield visible;
   }
 }
@@ -71,34 +80,34 @@ function storedEvidence(db, scope, id) {
     FROM cairn_inspect_evidence WHERE ${withinMemory}`).get(...scopeKey(scope), id);
 }
 
-/** @param {Connection} db @param {MemoryRow} row @param {Policy} policy @param {SQLOutputValue | undefined} filing
+/** @param {Connection} db @param {MemoryRow} row @param {ReceiptProjector} project @param {SQLOutputValue | undefined} filing
  * @returns {InspectMemoryMetadata}
  */
-function metadata(db, { scope, id, createdAtMs, updatedAtMs, confidence, kind, origin, revision, historical }, policy, filing) {
+function metadata(db, { scope, id, createdAtMs, updatedAtMs, confidence, kind, origin, revision, historical }, project, filing) {
   let receiptCount = 0;
-  for (const _receipt of visibleReceipts(db, scope, id, policy)) receiptCount++;
+  for (const _receipt of visibleReceipts(db, scope, id, project)) receiptCount++;
   return { id, scope, createdAtMs, updatedAtMs, confidence, kind, origin, revision, state: historical ? "historical" : "active",
     receiptCount, filing: { status: filing === "filed" ? "filed" : "unfiled" } };
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @param {Policy} policy @param {readonly string[]} ids */
-function receiptsById(db, scope, id, policy, ids) {
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project @param {readonly string[]} ids */
+function receiptsById(db, scope, id, project, ids) {
   const find = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE ${receiptScope} AND i.id = ?`);
   return new Map(ids.flatMap(receiptId => {
     const row = find.get(...scopeKey(scope), id, receiptId);
-    const visible = row && projectReceipt(row, policy);
-    return visible ? [[receiptId, visible.receipt]] : [];
+    return row ? [[receiptId, project(row)?.receipt ?? null]] : [];
   }));
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @param {Policy} policy @param {unknown} anchors */
-function anchorsVisible(db, scope, id, policy, anchors) {
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project @param {unknown} anchors */
+function anchorsVisible(db, scope, id, project, anchors) {
   if (!Array.isArray(anchors) || anchors.length > 4 ||
       anchors.some(anchor => !anchor || typeof anchor.receiptId !== "string")) return false;
-  const receipts = receiptsById(db, scope, id, policy, anchors.map(anchor => anchor.receiptId));
+  const receipts = receiptsById(db, scope, id, project, anchors.map(anchor => anchor.receiptId));
+  if ([...receipts.values()].includes(null)) return null;
   return anchors.every(({ receiptId, receiptDigest, digest, start, end, text }) => {
     const excerpt = receipts.get(receiptId)?.excerpt;
     if (excerpt === undefined || !Number.isInteger(start) || !Number.isInteger(end) ||
@@ -109,10 +118,11 @@ function anchorsVisible(db, scope, id, policy, anchors) {
   });
 }
 
-/** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {SQLOutputValue | undefined} stored
+/** @param {Connection} db @param {Scope} scope @param {Policy} policy
+ * @param {ReceiptProjector} project @param {SQLOutputValue | undefined} stored
  * @returns {ContextReadFields}
  */
-function supersession(db, scope, policy, stored) {
+function supersession(db, scope, policy, project, stored) {
   const link = stored ? /** @type {{ previousRevision: number, memoryId: string, revision: number, receiptIds: string[] }} */ (
     decodeJson(stored)
   ) : null;
@@ -120,7 +130,8 @@ function supersession(db, scope, policy, stored) {
   if (!link) return unavailable;
   const replacement = readEntry(db, scope, link.memoryId);
   if (!replacement || replacement.row.revision < link.revision || policy.hides(replacement)) return unavailable;
-  const receiptIds = [...receiptsById(db, scope, link.memoryId, policy, link.receiptIds).keys()];
+  const receiptIds = [...receiptsById(db, scope, link.memoryId, project, link.receiptIds)]
+    .flatMap(([id, receipt]) => receipt ? [id] : []);
   return {
     previousRevision: link.previousRevision,
     replacement: { memoryId: link.memoryId, revision: link.revision, currentRevision: replacement.row.revision,
@@ -129,8 +140,8 @@ function supersession(db, scope, policy, stored) {
   };
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @returns {InspectStore} */
-export function createInspectStore(port, hashSession) {
+/** @param {Port} port @param {SessionHasher} hashSession @param {ReceiptReadSafety} receiptReadSafety @returns {InspectStore} */
+export function createInspectStore(port, hashSession, receiptReadSafety) {
   return {
     async identity(tx) {
       return port(tx, tx.owner, {}, db => {
@@ -145,6 +156,7 @@ export function createInspectStore(port, hashSession) {
       return port(tx, scope.owner, {}, db => {
         const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
+        const project = receiptProjector(db, scope, policy, receiptReadSafety);
         const anchor = after && after.updatedAtUs <= maxSqlTime ? after : undefined;
         /** @type {SQLInputValue[]} */
         const stateKey = states.length === 1 ? [Number(states[0] === "historical")] : [];
@@ -157,7 +169,7 @@ export function createInspectStore(port, hashSession) {
         for (const record of scan) {
           const entry = decodeEntry(scope, record);
           if (policy.hides(entry)) continue;
-          rows.push({ ...metadata(db, entry.row, policy, storedEvidence(db, scope, entry.row.id)?.filing),
+          rows.push({ ...metadata(db, entry.row, project, storedEvidence(db, scope, entry.row.id)?.filing),
             updatedAtUs: entry.row.updatedAtUs });
           if (rows.length > limit) break;
         }
@@ -169,11 +181,12 @@ export function createInspectStore(port, hashSession) {
       return port(tx, scope.owner, {}, db => {
         const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
+        const project = receiptProjector(db, scope, policy, receiptReadSafety);
         const entry = readEntry(db, scope, memoryId);
         if (!entry || policy.hides(entry)) return { epoch, item: null, nextAnchor: null };
         const anchor = after ? resolveReceiptAnchor(db, scope, memoryId, after) : undefined;
         const rows = [];
-        for (const row of visibleReceipts(db, scope, memoryId, policy, anchor)) {
+        for (const row of visibleReceipts(db, scope, memoryId, project, anchor)) {
           rows.push(row);
           if (rows.length > limit) break;
         }
@@ -182,15 +195,17 @@ export function createInspectStore(port, hashSession) {
         const qualification = includeQualification && stored?.qualification
           ? /** @type {ContextReadFields} */ (decodeJson(stored.qualification)) : null;
         const procedural = stored?.procedural ? /** @type {Procedural} */ (decodeJson(stored.procedural)) : undefined;
-        const memory = { ...metadata(db, entry.row, policy, stored?.filing), text: entry.row.text };
+        const proceduralSafety = procedural ? anchorsVisible(db, scope, memoryId, project, procedural.anchors) : undefined;
+        const memory = { ...metadata(db, entry.row, project, stored?.filing), text: entry.row.text };
         return {
           epoch, nextAnchor,
           item: {
             memory, receipts: rows.slice(0, limit).map(({ receipt }) => receipt), placements: [], conflicts: [],
             ...(includeQualification && { qualification: qualification &&
-              anchorsVisible(db, scope, memoryId, policy, qualification.anchors) ? qualification : null }),
-            ...(procedural && anchorsVisible(db, scope, memoryId, policy, procedural.anchors) && { procedural }),
-            ...(entry.row.historical && { supersession: supersession(db, scope, policy, stored?.supersession) }),
+              anchorsVisible(db, scope, memoryId, project, qualification.anchors) ? qualification : null }),
+            ...(proceduralSafety && { procedural }),
+            ...(proceduralSafety === null && { procedural: null }),
+            ...(entry.row.historical && { supersession: supersession(db, scope, policy, project, stored?.supersession) }),
           },
         };
       });
