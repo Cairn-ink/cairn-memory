@@ -6,13 +6,17 @@ import { check, DEFAULT_EMBEDDING_DIMENSIONS, equal, readDump } from "./support.
 
 const encoder = new TextEncoder();
 
-/** Lends the adapter to core under a fixture name. Core reads each port when it needs it, on the adapter itself,
- * so ports behind prototype getters work and properties outside the storage contract are never read.
+/** Lends the adapter to core, adding a fixture name only when the adapter has none. Core reads each port when it
+ * needs it, on the adapter itself, so ports behind prototype getters work and properties outside the storage
+ * contract are never read. An existing name is passed through unchanged, as proxy invariants require for frozen adapters.
  * @param {CaseContext["adapter"]} adapter @returns {CaseContext["adapter"] & { name: string }}
  */
 function storageOf(adapter) {
   return /** @type {CaseContext["adapter"] & { name: string }} */ (new Proxy(adapter, {
-    get: (target, key) => key === "name" ? "receipt-fixture" : Reflect.get(target, key, target),
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      return key === "name" && typeof value !== "string" ? "receipt-fixture" : value;
+    },
     has: (target, key) => key === "name" || Reflect.has(target, key),
   }));
 }

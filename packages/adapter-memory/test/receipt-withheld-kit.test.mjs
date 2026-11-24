@@ -170,6 +170,19 @@ test("K-RCPT-W1 accepts an adapter that exposes its ports through prototype gett
   assert.equal(await runCase(factory, testCase), null);
 });
 
+for (const named of [true, false]) {
+  test(`K-RCPT-W1 accepts a frozen adapter ${named ? "with" : "without"} its own name`, async () => {
+    const factory = rawFactory({
+      create(options) {
+        const { name, ...ports } = createMemoryAdapter(options);
+        assert.equal(typeof name, "string");
+        return Object.freeze(named ? { name, ...ports } : ports);
+      },
+    });
+    assert.equal(await runCase(factory, testCase), null);
+  });
+}
+
 test("K-RCPT-W1 never reads adapter properties outside the storage contract", async () => {
   const factory = rawFactory({
     create(options) {
