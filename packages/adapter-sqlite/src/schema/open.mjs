@@ -5,7 +5,7 @@ import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
 import { CONTEXT_READ_TABLES, installContextReadSchema } from "./context-read.mjs";
-import { INSPECT_TABLES, installInspectSchema, upgradeInspectSchema } from "./inspect.mjs";
+import { INSPECT_TABLES, installInspectSchema } from "./inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
 /** @typedef {Pick<DatabaseSync, "prepare">} Reader */
@@ -43,25 +43,20 @@ function classifyStore(db) {
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
   const migrated = tables.some(table => table.name === "cairn_migration");
   const rawPrivacy = migrated && tables.some(table => table.name === "cairn_migrated_raw_privacy");
-  const inspectInstalled = tables.some(table => table.name === "cairn_inspect_identity");
-  const contextReadInstalled = tables.some(table => table.name === "cairn_context_publications");
-  const expected = [...layoutTables, ...(inspectInstalled ? INSPECT_TABLES : []),
-    ...(contextReadInstalled && inspectInstalled ? CONTEXT_READ_TABLES : [])];
+  const expected = [...layoutTables, ...INSPECT_TABLES, ...CONTEXT_READ_TABLES];
   if (tables.length !== expected.length + Number(migrated) + Number(rawPrivacy) ||
       !expected.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
   }
   if (migrated) assertMigrationComplete(db);
-  if (inspectInstalled) {
-    const identity = db.prepare("SELECT singleton, cursor_secret FROM cairn_inspect_identity LIMIT 2").all();
-    if (identity.length !== 1 || identity[0].singleton !== 1 ||
-        typeof identity[0].cursor_secret !== "string" || !/^[0-9a-f]{64}$/u.test(identity[0].cursor_secret)) {
-      throw new CoreError("storage_error");
-    }
+  const identity = db.prepare("SELECT singleton, cursor_secret FROM cairn_inspect_identity LIMIT 2").all();
+  if (identity.length !== 1 || identity[0].singleton !== 1 ||
+      typeof identity[0].cursor_secret !== "string" || !/^[0-9a-f]{64}$/u.test(identity[0].cursor_secret)) {
+    throw new CoreError("storage_error");
   }
   const legacyRawHashing = rawPrivacy && db.prepare(
     "SELECT json_type(source_evidence, '$.legacyRawHashing') AS kind FROM cairn_migration").get()?.kind === "true";
-  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing, inspectInstalled, contextReadInstalled };
+  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing };
 }
 
 /** @param {string} filename */
@@ -105,10 +100,11 @@ export async function openStorage(filename) {
       connection.port(tx, owner, { write: true }, (db) => {
         const existingKey = classifyStore(db);
         db.exec("PRAGMA secure_delete = ON");
-        if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
-        if (!existingKey?.inspectInstalled) installInspectSchema(db);
-        else upgradeInspectSchema(db);
-        if (!existingKey?.contextReadInstalled) installContextReadSchema(db);
+        if (existingKey === null) {
+          db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
+          installInspectSchema(db);
+          installContextReadSchema(db);
+        }
         return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
       }));
     return { ...connection, ...identity };
