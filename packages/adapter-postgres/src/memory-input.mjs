@@ -34,7 +34,7 @@ export function inputText(value) {
 }
 
 /** @param {unknown} namespace @param {boolean} [allowNonNull] @returns {string | null} */
-export function namespaceKey(namespace, allowNonNull = true) {
+export function namespaceKey(namespace, allowNonNull = false) {
   if (namespace === null) return null;
   if (!allowNonNull || typeof namespace !== "string" || UNPAIRED_SURROGATE.test(namespace)) invalid();
   // JSON encoding keeps the NUL separator of engine namespaces out of PostgreSQL text.
@@ -169,6 +169,7 @@ export function copyRefs(refs) {
     if (!ref) invalid();
     const { id, type, namespace } = ref;
     if (type !== "memory" && type !== "raw" && type !== "card") invalid();
-    return { ref: { id: inputText(id), type, namespace }, key: namespaceKey(namespace) };
+    // Delivery filters references against its validated scope after copying them.
+    return { ref: { id: inputText(id), type, namespace }, key: namespaceKey(namespace, true) };
   });
 }

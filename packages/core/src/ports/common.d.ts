@@ -66,6 +66,8 @@ export interface MemoryRow {
   /** null until embedded (engine embeds after write; a store without a key may never embed). */
   embedding?: { model: string; vector: Float32Array | number[] } | null;
   historical?: boolean;
+  /** Explicit read marker when a historical memory has no visible replacement. */
+  supersession?: "superseded (replacement no longer available)";
 }
 
 /** Evidence link from a memory to the capture messages it came from. */

@@ -47,6 +47,7 @@ function writeSchemaFixture(file, schema) {
 for (const [label, setup] of [
   ["foreign application", currentSchema + "PRAGMA application_id = 7;"],
   ["unmarked nonempty database", "CREATE TABLE example (value INTEGER);"],
+  ["core-next version 2", currentSchema + "PRAGMA user_version = 2;"],
   ["unsupported core-next version", currentSchema + `PRAGMA user_version = ${SQLITE_PHYSICAL_VERSION + 1};`],
   ["missing table", currentSchema + "DROP TABLE cairn_pause;"],
   ["extra table", currentSchema + "CREATE TABLE extra (value INTEGER);"],
@@ -88,7 +89,7 @@ test("a zero-length file initializes and a no-op reopen preserves database bytes
   const reader = new DatabaseSync(file, { readOnly: true });
   try {
     assert.equal(reader.prepare("PRAGMA application_id").get().application_id, SQLITE_APPLICATION_ID);
-    assert.equal(reader.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(reader.prepare("PRAGMA user_version").get().user_version, 3);
   } finally {
     reader.close();
   }

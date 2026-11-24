@@ -37,7 +37,7 @@ function validBound(value) {
 }
 
 /** @param {string} owner @param {RetrievalScope} scope @returns {RetrievalScope} */
-function readSet(owner, { namespaces, clients, window }) {
+export function readSet(owner, { namespaces, clients, window }) {
   const namespaceList = copyArray(namespaces);
   if (!namespaceList.length || new Set(namespaceList).size !== namespaceList.length ||
       !namespaceList.every(validNamespace)) invalidInput();
@@ -94,8 +94,21 @@ function recentOrder(a, b) {
 }
 
 /** @param {number} limit */
-function validateLimit(limit) {
+export function validateLimit(limit) {
   if (!Number.isSafeInteger(limit) || limit < 1) invalidInput();
+}
+
+/** @template {{ ref: ItemRef, text: string }} T
+ * @param {T[]} documents @param {string[]} terms @param {number} depth
+ */
+export function rankLexical(documents, terms, depth) {
+  const index = createBM25(documents);
+  const scored = [];
+  for (const { text, ...candidate } of documents) {
+    const score = scoreBM25(terms, termFrequencies(text), index);
+    if (score !== null) scored.push({ ...candidate, score });
+  }
+  return rankScores(scored).slice(0, depth);
 }
 
 /** @param {Connection} db @param {Entry} entry @returns {HydratedItem} */
@@ -113,9 +126,10 @@ function hydrateRow(db, { row }) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
+ * @param {(db: Connection, selection: RetrievalScope, refs: readonly ItemRef[]) => ItemRef[]} visibleRawRefs
  * @returns {Pick<StorageAdapter, "lexical" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, hashSession, storeKey) {
+export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs) {
   const stateToken = createSnapshotToken(storeKey);
 
   /** @param {Connection} db @param {RetrievalScope} selection @param {RecentKey | null} after
@@ -182,21 +196,20 @@ export function createRetrievalPorts(port, hashSession, storeKey) {
 
           const documents = Array.from(visibleRows(db, selection), row =>
             ({ ref: memoryRef(row), updatedAtUs: row.updatedAtUs, text: row.text }));
-          const index = createBM25(documents);
-          const scored = [];
-          for (const { text, ...candidate } of documents) {
-            const score = scoreBM25(terms, termFrequencies(text), index);
-            if (score !== null) scored.push({ ...candidate, score });
-          }
-          return { rows: rankScores(scored).slice(0, depth), matched: scored.length > 0 };
+          const rows = rankLexical(documents, terms, depth);
+          return { rows, matched: rows.length > 0 };
         });
       },
     },
     fence: {
       assertVisible(tx, scope, refs, intent) {
         // Core supplies a new read transaction for the final delivery check.
-        return port(tx, scope?.owner, {}, db => Array.from(
-          visibleRefs(db, readSet(tx.owner, scope), refs, intent === "read"), ({ row }) => memoryRef(row)));
+        return port(tx, scope?.owner, {}, db => {
+          const selection = readSet(tx.owner, scope);
+          const references = copyArray(refs);
+          const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
+          return [...visible, ...visibleRawRefs(db, selection, references)];
+        });
       },
     },
     hydrate: {
