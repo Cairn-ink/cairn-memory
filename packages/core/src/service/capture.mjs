@@ -12,7 +12,7 @@ import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
 
-/** @import {CaptureKey, CaptureMessage, RetainedDigester, Tx} from "../ports/index.d.ts" */
+/** @import {CaptureKey, CaptureMessage, FinishItem, RetainedDigester, Tx} from "../ports/index.d.ts" */
 /** @import {CallOptions} from "../ports/common.d.ts" */
 /** @import {ModelRequest} from "../ports/model.d.ts" */
 /** @import {SuppressionSnapshot} from "../ports/privacy.d.ts" */
@@ -445,10 +445,36 @@ export function captureMethods(deps) {
       /** @param {Tx} tx */
       const selectWriteKey = tx => keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner);
 
+      /** @type {Set<string>} */
+      const excludedSources = new Set();
+      /** @param {Tx} tx @param {readonly FinishItem[]} items */
+      async function finish(tx, items) {
+        const result = await capture.finish(tx, token, items);
+        const { suppressedItems } = result;
+        if (suppressedItems === undefined) return result;
+        if (!Array.isArray(suppressedItems) || suppressedItems.length > items.length) {
+          throw new CoreError("internal_error");
+        }
+        const seen = new Set();
+        for (let index = 0; index < suppressedItems.length; index++) {
+          const position = suppressedItems[index];
+          if (!Object.hasOwn(suppressedItems, index) || !Number.isInteger(position) ||
+              position < 0 || position >= items.length || seen.has(position)) {
+            throw new CoreError("internal_error");
+          }
+          seen.add(position);
+        }
+        // A receipt identifies its admitted source position by the unique message ID.
+        for (const position of seen) {
+          for (const { messageId } of items[position].receipts) excludedSources.add(messageId);
+        }
+        return result;
+      }
+
       let retryableExtraction = false;
       try {
         if (positions.length === 0) {
-          const result = await runAtGeneration(tx => capture.finish(tx, token, []));
+          const result = await runAtGeneration(tx => finish(tx, []));
           return result === null ? { status: "paused" } : { status: "done", result };
         }
 
@@ -477,7 +503,7 @@ export function captureMethods(deps) {
             }
             const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
             await capture.assertEligible(tx, key, allowed);
-            if (!allowed.length) return { result: await capture.finish(tx, token, []) };
+            if (!allowed.length) return { result: await finish(tx, []) };
             if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
             return { allowed };
           });
@@ -534,7 +560,6 @@ export function captureMethods(deps) {
         const candidates = hostedCandidates(output, policy, diagnostics);
         const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
         const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
-        const excludedSources = new Set();
         /** @param {Tx} tx @param {PreparedCandidate[]} batch */
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
@@ -585,7 +610,7 @@ export function captureMethods(deps) {
           const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>
             receipts.every(({ messageId }) => allowedIds.has(messageId)));
           checkCaptureAbort(signal, deadline);
-          const result = await capture.finish(tx, token, items);
+          const result = await finish(tx, items);
           const rawMessages = allowedMessages.filter(({ id }) => !excludedSources.has(id));
           if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
             await archive.archive(tx, key, rawMessages);
