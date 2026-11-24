@@ -180,7 +180,7 @@ test("admitted capture retains one bounded, redacted receipt with stable identit
   const [stored] = row.receipts;
   assert.equal(stored.excerpt.length, 800);
   assert.ok(!stored.excerpt.includes("sk-synthetic_example"));
-  assert.equal(stored.eventId, key.eventId);
+  assert.equal(stored.eventId, message.id);
   assert.equal(stored.occurredAtMs, 1);
   const first = await service.fetchEvidence(selection, { refs: [ref], intent: "current" });
   const second = await service.fetchEvidence(selection, { snapshot: first.snapshot });

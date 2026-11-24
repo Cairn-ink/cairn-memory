@@ -31,8 +31,8 @@ export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
    */
   return async function receiptReadSafety(state, scope, receipt, key, policy) {
     const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
-    if (!id || !excerpt || createdAtMs === undefined || !key || key !== await receiptIdentityKey(receipt)) return null;
-    if (rawSourcesVisible && !await rawSourcesVisible(state, scope, receipt)) return null;
+    if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant") ||
+        !id || !excerpt || createdAtMs === undefined || !key || key !== await receiptIdentityKey(receipt)) return null;
     if (state.receiptDenials.size) {
       const { namespace } = scope;
       if (state.receiptDenials.has(JSON.stringify([namespace, key])) ||
@@ -45,6 +45,7 @@ export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
       for (const fingerprintKey of await ringKeys(scope.owner)) digests.push(await coreDigest(excerpt, fingerprintKey));
     }
     if (policy.withholdsRaw(receipt, digests)) return null;
+    if (rawSourcesVisible && !await rawSourcesVisible(state, scope, receipt)) return null;
     return { client, sessionId, messageId, eventId: messageId, role, occurredAtMs, id, excerpt, createdAtMs };
   };
 }

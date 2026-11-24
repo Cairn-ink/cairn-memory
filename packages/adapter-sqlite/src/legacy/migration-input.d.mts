@@ -28,6 +28,7 @@ export interface LegacyInput {
   inspect: {
     cursorSecret: string;
     receiptPositions: Map<string, number>;
+    rawAncestryEmpty: Map<string, boolean>;
     epochs: { scope: { owner: string; namespace: string }; value: number }[];
     evidence: {
       scope: { owner: string; namespace: string };

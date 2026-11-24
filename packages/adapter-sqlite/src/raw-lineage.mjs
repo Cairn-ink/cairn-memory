@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { CoreError, factHidesRow } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
-import { decodeRawRow, rawScopeWhere, readRawRow } from "./raw-rows.mjs";
+import { decodeRawRow, rawScopeWhere, rawSessionKey, rawSessionWhere, readRawRow } from "./raw-rows.mjs";
 import { scopeKey, sha256, validateId } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
@@ -90,6 +90,22 @@ export function createRawLineage(storeKey, hashSession) {
         if (!allowsRawSession(db, root.scope, client, root.sessionHash)) return true;
       }
       return false;
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {Session & {messageId: string}} receipt */
+    hasPossibleReceiptSource(db, scope, receipt) {
+      const { client, sessionId, messageId } = receipt;
+      if (db.prepare(`SELECT 1 FROM cairn_raw_messages WHERE ${rawSessionWhere} LIMIT 1`)
+        .get(...rawSessionKey(scope, receipt))) return true;
+      const messageTag = tag(["raw-lineage-id", scope.owner, client, messageId]);
+      const sessionTag = tag(["raw-lineage-session", scope.owner, client, sessionId]);
+      const clientKey = JSON.stringify(client);
+      // Without the full turn, even a root with a different content proof is possible.
+      return Boolean(db.prepare(`SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ? AND client_key = ?
+        AND message_tag = ?
+        UNION ALL SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ? AND client_key = ?
+        AND namespace_key = ? AND session_tag = ? LIMIT 1`)
+        .get(scope.owner, clientKey, messageTag, ...scopeKey(scope), clientKey, sessionTag));
     },
 
     /** @param {Connection} db @param {Scope} scope @param {RawRow} source

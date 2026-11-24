@@ -145,9 +145,13 @@ export function installInspectSchema(db, source) {
     const hasIdentity = key === receiptIdentityKey({ ...body, excerpt: original });
     const excerpt = receiptExcerpt(original);
     const coordinates = [row.owner_id, row.namespace_key, row.memory_id, row.ordinal];
+    const rawAncestryEmpty = source?.rawAncestryEmpty.get(id);
+    if (rawAncestryEmpty !== undefined) body.legacyRawAncestryEmpty = rawAncestryEmpty;
     if (excerpt !== original) {
       body.legacy.excerpt = excerpt;
       if (hasIdentity) body.receiptKey = receiptIdentityKey({ ...body, excerpt });
+    }
+    if (rawAncestryEmpty !== undefined || excerpt !== original) {
       updateReceipt.run(JSON.stringify(body), ...coordinates);
     }
     const position = source?.receiptPositions.get(id) ?? null;

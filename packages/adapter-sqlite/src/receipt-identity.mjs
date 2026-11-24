@@ -1,7 +1,8 @@
 import { sha256 } from "./storage-values.mjs";
 
 /** @import { Receipt } from "@cairn-ink/core/ports" */
-/** @typedef {Receipt & { receiptKey?: string, legacy?: { id: string, excerpt: string, createdAt: string } }} StoredReceipt */
+/** @typedef {Receipt & { receiptKey?: string, legacyRawAncestryEmpty?: boolean,
+ * legacy?: { id: string, excerpt: string, createdAt: string } }} StoredReceipt */
 
 /** @param {Pick<Receipt, "client" | "sessionId" | "messageId" | "role" | "excerpt">} receipt */
 export function receiptIdentityKey({ client, sessionId, messageId, role, excerpt }) {
