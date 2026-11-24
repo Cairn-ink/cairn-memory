@@ -52,7 +52,7 @@ function validateDigests(digests) {
       fail();
     }
     const key = d.label === undefined ? `${d.alg}:${d.value}` :
-      JSON.stringify([d.alg, d.keyId, d.label, d.value]);
+      JSON.stringify([d.alg, d.keyId, d.label, d.pipeline, d.redactionVersion, d.value]);
     if (seen.has(key)) fail();
     seen.add(key);
   }

@@ -118,8 +118,8 @@ function signLegacyExact(text, key, prefix) {
   return sign(key.signingKey, prefix + text).then(toHex);
 }
 
-/** @param {string} text @param {FingerprintKey} key */
-async function signShingles(text, key) {
+/** @param {string} text @param {(text: string) => Promise<string>} mac */
+async function signShingles(text, mac) {
   const points = Array.from(text);
   const grams = new Set();
   for (let index = 0; index + 4 <= points.length; index++) {
@@ -130,7 +130,7 @@ async function signShingles(text, key) {
   const shingles = [];
   for (let start = 0; start < unique.length; start += 128) {
     const batch = unique.slice(start, start + 128);
-    shingles.push(...await Promise.all(batch.map((gram) => sign(key.signingKey, gram).then(toHex))));
+    shingles.push(...await Promise.all(batch.map(mac)));
   }
   return shingles;
 }
@@ -149,7 +149,7 @@ export async function legacyExactMac(text, key, labels) {
 export async function passageShingles(text, key, labels) {
   validateFingerprintLabels(labels);
   try {
-    return await signShingles(normalizeForHash(text), key);
+    return await signShingles(normalizeForHash(text), gram => sign(key.signingKey, gram).then(toHex));
   } catch {
     throw new CoreError("fingerprint_unavailable");
   }
@@ -162,7 +162,7 @@ export async function fingerprintLegacyCapture(text, key, labels) {
     const normalized = normalizeForHash(text);
     const [text_hmac, shingles] = await Promise.all([
       signLegacyExact(normalized, key, legacyExactPrefix),
-      signShingles(normalized, key),
+      signShingles(normalized, gram => sign(key.signingKey, gram).then(toHex)),
     ]);
     return { text_hmac, shingles, key_id: key.id };
   } catch {
@@ -236,65 +236,89 @@ export function addDigest(digests, digest) {
   if (!digests.some(({ alg, value }) => alg === digest.alg && value === digest.value)) digests.push(digest);
 }
 
-/** Builds retained MACs once per distinct normalized and redacted spelling.
- * @param {readonly RetainedDigester[] | undefined} digesters
- */
-export function retainedDigestBuilder(digesters) {
-  if (!digesters?.length) return undefined;
-  /** @type {Map<string, Promise<TextDigest[]>>} */
-  const byText = new Map();
-  /** @param {string} raw */
-  return raw => {
-    const text = coreDigestText(raw);
-    let pending = byText.get(text);
-    if (pending === undefined) {
-      pending = Promise.all(digesters.map(async digester => {
-        try {
-          const { alg, keyId, label } = digester;
-          if (typeof alg !== "string" || !alg || alg.length > 512 ||
-              typeof keyId !== "string" || !keyId || keyId.length > 64 ||
-              typeof label !== "string" || !label || label.length > 512) return null;
-          const value = await digester.mac(text);
-          if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value)) return null;
-          return /** @satisfies {TextDigest} */ ({
-            alg, keyId, label, value, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core,
-          });
-        } catch {
-          // Missing evidence makes a comparison with this domain ineligible.
-          return null;
-        }
-      })).then(results => results.filter(digest => digest !== null));
-      byText.set(text, pending);
-    }
-    return pending;
-  };
-}
-
-/** Builds the withholding evidence for a passage under current and historical memory pipelines.
- * @param {string} raw @param {string} text @param {FingerprintKey | null} key
- * @param {(text: string) => Promise<string>} [sha256Hex]
- * @param {(raw: string) => Promise<TextDigest[]>} [retainedFor]
- * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>}
- */
-export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256, retainedFor) {
+/** @param {string} raw @param {string} text */
+export function textVariants(raw, text) {
   const original = cleanContent(raw);
   const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
-  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
-  const variants = [
+  return /** @satisfies {Array<[string, TextDigest["pipeline"], number]>} */ ([
     [original, "hosted-v1", v1],
     [redactV1(original), "hosted-v1", v1],
     [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
     [text, "core", core],
     // Hosted capture derives its stored V1 evidence after capture normalization.
     [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
-  ];
-  const distinct = new Map(variants.map(variant => [normalizeForHash(variant[0]), variant]));
-  return Promise.all(Array.from(distinct, async ([normalized, [variant, pipeline, redactionVersion]]) => {
-    const [digests, exact, legacy, retained] = await Promise.all([
+  ]);
+}
+
+/** @typedef {ReturnType<typeof textVariants>} TextVariants */
+
+/** @param {Map<string, TextVariants>} spellings @param {RetainedDigester} digester */
+async function retainedFingerprints(spellings, digester) {
+  try {
+    const { alg, keyId, label } = digester;
+    if (typeof alg !== "string" || !alg || alg.length > 512 ||
+        typeof keyId !== "string" || !keyId || keyId.length > 64 ||
+        typeof label !== "string" || !label || label.length > 512) return null;
+    /** @type {Map<string, Promise<string>>} */
+    const signed = new Map();
+    /** @param {string} normalized */
+    function mac(normalized) {
+      let pending = signed.get(normalized);
+      if (!pending) {
+        pending = Promise.resolve().then(() => digester.mac(normalized)).then(value => {
+          if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value)) throw new CoreError("fingerprint_unavailable");
+          return value;
+        });
+        signed.set(normalized, pending);
+      }
+      return pending;
+    }
+    const signedVariants = (await Promise.all(Array.from(spellings, async ([normalized, variants]) => {
+      const value = await mac(normalized);
+      return variants.map(([, pipeline, redactionVersion]) => ({ alg, keyId, label, value, pipeline, redactionVersion }));
+    }))).flat();
+    const digests = [...new Map(signedVariants.map(digest =>
+      [JSON.stringify([digest.pipeline, digest.redactionVersion, digest.value]), digest])).values()];
+    const shingles = alg === "hmac" && label === "core" ?
+      await Promise.all(Array.from(spellings.keys(), async normalized => {
+        try {
+          return { keyId, shingles: await signShingles(normalized, mac) };
+        } catch {
+          return null;
+        }
+      })) : [];
+    return { digests, shingles };
+  } catch {
+    // A partial set of exact spellings cannot prove a miss for the signing domain.
+    return null;
+  }
+}
+
+/** Builds withholding evidence under current and historical memory pipelines.
+ * @param {string} raw @param {string} text @param {FingerprintKey | null} key
+ * @param {(text: string) => Promise<string>} [sha256Hex]
+ * @param {readonly RetainedDigester[]} [digesters]
+ * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>}
+ */
+export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256, digesters) {
+  /** @type {Map<string, TextVariants>} */
+  const spellings = new Map();
+  for (const variant of textVariants(raw, text)) {
+    const normalized = normalizeForHash(variant[0]);
+    const variants = spellings.get(normalized) ?? [];
+    variants.push(variant);
+    spellings.set(normalized, variants);
+  }
+  const retained = digesters?.length ?
+    (await Promise.all(digesters.map(digester => retainedFingerprints(spellings, digester)))).filter(evidence => evidence !== null) : [];
+  const retainedDigests = retained.flatMap(evidence => evidence.digests);
+  // Each spelling has the complete exact evidence. Containment still checks its own shingles.
+  return Promise.all(Array.from(spellings, async ([normalized, variants], index) => {
+    const [variant, pipeline, redactionVersion] = variants[variants.length - 1];
+    const [digests, exact, legacy] = await Promise.all([
       allDigests(variant, key),
       sha256Hex(normalized),
       key && fingerprintLegacyCapture(variant, key, coreFingerprintLabels),
-      retainedFor?.(variant),
     ]);
     // allDigests re-redacts its input. Keep the exact variant for historical facts.
     addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
@@ -303,7 +327,8 @@ export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha2
         alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,
       });
     }
-    return { digests: retained ? [...digests, ...retained] : digests,
-      shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
+    const retainedShingles = retained.map(evidence => evidence.shingles[index]).filter(shingles => shingles != null);
+    return { digests: [...digests, ...retainedDigests], shingles: legacy?.shingles ?? null,
+      keyId: legacy?.key_id ?? null, ...(retainedShingles.length && { retainedShingles }) };
   }));
 }

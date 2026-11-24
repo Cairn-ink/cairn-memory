@@ -85,6 +85,7 @@ Each row lists the ports used across the export, including those used only in a 
 | `IMPORT_ARCHIVE_CASES` | `uow`, `raw`, `keys` for keyed text | All need `rawArchive` and skip with a reason when `raw.importArchive` is absent. Window checks need `rawWindowHide`. Raw span checks need `rawSpans`. Keyed containment needs `fingerprintKey` and `shingleSuppression`. | `dump`, `seedFact`, plus `hashSessionKey` for hashed session and raw span fixtures as described above. |
 | `PROVEN_FORK_CASES` | `uow`, `raw`, `capture`, `suppressions` | All need `rawArchive`. | `dump`, including retained anchor IDs and opaque proof metadata, `seedFact`, plus `hashSessionKey` for hashed session fixtures. |
 | `TOPIC_CASES` | `uow`, `memories`, `placement` | All cases need `placement`. | `dump`, `seedFact`, plus `hashSessionKey` for the hashed session fixture. |
+| `DELIVERY_VISIBILITY_CASES` | `uow`, `memories`, `fence`, `documentCards`, `placement`, `raw` for message-backed cards | All cases need `documentCards` and `placement` with `forCards`. The session case also needs `rawArchive` and `raw.fenceSession`. | `seedFact`, plus `hashSessionKey` for hashed session fixtures. |
 
 ### Minimal driver
 

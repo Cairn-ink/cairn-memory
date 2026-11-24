@@ -39,6 +39,12 @@ jobs:
       - run: npm run typecheck
         working-directory: packages/adapter-memory
       - run: npm ci --ignore-scripts
+        working-directory: packages/adapter-sqlite
+      - run: npm test
+        working-directory: packages/adapter-sqlite
+      - run: npm run typecheck
+        working-directory: packages/adapter-sqlite
+      - run: npm ci --ignore-scripts
         working-directory: packages/conformance
       - run: npm run typecheck
         working-directory: packages/conformance

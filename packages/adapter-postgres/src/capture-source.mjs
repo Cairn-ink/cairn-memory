@@ -1,18 +1,11 @@
 import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
+import { readVisibilityFacts } from "./memory-visibility.mjs";
 
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { StoredFact } from "../../core/src/suppression-fact.mjs" */
 /** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
-
-const SOURCE_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
-  WHERE user_id = $1 AND (
-    kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $2
-    OR kind = 'session' AND body #>> '{session,client}' = $3 AND (
-      body #>> '{session,sessionId}' <> $4 OR body #>> '{session,sessionKeyHash}' IS NOT NULL
-    )
-  )`;
 
 const MAX_LINEAGE_SESSIONS = 1_000;
 const MAX_LINEAGE_VERTICES = 20_000;
@@ -107,7 +100,7 @@ function withholdsHashedAncestor(hashes, hashSessionKey, client, sessionId) {
  */
 export async function filterSources(query, key, times, proofs, mode, hashSessionKey) {
   const { scope, client, sessionId } = key;
-  const { rows } = await query(SOURCE_FACTS, [scope.owner, scope.namespace, client, sessionId]);
+  const facts = await readVisibilityFacts(query, scope.owner, { source: key });
   /** @type {StoredFact[]} */
   const windows = [];
   /** @type {Set<string>} */
@@ -116,13 +109,11 @@ export async function filterSources(query, key, times, proofs, mode, hashSession
   const fencedSessionHashes = new Set();
   const candidate = { scope, passages: [], session: { client, sessionId } };
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
-  for (const { kind, body, action_id: actionId } of rows) {
-    const fact = { ...body, owner: scope.owner, actionId };
-    if (fact.kind !== kind) throw new CoreError("suppressed");
-    const stored = /** @type {StoredFact} */ ({ fact });
-    if (kind === "window") {
+  for (const stored of facts) {
+    const { fact } = stored;
+    if (fact.kind === "window") {
       windows.push(stored);
-    } else {
+    } else if (fact.kind === "session") {
       if (factBlocksIncoming(stored, candidate, policy) !== false) {
         if (mode === "assert") throw new CoreError("suppressed");
         return [];
@@ -130,12 +121,12 @@ export async function filterSources(query, key, times, proofs, mode, hashSession
       const ancestor = fact.session;
       // Shared lineage identifies ancestors by owner, client and session. Test the
       // session facts in their own scope, keeping direct checks in the incoming scope.
-      if (ancestor.client === client && typeof ancestor.sessionId === "string" && ancestor.sessionId !== sessionId &&
+      if (ancestor.client === client && "sessionId" in ancestor && ancestor.sessionId !== sessionId &&
           factBlocksIncoming(stored, {
             ...candidate, scope: { owner: scope.owner, namespace: fact.namespace ?? null }, session: ancestor,
           }, policy) !== false) {
         fencedSessions.add(ancestor.sessionId);
-      } else if (ancestor.client === client && typeof ancestor.sessionKeyHash === "string") {
+      } else if (ancestor.client === client && "sessionKeyHash" in ancestor) {
         fencedSessionHashes.add(ancestor.sessionKeyHash);
       }
     }

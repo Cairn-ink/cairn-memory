@@ -1,9 +1,13 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 import { buildFactStorage, canonicalDigests } from "./facts.mjs";
+import { readCreatedAtMs, readEpoch } from "./memory-visibility.mjs";
+import { createSuppressionReads } from "./suppression-read.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { SuppressionStore } from "../../core/src/ports/privacy.d.ts" */
+/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
+/** @typedef {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {sessionRefs?: "plain" | "hashed", allowNonNullNamespace?: boolean}} SuppressionOptions */
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 const CREATED_AT_US = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us";
@@ -18,29 +22,11 @@ const INSERT_FACT = `INSERT INTO core_suppression_facts (
 const INSERT_DIGESTS = `INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id)
   SELECT $1, $2, * FROM unnest($3::text[], $4::text[], $5::text[], $6::integer[], $7::text[])`;
 
-/** @param {unknown} value */
-function integer(value) {
-  if (typeof value !== "string" || !/^-?(?:0|[1-9][0-9]*)$/u.test(value)) throw new CoreError("internal_error");
-  return BigInt(value);
-}
-
-/** @param {unknown} value @param {bigint} minimum */
-function readEpoch(value, minimum) {
-  const epoch = integer(value);
-  if (epoch < minimum || epoch > 9223372036854775807n) throw new CoreError("internal_error");
-  return epoch;
-}
-
-/** @param {unknown} value */
-function readCreatedAtMs(value) {
-  const us = integer(value);
-  const ms = Number((us - (us < 0n ? 999n : 0n)) / 1000n);
-  if (!Number.isSafeInteger(ms)) throw new CoreError("internal_error");
-  return ms;
-}
-
-/** @type {SuppressionStore["writeFact"]} */
-async function writeFact(tx, fact, incarnation) {
+/** @param {Parameters<SuppressionStore["writeFact"]>[0]} tx
+ * @param {Parameters<SuppressionStore["writeFact"]>[1]} fact
+ * @param {string} incarnation @param {boolean} hashedSessions
+ */
+async function writeFact(tx, fact, incarnation, hashedSessions) {
   requireLiveRun(tx, true);
   try {
     if (fact?.owner !== tx.owner) throw new CoreError("internal_error");
@@ -56,6 +42,9 @@ async function writeFact(tx, fact, incarnation) {
   const { owner, slot, slotHash } = stored;
   // A proxy can report a different owner when storage snapshots its own fields.
   if (owner !== tx.owner) throw new CoreError("internal_error");
+  if (hashedSessions && stored.fact.kind === "session" && "sessionId" in stored.fact.session) {
+    throw new CoreError("invalid_input");
+  }
 
   return runOperation(tx, async (query) => {
     const { rows } = await query(SELECT_SLOT, [owner, slotHash]);
@@ -96,6 +85,12 @@ async function epoch(tx, owner) {
   });
 }
 
-export function createPostgresSuppressionStore() {
-  return { writeFact, epoch };
+/** @param {SuppressionOptions} [options] @returns {SuppressionStore} */
+export function createPostgresSuppressionStore(options = {}) {
+  const hashedSessions = options.sessionRefs === "hashed";
+  return {
+    writeFact: (tx, fact, incarnation) => writeFact(tx, fact, incarnation, hashedSessions),
+    epoch,
+    ...createSuppressionReads(options),
+  };
 }

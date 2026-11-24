@@ -253,6 +253,7 @@ export async function buildFactStorage(candidate) {
   const mode = fact.kind === "text" ? fact.mode : null;
   const lookup = fact.kind === "text" && mode === "full" ? fact.text : null;
   return {
+    fact,
     owner: fact.owner,
     actionId: fact.actionId,
     origin: fact.origin,

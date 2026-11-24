@@ -144,9 +144,9 @@ export function copyReceipts(receipts) {
   });
 }
 
-/** @param {string} owner @param {Omit<RetrievalScope, "owner">} scope */
-export function copyReadScope(owner, { namespaces, clients, window }) {
-  const keys = copyArray(namespaces).map(namespace => namespaceKey(namespace));
+/** @param {string} owner @param {Omit<RetrievalScope, "owner">} scope @param {boolean} [allowNonNullNamespace] */
+export function copyReadScope(owner, { namespaces, clients, window }, allowNonNullNamespace = false) {
+  const keys = copyArray(namespaces).map(namespace => namespaceKey(namespace, allowNonNullNamespace));
   if (keys.length === 0 || new Set(keys).size !== keys.length) invalid();
   const clientList = clients === undefined ? null : copyArray(clients).map(inputText);
   let since = null;

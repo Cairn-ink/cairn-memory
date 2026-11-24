@@ -1,4 +1,4 @@
-import type { PassageFingerprint } from "../ports/privacy.d.ts";
+import type { PassageFingerprint, RetainedShingles } from "../ports/privacy.d.ts";
 import type { TextDigest, TextFact } from "../suppression-fact.mjs";
 
 /** Matches historical aliases by algorithm and value. Labelled MACs require the same domain. Invalid lists also withhold. */
@@ -14,6 +14,7 @@ export interface FingerprintEvidence {
   digests?: readonly TextDigest[];
   keyId?: string | null;
   shingles?: readonly string[] | null;
+  retainedShingles?: readonly RetainedShingles[];
 }
 /** @internal */
 export declare function isValidFingerprint(

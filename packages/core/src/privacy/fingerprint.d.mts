@@ -46,12 +46,10 @@ export declare function allDigests(raw: string, key?: FingerprintKey | null): Pr
 export declare const coreFingerprintLabels: FingerprintLabels;
 /** @internal */
 export declare function addDigest(digests: TextDigest[], digest: TextDigest): void;
-/** @internal Builds labelled MACs for one candidate's normalized and redacted spellings. */
-export declare function retainedDigestBuilder(
-  digesters?: readonly RetainedDigester[],
-): ((raw: string) => Promise<TextDigest[]>) | undefined;
+/** @internal Lists the current and historical spellings with their pipeline and redactor version. */
+export declare function textVariants(raw: string, text: string): Array<[string, TextDigest["pipeline"], number]>;
 /** @internal Builds the current and historical fingerprints used by memory withholding. */
 export declare function fingerprintMemoryPassages(
   raw: string, text: string, key: FingerprintKey | null, sha256Hex?: (text: string) => Promise<string>,
-  retainedFor?: (raw: string) => Promise<TextDigest[]>,
+  digesters?: readonly RetainedDigester[],
 ): Promise<PassageFingerprint[]>;

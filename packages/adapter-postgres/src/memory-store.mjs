@@ -11,6 +11,7 @@ import { readVisibility } from "./memory-visibility.mjs";
 import { memoryPage } from "./memory-read.mjs";
 import { runOperation } from "./uow.mjs";
 
+/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
 /** @import { MemoryStore } from "../../core/src/ports/index.d.ts" */
 
 const CONTENT_COLUMNS = "text, kind, origin, confidence, embedding, embedding_model, source_kind, source_client, source_session_id, core_digests";
@@ -21,8 +22,9 @@ function contentValues({ text, kind, origin, confidence, vector, model, source }
   return [text, kind, origin, confidence, vector, model, source.kind, source.client, source.sessionId, JSON.stringify(digests)];
 }
 
-/** @param {{nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options] @returns {MemoryStore} */
-export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNamespace = false } = {}) {
+/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options]
+ * @returns {MemoryStore} */
+export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNamespace = false, hashSessionKey } = {}) {
   return {
     async insert(tx, scope, row, receipts, nowMs) {
       guardOwner(tx, scope, true);
@@ -171,7 +173,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       if (!Number.isFinite(nearDistance) || nearDistance < 0) invalid();
       const excluded = excludeId === undefined ? undefined : inputText(excludeId);
       return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, tx.owner);
+        const visibility = await readVisibility(query, tx.owner, hashSessionKey);
         const { matches, visible } = await duplicateMatches(query, selection, ns, visibility, queries, nearDuplicate, nearDistance, excluded);
         return matches.map(group => group.filter(match => match.kind === "prior" || visible.has(match.id)));
       });
@@ -187,7 +189,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       if (mode !== "hash" && mode !== "full") invalid();
       const excluded = editId === undefined ? undefined : inputText(editId);
       return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, tx.owner);
+        const visibility = await readVisibility(query, tx.owner, hashSessionKey);
         const edit = excluded === undefined ? null : await selectMemory(query, tx.owner, ns, excluded);
         const sourceMemory = edit && { id: edit.memory.id, createdAtMs: edit.memory.createdAtMs };
         const blockedSession = visibility.blocksSession(selection, incoming);
@@ -203,7 +205,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
     async exportPage(tx, scope, page) {
       guardOwner(tx, scope);
       return memoryPage(tx, { owner: tx.owner, keys: [namespaceKey(scope.namespace)], clients: null, since: null, until: null, hasWindow: false },
-        page, true);
+        page, true, hashSessionKey);
     },
   };
 }
