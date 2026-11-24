@@ -1,4 +1,4 @@
-import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core";
+import { CoreError, isErrorCode, receiptExcerpt, validateSuppressionFact } from "@cairn-ink/core";
 import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
@@ -327,10 +327,13 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
 export function copyReceipts(receipts) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
-    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    const { client, sessionId, messageId, role, occurredAtMs, excerpt } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
       (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
-    return { client, sessionId, messageId, role, occurredAtMs };
+    if (excerpt !== undefined && (typeof excerpt !== "string" || !excerpt || excerpt.includes("\0") ||
+        !/** @type {string & {isWellFormed(): boolean}} */ (excerpt).isWellFormed() ||
+        excerpt.length > 800 || receiptExcerpt(excerpt) !== excerpt.trimEnd())) invalid();
+    return { client, sessionId, messageId, role, occurredAtMs, ...(excerpt !== undefined && { excerpt }) };
   });
 }
 

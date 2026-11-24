@@ -16,7 +16,7 @@ export const cliEntry = 'packaging/core-local/cli.mjs';
 export const coreManifest = coreRoot + '/package.json';
 
 const runtimeGlobals = new Set([
-  'AbortSignal', 'Array', 'ArrayBuffer', 'Blob', 'Date', 'Error', 'Float32Array',
+  'AbortSignal', 'Array', 'ArrayBuffer', 'BigInt', 'Blob', 'Date', 'Error', 'Float32Array',
   'Float64Array', 'Infinity', 'Intl', 'JSON', 'Map', 'Math', 'NaN', 'Number',
   'Object', 'Promise', 'Reflect', 'RegExp', 'Set', 'String', 'TextDecoder',
   'TextEncoder', 'TypeError', 'Uint8Array', 'WeakMap', 'WeakSet', 'atob', 'btoa',
@@ -26,6 +26,7 @@ const stdioProcessMembers = new Set(['argv', 'stdin', 'stdout']);
 const webCryptoMembers = new Map([
   [coreSource + 'privacy/fingerprint.mjs', new Set(['digest', 'importKey', 'sign'])],
   [coreSource + 'routing/card.mjs', new Set(['digest'])],
+  [coreSource + 'service/inspect-cursor.mjs', new Set(['generateKey', 'importKey', 'sign', 'verify'])],
 ]);
 const functionTypes = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const scopeTypes = new Set([

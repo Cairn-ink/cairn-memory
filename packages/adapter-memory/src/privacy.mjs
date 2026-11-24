@@ -3,6 +3,7 @@ import {
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
 import { copySuppressionCandidates, createFactMatcher } from "./fact-match.mjs";
+import { advanceInspectEpoch } from "./unit-of-work.mjs";
 import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
@@ -128,6 +129,7 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
   const stored = { fact, factId: newId(), incarnation, epoch, createdAtMs: now() };
   state.facts.set(slot, stored);
   state.epoch = epoch;
+  advanceInspectEpoch(state, fact.namespace ?? null);
   return { factId: stored.factId, epoch, createdAtMs: stored.createdAtMs, created: true };
 }
 

@@ -63,5 +63,13 @@ export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock
   readonly contextReadFormat: (value: ContextAssemblyValue) => string;
 }
 
+export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "clock"> {
+  readonly profile: "keyless-local";
+  readonly storage: Pick<MemoryServiceDeps["storage"], "capabilities" | "uow" | "inspect">;
+}
+
+export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
+
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService & CaptureRunner;
-export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner;
+export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
+export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner & InspectMemoryService;

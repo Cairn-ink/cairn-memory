@@ -30,13 +30,21 @@ export const CAPABILITIES = Object.freeze([
   "forgetLog", // cutover-only forget log (Postgres, removed after cutover)
 ]);
 
+// The read contract extends the base adapter capability inventory.
+export const READ_CAPABILITIES = Object.freeze(["inspect"]);
+
+const knownCapabilities = [...CAPABILITIES, ...READ_CAPABILITIES];
+
 /** @param {Partial<Record<string, boolean>>} flags */
 export function capabilities(flags) {
   /** @type {Record<string, boolean>} */
   const out = {};
   for (const name of CAPABILITIES) out[name] = flags[name] === true;
+  for (const name of READ_CAPABILITIES) {
+    if (Object.hasOwn(flags, name)) out[name] = flags[name] === true;
+  }
   for (const name of Object.keys(flags)) {
-    if (!CAPABILITIES.includes(name)) throw new CoreError("invalid_input");
+    if (!knownCapabilities.includes(name)) throw new CoreError("invalid_input");
   }
   return Object.freeze(out);
 }
@@ -46,7 +54,7 @@ export function capabilities(flags) {
  * @param {string} name
  */
 export function requireCapability(caps, name) {
-  if (!CAPABILITIES.includes(name)) throw new CoreError("invalid_input");
+  if (!knownCapabilities.includes(name)) throw new CoreError("invalid_input");
   if (caps[name] !== true) throw new CoreError("capability_unavailable");
 }
 
@@ -79,5 +87,6 @@ export function assertAdapterCapabilities(adapter) {
   for (const [member, flag] of Object.entries(OPTIONAL_PORTS)) {
     if ((adapter[member] != null) !== (caps[flag] === true)) throw new CoreError("capability_unavailable");
   }
+  if ((adapter.inspect != null) !== (caps.inspect === true)) throw new CoreError("capability_unavailable");
   if (caps.documentCardSearch === true && caps.documentCards !== true) throw new CoreError("capability_unavailable");
 }

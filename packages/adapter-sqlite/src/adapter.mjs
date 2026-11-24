@@ -1,6 +1,7 @@
 import { assertAdapterCapabilities, capabilities } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
+import { createInspectStore } from "./inspect.mjs";
 import { createMemoryStore } from "./memories.mjs";
 import { createMigratedRawPolicy } from "./migrate/raw-privacy.mjs";
 import { createPauseStore } from "./pause.mjs";
@@ -28,10 +29,11 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw);
   const adapter = {
     name: "sqlite",
-    capabilities: capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true }),
+    capabilities: capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true }),
     uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw),
     memories: createMemoryStore(port, hashSessionKey, index.markDirty),
+    inspect: createInspectStore(port, hashSessionKey),
     ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),

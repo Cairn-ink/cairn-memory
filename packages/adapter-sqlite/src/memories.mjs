@@ -144,7 +144,7 @@ export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts
     VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
     .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
   if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-  attachReceipts(db, scope, inserted.id, receipts);
+  attachReceipts(db, scope, inserted.id, receipts, nowMs);
   return { id: inserted.id, revision: 1, createdAtMs, ...time };
 }
 
@@ -168,7 +168,7 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
     body = json_set(body, '$.confidence', ?, '$.kind', ?, '$.origin', ?) WHERE ${LIVE_SCOPE} AND id = ?`)
     .run(revision, updatedAtUs, confidence, kind, origin, ...scopeKey(scope), id);
-  attachReceipts(db, scope, id, evidence);
+  attachReceipts(db, scope, id, evidence, nowMs);
   return { outcome: changed ? "changed" : "touched", revision };
 }
 
@@ -250,7 +250,7 @@ export function createMemoryStore(port, hashSession, markDirty) {
           .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify(body), ...scopeKey(scope), id);
         if (evidence !== null) {
           clearReceipts(db, scope, id);
-          attachReceipts(db, scope, id, evidence);
+          attachReceipts(db, scope, id, evidence, nowMs);
         }
         markDirty?.(db, tx);
         return { outcome: "changed", revision };

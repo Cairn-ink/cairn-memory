@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
-import type { CaptureMessage, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
+import type { CaptureMessage, InspectItemEvidence, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -11,7 +11,7 @@ export type OpenedAdapter = {
   adapter: Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
     "suppressions" | "pause" | "keys" | "placement" | "raw" | "sessionLineage" | "documentCards" | "rationale" |
-    "rationaleSourceText">;
+    "rationaleSourceText" | "inspect">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -31,6 +31,9 @@ export type RationaleFixtureChange = "revision" | "content" | "currentness" | "r
 export type RetainedDigestFixture = { keyId: string; label: string; secret: string };
 
 export type TestHarness = {
+  /** Seed inspect data on adapters without a public metadata mutation route. */
+  markInspectHistorical?(scope: Scope, id: string): Promise<void>;
+  seedInspectEvidence?(scope: Scope, id: string, evidence: Pick<InspectItemEvidence, "procedural" | "qualification">): Promise<void>;
   /** Synthetic raw text for a receipt. Null retires the source. */
   seedRationaleMessage?(scope: Scope, receipt: Receipt, text: string | null): Promise<void>;
   /** Exercise invalidating writes an adapter does not expose on its ordinary ports. */

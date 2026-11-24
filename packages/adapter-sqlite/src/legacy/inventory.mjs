@@ -13,7 +13,7 @@ const hexDigest = /^[0-9a-f]{64}$/;
 const count = (db, table, where = '1') => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${where}`).get().n;
 const digestColumn = column => `length(${column}) = 64 AND ${column} NOT GLOB '*[^0-9a-f]*'`;
 
-function readIdentity(db, expectedStoreId) {
+export function readIdentity(db, expectedStoreId) {
   const stores = db.prepare('SELECT singleton,store_id,cursor_secret FROM store_metadata LIMIT 2').all();
   const episodes = db.prepare('SELECT singleton,secret FROM episode_identity LIMIT 2').all();
   if (stores.length !== 1 || stores[0].singleton !== 1 || !hexDigest.test(stores[0].cursor_secret) ||

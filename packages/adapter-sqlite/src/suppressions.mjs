@@ -211,6 +211,13 @@ export function scopedSuppression(db, scope, hashSession) {
     blocksSession,
     blocksReceipts,
 
+    /** @param {Receipt & { legacyReceiptKey?: string }} receipt */
+    withholdsReceipt(receipt) {
+      const { client, sessionId, occurredAtMs } = receipt;
+      return blocksReceipts([receipt]) || windows.some(stored =>
+        factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId }, occurredAtMs }, capture) !== false);
+    },
+
     /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
     snapshot({ client, sessionId, occurredAtMs, passages }) {
       /** @type {number[]} */

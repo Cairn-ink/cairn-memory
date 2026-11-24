@@ -1,12 +1,13 @@
-import { CAPABILITIES } from "../capabilities.mjs";
+import { CAPABILITIES, READ_CAPABILITIES } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { captureMethods } from "./capture.mjs";
-import { entry, entryError, scopeOf } from "./entry.mjs";
+import { entryError } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
+import { inspectMethod } from "./inspect.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { recallMethod } from "./recall.mjs";
 import { listRawMessagesMethod, readMethods } from "./reads.mjs";
@@ -64,15 +65,23 @@ function requireMethods(port, ...methods) {
   }
 }
 
+/** @param {import("./index.d.mts").KeylessInspectServiceDeps["storage"]} storage */
+function assertInspectStore(storage) {
+  const enabled = storage.capabilities.inspect === true;
+  if ((storage.inspect != null) !== enabled) throw new CoreError("capability_unavailable");
+  if (enabled) requireMethods(storage.inspect, "identity", "list", "item");
+}
+
 /** @param {import("./index.d.mts").MemoryServiceDeps} input */
 function freezeDeps(input) {
   const deps = { ...input };
   const { storage, model, embedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
   identifier(storage?.name);
-  validateObject(storage.capabilities, CAPABILITIES);
+  validateObject(storage.capabilities, [...CAPABILITIES, ...READ_CAPABILITIES]);
   if (Object.values(storage.capabilities).some(value => typeof value !== "boolean")) {
     throw new CoreError("invalid_input");
   }
+  assertInspectStore(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
   requireMethods(storage.uow, "run");
   requireMethods(storage.pause, "get", "set");
@@ -98,13 +107,19 @@ function freezeDeps(input) {
 }
 
 /**
- * @param {import("./index.d.mts").MemoryServiceDeps} input
- * @returns {import("../ports/host.d.ts").MemoryService & import("./index.d.mts").CaptureRunner}
+ * @param {import("./index.d.mts").MemoryServiceDeps | import("./index.d.mts").KeylessInspectServiceDeps} input
  */
 export function createMemoryService(input) {
   try {
+    if ("profile" in input && input.profile === "keyless-local") {
+      const { storage, clock } = input;
+      requireMethods(storage.uow, "run");
+      requireMethods(clock, "hmacHex");
+      assertInspectStore(storage);
+      if (!storage.inspect) throw new CoreError("capability_unavailable");
+      return { inspect: inspectMethod(storage, clock) };
+    }
     const deps = freezeDeps(input);
-    const placeholder = entry(unavailable);
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
@@ -114,6 +129,7 @@ export function createMemoryService(input) {
       recall: recallMethod(deps),
       find: findMethod(deps),
       read: readMethod(deps.storage),
+      inspect: inspectMethod(deps.storage, deps.clock),
       listRawMessages: listRawMessagesMethod(deps.storage),
       importMemories: importMethod(deps),
       importRawMessages: importRawMethod(deps),
@@ -121,10 +137,4 @@ export function createMemoryService(input) {
   } catch (error) {
     throw entryError(error);
   }
-}
-
-/** @param {unknown} scope */
-async function unavailable(scope) {
-  scopeOf(scope);
-  throw new CoreError("capability_unavailable");
 }

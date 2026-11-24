@@ -3,11 +3,12 @@ export type Capability =
   | "orderedCapture" | "stagedEvidence" | "placement" | "relations" | "cards" | "documentCards" | "episodes"
   | "spanLineage" | "sessionLineage" | "rawSpans" | "rawArchive" | "rawWindowHide"
   | "supersession" | "conflictEdges" | "semanticRetrieval" | "forgetLog"
-  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch";
+  | "rationaleEdges" | "quantityLedger" | "embeddingRequiredOnInsert" | "documentCardSearch" | "inspect";
 
-export type Capabilities = Readonly<Record<Capability, boolean>>;
+export type Capabilities = Readonly<Record<Exclude<Capability, "inspect">, boolean> & { inspect?: boolean }>;
 
-export declare const CAPABILITIES: readonly Capability[];
+export declare const CAPABILITIES: readonly Exclude<Capability, "inspect">[];
+export declare const READ_CAPABILITIES: readonly "inspect"[];
 /** Unknown names throw invalid_input; unset names are false. */
 export declare function capabilities(flags: Partial<Record<Capability, boolean>>): Capabilities;
 /** Throws capability_unavailable when the flag is not true. */
