@@ -1,7 +1,7 @@
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
 // separate schema version sequence from the legacy engine.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 1;
+export const SQLITE_PHYSICAL_VERSION = 2;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -82,6 +82,58 @@ export const STORAGE_SCHEMA = `
     owner_id TEXT PRIMARY KEY,
     paused INTEGER NOT NULL CHECK (paused IN (0, 1)),
     generation INTEGER NOT NULL CHECK (generation >= 0)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_capture_claims (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    event_key TEXT NOT NULL,
+    session_key TEXT NOT NULL,
+    payload_digest TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'leased', 'retryable', 'failed', 'done')),
+    token TEXT UNIQUE,
+    expires_at_ms INTEGER,
+    dispatched INTEGER NOT NULL DEFAULT 0 CHECK (dispatched IN (0, 1)),
+    source_times TEXT,
+    failure_code TEXT,
+    PRIMARY KEY (owner_id, namespace_key, client_key, event_key),
+    CHECK ((status = 'leased') = (token IS NOT NULL)),
+    CHECK ((status = 'leased') = (expires_at_ms IS NOT NULL)),
+    CHECK ((status = 'leased') = (source_times IS NOT NULL)),
+    CHECK ((status IN ('retryable', 'failed')) = (failure_code IS NOT NULL))
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE INDEX cairn_capture_event ON cairn_capture_claims (owner_id, namespace_key, event_key);
+
+  CREATE TABLE cairn_capture_outbox (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    event_key TEXT NOT NULL,
+    messages TEXT,
+    result TEXT,
+    PRIMARY KEY (owner_id, namespace_key, client_key, event_key),
+    FOREIGN KEY (owner_id, namespace_key, client_key, event_key)
+      REFERENCES cairn_capture_claims (owner_id, namespace_key, client_key, event_key),
+    CHECK (messages IS NOT NULL OR result IS NOT NULL)
+  ) STRICT, WITHOUT ROWID;
+
+  -- Keep repeat abandon idempotent even after a replacement lease finishes.
+  CREATE TABLE cairn_capture_abandoned_tokens (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    event_key TEXT NOT NULL,
+    token TEXT NOT NULL,
+    PRIMARY KEY (owner_id, token),
+    FOREIGN KEY (owner_id, namespace_key, client_key, event_key)
+      REFERENCES cairn_capture_claims (owner_id, namespace_key, client_key, event_key)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_index_revisions (
+    owner_id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991)
   ) STRICT, WITHOUT ROWID;
 `;
 
