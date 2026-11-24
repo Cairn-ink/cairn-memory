@@ -50,9 +50,8 @@ export function contextQuery(ns, group, { rawAncestry = false, sourceMarkers = f
   return { sql, params };
 }
 export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection }) {
-  function step(row, withheldSources) {
+  function step(row) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
-    if (withheldSources) nextStep.anchors = nextStep.anchors.filter(anchor => !withheldSources.has(anchor.sourceId));
     const sources = [];
     for (const anchor of nextStep.anchors) {
       const source = db.prepare(`SELECT s.* FROM episode_sources s JOIN session_episodes origin ON origin.id=s.origin_episode_id
@@ -109,7 +108,6 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         let query = nextSteps ? projected.query : original;
         let budget = projected.budget;
         const rows = [];
-        const withheldStepSources = new Map();
         const memoryItems = safety && !nextSteps ? [] : null;
         let sourceError;
         const count = original.params.at(-1);
@@ -123,11 +121,9 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           for (const row of eligible) {
             if (nextSteps) {
               const withheldSources = row.withheld_source_ids && new Set(JSON.parse(row.withheld_source_ids));
-              if (withheldSources?.size) {
-                const { anchors } = JSON.parse(row.record).nextStep;
-                if (anchors.length && anchors.every(anchor => withheldSources.has(anchor.sourceId))) continue;
-                withheldStepSources.set(row.id, withheldSources);
-              }
+              // Step text may draw on any anchor, so a single match withdraws the step.
+              if (withheldSources?.size && JSON.parse(row.record).nextStep.anchors
+                .some(anchor => withheldSources.has(anchor.sourceId))) continue;
               if (assertEpisodeRead?.(ns, row, budget, 'batch', withheldSources) === false) continue;
             }
             if (memoryItems && rows.length < count - 1 && !sourceError) {
@@ -158,7 +154,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         try {
           if (sourceError) throw sourceError;
           items = memoryItems ?? rows.slice(0, 12).map(row => nextSteps
-            ? step(row, withheldStepSources.get(row.id)) : sourcedMemory(ns, row, group));
+            ? step(row) : sourcedMemory(ns, row, group));
         }
         catch (error) {
           if (expected && error.code !== 'index_revision_conflict') fail('revision_conflict');
