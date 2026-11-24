@@ -414,7 +414,8 @@ export const relationCases = [
       const { duplicateCount, suppressedCount, memories: written } = await captureRow(ctx, { ...original, confidence: 0.9 });
       const captured = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
       check(captured, "Historical row is missing after capture");
-      equal({ duplicateCount, suppressedCount, written,
+      // A store may carry the touch's optional receiptIds into the finish entry; this capture attaches none.
+      equal({ duplicateCount, suppressedCount, written: written.map((entry) => withoutReceiptIds(entry, 0)),
         row: [captured.kind, captured.origin, captured.confidence, captured.revision, captured.historical] }, {
         duplicateCount: 1, suppressedCount: 0, written: [{ id, revision, outcome: "touched" }],
         row: [original.kind, "inferred", 0.4, revision, true],

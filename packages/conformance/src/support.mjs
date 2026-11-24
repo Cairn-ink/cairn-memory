@@ -279,7 +279,8 @@ export function withoutReceiptIds(result, attached) {
   const { receiptIds, ...rest } = /** @type {T & { receiptIds?: unknown }} */ (result);
   if (receiptIds !== undefined) {
     check(Array.isArray(receiptIds) && receiptIds.length === attached &&
-      receiptIds.every((id) => typeof id === "string" && id.length > 0),
+      receiptIds.every((_, index) => Object.hasOwn(receiptIds, index)) &&
+      Array.from(receiptIds).every((id) => typeof id === "string" && id.length > 0),
       "receiptIds must list one stored ID per attached receipt");
   }
   return rest;

@@ -40,9 +40,16 @@ function attachFactory({ advances = true, flag = true, receiptIds = (count) => A
           return { ...bumped, receiptIds: receiptIds(receipts.length) };
         },
       };
+      // Like a store that spreads the touch result into its finish entries.
+      const { finish } = adapter.capture;
+      const capture = { ...adapter.capture, async finish(tx, token, items) {
+        const result = await finish.call(adapter.capture, tx, token, items);
+        return { ...result, memories: result.memories.map((entry) => ({ ...entry, receiptIds: [] })) };
+      } };
       return {
         ...opened,
-        adapter: { ...adapter, memories, capabilities: { ...adapter.capabilities, receiptAttachAdvancesRevision: flag } },
+        adapter: { ...adapter, memories, capture,
+          capabilities: { ...adapter.capabilities, receiptAttachAdvancesRevision: flag } },
       };
     },
   };
@@ -79,4 +86,10 @@ test("T-RAT-receipt-add expects one revision advance under the flag and none wit
 
 test("K-REL-10 tolerates an empty receiptIds on a direct touch without receipts", async () => {
   assert.equal(await runCase(attachFactory({ advances: false, flag: false }), historicalCase), null);
+});
+
+test("K-MEM-4 rejects a sparse receiptIds array", async () => {
+  assert.ok(touchCase);
+  await assert.rejects(runCase(attachFactory({ receiptIds: (count) => new Array(count) }), touchCase),
+    /receiptIds must list one stored ID per attached receipt/);
 });
