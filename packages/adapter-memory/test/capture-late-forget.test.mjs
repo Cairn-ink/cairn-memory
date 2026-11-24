@@ -188,7 +188,9 @@ function reuseAdmissionPassages(adapter) {
 }
 
 test("the pre-dispatch test detects stale source passages", async () => {
-  await assert.rejects(captureRace({ keyed: true, timing: "before dispatch", mutate: reuseAdmissionPassages }),
+  // The no-key route commits the fact directly. A keyed forget also blanks the stored source text, which would
+  // keep it from the model even with stale passages and so hide this check.
+  await assert.rejects(captureRace({ timing: "before dispatch", mutate: reuseAdmissionPassages }),
     /Unexpected source text reached the model/);
 });
 
