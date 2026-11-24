@@ -3,7 +3,8 @@ import {
   fingerprintLegacyCapture, fingerprintMemoryPassages, textVariants, validateFingerprintLabels,
   validateFingerprintSigningKey,
 } from "../privacy/fingerprint.mjs";
-import { normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { PRIVACY_REDACTION_VERSIONS } from "../privacy/redact.mjs";
+import { normalizeForHash, prepareCoreText, prepareHostedCaptureText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
@@ -43,13 +44,27 @@ async function readLegacyFingerprint(input) {
 
 /** @param {string} text @param {LegacyFingerprint} legacy
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>} */
-function legacyCardPassages(text, { key, labels }) {
-  const variants = new Map(textVariants(text, prepareCoreText(text)).map(([variant, , redactionVersion]) =>
-    [normalizeForHash(variant), redactionVersion]));
-  return Promise.all(Array.from(variants, async ([variant, redactionVersion]) => {
-    const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(variant, key, labels);
-    return { digests: [{ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }], shingles, keyId };
+async function legacyCardPassages(text, { key, labels }) {
+  const spellings = textVariants(text, prepareCoreText(text));
+  spellings.push([prepareHostedCaptureText(text), "hosted-v1", PRIVACY_REDACTION_VERSIONS.hostedCurrent]);
+  /** @type {Map<string, { original: string, versions: Set<number> }>} */
+  const variants = new Map();
+  for (const [spelling, , version] of spellings) {
+    const normalized = normalizeForHash(spelling);
+    const variant = variants.get(normalized) ?? { original: spelling, versions: new Set() };
+    variant.versions.add(version);
+    variants.set(normalized, variant);
+  }
+  const passages = await Promise.all(Array.from(variants.values(), async ({ original, versions }) => {
+    // The signer normalizes the original spelling once.
+    const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(original, key, labels);
+    const digests = Array.from(versions, (redactionVersion) =>
+      /** @satisfies {TextDigest} */ ({ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }));
+    return { digests, shingles, keyId };
   }));
+  // Compare every exact alias before checking each spelling's own shingles.
+  const digests = passages.flatMap(passage => passage.digests);
+  return passages.map(({ shingles, keyId }) => ({ digests, shingles, keyId }));
 }
 
 /** @param {DocumentCardVisibilityInput} input @returns {Promise<DocumentCardVisibility>} */

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HOSTED_FINGERPRINT_LABELS as labels } from "../../adapter-postgres/src/fingerprint-labels.mjs";
-import { legacyExactMac, passageShingles, userFingerprintKey } from "../src/privacy/fingerprint.mjs";
+import {
+  coreDigest, coreFingerprintLabels, fingerprintLegacyCapture, fingerprintMemoryPassages,
+  legacyExactMac, passageShingles, userFingerprintKey,
+} from "../src/privacy/fingerprint.mjs";
 import { redactHostedCurrent, redactV1 } from "../src/privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../src/privacy/text.mjs";
+import { withholdsAnyPassage } from "../src/privacy/withholds.mjs";
 import { documentCardSourceWithheld, documentCardVisible } from "../src/routing/visibility.mjs";
 
 const scope = { owner: "sample-owner", namespace: null };
@@ -94,4 +98,81 @@ test("a Raw source projection uses the Raw policy threshold for legacy shingles"
   assert.equal(documentCardSourceWithheld(input), false);
   assert.equal(documentCardSourceWithheld({ ...input, policy: { containmentThreshold: 0.6 } }), false);
   assert.equal(documentCardSourceWithheld({ ...input, policy: { containmentThreshold: 0.3 } }), true);
+});
+
+const dummyPat = "crn_pat_" + "1234567890".repeat(4);
+const captureRaw = `Note {"access_token":"demo-value"} ${dummyPat} ｐａｓｓｗｏｒｄ： demo-example`;
+// Output of the hosted capture redactor. Its PAT rules leave this 40-hex dummy value alone.
+const captureStored = `Note {"access_token":"[REDACTED]"} ${dummyPat} password: [REDACTED]`;
+
+for (const field of ["title", "body"]) {
+  test(`a sole hosted MAC of the NFKC then hosted-current ${field} hides the card`, async () => {
+    const fact = textFact({ digests: [await legacyDigest(captureStored)] });
+    assert.deepEqual(await documentCardVisible({
+      ...read, card: { ...card, [field]: captureRaw }, textFacts: [fact],
+    }), withheld);
+  });
+}
+
+for (const [field, stored] of [["body", "J\u030c ab"], ["title", "H\u0331 yz"]]) {
+  for (const mode of ["exact", "full"]) {
+    test(`the one-pass hosted ${mode} fingerprint hides the combining-mark ${field}`, async () => {
+      const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(stored, key, labels);
+      assert.notEqual(text_hmac, await legacyExactMac(normalizeForHash(stored), key, labels));
+      const digest = { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 2, keyId, value: text_hmac };
+      const fact = textFact({ digests: [digest], ...(mode === "full" && { shingles, keyId }) }, mode);
+      assert.deepEqual(await documentCardVisible({
+        ...read, card: { ...card, [field]: stored }, textFacts: [fact],
+      }), withheld);
+    });
+  }
+}
+
+const labelledDigest = async (text, redactionVersion) => ({
+  ...await legacyDigest(text), label: "hosted-v1", redactionVersion,
+});
+
+for (const version of [1, 2, 3]) {
+  test(`a matching labelled hosted MAC at version ${version} hides the card`, async () => {
+    const fact = textFact({ digests: [await labelledDigest(card.body, version)] });
+    assert.deepEqual(await documentCardVisible({ ...read, textFacts: [fact] }), withheld);
+  });
+
+  test(`an unrelated labelled hosted MAC at version ${version} leaves the card visible`, async () => {
+    const fact = textFact({ digests: [await labelledDigest("Unrelated balcony notes", version)] });
+    assert.deepEqual(await documentCardVisible({ ...read, textFacts: [fact] }), visible);
+  });
+}
+
+test("an unrelated labelled hosted MAC stays comparable across distinct spellings", async () => {
+  const fact = textFact({ digests: [await labelledDigest("Unrelated balcony notes", 2)] });
+  assert.deepEqual(await documentCardVisible({
+    ...read, card: { ...card, body: captureRaw }, textFacts: [fact],
+  }), visible);
+});
+
+test("a numeric-string cutoff fails closed on an exact legacy miss", async () => {
+  const fact = textFact({ digests: [await legacyDigest(reference)] });
+  const input = { ...read, card: { ...card, body: candidate }, textFacts: [fact] };
+  assert.deepEqual(await documentCardVisible({ ...input, containmentThreshold: 0.3 }), visible);
+  assert.deepEqual(await documentCardVisible({ ...input, containmentThreshold: "0.3" }), withheld);
+});
+
+test("a Core-only full fact uses the default card cutoff", async () => {
+  const fingerprintKey = await userFingerprintKey("synthetic fingerprint secret", scope.owner, coreFingerprintLabels);
+  const fact = textFact({
+    digests: [await coreDigest(reference, fingerprintKey)],
+    shingles: await passageShingles(reference, fingerprintKey, coreFingerprintLabels), keyId: fingerprintKey.id,
+  }, "full");
+  const passages = await fingerprintMemoryPassages(candidate, prepareCoreText(candidate), fingerprintKey);
+  assert.equal(withholdsAnyPassage(passages, [fact], 0.3), true);
+  assert.equal(withholdsAnyPassage(passages, [fact], 0.6), false);
+
+  const input = {
+    card: { ...card, body: candidate }, requestedScope: scope, memoryStates: new Map(),
+    textFacts: [fact], fingerprintKey,
+  };
+  for (const containmentThreshold of [undefined, 0.3, "0.3"]) {
+    assert.deepEqual(await documentCardVisible({ ...input, containmentThreshold }), visible);
+  }
 });
