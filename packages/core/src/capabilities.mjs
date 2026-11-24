@@ -36,7 +36,10 @@ export const READ_CONTRACT_CAPABILITIES = Object.freeze([
   "inspect", // exact-scope Memory and receipt paging
 ]);
 
-const registeredCapabilities = [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES];
+export const WRITE_PARITY_CAPABILITIES = Object.freeze(["proceduralTags", "receiptAttachAdvancesRevision"]);
+
+const optionalCapabilities = [...READ_CONTRACT_CAPABILITIES, ...WRITE_PARITY_CAPABILITIES];
+const registeredCapabilities = [...CAPABILITIES, ...optionalCapabilities];
 
 /** @param {Partial<Record<string, boolean>>} flags */
 export function capabilities(flags) {
@@ -45,6 +48,13 @@ export function capabilities(flags) {
   for (const name of CAPABILITIES) out[name] = flags[name] === true;
   for (const name of READ_CONTRACT_CAPABILITIES) {
     if (Object.hasOwn(flags, name)) out[name] = flags[name] === true;
+  }
+  for (const name of WRITE_PARITY_CAPABILITIES) {
+    if (Object.hasOwn(flags, name)) {
+      const value = flags[name];
+      if (typeof value !== "boolean") throw new CoreError("invalid_input");
+      out[name] = value;
+    }
   }
   for (const name of Object.keys(flags)) {
     if (!registeredCapabilities.includes(name)) throw new CoreError("invalid_input");

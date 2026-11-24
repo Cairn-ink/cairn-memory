@@ -35,7 +35,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
+/** @typedef {{state: State, run: {readonly ended: boolean}, startIndexRevision: number, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number, cardWrites: number,
  * writeTail?: Promise<void>}} IssuedRun */
 
@@ -210,7 +210,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         tx = Object.freeze({ owner, readOnly, __adapter: run });
         /** @type {IssuedRun} */
         const issuedRun = {
-          run, state, indexDirty: false, stateWritten: false, pauseLock, poisoned: false,
+          run, state, startIndexRevision: state.indexRevision, pauseLock, indexDirty: false, stateWritten: false, poisoned: false,
           writeErrorCode: "internal_error", finishes: new Set(), writingFinishes: 0, cardWrites: 0,
         };
         issued.set(tx, issuedRun);
@@ -342,6 +342,11 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   // Ports can validate arguments after the transaction guard and before requesting owner state.
   port.read = readPort;
   port.write = writePort;
+  // Raw writes can advance the working state's revision before commit.
+  port.indexRevision = (/** @type {Tx} */ tx) =>
+    accessPort(tx, tx, false, (_getState, _markDirty, run) => run.startIndexRevision);
+  port.committedIndexRevision = (/** @type {Tx} */ tx) =>
+    accessPort(tx, tx, false, (_getState, _markDirty, run) => indexRevisionAfterRun(run));
 
   /**
    * Memory operations invoked by the finish that already holds the queue.

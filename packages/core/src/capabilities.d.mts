@@ -7,15 +7,18 @@ export type Capability =
   | "contextRead" | "contextRawRead" | "inspect";
 
 type OptionalReadCapability = "contextRead" | "contextRawRead" | "inspect";
+type WriteParityCapability = "proceduralTags" | "receiptAttachAdvancesRevision";
+type WriteParityCapabilities = Readonly<Partial<Record<WriteParityCapability, boolean>>>;
 export type Capabilities = Readonly<Record<Exclude<Capability, OptionalReadCapability>, boolean> &
   Partial<Record<OptionalReadCapability, boolean>>>;
 
 export declare const CAPABILITIES: readonly Exclude<Capability, OptionalReadCapability>[];
 export declare const READ_CONTRACT_CAPABILITIES: readonly OptionalReadCapability[];
-/** Unknown names throw invalid_input; unset names are false. */
-export declare function capabilities(flags: Partial<Record<Capability, boolean>>): Capabilities;
+export declare const WRITE_PARITY_CAPABILITIES: readonly WriteParityCapability[];
+/** Unknown names throw invalid_input. Optional read-contract and write-parity names are omitted when unset. */
+export declare function capabilities(flags: Partial<Record<Capability | WriteParityCapability, boolean>>): Capabilities & WriteParityCapabilities;
 /** Throws capability_unavailable when the flag is not true. */
-export declare function requireCapability(caps: Capabilities, name: Capability): void;
+export declare function requireCapability(caps: Capabilities & WriteParityCapabilities, name: Capability | WriteParityCapability): void;
 
 export declare const OPTIONAL_PORTS: Readonly<
   Record<"vector" | "raw" | "staged" | "placement" | "relations" | "causal" | "supersession" | "conflicts" | "forgetLog" | "sessionLineage" | "spanLineage", Capability>

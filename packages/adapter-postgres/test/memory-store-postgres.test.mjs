@@ -111,7 +111,7 @@ test("P1-2 core forget round trips through a hosted bare text hash", migrationDb
   const deps = await writeDeps(f);
   deps.storage.capabilities = capabilities({ embeddingRequiredOnInsert: true });
   const forget = forgetMethod(deps);
-  assert.deepEqual(await forget(scope, "legacy", content("").source), { status: "forgotten", removedSimilar: 0 });
+  assert.deepEqual(await forget(scope, "legacy", content("").source), { status: "forgotten", removedSimilar: 0, indexRevision: 1 });
   assert.equal(await f.run(owner, readOnly, tx => f.memories.get(tx, scope, "legacy")), null);
   const { rows } = await f.pool.query("SELECT body FROM core_suppression_facts WHERE user_id = $1", [owner]);
   assert.equal(rows.length, 1);

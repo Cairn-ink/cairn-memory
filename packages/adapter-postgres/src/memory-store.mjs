@@ -12,7 +12,7 @@ import { memoryPage } from "./memory-read.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
-/** @import { MemoryStore } from "../../core/src/ports/index.d.ts" */
+/** @import { MemoryStore, Tx } from "../../core/src/ports/index.d.ts" */
 
 const CONTENT_COLUMNS = "text, kind, origin, confidence, embedding, embedding_model, source_kind, source_client, source_session_id, core_digests";
 const TARGET = "user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3";
@@ -20,6 +20,24 @@ const TARGET = "user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id =
 /** @param {Awaited<ReturnType<typeof copyContent>>} content @param {unknown} digests */
 function contentValues({ text, kind, origin, confidence, vector, model, source }, digests) {
   return [text, kind, origin, confidence, vector, model, source.kind, source.client, source.sessionId, JSON.stringify(digests)];
+}
+
+/** @param {Tx} tx @param {boolean} committed */
+function readIndexRevision(tx, committed) {
+  return runOperation(tx, async (query, run) => {
+    // The owner lock or the read-only snapshot keeps the revision stable before the first advance.
+    let value = run.indexStart;
+    if (value === undefined) {
+      const { rows: [row] } = await query("SELECT index_revision::text FROM core_owner_state WHERE user_id = $1",
+        [tx.owner]);
+      value = BigInt(row?.index_revision ?? "0");
+    } else if (committed) {
+      value += 1n;
+    }
+    const revision = Number(value);
+    if (!Number.isSafeInteger(revision) || revision < 0) throw new CoreError("internal_error");
+    return revision;
+  });
 }
 
 /** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options]
@@ -130,6 +148,14 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         await advanceIndex(query, owner, run);
         return { outcome: "changed", revision };
       }, true);
+    },
+
+    async indexRevision(tx) {
+      return readIndexRevision(tx, false);
+    },
+
+    async committedIndexRevision(tx) {
+      return readIndexRevision(tx, true);
     },
 
     async get(tx, scope, id) {
