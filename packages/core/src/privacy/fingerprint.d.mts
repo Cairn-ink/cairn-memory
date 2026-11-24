@@ -37,8 +37,8 @@ export declare function hostedV1Digest(raw: string): Promise<TextDigest>;
 export declare function engineLegacyDigest(raw: string, max?: number, rawMax?: number): Promise<TextDigest>;
 /**
  * Lookup candidates deduped by algorithm and value, keeping the first pipeline.
- * An engine refusal omits its alias. Legacy SHA candidates are for matching
- * historical facts. Facts for passages that held secrets need keyed digests.
+ * An engine refusal omits its alias. Legacy SHA candidates can match historical
+ * facts. A keyless forget checks every hash input for secrets before storing it.
  */
 export declare function allDigests(raw: string, key?: FingerprintKey | null): Promise<TextDigest[]>;
 
@@ -48,6 +48,8 @@ export declare const coreFingerprintLabels: FingerprintLabels;
 export declare function addDigest(digests: TextDigest[], digest: TextDigest): void;
 /** @internal Lists the current and historical spellings with their pipeline and redactor version. */
 export declare function textVariants(raw: string, text: string): Array<[string, TextDigest["pipeline"], number]>;
+/** @internal Derives unkeyed candidate digests for only the approved hash inputs. */
+export declare function unkeyedForgetDigests(raw: string, text: string, allows: (text: string) => boolean): Promise<TextDigest[]>;
 /** @internal Builds the current and historical fingerprints used by memory withholding. */
 export declare function fingerprintMemoryPassages(
   raw: string, text: string, key: FingerprintKey | null, sha256Hex?: (text: string) => Promise<string>,

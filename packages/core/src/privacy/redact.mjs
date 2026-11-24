@@ -11,6 +11,7 @@ const WEB_PAT = /(?<![A-Za-z0-9_-])crn_pat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/g;
 const CLI_PAT = /\bcrn_pat_[a-f0-9]{64}\b/gi;
 const QUOTED_OAUTH =
   /((["'])(?:access_token|refresh_token|id_token|client_secret)\2\s*:\s*)(["'])(?:\\.|(?!\3)[^\\])+\3/gis;
+const BEARER = /\bBearer\s+[A-Za-z0-9._~+\/-]{12,}=*\b/gi;
 const ASSIGNMENT =
   /\b((?:[a-z][a-z0-9_]*_)?(?:api[_-]?(?:key|token)|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*)["']?[^\s"']{8,}["']?/gi;
 
@@ -18,7 +19,7 @@ const COMMON_SUFFIX = [
   /\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}\b/g,
   /\bAKIA[0-9A-Z]{16}\b/g,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
-  /\bBearer\s+[A-Za-z0-9._~+\/-]{12,}=*\b/gi,
+  BEARER,
   ASSIGNMENT,
 ];
 
@@ -94,8 +95,8 @@ function originalOffsets(masks) {
   };
 }
 
-/** @param {string} text @param {RegExp[]} rules @returns {Mask[]} */
-function traceMasks(text, rules) {
+/** @param {string} text @param {RegExp[]} rules @param {Set<string>} [secrets] @returns {Mask[]} */
+function traceMasks(text, rules, secrets) {
   let value = text;
   /** @type {Mask[]} */
   let masks = [];
@@ -110,6 +111,25 @@ function traceMasks(text, rules) {
       const start = originalOffset(offset + prefix, false);
       const end = originalOffset(offset + match[0].length - suffix, true);
       added.push([start, end]);
+      if (secrets) {
+        let secret = match[0].slice(prefix, match[0].length - suffix);
+        if (rule === ASSIGNMENT) {
+          secret = secret.replace(/^["']|["']$/gu, "");
+          // An unquoted match can run through sentence punctuation. A prose
+          // copy of the value need not have the same trailing punctuation.
+          const value = secret.replace(/[.,;:!?]+$/u, "");
+          if (value.length >= 8 && value !== REPLACEMENT) secrets.add(value);
+        }
+        if (rule === BEARER) secret = secret.replace(/^Bearer\s+/iu, "");
+        if (rule === PEM) secret = secret.slice(secret.indexOf("-----", 5) + 5, secret.lastIndexOf("-----END")).trim();
+        if (!secret || secret === REPLACEMENT) continue;
+        secrets.add(secret);
+        // A masked assignment can include punctuation absent from a surviving copy.
+        for (const [run] of secret.matchAll(/[A-Za-z0-9_\-+/=.]{4,}/gu)) {
+          const trimmed = run.replace(/^[_\-+/=.]+|[_\-+/=.]+$/gu, "");
+          secrets.add(trimmed.length >= 4 ? trimmed : run);
+        }
+      }
     }
     if (added.length) {
       masks = mergeMasks([...masks, ...added]);
@@ -119,24 +139,39 @@ function traceMasks(text, rules) {
   return masks;
 }
 
+/** @param {string} text @param {Set<string>} [secrets] @returns {Mask[]} */
+function unionMasks(text, secrets) {
+  return mergeMasks([...traceMasks(text, V1_RULES, secrets), ...traceMasks(text, HOSTED_RULES, secrets)]);
+}
+
 /** One pass of the core policy, with positions in the original text.
  * @param {string} text
  * @returns {Mask[]}
  */
 export function coreRedactionMasks(text) {
-  return mergeMasks([...traceMasks(text, V1_RULES), ...traceMasks(text, HOSTED_RULES)]);
+  return unionMasks(text);
 }
 
-/** @param {unknown} text */
-export function redactCore(text) {
-  if (typeof text !== "string") throw new CoreError("invalid_input");
+/** @param {string} text @param {Set<string>} [secrets] */
+function redactUnion(text, secrets) {
   // Each policy sees the original input. A replacement in one policy can hide
   // the boundary or quotes that the other policy needs to find a secret.
   // Repeat because replacements can expose new boundaries in the combined output.
   let value = text;
   while (true) {
-    const masked = applyMasks(value, coreRedactionMasks(value));
+    const masked = applyMasks(value, unionMasks(value, secrets));
     if (masked === value) return masked;
     value = masked;
   }
+}
+
+/** @param {unknown} text */
+export function redactCore(text) {
+  if (typeof text !== "string") throw new CoreError("invalid_input");
+  return redactUnion(text);
+}
+
+/** @param {string} text @param {Set<string>} values */
+export function collectRedactedSecretValues(text, values) {
+  redactUnion(text, values);
 }
