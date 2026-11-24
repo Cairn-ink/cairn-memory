@@ -87,12 +87,16 @@ export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
     conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
 
-  return entry(async (input, id, inputSource) => {
+  return entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
     if (!isWellFormedText(id) || !id || id.length > 512 ||
         id.trim() !== id || /[\x00-\x1f\x7f]/.test(id)) throw new CoreError("invalid_input");
     sourceOf(inputSource);
+    const expectedRevision = options?.expectedRevision;
+    if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) {
+      throw new CoreError("invalid_input");
+    }
     if (typeof memories.get !== "function") throw new CoreError("capability_unavailable");
 
     // Only the adapter's configured key provider can use its transaction.
@@ -107,6 +111,7 @@ export function forgetMethod({ storage, clock }) {
       // resolve
       const row = await scopedRow(memories, scope, id, tx);
       if (!row) return { status: "not_found" };
+      if (expectedRevision !== undefined && row.revision !== expectedRevision) return { status: "conflict" };
       if (keyResult?.error) throw keyResult.error;
       const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {
