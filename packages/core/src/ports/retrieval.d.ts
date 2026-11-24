@@ -13,7 +13,7 @@ export interface RetrievalScope {
   /** Restrict memories to matching source.client values (null never matches) and raw to matching clients. */
   clients?: readonly string[];
   /**
-   * Half-open store-entry time range: memory createdAtMs, card creation time, raw occurredAtMs.
+   * Half-open time range: memory createdAtMs, card date, raw occurredAtMs.
    * Raw segments with unknown time are excluded whenever set.
    * Candidate ports apply both window and clients before depth or pool cuts.
    */

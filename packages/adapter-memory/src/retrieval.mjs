@@ -1,9 +1,13 @@
-import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
-import { documentCardVisible } from "@cairn-ink/core/routing";
+import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies,
+  tokenizeT1, withholdsAnyPassage } from "@cairn-ink/core";
+import { DOCUMENT_CARD_SEARCH_TEXT_VERSION, documentCardSearchText, documentCardVisible } from "@cairn-ink/core/routing";
+import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+import { prepareCoreText } from "../../core/src/privacy/text.mjs";
+import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
-import { matchesMemoryFilters } from "./retrieval-window.mjs";
+import { matchesMemoryFilters, withinWindow } from "./retrieval-window.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
@@ -14,9 +18,9 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
-/** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
+/** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { FingerprintKeyProvider, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
@@ -81,17 +85,25 @@ export function validateToken(token) {
 
 /**
  * @template {{ref: ItemRef, text: string}} T
- * @param {T[]} documents @param {string[]} terms @param {number} depth
+ * @param {T[]} documents @param {string[]} terms
  */
-export function rankLexical(documents, terms, depth) {
-  // The BM25 search convenience method caps depth. The port accepts any positive safe integer.
+function scoreLexical(documents, terms) {
   const index = createBM25(documents);
   const rows = [];
   for (const { text, ...document } of documents) {
     const score = scoreBM25(terms, termFrequencies(text), index);
     if (score !== null) rows.push({ ...document, score });
   }
-  return rankScores(rows).slice(0, depth);
+  return rows;
+}
+
+/**
+ * @template {{ref: ItemRef, text: string}} T
+ * @param {T[]} documents @param {string[]} terms @param {number} depth
+ */
+export function rankLexical(documents, terms, depth) {
+  // The BM25 search convenience method caps depth. The port accepts any positive safe integer.
+  return rankScores(scoreLexical(documents, terms)).slice(0, depth);
 }
 
 /** @param {Receipt[]} receipts */
@@ -109,10 +121,13 @@ function sourceDates(receipts) {
 }
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
-export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
-  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
-  return async function cardVisible(state, scope, card) {
+ * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceCheck>} [rawSourceVisible] */
+export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
+  /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
+  const fingerprintKeys = new WeakMap();
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card
+   * @param {boolean} [requireRaw] @returns {Promise<DocumentCardVisibilityInput | null>} */
+  return async function cardVisibilityInput(tx, state, scope, card, requireRaw = false) {
     const policy = matchFacts(state.facts, scope);
     const rows = state.rows.get(scope.namespace);
     /** @type {Map<string, DocumentCardMemoryState>} */
@@ -125,16 +140,24 @@ export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
       else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
       else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
     }
-    const { sourceMessage } = card;
+    const { id, scope: cardScope, origin, sourceMessage, sourceMemories, title, body } = card;
     let canonicalSessionKey = null;
     let sourceWithheld = false;
     /** @type {FingerprintKey | null} */
     let fingerprintKey = null;
     const { textFacts } = policy;
     try {
-      if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
+      if (textFacts.length) {
+        let key = fingerprintKeys.get(tx);
+        if (!key) {
+          key = keys.userKey(tx.owner);
+          fingerprintKeys.set(tx, key);
+        }
+        fingerprintKey = await key;
+      }
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
+        if (requireRaw && (!rawSourceVisible || !canonicalSessionKey)) return null;
         sourceWithheld = rawSourceVisible !== undefined && !await rawSourceVisible(state, scope, sourceMessage);
         if (!sourceWithheld) {
           // The retained projection also checks identity facts against linked revisions.
@@ -145,14 +168,100 @@ export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
           })) : [];
           sourceWithheld = policy.withholdsCardSource(card, passages);
         }
+        if (!sourceWithheld && textFacts.length) {
+          const texts = title == null ? [body] : [title, body];
+          const fingerprints = await Promise.all(texts.map(text =>
+            fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
+          sourceWithheld = textFacts.some(requiresLegacyMacDomain) || withholdsAnyPassage(fingerprints.flat(), textFacts);
+        }
       }
     } catch {
-      return false;
+      return null;
     }
-    return (await documentCardVisible({
-      card: { ...card, canonicalSessionKey }, requestedScope: scope, memoryStates,
+    return {
+      card: { id, scope: cardScope, origin, sourceMessage, sourceMemories, title: requireRaw ? title ?? null : title,
+        body, canonicalSessionKey },
+      requestedScope: scope, memoryStates,
       sourceWithheld, textFacts, fingerprintKey,
-    })).visible;
+    };
+  };
+}
+
+/** @param {ReturnType<typeof createCardVisibilityInput>} buildInput */
+export function createCardVisibility(buildInput) {
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [requireRaw] */
+  return async (tx, state, scope, card, requireRaw) => {
+    const input = await buildInput(tx, state, scope, card, requireRaw);
+    return input !== null && (await documentCardVisible(input)).visible;
+  };
+}
+
+/** @param {Parameters<typeof createRetrievalPorts>[0]} port
+ * @param {ReturnType<typeof createCardVisibility>} cardVisible
+ * @returns {NonNullable<StorageAdapter["documentCardCandidates"]>}
+ */
+export function createDocumentCardCandidates(port, cardVisible) {
+  /** @param {Tx} tx @param {State} state @param {RetrievalScope} selection */
+  async function visibleCards(tx, state, { owner, namespaces, clients, window }) {
+    const rows = [];
+    for (const namespace of namespaces) {
+      const scope = { owner, namespace };
+      for (const [id, { card, embedding, createdAtMs, updatedAtUs }] of state.documentCards.get(namespace) ?? []) {
+        if (!card || !withinWindow(window, card.date) ||
+            (clients && (!card.sourceMessage || !clients.includes(card.sourceMessage.client))) ||
+            !await cardVisible(tx, state, scope, card, true)) continue;
+        /** @type {ItemRef} */
+        const ref = { type: "card", id, namespace };
+        rows.push({ ref, card, embedding, updatedAtUs: updatedAtUs ?? BigInt(createdAtMs) * 1000n });
+      }
+    }
+    return rows;
+  }
+
+  /** @param {{ref: ItemRef, updatedAtUs: bigint}} a @param {{ref: ItemRef, updatedAtUs: bigint}} b */
+  function newestCardFirst(a, b) {
+    return newestFirst({ id: a.ref.id, updatedAtUs: a.updatedAtUs }, { id: b.ref.id, updatedAtUs: b.updatedAtUs });
+  }
+
+  return {
+    async lexical(tx, scope, query, depth) {
+      return port.read(tx, scope, async getState => {
+        const selection = copyReadScope(tx.owner, scope);
+        validateLimit(depth);
+        if (typeof query !== "string") throw new CoreError("invalid_input");
+        const terms = tokenizeT1(query);
+        if (terms.length === 0) return { rows: [], matched: false };
+
+        const visible = await visibleCards(tx, getState(), selection);
+        const documents = visible.map(({ ref, card, updatedAtUs }) => ({
+          ref, updatedAtUs, text: documentCardSearchText(card),
+        }));
+        const rows = scoreLexical(documents, terms)
+          .sort((a, b) => b.score - a.score || newestCardFirst(a, b)).slice(0, depth);
+        return { rows, matched: rows.length > 0 };
+      });
+    },
+    async vector(tx, scope, query, model, depth) {
+      return port.read(tx, scope, async getState => {
+        const selection = copyReadScope(tx.owner, scope);
+        validateLimit(depth);
+        const queryVector = readEmbedding(query);
+        if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
+
+        const visible = await visibleCards(tx, getState(), selection);
+        const rows = [];
+        for (const { ref, embedding, updatedAtUs } of visible) {
+          if (embedding?.model !== model || embedding.textVersion !== DOCUMENT_CARD_SEARCH_TEXT_VERSION ||
+              embedding.vector.length !== queryVector.length) continue;
+          const distance = cosineDistance(queryVector, embedding.vector) ?? 1;
+          rows.push({ ref, distance, updatedAtUs });
+        }
+        rows.sort((a, b) => a.distance - b.distance || newestCardFirst(a, b));
+        const eligible = visible.length;
+        const embedded = rows.length;
+        return { rows: rows.slice(0, depth), coverage: { eligible, embedded, complete: embedded === eligible } };
+      });
+    },
   };
 }
 
@@ -165,7 +274,7 @@ export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
 export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
-  visibleRawRefs, cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
+  visibleRawRefs, cardVisible = createCardVisibility(createCardVisibilityInput(matchFacts, { async userKey() { return null; } }))) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -299,7 +408,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
                 const { namespace, id } = ref;
                 if (!byNamespace.get(namespace)) continue;
                 const card = state.documentCards.get(namespace)?.get(id)?.card;
-                if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
+                if (card && await cardVisible(tx, state, { owner: tx.owner, namespace }, card)) visible.push(ref);
               }
             }
             if (!rawFence) return visible;
