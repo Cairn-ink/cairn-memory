@@ -27,9 +27,9 @@ export function receiptExcerptDenial(namespace, excerpt) {
  */
 export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
   /** @param {State} state @param {Scope} scope @param {Receipt & { excerpt: string }} receipt
-   * @param {Policy} policy @param {string} [key]
+   * @param {Policy} policy @param {string} [key] @param {string} [admittedContent]
    */
-  async function receiptWithheld(state, scope, receipt, policy, key) {
+  async function receiptWithheld(state, scope, receipt, policy, key, admittedContent) {
     const { excerpt } = receipt;
     if (state.receiptDenials.size) {
       const { namespace } = scope;
@@ -42,7 +42,8 @@ export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
     if (policy.textFacts.length) {
       for (const fingerprintKey of await ringKeys(scope.owner)) digests.push(await coreDigest(excerpt, fingerprintKey));
     }
-    return policy.withholdsRaw(receipt, digests) || (rawSourcesVisible ? !await rawSourcesVisible(state, scope, receipt) : false);
+    return policy.withholdsRaw(receipt, digests) ||
+      (rawSourcesVisible ? !await rawSourcesVisible(state, scope, receipt, admittedContent) : false);
   }
 
   /** @param {State} state @param {Scope} scope @param {StoredReceipt} receipt

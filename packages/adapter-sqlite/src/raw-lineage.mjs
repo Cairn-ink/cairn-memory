@@ -46,6 +46,16 @@ export function createRawLineage(storeKey, hashSession) {
     });
   }
 
+  /** @param {Scope} scope @param {Session} session @param {readonly CaptureMessage[]} messages */
+  function anchorRows(scope, { client, sessionId }, messages) {
+    const { owner } = scope;
+    const [, namespace] = scopeKey(scope);
+    const sessionTag = tag(["raw-lineage-session", owner, client, sessionId]);
+    const sessionHash = hashSession(scope, client, sessionId);
+    return proofs(owner, client, messages).map(([messageTag, proof]) =>
+      [owner, JSON.stringify(client), messageTag, namespace, sessionTag, sessionHash, proof]);
+  }
+
   /** @param {Connection} db @param {string} owner @param {string} client
    * @param {readonly Proof[]} candidates @param {string | null} excludedSession
    */
@@ -65,20 +75,14 @@ export function createRawLineage(storeKey, hashSession) {
   }
 
   return {
-    proofs,
+    proofs, anchorRows,
 
     /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly CaptureMessage[]} messages */
-    record(db, scope, { client, sessionId }, messages) {
-      const { owner } = scope;
-      const [, namespace] = scopeKey(scope);
-      const sessionTag = tag(["raw-lineage-session", owner, client, sessionId]);
-      const sessionHash = hashSession(scope, client, sessionId);
+    record(db, scope, session, messages) {
       const insert = db.prepare(`INSERT INTO cairn_raw_anchors
         (owner_id, client_key, message_tag, namespace_key, session_tag, session_hash, proof)
         VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`);
-      for (const [messageTag, proof] of proofs(owner, client, messages)) {
-        insert.run(owner, JSON.stringify(client), messageTag, namespace, sessionTag, sessionHash, proof);
-      }
+      for (const row of anchorRows(scope, session, messages)) insert.run(...row);
     },
 
     /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Proof[]} candidates */
@@ -145,6 +149,24 @@ export function createSpanLineage(port, hashSession) {
     const spans = [];
     for (const receipt of receipts) {
       const { client, sessionId, messageId, role } = receipt;
+      if (receipt.legacyReceiptKey !== undefined && receipt.legacy?.spans) {
+        for (const source of receipt.legacy.spans) {
+          const archived = readRawRow(db, scope, { client, sessionId: source.sessionId }, messageId);
+          if (!archived) continue;
+          const text = archived.message.content;
+          if (text === "" || archived.message.role !== role) {
+            if (intent === "forget") continue;
+            throw new CoreError("raw_lineage_unavailable");
+          }
+          if (source.start < 0 || source.end > text.length || source.end <= source.start) {
+            throw new CoreError("raw_lineage_unavailable");
+          }
+          spans.push({ ...scope, kind: "rawSpan", origin: "forget", actionId: memoryId,
+            sessionKeyHash: hashSession(scope, client, source.sessionId), messageKey: messageId,
+            startUtf16: source.start, endUtf16: source.end, contentDigest: sha256(text.slice(source.start, source.end)) });
+        }
+        continue;
+      }
       const archived = readRawRow(db, scope, receipt, messageId);
       if (!archived) continue;
       const { content } = archived.message;

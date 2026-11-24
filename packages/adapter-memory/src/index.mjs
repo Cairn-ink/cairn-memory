@@ -1,4 +1,4 @@
-import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
+import { CoreError, assertAdapterCapabilities, capabilities, receiptExcerpt, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
 import { withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
@@ -16,7 +16,7 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
-import { copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
+import { copyCaptureMessages, copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
 
 export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
 
@@ -72,13 +72,17 @@ export function createMemoryAdapter(options = {}) {
     capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections({ ...suppressions,
-      async receiptWithheld(tx, scope, receipt) {
+      async receiptWithheld(tx, scope, receipt, admitted) {
         return port.read(tx, scope, getState => {
           const target = { owner: tx.owner, namespace: writeNamespace(scope) };
           const [copy] = copyReceipts([receipt]);
           if (copy.excerpt === undefined) throw new CoreError("invalid_input");
+          const source = admitted === undefined ? undefined : copyCaptureMessages([admitted])[0];
+          if (source && (!source.content || source.id !== copy.messageId || source.role !== copy.role ||
+              source.occurredAtMs !== copy.occurredAtMs || receiptExcerpt(source.content) !== copy.excerpt)) return true;
           const state = getState();
-          return receiptWithheld(state, target, { ...copy, excerpt: copy.excerpt }, matchFacts(state.facts, target));
+          return receiptWithheld(state, target, { ...copy, excerpt: copy.excerpt }, matchFacts(state.facts, target),
+            undefined, source?.content);
         });
       },
     }, ["writeFact"]),

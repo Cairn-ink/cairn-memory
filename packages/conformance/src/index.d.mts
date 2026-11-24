@@ -1,10 +1,11 @@
 import type { Capabilities, Capability } from "@cairn-ink/core";
-import type { Namespace, Scope } from "@cairn-ink/core/ports";
+import type { Namespace, QuantityLedgerStore, Scope } from "@cairn-ink/core/ports";
 import type { AdapterFactory, OpenedAdapter } from "./factory.d.ts";
 
 export type { AdapterFactory, JsonValue, OpenedAdapter, TestHarness } from "./factory.d.ts";
 
 export type CaseContext = Omit<OpenedAdapter, "close"> & {
+  adapter: OpenedAdapter["adapter"] & { readonly quantityLedger?: QuantityLedgerStore };
   vec(distance: number): number[];
   hash(text: string): Promise<string>;
   owner: string;
@@ -53,6 +54,10 @@ export declare const RELATION_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CARD_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_AMENDMENT_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_LINK_CASES: readonly ConformanceCase[];
+export declare const CAPTURE_DOCUMENT_CARD_CASES: readonly ConformanceCase[];
+export declare const CAPTURE_DOCUMENT_AMENDMENT_CASES: readonly ConformanceCase[];
+export declare const CAPTURE_QUANTITY_LEDGER_CASES: readonly ConformanceCase[];
+export declare const CAPTURE_DOCUMENT_FORGET_CASES: readonly ConformanceCase[];
 export declare const TOPICS_FOR_CARDS_CASES: readonly ConformanceCase[];
 export declare const DELIVERY_VISIBILITY_CASES: readonly ConformanceCase[];
 export declare const RECEIPT_WITHHELD_CASES: readonly ConformanceCase[];

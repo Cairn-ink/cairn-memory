@@ -5,7 +5,7 @@ import { ownerKey } from "./storage-values.mjs";
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @typedef {readonly [string, string, string]} Identity */
 /** @typedef {{ revision: number | undefined }} RevisionView */
-/** @typedef {{ ordinaryWrite: boolean, view: RevisionView,
+/** @typedef {{ ordinaryWrite: boolean, start?: number, view: RevisionView,
  *   finishes: Map<string, { identity: Identity, revision: number }> }} IndexRun */
 
 /** @param {Connection} db @param {string} owner @param {boolean} advance */
@@ -28,6 +28,17 @@ export function createIndexRevisions(uow, port) {
     const run = runs.get(tx);
     if (!run) throw new CoreError("internal_error");
     return run;
+  }
+
+  /** @param {Connection} db @param {Tx} tx @param {IndexRun} run */
+  function startRevision(db, tx, run) {
+    return run.start ??= readRevision(db, tx.owner, false);
+  }
+
+  /** @param {Connection} db @param {Tx} tx @param {IndexRun} run */
+  function advance(db, tx, run) {
+    startRevision(db, tx, run);
+    return run.view.revision = readRevision(db, tx.owner, true);
   }
 
   return {
@@ -64,7 +75,7 @@ export function createIndexRevisions(uow, port) {
     markDirty(db, tx) {
       const run = indexRun(tx);
       if (!run.ordinaryWrite) {
-        run.view.revision = readRevision(db, tx.owner, true);
+        advance(db, tx, run);
         run.ordinaryWrite = true;
       }
     },
@@ -73,15 +84,28 @@ export function createIndexRevisions(uow, port) {
      * @param {Connection} db @param {Tx} tx
      */
     advanceRaw(db, tx) {
-      indexRun(tx).view.revision = readRevision(db, tx.owner, true);
+      advance(db, tx, indexRun(tx));
+    },
+
+    /** @param {Tx} tx */
+    indexRevision(tx) {
+      return port(tx, tx?.owner, {}, db => startRevision(db, tx, indexRun(tx)));
+    },
+
+    /** @param {Tx} tx */
+    committedIndexRevision(tx) {
+      return port(tx, tx?.owner, {}, db => {
+        const run = indexRun(tx);
+        return run.view.revision ?? startRevision(db, tx, run);
+      });
     },
 
     /** @param {Connection} db @param {Tx} tx @param {Identity} identity @param {boolean} changed */
     finish(db, tx, identity, changed) {
-      const { view, finishes } = indexRun(tx);
-      const revision = changed ? readRevision(db, tx.owner, true) : view.revision ?? readRevision(db, tx.owner, false);
-      view.revision = revision;
-      finishes.set(JSON.stringify(identity), { identity, revision });
+      const run = indexRun(tx);
+      const revision = changed ? advance(db, tx, run) : run.view.revision ?? startRevision(db, tx, run);
+      run.view.revision = revision;
+      run.finishes.set(JSON.stringify(identity), { identity, revision });
       return revision;
     },
 

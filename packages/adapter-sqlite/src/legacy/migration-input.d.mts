@@ -6,6 +6,13 @@ export interface MigrationInput {
   quiescence: { admissionsClosed: boolean; writersStopped: boolean; readersDrained: boolean; oldHandlesClosed: boolean };
 }
 interface NamespaceRow { owner_id: string; scope: string; project_id: string }
+interface LegacyAdmission extends NamespaceRow { client: string; event_id: string }
+export interface LegacySafetyFact extends NamespaceRow {
+  fact_id: string; epoch_hi: bigint; epoch_lo: bigint; kind: string; stable_key: string;
+  incarnation: string; match_mode: string; source_version: string; message_key: string;
+  span_start: bigint; span_end: bigint; reason: string; action_id: string; recorded_at: string;
+  evidence_origin: string; cleanup_status: string; cleanup_attempt: bigint;
+}
 export interface LegacyMemory extends NamespaceRow {
   id: string; fingerprint: string; content: string | null; kind: string; origin: string; confidence: number;
   revision: bigint; deleted: bigint; created_at: string; updated_at: string; review_state: string; currentness: string;
@@ -53,6 +60,23 @@ export interface LegacyInput {
     rules: string[][];
     actions: unknown[];
     effects: unknown[];
+  } | null;
+  localRawPrivacy: boolean;
+  archive: {
+    rows: import("node:sqlite").SQLInputValue[][];
+    anchors: Array<{scope: import("@cairn-ink/core/ports").Scope; client: string; sessionId: string;
+      message: import("@cairn-ink/core/ports").CaptureMessage}>;
+    spans: Map<string, Array<{sessionId: string; start: number; end: number; precision: string}>>;
+    maps: import("node:sqlite").SQLInputValue[][];
+    reservations: import("node:sqlite").SQLInputValue[][];
+    counts: Record<string, number>;
+  };
+  admissions: Array<LegacyAdmission & {state: "reserved" | "pending" | "completed"}>;
+  registered: LegacyAdmission[];
+  safety: {
+    facts: LegacySafetyFact[];
+    reservations: Array<NamespaceRow & {kind: string; stable_key: string; incarnation: string; evidence_origin: string}>;
+    epochs: Array<{owner_id: string; epoch_hi: bigint; epoch_lo: bigint}>;
   } | null;
   dropped: Record<string, number>;
 }

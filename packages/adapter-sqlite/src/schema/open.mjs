@@ -3,7 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
-import { openSqliteUnitOfWork } from "../uow.mjs";
+import { readMigratedControls } from "../migrate/capture-controls.mjs";
+import { openAdapterUnitOfWork } from "../uow.mjs";
 import { CONTEXT_READ_TABLES, installContextReadSchema } from "./context-read.mjs";
 import { INSPECT_TABLES, installInspectSchema } from "./inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
@@ -11,10 +12,11 @@ import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORA
 /** @typedef {Pick<DatabaseSync, "prepare">} Reader */
 
 const layoutTables = [
-  "cairn_store", "cairn_memories", "cairn_receipts", "cairn_suppression_facts",
+  "cairn_store", "cairn_memories", "cairn_receipts", "cairn_procedural_tags", "cairn_suppression_facts",
   "cairn_suppression_epochs", "cairn_legacy_denials", "cairn_pause",
   "cairn_capture_claims", "cairn_capture_outbox", "cairn_capture_abandoned_tokens", "cairn_index_revisions",
   "cairn_raw_messages", "cairn_raw_fences", "cairn_raw_anchors",
+  "cairn_migrated_raw_privacy", "cairn_migrated_safety", "cairn_migrated_raw_maps",
 ];
 
 /** @param {Reader} db */
@@ -42,10 +44,8 @@ function classifyStore(db) {
   }
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
   const migrated = tables.some(table => table.name === "cairn_migration");
-  const rawPrivacy = migrated && tables.some(table => table.name === "cairn_migrated_raw_privacy");
-  const expected = [...layoutTables, ...INSPECT_TABLES, ...CONTEXT_READ_TABLES];
-  if (tables.length !== expected.length + Number(migrated) + Number(rawPrivacy) ||
-      !expected.every(name => tables.some(table => table.name === name))) {
+  const expected = [...layoutTables, ...INSPECT_TABLES, ...CONTEXT_READ_TABLES, ...(migrated ? ["cairn_migration"] : [])];
+  if (tables.length !== expected.length || !expected.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
   }
   if (migrated) assertMigrationComplete(db);
@@ -54,9 +54,10 @@ function classifyStore(db) {
       typeof identity[0].cursor_secret !== "string" || !/^[0-9a-f]{64}$/u.test(identity[0].cursor_secret)) {
     throw new CoreError("storage_error");
   }
-  const legacyRawHashing = rawPrivacy && db.prepare(
+  const legacyRawHashing = migrated && db.prepare(
     "SELECT json_type(source_evidence, '$.legacyRawHashing') AS kind FROM cairn_migration").get()?.kind === "true";
-  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing };
+  const controls = migrated ? readMigratedControls(db) : undefined;
+  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing, controls };
 }
 
 /** @param {string} filename */
@@ -93,7 +94,7 @@ export async function openStorage(filename) {
   } catch (error) {
     throw toSqliteError(error);
   }
-  const connection = openSqliteUnitOfWork(filename);
+  const connection = openAdapterUnitOfWork(filename);
   const owner = "schema";
   try {
     const identity = await connection.uow.run(owner, {}, (tx) =>
@@ -105,7 +106,7 @@ export async function openStorage(filename) {
           installInspectSchema(db);
           installContextReadSchema(db);
         }
-        return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
+        return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false, controls: undefined };
       }));
     return { ...connection, ...identity };
   } catch (error) {
