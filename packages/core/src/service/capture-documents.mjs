@@ -494,10 +494,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
       const result = await runAtGeneration(async tx => {
         checkAbort(signal, deadline);
-        await capture.assertEligible(tx, key, preEmbed);
         // The card write and the Raw archive map positions back to the admitted copy, so withdraw a
         // blanked or changed slot first. A post-commit amendment check reads Raw instead.
-        const allowed = await currentSources(tx, await unchangedPositions(tx, preEmbed));
+        const unchanged = await unchangedPositions(tx, preEmbed);
+        await capture.assertEligible(tx, key, unchanged);
+        const allowed = await currentSources(tx, unchanged);
         if (allowed === null) return abandonKeyMismatch(tx);
         checkAbort(signal, deadline);
         const result = await finish(tx, []);
