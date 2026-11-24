@@ -59,9 +59,15 @@ const SET_LEASE = `UPDATE capture_events SET core_lease_token = $4, core_lease_e
     core_lease_sources = $6::jsonb, core_dispatched = false WHERE ${IDENTITY}`;
 const WAS_ABANDONED = `SELECT 1 FROM capture_events WHERE user_id = $1 AND core_abandoned_tokens IS NOT NULL
   AND core_abandoned_tokens @> ARRAY[$2::uuid] LIMIT 1`;
-const ABANDON = `UPDATE capture_events SET core_lease_token = NULL, core_lease_expires_at_ms = NULL,
-    core_lease_sources = NULL, core_dispatched = false, core_failure_code = $3,
-    core_abandoned_tokens = array_append(core_abandoned_tokens, $2::uuid) WHERE ${TOKEN}`;
+const RETIRE_LEASE = `core_lease_token = NULL, core_lease_expires_at_ms = NULL,
+    core_lease_sources = NULL, core_dispatched = false,
+    core_abandoned_tokens = CASE WHEN core_lease_token IS NOT NULL
+      THEN array_append(core_abandoned_tokens, core_lease_token) ELSE core_abandoned_tokens END`;
+const ABANDON = `UPDATE capture_events SET ${RETIRE_LEASE}, core_failure_code = $3 WHERE ${TOKEN}`;
+const TERMINATE_DIRECT_CLAIMS = `UPDATE capture_events SET ${RETIRE_LEASE}, core_failure_code = 'stale_admission'
+  WHERE user_id = $1 AND client = $2 AND session_id = $3 AND core_admitted IS FALSE
+    AND core_payload_digest IS NOT NULL AND status = 'pending' AND raw_archive_from IS NULL
+    AND core_failure_code IS NULL RETURNING 1`;
 const COMPLETE = `UPDATE capture_events SET status = 'completed', memory_count = GREATEST(memory_count, $3),
     core_result = $4::jsonb, core_lease_token = NULL, core_lease_expires_at_ms = NULL,
     core_lease_sources = NULL, core_dispatched = false, core_failure_code = NULL
@@ -100,6 +106,12 @@ function storedRetry(row, key) {
 /** @param {Pick<CaptureRow, "core_lease_expires_at_ms">} row @param {bigint} now */
 function hasLiveLease(row, now) {
   return row.core_lease_expires_at_ms !== null && now < BigInt(row.core_lease_expires_at_ms);
+}
+
+/** @param {Query} query @param {string} owner @param {{client: string, sessionId: string}} source */
+export async function terminateDirectClaims(query, owner, { client, sessionId }) {
+  const { rows } = await query(TERMINATE_DIRECT_CLAIMS, [owner, client, sessionId]);
+  return rows.length > 0;
 }
 
 /** @param {Query} query @param {CaptureKey} key @param {CaptureMessage[]} [batch]

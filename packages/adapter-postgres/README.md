@@ -262,8 +262,8 @@ Run Raw mutations with `pauseLock: true`. Resolve a proven closure and pass it
 to `eraseSessions` inside that same transaction. Erasure fences the proven
 sessions, deletes their Raw rows, and blanks their ledger messages. An
 ID-only match withholds admission without joining the erase closure.
-`deleteConversation` deletes the conversation's Raw rows and preserves its
-ledger and any existing fence.
+`deleteConversation` deletes the conversation's Raw rows and blanks its ledger
+messages in the same transaction, with any existing fence still in force.
 
 Supply `fingerprintKeys(owner)` with the current and retained keys and their
 respective fingerprint pipelines to enable keyed Raw purge. Exact evidence
