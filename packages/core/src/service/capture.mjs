@@ -523,7 +523,12 @@ export function captureMethods(deps) {
           return allowed;
         }
         const supplemental = documents?.forCapture({ key, messages: admittedMessages, excludedSources, sourceKey,
-          readSourcePassages, selectWriteKey, filterSources: (positions, passages, writeKey) =>
+          readSourcePassages, selectWriteKey,
+          unchangedPositions: async (tx, positions) => {
+            const current = await readCurrentMessages(tx);
+            return positions.filter(position => sourceUnchanged(current, position));
+          },
+          filterSources: (positions, passages, writeKey) =>
             filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
           abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
           generation: preflight.generation, signal: options?.signal });

@@ -28,6 +28,7 @@ import { validWriteEmbedding } from "./writes.mjs";
  *   excludedSources: Set<string>,
  *   sourceKey: FingerprintKey | undefined,
  *   readSourcePassages: (tx: Tx, positions: number[]) => Promise<import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]>,
+ *   unchangedPositions: (tx: Tx, positions: number[]) => Promise<number[]>,
  *   selectWriteKey: (tx: Tx) => Promise<FingerprintKey>,
  *   filterSources: (positions: number[], passages: import("../ports/privacy.d.ts").SuppressionSnapshot["passages"],
  *     writeKey: FingerprintKey) => Promise<number[]>,
@@ -370,8 +371,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
   /** @param {CaptureContext} context */
   function forCapture(context) {
-    const { key, messages, excludedSources, sourceKey, readSourcePassages, selectWriteKey, filterSources,
-      abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation, signal } = context;
+    const { key, messages, excludedSources, sourceKey, readSourcePassages, unchangedPositions, selectWriteKey,
+      filterSources, abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation,
+      signal } = context;
     const { capture } = storage;
     const archive = capabilities.rawArchive ? raw : undefined;
     // Candidate preparation and embedding preserve the receipts array through finish.
@@ -392,8 +394,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       }
     }
 
-    /** @param {Tx} tx @param {number[]} positions */
-    async function currentSources(tx, positions) {
+    /** @param {Tx} tx @param {number[]} inputPositions */
+    async function currentSources(tx, inputPositions) {
+      // A deleted or edited conversation blanks or changes its stored slot. Withdraw it before any card
+      // embedding, card write or Raw archive, all of which map positions back to the admitted copy.
+      const positions = await unchangedPositions(tx, inputPositions);
       const passages = await readSourcePassages(tx, positions);
       const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
       if (capabilities.fingerprintKey && passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
