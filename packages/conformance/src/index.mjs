@@ -67,11 +67,13 @@ async function runOpenedCase(factory, testCase) {
   try {
     opened = await factory.open({ capabilities });
   } catch (error) {
-    const { rawArchive, ...withoutRawArchive } = capabilities;
-    if (rawArchive !== true || testCase.needs.includes("rawArchive") ||
-        toCoreError(error).code !== "capability_unavailable") throw error;
-    // A factory can reject an optional raw archive request during setup. Retry with its default raw setting.
-    opened = await factory.open({ capabilities: withoutRawArchive });
+    if (toCoreError(error).code !== "capability_unavailable") throw error;
+    const retry = { ...capabilities };
+    // A factory can reject these requests during setup. Check the actual flags after reopening.
+    if (retry.rawArchive === true && !testCase.needs.includes("rawArchive")) delete retry.rawArchive;
+    if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
+    if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
+    opened = await factory.open({ capabilities: retry });
   }
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;

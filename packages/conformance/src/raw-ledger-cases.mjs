@@ -60,24 +60,22 @@ export const RAW_LEDGER_CASES = [
       const scrubbed = { key, messages: [{ ...first, content: "" }, second] };
       equal(await read(), scrubbed, "Purge must preserve both slot identities and the unmatched text");
       equal(await purge(), { rawDeleted: 0, ledgerBlanked: 0 }, "A repeated purge must report zero changes");
+      equal(await read(), scrubbed, "A repeated purge must preserve the ledger");
       equal(await write((tx) => raw.deleteConversation(tx, scope, key)), { rawDeleted: 1 },
         "Only the unmatched Raw row must remain in storage");
-      equal(await read(), scrubbed, "Raw-only deletion must preserve the ledger");
     },
   },
   {
     id: "K-RAW-LEDGER-2", title: "closure erasure blanks every slot in the proven sessions",
-    needs: ["rawArchive"],
+    needs: ["rawArchive", "sessionLineage"],
     async run(ctx) {
-      // Check the opened Raw profile so adapters without a resolver can run the suite.
-      if (!ctx.adapter.capabilities.sessionLineage) return "needs sessionLineage";
       const fixture = ledgerFixture(ctx);
       if (typeof fixture === "string") return fixture;
       const { raw, key, scope, write, reserve, read } = fixture;
       const lineage = ctx.adapter.sessionLineage;
-      if (typeof lineage?.provenClosure !== "function") return "needs sessionLineage.provenClosure";
-      if (typeof raw.recordLineage !== "function") return "needs raw.recordLineage";
-      if (typeof raw.eraseSessions !== "function") return "needs raw.eraseSessions";
+      check(typeof lineage?.provenClosure === "function", "Session lineage must provide provenClosure");
+      check(typeof raw.recordLineage === "function", "Raw store must provide recordLineage");
+      check(typeof raw.eraseSessions === "function", "Raw store must provide eraseSessions");
       const related = { ...key, sessionId: "related", eventId: crypto.randomUUID() };
       const unrelated = { ...key, sessionId: "unrelated", eventId: crypto.randomUUID() };
       const changed = { ...first, content: "birch cabinet" };
