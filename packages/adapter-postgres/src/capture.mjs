@@ -1,5 +1,5 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
-import { copyFinishItems, finishMemories, readIndexRevision } from "./capture-finish.mjs";
+import { copyFinishItems, finishMemories, readIndexRevision, trackFinish } from "./capture-finish.mjs";
 import {
   clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
   readInput, readLease, readSelection, readToken,
@@ -65,7 +65,7 @@ const ABANDON = `UPDATE capture_events SET core_lease_token = NULL, core_lease_e
 const COMPLETE = `UPDATE capture_events SET status = 'completed', memory_count = GREATEST(memory_count, $3),
     core_result = $4::jsonb, core_lease_token = NULL, core_lease_expires_at_ms = NULL,
     core_lease_sources = NULL, core_dispatched = false, core_failure_code = NULL
-  WHERE ${TOKEN} AND status = 'pending' RETURNING 1`;
+  WHERE ${TOKEN} AND status = 'pending' RETURNING client, event_id`;
 
 /** @param {Pick<CaptureKey, "scope" | "client" | "eventId">} key */
 function identity({ scope, client, eventId }) {
@@ -208,9 +208,9 @@ export function createPostgresCapturePorts(options) {
           if (row.status !== "pending" || !row.core_lease_sources) throw new CoreError("stale_admission");
           const scope = { owner: tx.owner, namespace: row.core_namespace };
           const source = { kind: /** @type {const} */ ("capture"), client: row.client, sessionId: row.session_id };
+          const { proofs } = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources);
           if (row.core_admitted) {
             const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
-            const proofs = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources).proofs;
             const currentProofs = await captureProofs({ scope, client: row.client }, current);
             const blankIds = new Set(current.filter(({ content }) => !content).map(({ id }) => id));
             if ((batch.length > 0 && blankIds.size > 0 && current.every(({ content }) => !content)) ||
@@ -220,6 +220,12 @@ export function createPostgresCapturePorts(options) {
                   receipt.sessionId === source.sessionId && blankIds.has(receipt.messageId)))) {
               throw new CoreError("suppressed");
             }
+          }
+          const receiptSessions = new Map(batch.flatMap(({ receipts }) => receipts.map(({ client, sessionId }) =>
+            [JSON.stringify([client, sessionId]), { scope, client, sessionId }])));
+          for (const receiptSource of receiptSessions.values()) {
+            const fromLease = receiptSource.client === source.client && receiptSource.sessionId === source.sessionId;
+            await filterSources(query, receiptSource, [], fromLease ? proofs : [], "assert", captureProofs, hashSessionKey);
           }
           return { scope, source, batch, lease, revision: await readIndexRevision(query, tx.owner), nowMs };
         };
@@ -233,8 +239,9 @@ export function createPostgresCapturePorts(options) {
         if (current !== result.indexRevision) {
           await query("UPDATE core_owner_state SET index_revision = $2 WHERE user_id = $1", [tx.owner, result.indexRevision]);
         }
-        const completed = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
-        if (completed.rows.length !== 1) throw new CoreError("stale_admission");
+        const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
+        if (!completed) throw new CoreError("stale_admission");
+        trackFinish(tx, completed.client, completed.event_id, result);
         return result;
       });
     },

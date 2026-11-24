@@ -9,6 +9,28 @@ import { runOperation } from "./uow.mjs";
 /** @import { InsertRow, MemoryStore, Scope, SourceRef, Tx } from "../../core/src/ports/index.d.ts" */
 /** @import { Query } from "./memory-rows.mjs" */
 
+/** @type {WeakMap<Tx, {client: string, eventId: string, result: FinishResult}[]>} */
+const finishedInRun = new WeakMap();
+
+/** @param {Tx} tx @param {string} client @param {string} eventId @param {FinishResult} result */
+export function trackFinish(tx, client, eventId, result) {
+  const finishes = finishedInRun.get(tx) ?? [];
+  finishes.push({ client, eventId, result });
+  finishedInRun.set(tx, finishes);
+}
+
+/** @param {Tx} tx @param {Query} query */
+export async function refreshFinishRevisions(tx, query) {
+  const finishes = finishedInRun.get(tx);
+  if (!finishes) return;
+  const revision = await readIndexRevision(query, tx.owner);
+  for (const { client, eventId, result } of finishes) {
+    await query(`UPDATE capture_events SET core_result = jsonb_set(core_result, '{indexRevision}', to_jsonb($4::bigint))
+      WHERE user_id = $1 AND client = $2 AND event_id = $3`, [tx.owner, client, eventId, revision]);
+    result.indexRevision = revision;
+  }
+}
+
 /** @param {readonly FinishItem[]} items */
 export function copyFinishItems(items) {
   return copyArray(items).map((item) => {

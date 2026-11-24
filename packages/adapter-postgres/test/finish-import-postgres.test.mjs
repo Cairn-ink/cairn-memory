@@ -29,7 +29,7 @@ async function fixture(t) {
   let now = Date.now();
   const lineageSecret = randomBytes(32).toString("hex");
   const capture = createPostgresCapturePorts({ lineageSecret, nearDuplicate: false, now: () => now });
-  const { raw } = createPostgresRawPorts({ lineageSecret });
+  const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret });
   const run = (operation) => uow.run(owner, write, operation);
   const acquire = (messages, admit = true) => run(async (tx) => {
     if (admit) assert.deepEqual(await capture.admit(tx, key, messages), { status: "admitted" });
@@ -37,7 +37,7 @@ async function fixture(t) {
     assert.equal(claim.status, "claimed");
     return claim.token;
   });
-  return { pool, uow, owner, otherOwner, scope, key, capture, raw, run, acquire, backends,
+  return { pool, uow, owner, otherOwner, scope, key, capture, raw, sessionLineage, run, acquire, backends,
     advanceClock: (ms) => { now += ms; } };
 }
 
@@ -156,6 +156,78 @@ test("finish persists lossless replay and the completed status and count read by
   assert.deepEqual(await run((tx) => capture.admit(tx, key, messages)), replay);
 });
 
+test("finish and replay use the revision committed with the Raw archive", migrationDbTest, async (t) => {
+  const db = await fixture(t);
+  const { key, capture, raw, acquire, run } = db;
+  const source = message("A source that will also be archived.");
+  const token = await acquire([source]);
+  const result = await run(async (tx) => {
+    const finished = await capture.finish(tx, token, [item("An extracted memory", key, source)]);
+    assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 1 });
+    return finished;
+  });
+  const { revision } = await writeCounts(db);
+  const replay = await run((tx) => capture.claim(tx, key, [source], { leaseMs }));
+  const admitted = await run((tx) => capture.admit(tx, key, [source]));
+  assert.equal(revision, 2);
+  assert.equal(replay.status, "rawReplay");
+  assert.equal(admitted.status, "rawReplay");
+  assert.deepEqual([result.indexRevision, replay.result.indexRevision, admitted.result.indexRevision],
+    [revision, revision, revision]);
+});
+
+test("Raw import follows an ID-only link into a proven fenced component", migrationDbTest, async (t) => {
+  const { key, scope, raw, run } = await fixture(t);
+  const peer = { ...key, sessionId: randomUUID(), eventId: randomUUID() };
+  const fork = { ...key, sessionId: randomUUID(), eventId: randomUUID() };
+  const shared = message("A passage shared by the ancestor and its proven fork.");
+  const weak = message("");
+  const comparable = message("An original version of the passage.");
+  const batch = [{ ...weak, content: "A later copy of the ID-only passage." }, message("Another passage.")];
+  await run(async (tx) => {
+    await raw.recordLineage(tx, key, [shared]);
+    await raw.recordLineage(tx, peer, [shared, weak, comparable]);
+    await raw.fenceSession(tx, scope, key);
+  });
+  assert.deepEqual(await run((tx) => raw.archive(tx, fork, batch)), { archived: 0 });
+  assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, fork, batch)),
+    { archived: 0, existing: 0, withheld: 2 });
+  const edited = { ...comparable, content: "A different version of the passage." };
+  assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, fork, [edited])),
+    { archived: 1, existing: 0, withheld: 0 });
+});
+
+test("Raw import uses exact-only matching for a SHA-only full fact without keys", migrationDbTest, async (t) => {
+  const { owner, key, scope, raw, run } = await fixture(t);
+  const exact = message("Cedar gates are painted on Fridays.");
+  const fresh = message("Maple seedlings are watered on Mondays.");
+  const fact = { owner, actionId: randomUUID(), origin: "forget", kind: "text", mode: "full",
+    text: { digests: [await coreDigest(exact.content)] } };
+  const suppressions = createPostgresSuppressionStore();
+  await run((tx) => suppressions.writeFact(tx, fact, hash(factIncarnationBody(fact))));
+  assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, key, [exact, fresh])),
+    { archived: 1, existing: 0, withheld: 1 });
+});
+
+test("Raw import withholds receipt tombstones without storing or indexing the replay", migrationDbTest, async (t) => {
+  const db = await fixture(t);
+  const { pool, owner, key, scope, raw, run } = db;
+  const forgotten = message("A passage previously removed from Raw.");
+  await pool.query(`INSERT INTO core_memory_receipts
+    (user_id, memory_id, client, session_id, message_id, role, forgotten_at)
+    VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
+  [owner, randomUUID(), key.client, key.sessionId, forgotten.id, forgotten.role]);
+  assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, key, [forgotten])),
+    { archived: 0, existing: 0, withheld: 1 });
+  assert.equal((await writeCounts(db)).revision, 0);
+  assert.deepEqual((await pool.query("SELECT message_id FROM raw_messages WHERE user_id = $1", [owner])).rows, []);
+  const fresh = message("An eligible passage in the same session.");
+  assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, key, [forgotten, fresh])),
+    { archived: 1, existing: 0, withheld: 1 });
+  assert.deepEqual((await pool.query("SELECT message_id FROM raw_messages WHERE user_id = $1", [owner])).rows,
+    [{ message_id: fresh.id }]);
+});
+
 test("withheld import positions never write raw rows and still fence a proven fork", migrationDbTest, async (t) => {
   const { pool, owner, key, scope, raw, run } = await fixture(t);
   const anchor = message("A passage withheld by the caller.");
@@ -165,18 +237,22 @@ test("withheld import positions never write raw rows and still fence a proven fo
     [anchor, kept, kept, outsideWire], { withheld: [0] })), { archived: 1, existing: 1, withheld: 2 });
   const stored = async () => (await pool.query("SELECT message_id, content FROM raw_messages WHERE user_id = $1", [owner])).rows;
   assert.deepEqual(await stored(), [{ message_id: kept.id, content: kept.content }]);
+  const anchors = async () => (await pool.query(`SELECT session_id, message_mac FROM capture_raw_lineage
+    WHERE user_id = $1 ORDER BY session_id, message_mac`, [owner])).rows;
+  assert.equal((await anchors()).length, 1);
 
   await run(async (tx) => {
     await raw.recordLineage(tx, key, [anchor]);
     await raw.fenceSession(tx, scope, key);
     await raw.deleteConversation(tx, scope, key);
   });
+  const before = await anchors();
+  assert.deepEqual(before.map(({ session_id }) => session_id), [key.sessionId, key.sessionId]);
   const fork = { client: key.client, sessionId: randomUUID() };
   assert.deepEqual(await run((tx) => raw.importArchive(tx, scope, fork, [kept, anchor], { withheld: [1] })),
     { archived: 0, existing: 0, withheld: 2 });
   assert.deepEqual(await stored(), []);
-  const { rows: proofs } = await pool.query("SELECT session_id FROM capture_raw_lineage WHERE user_id = $1", [owner]);
-  assert.deepEqual(proofs, [{ session_id: key.sessionId }]);
+  assert.deepEqual(await anchors(), before);
 });
 
 async function waitForBlock(pool, backends, offset) {
@@ -191,8 +267,69 @@ async function waitForBlock(pool, backends, offset) {
     }
     await delay(20);
   }
-  assert.fail("Postgres did not report the finish waiting on the purge");
+  assert.fail("Postgres did not report the second transaction waiting on the first");
 }
+
+test("erasure waiting for a Raw import includes and deletes the imported fork", migrationDbTest, async (t) => {
+  const { pool, owner, key, scope, raw, sessionLineage, run, backends } = await fixture(t);
+  const shared = message("An imported copy of an ancestor's passage.");
+  const ancestor = { client: key.client, sessionId: key.sessionId };
+  const fork = { client: key.client, sessionId: randomUUID() };
+  await run(async (tx) => {
+    await raw.recordLineage(tx, key, [shared]);
+    assert.deepEqual(await raw.archive(tx, key, [shared]), { archived: 1 });
+  });
+
+  const ready = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const offset = backends.length;
+  const importing = run(async (tx) => {
+    ready.resolve(await raw.importArchive(tx, scope, fork, [shared]));
+    await release.promise;
+  });
+  let erasing;
+  try {
+    assert.deepEqual(await Promise.race([ready.promise, importing]), { archived: 1, existing: 0, withheld: 0 });
+    erasing = run(async (tx) => {
+      const closure = await sessionLineage.provenClosure(tx, scope, [ancestor]);
+      const counts = await raw.eraseSessions(tx, scope, closure);
+      return { sessions: closure.map(({ sessionId }) => sessionId).sort(), ...counts };
+    });
+    void erasing.catch(() => {});
+    await waitForBlock(pool, backends, offset);
+    release.resolve();
+    await importing;
+    assert.deepEqual(await erasing, { sessions: [ancestor.sessionId, fork.sessionId].sort(), rawDeleted: 2, ledgerBlanked: 0 });
+  } finally {
+    release.resolve();
+    await Promise.allSettled([importing, erasing]);
+  }
+  assert.deepEqual((await pool.query("SELECT session_id FROM raw_messages WHERE user_id = $1", [owner])).rows, []);
+});
+
+test("finish rejects receipt sources fenced after claim", migrationDbTest, async (t) => {
+  for (const lineage of [false, true]) {
+    await t.test(lineage ? "proven fork" : "bare Raw fence", async (t) => {
+      const db = await fixture(t);
+      const { key, scope, capture, raw, acquire, run } = db;
+      const source = message("A claimed passage whose source is fenced before finish.");
+      const ancestor = { ...key, sessionId: randomUUID(), eventId: randomUUID() };
+      const token = await acquire([source]);
+      await run(async (tx) => {
+        if (lineage) await raw.recordLineage(tx, ancestor, [source]);
+        await raw.fenceSession(tx, scope, lineage ? ancestor : key);
+      });
+      await assert.rejects(run((tx) => capture.assertEligible(tx, key, [0])), { code: "lineage_fenced" });
+      await assert.rejects(run((tx) => capture.finish(tx, token, [item("A memory from the fenced source", key, source)])),
+        { code: "lineage_fenced" });
+      assert.deepEqual(await writeCounts(db), { memories: 0, receipts: 0, revision: 1 });
+      const row = await ledger(db);
+      assert.equal(row.core_lease_token, token);
+      assert.equal(row.core_result, null);
+      assert.equal(row.raw_request.messages[0].content, source.content);
+    });
+  }
+});
 
 test("finish rereads an outbox slot scrubbed by a concurrent purge before writing memories or receipts", migrationDbTest, async (t) => {
   const db = await fixture(t);

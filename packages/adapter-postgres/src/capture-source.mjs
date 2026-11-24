@@ -97,10 +97,10 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
  * @param {Connection["query"]} query @param {Source} source @param {Proof[] | null} proofs
  * @param {{incoming: StoredFact[], ancestors?: StoredFact[]}} facts
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
- * @param {boolean} raw
+ * @param {boolean} raw @param {boolean} [allowEdited]
  * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
  */
-async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey, raw) {
+async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey, raw, allowEdited = false) {
   if (proofs === null) return "unknown";
   const { scope, client, sessionId } = source;
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
@@ -130,10 +130,11 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
 
   const encoded = JSON.stringify(fences);
   const hasHashes = hashes.length > 0;
-  const legacy = await legacyProofs(query, source, signer, encoded, hasHashes, raw || !proofs.length);
+  const matchEditedIds = raw && !allowEdited;
+  const legacy = await legacyProofs(query, source, signer, encoded, hasHashes, matchEditedIds || !proofs.length);
   if (!legacy) return "unknown";
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [scope.owner, client, scope.namespace, sessionId,
-    JSON.stringify([...proofs, ...legacy.incoming]), encoded, hasHashes, raw, JSON.stringify(legacy.ancestors)]);
+    JSON.stringify([...proofs, ...legacy.incoming]), encoded, hasHashes, matchEditedIds, JSON.stringify(legacy.ancestors), raw]);
   if (!lineage || lineage.exceeded) return "unknown";
   if (lineage.direct || lineage.proven) return "proven";
   if (lineage.fenced) return "id-only";
@@ -183,7 +184,8 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
   if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
   // Import supplies fresh proofs. A comparable proof for edited content can rule out an ID match.
-  const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey, mode === "raw");
+  const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey,
+    mode === "raw" || mode === "import", mode === "import");
   if (verdict === "allowed") return positions;
   if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
   return [];

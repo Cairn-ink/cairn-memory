@@ -68,7 +68,9 @@ export function createImportTextFilter(factRows, scope, fingerprintKeys) {
       return facts.some(fact => {
         const index = byKey.findIndex(key => key.id === fact.text.keyId);
         const passages = variants[Math.max(0, index)].map(passage => ({ ...passage, digests: exact }));
-        return withholdsAnyPassage(passages, [fact]);
+        const exactOnly = !byKey.length && fact.text.keyId == null && fact.text.shingles == null &&
+          fact.text.digests.every(({ alg, keyId }) => alg === "sha256" && keyId === null);
+        return withholdsAnyPassage(passages, [exactOnly ? { ...fact, mode: "exact" } : fact]);
       });
     } catch {
       return true;

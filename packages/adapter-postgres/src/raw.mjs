@@ -2,6 +2,7 @@ import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
 import {
   copyArray, copyKey, copyMessages, copyScope, decodeOutboxMessages, decodeRequest, hostedTime, identifier, pgText, readInput,
 } from "./capture-input.mjs";
+import { refreshFinishRevisions } from "./capture-finish.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { namespaceKey } from "./memory-input.mjs";
@@ -128,11 +129,14 @@ function archiveRecord({ id, role, content }, occurred_at) {
   return { id: crypto.randomUUID(), message_id: id, role, content, occurred_at };
 }
 
-/** @param {Query} query @param {{scope: Scope} & Session} source @param {ReturnType<typeof archiveRecord>[]} records */
-async function archiveRecords(query, { scope, client, sessionId }, records) {
+/** @param {Tx} tx @param {Query} query @param {{scope: Scope} & Session} source @param {ReturnType<typeof archiveRecord>[]} records */
+async function archiveRecords(tx, query, { scope, client, sessionId }, records) {
   if (!records.length) return 0;
   const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
-  if (rows.length) await advanceIndex(query, scope.owner);
+  if (rows.length) {
+    await advanceIndex(query, scope.owner);
+    await refreshFinishRevisions(tx, query);
+  }
   return rows.length;
 }
 
@@ -218,7 +222,7 @@ export function createPostgresRawPorts(options) {
             if (occurred_at === undefined || spanBlocked(batch[index])) return [];
             return [archiveRecord(batch[index], occurred_at)];
           });
-          return { ...result, archived: await archiveRecords(query, capture, records) };
+          return { ...result, archived: await archiveRecords(tx, query, capture, records) };
         };
       });
     },
@@ -233,23 +237,37 @@ export function createPostgresRawPorts(options) {
           if (!batch.length) return counts;
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
           const proofs = await captureProofs(source, batch);
+          if (proofs === null) return counts;
           const positions = await filterSources(query, source, times, proofs, "import", captureProofs, hashSessionKey);
           if (!positions.length) return counts;
 
+          const params = [source.scope.owner, source.client, source.sessionId];
+          const { rows: tombstones } = await query(`SELECT DISTINCT message_id FROM core_memory_receipts
+            WHERE user_id = $1 AND client = $2 AND session_id = $3 AND forgotten_at IS NOT NULL AND message_id = ANY($4::text[])`,
+          [...params, positions.map(position => batch[position].id)]);
+          const forgotten = new Set(tombstones.map(({ message_id }) => message_id));
           const facts = await readVisibilityFacts(query, source.scope.owner, { rawSpans: true });
           const spanBlocked = rawSpanFilter(facts, source, hashSessionKey);
           const textBlocked = createImportTextFilter(facts, source.scope, fingerprintKeys);
-          const records = [];
+          const eligible = [];
           for (const position of positions) {
-            if (withheld.has(position)) continue;
             const message = batch[position];
+            if (withheld.has(position) || forgotten.has(message.id)) continue;
             const { content, occurredAtMs } = message;
             const occurredAt = occurredAtMs === null ? null : hostedTime(occurredAtMs);
             if ((occurredAtMs !== null && occurredAt === null) || spanBlocked(message) || await textBlocked(content)) continue;
-            records.push(archiveRecord(message, occurredAt));
+            eligible.push({ row: archiveRecord(message, occurredAt), proof: proofs[position] });
           }
-          const archived = await archiveRecords(query, source, records);
-          return { archived, existing: records.length - archived, withheld: batch.length - records.length };
+          if (!eligible.length) return counts;
+          const archived = await archiveRecords(tx, query, source, eligible.map(({ row }) => row));
+          // For conflicting IDs, anchor the version that actually exists in Raw.
+          const { rows: stored } = await query(`SELECT message_id, content FROM raw_messages
+            WHERE user_id = $1 AND client = $2 AND session_id = $3 AND message_id = ANY($4::text[])`,
+          [...params, eligible.map(({ row }) => row.message_id)]);
+          const contents = new Map(stored.map(({ message_id, content }) => [message_id, content]));
+          await record(query, source.scope, source, eligible.flatMap(({ row, proof }) =>
+            contents.get(row.message_id) === row.content ? [proof] : []));
+          return { archived, existing: eligible.length - archived, withheld: batch.length - eligible.length };
         };
       });
     },
