@@ -410,3 +410,18 @@ test("9: an exact forget inside extraction withholds quantity rows carrying the 
       (forgotten === category ? quantities.slice(-1) : quantities).map(fields));
   }
 });
+
+test("10: an exact forget inside extraction preserves a quantity row that matches only its group", async () => {
+  const f = fixture({ ledger: true });
+  const saved = await f.service.save(scope, "food", user);
+  assert.equal(saved.status, "saved");
+  const row = quantity(0, "bread", 3);
+  const result = await f.capture(selection("purchase"), [unrelated], {
+    items: [extract(unrelated.content)], quantities: [row],
+  }, { race: { point: "extract", commit: () => f.forget(saved.item.id) } });
+  const memoryId = await f.assertSurvivor(result);
+  assert.deepEqual(f.trace.slice(0, 3), ["dispatch-1", "extract", "committed"]);
+  const fields = ({ group, measure, unit, category, value }) => ({ group, measure, unit, category, value });
+  assert.deepEqual((await f.ledgerRows()).map(stored => ({ memoryId: stored.memoryId, ...fields(stored) })),
+    [{ memoryId, ...fields(row) }]);
+});

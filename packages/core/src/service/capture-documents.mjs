@@ -2,6 +2,7 @@ import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
 import { reconcileLedgerQuantities } from "../ledger/index.mjs";
+import { QUANTITY_TEXT_FIELDS } from "../ledger/quantities.mjs";
 import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
 import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -274,8 +275,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
         const permitted = [];
         for (const quantityRow of rows) {
-          const { memoryId, receiptId, textHash, ...quantity } = quantityRow;
-          if (await withholds(Object.values(quantity).filter(value => typeof value === "string"))) {
+          if (await withholds(QUANTITY_TEXT_FIELDS.map(field => quantityRow[field]))) {
             emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_text_withheld");
           } else {
             permitted.push(quantityRow);
