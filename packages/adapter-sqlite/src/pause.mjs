@@ -6,7 +6,7 @@ import { ownerKey } from "./storage-values.mjs";
 /** @typedef {Parameters<Parameters<Port>[3]>[0]} Connection */
 
 /** @param {Connection} db @param {string} owner */
-function readPause(db, owner) {
+export function readPause(db, owner) {
   const row = db.prepare("SELECT paused, generation FROM cairn_pause WHERE owner_id = ?").get(ownerKey(owner));
   return { paused: row?.paused === 1, generation: Number(row?.generation ?? 0) };
 }
