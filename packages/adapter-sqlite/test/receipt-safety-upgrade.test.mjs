@@ -7,7 +7,7 @@ import { createMemoryAdapter } from "../../adapter-memory/src/index.mjs";
 import { openSqliteAdapter } from "../src/index.mjs";
 import { migrateLegacyStore } from "../src/migrate/index.mjs";
 import { editFixture, fixture as legacyFixture, scratch } from "./legacy/fixtures.mjs";
-import { admit, coreScope, createLegacyBackup, ok, personal, prepareInput, service, sha256 } from "./migration-fixtures.mjs";
+import { admit, coreScope, createLegacyBackup, fileDigest, ok, personal, prepareInput, service, sha256 } from "./migration-fixtures.mjs";
 import { scratch as sqliteScratch } from "./storage-fixtures.mjs";
 
 const scope = coreScope(personal);
@@ -141,47 +141,32 @@ test("P3 old conversions require integer zero for every absence count", async t 
   assert.deepEqual(unexpected, []);
 });
 
-test("P4 opening a pre-identity v3 inspect store preserves two receipts and redacts before keying", async t => {
-  const path = sqlitePath(t);
-  const first = receipt("first-turn", "The first explicit-save receipt.");
-  const historical = '{ "refresh_token": "synthetic-fixture-value" }';
-  const second = receipt("second-turn", receiptExcerpt(historical));
-  assert.ok(second.excerpt.includes("[REDACTED]"));
-  const initial = await openSqliteAdapter(path);
-  let id;
+test("P4 refuses a pre-identity v3 inspect store without changing bytes", async () => {
+  const { path, remove } = sqliteScratch();
   try {
-    ({ id } = await insert(initial, "A Memory with two explicit-save receipts.", [first, second]));
-    assert.deepEqual(await receiptView(initial, id), view(first.excerpt, second.excerpt));
-  } finally {
-    await initial.close();
-  }
-  editFixture(path, db => {
-    // Simulate the old v3 writer and inspect schema, which predate receipt identities.
-    for (const { name } of db.prepare("SELECT name FROM sqlite_schema WHERE type = 'trigger' AND name GLOB '*_inspect_raw_*'").all()) {
-      db.exec(`DROP TRIGGER "${name}"`);
+    const first = receipt("first-turn", "The first explicit-save receipt.");
+    const historical = '{ "refresh_token": "synthetic-fixture-value" }';
+    const second = receipt("second-turn", receiptExcerpt(historical));
+    const initial = await openSqliteAdapter(path);
+    let id;
+    try {
+      ({ id } = await insert(initial, "A Memory with two explicit-save receipts.", [first, second]));
+    } finally {
+      await initial.close();
     }
-    db.exec("UPDATE cairn_receipts SET body = json_remove(body, '$.receiptKey')");
-    db.prepare("UPDATE cairn_inspect_receipts SET excerpt = ? WHERE memory_id = ? AND ordinal = 2").run(historical, id);
-  });
-
-  const upgraded = await openSqliteAdapter(path);
-  try {
-    assert.deepEqual(await receiptView(upgraded, id), view(first.excerpt, second.excerpt));
     editFixture(path, db => {
-      const rows = db.prepare(`SELECT i.excerpt, r.body FROM cairn_inspect_receipts i
-        JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal) WHERE i.memory_id = ? ORDER BY ordinal`).all(id);
-      assert.deepEqual(rows.map(({ excerpt, body }) => {
-        const { client, sessionId, messageId, role, receiptKey } = JSON.parse(body);
-        return [excerpt, receiptKey === sha256(JSON.stringify({ client, sessionId, eventId: messageId, role, excerpt }))];
-      }), [[first.excerpt, true], [second.excerpt, true]]);
+      // Simulate the old v3 writer and inspect schema, which predate receipt identities.
+      db.exec("PRAGMA user_version = 3");
+      for (const { name } of db.prepare("SELECT name FROM sqlite_schema WHERE type = 'trigger' AND name GLOB '*_inspect_raw_*'").all()) {
+        db.exec(`DROP TRIGGER "${name}"`);
+      }
+      db.exec("UPDATE cairn_receipts SET body = json_remove(body, '$.receiptKey')");
+      db.prepare("UPDATE cairn_inspect_receipts SET excerpt = ? WHERE memory_id = ? AND ordinal = 2").run(historical, id);
     });
+    const digest = fileDigest(path);
+    await assert.rejects(openSqliteAdapter(path).then(adapter => adapter.close()), { code: "storage_error" });
+    assert.equal(fileDigest(path), digest);
   } finally {
-    await upgraded.close();
+    remove();
   }
-
-  editFixture(path, db => db.exec(`UPDATE cairn_receipts SET body = CASE ordinal
-    WHEN 1 THEN json_remove(body, '$.receiptKey')
-    ELSE json_set(body, '$.messageId', 'changed-after-upgrade') END`));
-  const reopened = await open(t, path);
-  assert.deepEqual(await receiptView(reopened, id), view());
 });

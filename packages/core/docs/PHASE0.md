@@ -717,3 +717,72 @@ excerpt bound. SQLite local composition also passes the installed 0.6.11
 MCP golden cases, including schema errors, diagnostic placement and the
 legacy recall refusal, using its documented time/identity normalization
 and an independently checked token count for the actual assembly block.
+
+## Addendum 18 — Write results for local parity
+
+- **Write results.** Every write result reports the owner's `indexRevision` for that run,
+  including a refusal returned by a post-commit visibility check.
+  Save returns `{ status, item, indexRevision }` with `saved` or `duplicate`. Correct returns
+  the same fields with `saved` or `unchanged`. Forget returns
+  `{ status: "forgotten", removedSimilar, indexRevision }` or `{ status: "not_found", indexRevision }`.
+  A missing or already forgotten row maps to `forgotten: false` on the wire. Refusals keep their
+  status. The result types allow older implementations to omit `indexRevision`.
+- **Forget guard.** When supplied, compare `options.expectedRevision` with the memory row
+  revision inside the forget transaction, after resolving the row and before any privacy mutation.
+  A mismatch writes nothing and returns `{ status: "conflict", indexRevision }` with the owner's
+  start index revision. Older implementations may omit `indexRevision` as above. Omitting the
+  guard keeps forget unconditional.
+- **Explicit receipts.** Save accepts one `options.receipt` with `client`, `sessionId`, `eventId`
+  or `messageId`, `role: "user"`, and `occurredAtMs`. The host supplies the identity. Core uses
+  the supplied event or message ID as `Receipt.messageId`. The excerpt is the normalized,
+  redacted text from the write. `Receipt.id` and `Receipt.excerpt` are optional. A new save inserts
+  that one receipt. A duplicate attaches it.
+- **Receipt-only attachment.** With `receiptAttachAdvancesRevision` enabled, a newly attached
+  receipt counts as a change under `touchDuplicate` and advances the memory revision once.
+  SQLite enables this capability for the local installer. The reference adapter makes it
+  configurable. Postgres disables it, preserving the hosted service's capture duplicate
+  revisions.
+- **Index revision.** `MemoryStore.indexRevision(tx)` returns the owner's revision at the start
+  of the run and stays stable throughout that run. The owner index advances once per write run
+  that changes anything. A procedural save and its tag write share that advance. A write result
+  reports that run's start revision plus one if it changed anything, and the start revision
+  otherwise. A save that changed state can report `suppressed` after its post-commit visibility
+  check, and a correction that changed state can report `not_found` after its check. Both
+  results report the start revision plus one.
+- **Procedural tags.** The optional `ProceduralTagStore` port requires the `proceduralTags`
+  capability. SQLite and the reference adapter enable it. Postgres disables it, so a save with
+  `options.procedural` fails with `capability_unavailable` on the hosted service. The local installer
+  accepts `options.procedural = { anchors: [{ receiptIndex, start, end }] }` for `instruction` and
+  `preference`. It requires one to four anchors on the explicit receipt at index zero, with
+  integer UTF-16 offsets satisfying `0 ≤ start < end ≤ excerpt.length` on code-point boundaries.
+  Invalid input returns `invalid` and writes nothing. `MemoryStore.insert` and `touchDuplicate`
+  can return `receiptIds`, the stored IDs of the attached receipts in input order, so core can
+  bind the anchors in the same transaction. Each stored anchor has `receiptId`, `digest`,
+  `start` and `end`. The SHA-256 hex digest covers the whole receipt excerpt. The tag carries
+  `positive`, `origin` and its own revision. Save writes the tag in the memory write transaction.
+  Correct and forget clear the tag in their respective transactions. The port also provides a read
+  for inspect.
+- **Optional embedding.** Save and correct can write `embedding: null` when
+  `capabilities.embeddingRequiredOnInsert` is false and the embedder is absent or null.
+  Typed hosts will use `embedder: null` in `MemoryServiceDeps`. The declaration change ships
+  with the save implementation.
+  Stores that require an embedding and failures from a configured embedder keep their current rules.
+- **Keyless correct.** Use addendum 15's keyless predecessor rule for exact suppression and
+  lineage only when the store's `fingerprintKey` capability is off or no key provider is
+  configured. This covers the local installer's SQLite profile. With `fingerprintKey` on and
+  a configured provider whose lookup returns `null`, correct still raises
+  `fingerprint_unavailable`, as on the hosted service.
+- **Correction options.** When the text changes, correct keeps the explicit source and origin,
+  accepts an optional `options.kind`, and replaces the old receipts with `options.receipt` when
+  supplied. At content replacement, identical text returns `unchanged` on every store and
+  leaves the kind, receipts, memory revision, and owner index revision as they were, even if
+  a kind or a replacement receipt was supplied. The local wire golden's correction changes
+  the text, so the existing same-text rule preserves parity.
+
+The MCP host uses these status mappings.
+
+| Service status | Wire error code |
+| --- | --- |
+| `conflict` | `revision_conflict` |
+| `suppressed` | `memory_suppressed` |
+| `invalid` | `invalid_input` |

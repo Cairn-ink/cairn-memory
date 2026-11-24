@@ -538,25 +538,56 @@ export interface ReadContractCapabilities {
 }
 
 export interface ReadContractStorage<Card extends StoredDocumentCardRecord = StoredDocumentCardRecord> extends StorageAdapter<Card> {
-  readonly capabilities: Capabilities & ReadContractCapabilities;
+  readonly capabilities: StorageAdapter<Card>["capabilities"] & ReadContractCapabilities;
   readonly contextRead?: ContextReadStore;
   readonly inspect?: InspectStore;
 }
 
-/** The facade every host (MCP, plugin, web, hosted service) talks to. Template: cloud port.ts. */
+
+/** The host supplies the source identity. Core uses the event or message ID as Receipt.messageId. */
+type ExplicitWriteReceipt = Pick<Receipt, "client" | "sessionId" | "occurredAtMs" | "excerpt"> &
+  { role: "user" } &
+  ({ messageId: string; eventId?: never } | { eventId: string; messageId?: never });
+
+interface SaveOptions {
+  receipt?: ExplicitWriteReceipt;
+  /** Requires proceduralTags. Offsets refer to the explicit receipt excerpt. */
+  procedural?: { anchors: readonly { receiptIndex: 0; start: number; end: number }[] };
+}
+
+interface CorrectOptions {
+  kind?: MemoryKind;
+  receipt?: ExplicitWriteReceipt;
+}
+
+type ForgetResult =
+  { status: "forgotten"; removedSimilar: number; indexRevision?: number } |
+  { status: "not_found"; indexRevision?: number };
+
+/**
+ * The facade used by the MCP host, plugin, web client and the hosted service.
+ * On write results, indexRevision reflects changes committed by that run. Older implementations may omit it.
+ */
 export interface MemoryService {
   findCandidates?(readSet: ContextReadSet, input: FindCandidatesInput, options?: CallOptions): Promise<FindCandidatesResult>;
   fetchEvidence?(readSet: ContextReadSet, input: FetchEvidenceInput, options?: CallOptions): Promise<FetchEvidenceResult>;
   readContext?(readSet: ContextReadSet, input: ReadContextInput, options?: CallOptions): Promise<ReadContextResult>;
   inspect?(scope: Scope, input: InspectListInput | InspectItemInput, options?: CallOptions): Promise<InspectListResult | InspectItemResult>;
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
-  save(scope: Scope, text: string, source: SourceRef, kind?: MemoryKind): Promise<
-    { status: "saved" | "duplicate"; item: MemoryRow } | { status: "suppressed" | "paused" | "invalid" }
+  /** Throws capability_unavailable if procedural options are supplied without proceduralTags. */
+  save(scope: Scope, text: string, source: SourceRef, kind?: MemoryKind, options?: SaveOptions): Promise<
+    { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number } |
+    { status: "suppressed" | "paused" | "invalid"; indexRevision?: number }
   >;
-  correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef): Promise<
-    { status: "saved" | "unchanged"; item: MemoryRow } | { status: "suppressed" | "paused" | "not_found" | "conflict" }
+  correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef, options?: CorrectOptions): Promise<
+    { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |
+    { status: "suppressed" | "paused" | "not_found" | "conflict"; indexRevision?: number }
   >;
-  forget(scope: Scope, id: string, source: SourceRef): Promise<{ status: "forgotten"; removedSimilar: number } | { status: "not_found" }>;
+  /** The optional guard compares the memory row revision. */
+  forget(scope: Scope, id: string, source: SourceRef, options: { expectedRevision?: Revision }): Promise<
+    ForgetResult | { status: "conflict"; indexRevision?: number }
+  >;
+  forget(scope: Scope, id: string, source: SourceRef): Promise<ForgetResult>;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   /** A null query leaves the raw layer empty. */
   find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "raw"> & { raw: [] }>;
