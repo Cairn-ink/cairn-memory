@@ -423,13 +423,14 @@ export async function localStatus(detection, { write, t, env = process.env, plat
   }
 }
 
-function runLocalDaemon(action, root, descriptor, env, stdout) {
+export function runLocalDaemon(action, root, descriptor, env, stdout) {
   const args = [executableFor(root, descriptor.engine.id), 'daemon', action, '--db', descriptor.database.path];
   const result = spawnSync(descriptor.node, args, {
     env: engineOperatorEnvironment(env), stdio: ['ignore', stdout, 'ignore'], windowsHide: true,
     // Bound only the CLI subprocess. The engine owns the daemon's TERM-only shutdown.
     timeout: 10000, killSignal: 'SIGKILL',
   });
+  if (stdout === 'pipe') return { code: result.status ?? 1, stdout: result.stdout?.toString('utf8') };
   return result.status ?? 1;
 }
 
