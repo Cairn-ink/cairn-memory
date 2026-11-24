@@ -6,12 +6,12 @@ import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
-import { createCaptureProofs } from "../src/capture-source.mjs";
 import { toPostgresError } from "../src/errors.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
-  createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresRawReads,
-  createPostgresPauseStore, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
+  createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
+  createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
+  createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
@@ -45,6 +45,10 @@ const dumpSql = `SELECT jsonb_build_object(
     SELECT to_jsonb(s) || jsonb_build_object('fact_epoch', s.fact_epoch::text, 'index_revision', s.index_revision::text)
     FROM core_owner_state s ORDER BY s.user_id
   ),
+  'rawLineage', ARRAY(SELECT to_jsonb(l) FROM capture_raw_lineage l
+    ORDER BY l.user_id, l.client, l.session_id, l.message_mac, l.content_mac),
+  'rawFences', ARRAY(SELECT to_jsonb(f) FROM capture_raw_fences f ORDER BY f.user_id, f.client, f.session_id),
+  'rawMessages', ARRAY(SELECT to_jsonb(r) FROM raw_messages r ORDER BY r.user_id, r.id),
   'captureEvents', ARRAY(
     SELECT to_jsonb(e) FROM capture_events e ORDER BY e.user_id, e.client, e.event_id
   )
@@ -105,6 +109,16 @@ function trackedPool(connectionString, timeouts) {
 }
 
 const concurrentIndexes = {
+  "0022_core_raw_purge_idx.concurrent.sql": {
+    name: "raw_messages_core_purge_idx",
+    table: "raw_messages",
+    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, id)",
+  },
+  "0023_core_raw_ledger_idx.concurrent.sql": {
+    name: "capture_events_core_raw_ledger_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, client, event_id) WHERE (core_namespace IS NULL)",
+  },
   "0004_core_recent_index.concurrent.sql": {
     name: "memories_user_recent_c",
     table: "memories",
@@ -222,44 +236,6 @@ async function openDatabase() {
   }
 }
 
-// The retrieval cases seed the hosted tables through fixtures until the capture lane supplies these writes.
-function rawFixtures(capture, lineageSecret) {
-  const proofs = createCaptureProofs(lineageSecret);
-  return {
-    async recordLineage(tx, key, messages) {
-      assert.equal(key.scope.namespace, null);
-      for (const proof of await proofs(key, messages)) {
-        await query(tx, `INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
-          VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-        [tx.owner, key.client, key.sessionId, proof.message_mac, proof.content_mac]);
-      }
-    },
-    async archiveAllowed(tx, key) {
-      return (await capture.eligible(tx, key, [{ id: "probe", role: "user", content: "probe", occurredAtMs: null }])).length === 1;
-    },
-    async archive(tx, key, messages) {
-      assert.equal(key.scope.namespace, null);
-      let archived = 0;
-      for (const position of await capture.eligible(tx, key, messages)) {
-        const { id, role, content, occurredAtMs } = messages[position];
-        const result = await query(tx, `INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content, occurred_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, ${timestampUs("$8")}) ON CONFLICT DO NOTHING`,
-        [randomUUID(), tx.owner, key.client, key.sessionId, id, role, content,
-          occurredAtMs === null ? null : (BigInt(occurredAtMs) * 1000n).toString()]);
-        archived += result.rowCount;
-      }
-      if (archived) await advanceIndex((sql, params) => query(tx, sql, params), tx.owner);
-      return { archived };
-    },
-    async fenceSession(tx, scope, { client, sessionId }) {
-      assert.equal(scope.namespace, null);
-      await query(tx, `INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [tx.owner, client, sessionId]);
-      await advanceIndex((sql, params) => query(tx, sql, params), tx.owner);
-    },
-  };
-}
-
 function postgresFactory(wrapSuppressions = (store) => store) {
   return {
     name: "Postgres",
@@ -280,7 +256,8 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const fingerprintKey = requested.fingerprintKey === true;
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
-        semanticRetrieval, rawArchive, rawWindowHide: rawArchive, rawSpans: true, fingerprintKey,
+        semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
+        sessionLineage: rawArchive, rawSpans: true, fingerprintKey,
       });
       const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
       const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
@@ -291,6 +268,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           return key ? [key] : [];
         },
       };
+      const rawPorts = rawArchive ? createPostgresRawPorts(rawOptions) : null;
       const readOptions = { hashSessionKey, allowNonNullNamespace: true };
       const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
       const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
@@ -344,7 +322,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
         adapter: {
           capabilities: flags, uow, suppressions, capture, keys, lexical, ...memoryReads,
           ...(semanticRetrieval && { vector }),
-          ...(rawArchive && { raw: { ...rawFixtures(capture, lineageSecret), ...createPostgresRawReads(rawOptions) } }),
+          ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true, hashSessionKey }),
           pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
@@ -374,11 +352,13 @@ const selected = new Set([
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
   "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
+  "K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
+  "K-FORK-6", "K-FORK-7", "K-FORK-10",
   "K-RET-1", "K-RET-2", "K-RET-3", "K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3",
   "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
-  "K-SNAP-C1", "K-SNAP-C3",
+  "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
   "K-KD-1", "K-KD-2", "K-HASH-1",
 ]);
@@ -401,8 +381,7 @@ const notApplicable = {
   "hosted raw is personal-only until scopes step 2 (namespace guard)": ["K-RAW-4", "K-RAW-5"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
-  "raw.recordLineage": ["K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
-    "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9", "K-FORK-10"],
+  "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session"],

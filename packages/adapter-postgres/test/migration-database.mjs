@@ -7,6 +7,16 @@ const url = process.env.CORE_PG_TEST_URL;
 export const migrationDbTest = { skip: !url, timeout: 20_000 };
 
 const concurrentIndexes = {
+  "0022_core_raw_purge_idx.concurrent.sql": {
+    name: "raw_messages_core_purge_idx",
+    table: "raw_messages",
+    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, id)",
+  },
+  "0023_core_raw_ledger_idx.concurrent.sql": {
+    name: "capture_events_core_raw_ledger_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, client, event_id) WHERE (core_namespace IS NULL)",
+  },
   "0018_core_capture_lease_idx.concurrent.sql": {
     name: "capture_events_core_lease_idx",
     table: "capture_events",

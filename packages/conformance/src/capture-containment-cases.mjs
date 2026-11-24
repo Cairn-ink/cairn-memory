@@ -89,4 +89,32 @@ export const CAPTURE_CONTAINMENT_CASES = [
       equal(withholdsAnyPassage([output], facts), true, "Core must withhold when the shingle keys differ");
     },
   },
+  {
+    id: "K-SNAP-C4", title: "capture snapshots use current facts and candidate passages", needs: ["fingerprintKey"],
+    async run(ctx) {
+      const key = await ownerKey(ctx);
+      const control = await fingerprint(unrelated, key);
+      const output = await fingerprint(containing, key);
+      const initial = await snapshotFacts(ctx, control);
+      check(initial.every((fact) => fact.actionId !== actionId), "The first snapshot precedes the forget fact");
+
+      await seedForgotten(ctx, key);
+      const current = await snapshotFacts(ctx, output);
+      check(current.some((fact) => fact.actionId === actionId),
+        "A new run must return the committed full fact for the containing output");
+
+      const { adapter: { uow, suppressions }, owner, scope } = ctx;
+      await uow.run(owner, { readOnly: true }, async (tx) => {
+        // Both calls share a committed view of the fact but use different candidate evidence.
+        const first = await suppressions.snapshot(tx, scope(null), { passages: [control] });
+        equal(withholdsAnyPassage([control], first.passages.map(({ fact }) => fact)), false,
+          "Core must admit the unrelated passage in the same run");
+        const second = await suppressions.snapshot(tx, scope(null), { passages: [output] });
+        const facts = second.passages.map(({ fact }) => fact);
+        check(facts.some((fact) => fact.actionId === actionId),
+          "A second snapshot in the same run must return the full fact for the containing output");
+        equal(withholdsAnyPassage([output], facts), true, "Core must withhold the containing output");
+      });
+    },
+  },
 ];

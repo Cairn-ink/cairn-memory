@@ -23,6 +23,7 @@ const terminal = { code: "invalid_input", retryable: false };
 async function database(t, captureOptions, afterQuery) {
   const { pool } = await migrationDatabase(t);
   await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]);
+  await pool.query("INSERT INTO core_owner_state (user_id, legacy_facts_ready) VALUES ($1, true), ($2, true)", [owner, otherOwner]);
   const backends = [];
   const uow = createPostgresUnitOfWork({
     async connect() {
@@ -436,6 +437,11 @@ test("a proven fork rechecks the ancestor's namespace on read and write", migrat
   await suppress(ancestor.sessionId);
   assert.deepEqual(await eligible(), []);
   await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0])), { code: "lineage_fenced" });
+
+  // A tagged outbox can identify an ancestor with the same session ID in another namespace.
+  await uow.run(owner, write, (tx) => capture.admit(tx, { ...ancestor, eventId: "ancestor-event" }, messages));
+  const sameSession = { ...replay, sessionId: ancestor.sessionId, eventId: "same-session-replay" };
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.eligible(tx, sameSession, messages)), []);
 });
 
 async function hashedFork(t, selectHasher = (hashSessionKey) => hashSessionKey) {
