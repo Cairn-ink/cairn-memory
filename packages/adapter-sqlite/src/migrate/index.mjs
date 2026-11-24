@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
-import { LegacyRefusal, refuse, readMigrationInput, installMigrationTarget, targetExists } from "../legacy/migration-input.mjs";
+import { cleanMigrationBootstraps, installMigrationTarget, targetExists } from "../legacy/migration-bootstrap.mjs";
+import { LegacyRefusal, refuse, readMigrationInput } from "../legacy/migration-input.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "../schema/layout.mjs";
 import { sha256 } from "../storage-values.mjs";
-import { openSqliteUnitOfWork } from "../uow.mjs";
+import { openMigrationUnitOfWork } from "../uow.mjs";
 import { BOOTSTRAP_FILENAME, MIGRATION_SCHEMA } from "./layout.mjs";
 import { encodeEvidence, planMigration } from "./plan.mjs";
 
@@ -19,8 +20,8 @@ const owner = "schema";
 const schemaQuery = "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type, name";
 const migrationSchema = STORAGE_SCHEMA + MIGRATION_SCHEMA + INITIALIZE_STORE;
 
-/** @param {Plan} plan */
-function phases(plan) {
+/** @param {Plan} plan @param {LegacyInput} source */
+function phases(plan, source) {
   return [
     [
       ["cairn_memories", plan.memoryRows],
@@ -31,6 +32,8 @@ function phases(plan) {
       ["cairn_legacy_denials", plan.markers],
       ["cairn_suppression_epochs", plan.epochs],
       ["cairn_pause", plan.pause],
+      ["cairn_raw_fences", source.rawPrivacy?.fences ?? []],
+      ["cairn_migrated_raw_privacy", source.rawPrivacy?.rules ?? []],
     ],
   ].map(phase => /** @type {Array<[string, SQLInputValue[][]]>} */ (phase));
 }
@@ -50,7 +53,7 @@ function migrationRecord(db) {
  * The UoW uses CoreError at its port boundary. Keep maintenance refusal codes
  * for the caller after a failing write has rolled back.
  * @template T
- * @param {ReturnType<typeof openSqliteUnitOfWork>} connection
+ * @param {ReturnType<typeof openMigrationUnitOfWork>} connection
  * @param {(db: Connection) => T} work
  */
 async function migrationWrite({ uow, port }, work) {
@@ -77,6 +80,7 @@ function checkRecord(record, source, plan) {
   if (record.source_digest !== source.logicalDigest || record.source_version !== source.physical) refuse("legacy_backup_stale");
   if (typeof record.migration_id !== "string" || !/^[0-9a-f-]{36}$/u.test(record.migration_id) ||
       typeof record.session_hash_key !== "string" || !/^[0-9a-f]{64}$/u.test(record.session_hash_key) ||
+      (source.rawPrivacy && record.session_hash_key !== source.rawPrivacy.key) ||
       typeof record.checkpoint !== "number" || !Number.isInteger(record.checkpoint) ||
       record.checkpoint < 0 || record.checkpoint > 3 ||
       (record.checkpoint === 3 ? typeof record.attestation !== "string" ||
@@ -113,7 +117,7 @@ function verify(db, source, plan, record, schema) {
   if (JSON.stringify(actual) !== JSON.stringify(schema) ||
       db.prepare("PRAGMA integrity_check(1)").get()?.integrity_check !== "ok" ||
       db.prepare("PRAGMA foreign_key_check").get()) return refuse("legacy_integrity_mismatch");
-  const expected = new Map(phases(plan).flat());
+  const expected = new Map(phases(plan, source).flat());
   expected.set("cairn_store", [[1, source.storeId, record.sessionKey]]);
   const digests = [];
   for (const { type, name } of schema) {
@@ -139,14 +143,16 @@ export async function migrateLegacyStore(input) {
   if (basename(target) === BOOTSTRAP_FILENAME) refuse("legacy_unsafe_path");
   const plan = planMigration(source);
   const schema = expectedSchema();
+  cleanMigrationBootstraps(target);
   if (!targetExists(target)) {
     const migrationId = randomUUID();
-    await installMigrationTarget(target, BOOTSTRAP_FILENAME, async filename => {
-      const connection = openSqliteUnitOfWork(filename);
+    await installMigrationTarget(target, async filename => {
+      const connection = openMigrationUnitOfWork(filename);
       try {
         await migrationWrite(connection, db => {
           db.exec(migrationSchema);
           db.prepare("UPDATE cairn_store SET store_id = ?").run(source.storeId);
+          if (source.rawPrivacy) db.prepare("UPDATE cairn_store SET session_hash_key = ?").run(source.rawPrivacy.key);
           db.prepare("INSERT INTO cairn_migration VALUES (1, ?, ?, ?, 0, ?, NULL)")
             .run(migrationId, source.physical, source.logicalDigest, plan.evidence);
         });
@@ -166,14 +172,16 @@ export async function migrateLegacyStore(input) {
     migrationId: observed.migrationId, storeId: source.storeId, sourceLayout: source.physical,
     memories: plan.memoryRows.length, receipts: plan.receiptRows.length, denials: plan.markers.length,
     withheldReceipts: plan.withheldReceipts, pausedOwners: plan.pausedOwners,
+    rawFences: source.rawPrivacy?.fences.length ?? 0, rawPrivacyFacts: source.rawPrivacy?.rules.length ?? 0,
+    dropped: source.dropped,
   };
   if (observed.checkpoint === 3) return { ...result, attestation: String(observed.attestation) };
 
-  const connection = openSqliteUnitOfWork(target);
+  const connection = openMigrationUnitOfWork(target);
   const { migrationId } = result;
   try {
     if (observed.checkpoint === 0) input.onCheckpoint?.("initialized", migrationId);
-    const steps = phases(plan);
+    const steps = phases(plan, source);
     for (const [index, name] of /** @type {const} */ ([[0, "memories"], [1, "privacy"]])) {
       source.checkSource();
       const advanced = await migrationWrite(connection, db => {

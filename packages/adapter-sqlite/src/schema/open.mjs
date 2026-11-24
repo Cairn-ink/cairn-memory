@@ -1,9 +1,8 @@
 import { chmodSync, realpathSync, statSync } from "node:fs";
-import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
-import { BOOTSTRAP_FILENAME } from "../migrate/layout.mjs";
+import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
@@ -41,28 +40,25 @@ function classifyStore(db) {
   }
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
   const migrated = tables.some(table => table.name === "cairn_migration");
-  if (tables.length !== layoutTables.length + Number(migrated) ||
+  const rawPrivacy = migrated && tables.some(table => table.name === "cairn_migrated_raw_privacy");
+  if (tables.length !== layoutTables.length + Number(migrated) + Number(rawPrivacy) ||
       !layoutTables.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
   }
-  if (migrated) {
-    const record = db.prepare("SELECT singleton, checkpoint, attestation FROM cairn_migration LIMIT 2").all();
-    if (record.length !== 1 || record[0].singleton !== 1 || record[0].checkpoint !== 3 ||
-        typeof record[0].attestation !== "string" || !/^[0-9a-f]{64}$/u.test(record[0].attestation)) {
-      throw new CoreError("storage_error");
-    }
-  }
-  return readSessionHashKey(db);
+  if (migrated) assertMigrationComplete(db);
+  const legacyRawHashing = rawPrivacy && db.prepare(
+    "SELECT json_type(source_evidence, '$.legacyRawHashing') AS kind FROM cairn_migration").get()?.kind === "true";
+  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing };
 }
 
 /** @param {string} filename */
 function preflight(filename) {
   if (typeof filename !== "string" || !filename || filename === ":memory:" ||
       filename.startsWith("file:") || filename.includes("\0")) throw new CoreError("invalid_input");
-  if (basename(filename) === BOOTSTRAP_FILENAME) throw new CoreError("storage_error");
+  assertServingFilename(filename);
   try {
     if (!statSync(filename).isFile()) throw new CoreError("invalid_input");
-    if (basename(realpathSync(filename)) === BOOTSTRAP_FILENAME) throw new CoreError("storage_error");
+    assertServingFilename(realpathSync(filename));
   } catch (error) {
     if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") throw error;
     return false;
@@ -92,14 +88,14 @@ export async function openStorage(filename) {
   const connection = openSqliteUnitOfWork(filename);
   const owner = "schema";
   try {
-    const sessionHashKey = await connection.uow.run(owner, {}, (tx) =>
+    const identity = await connection.uow.run(owner, {}, (tx) =>
       connection.port(tx, owner, { write: true }, (db) => {
         const existingKey = classifyStore(db);
         if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
         db.exec("PRAGMA secure_delete = ON");
-        return existingKey ?? readSessionHashKey(db);
+        return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
       }));
-    return { ...connection, sessionHashKey };
+    return { ...connection, ...identity };
   } catch (error) {
     await connection.close();
     throw error;

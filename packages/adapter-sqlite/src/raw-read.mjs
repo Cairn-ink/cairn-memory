@@ -12,6 +12,7 @@ import { readFacts } from "./suppressions.mjs";
 /** @import { RawRow } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
+/** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {Pick<RawSegment, "occurredAtMs"> & {ref: {id: string}}} PageKey */
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -54,8 +55,8 @@ function refAddress({ owner, namespace }, id) {
   }
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey */
-export function createRawReads(port, hashSession, storeKey) {
+/** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey @param {MigratedRawPolicy} [migratedRaw] */
+export function createRawReads(port, hashSession, storeKey, migratedRaw) {
   const stateToken = createSnapshotToken(storeKey);
   const binding = randomUUID();
 
@@ -77,7 +78,7 @@ export function createRawReads(port, hashSession, storeKey) {
         policy = hasRawFence(db, scope, candidate.sessionKeyHash) ? null : candidate;
         sessions.set(key, policy);
       }
-      return policy !== null && !policy.hides(row.message);
+      return policy !== null && !policy.hides(row.message) && !migratedRaw?.blocks(db, scope, row, [row.message]);
     };
   }
 
