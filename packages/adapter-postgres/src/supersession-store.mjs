@@ -54,7 +54,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
       const receipts = copyArray(receiptIds).map(inputText);
       if (receipts.length > 4) invalid();
       const us = writeTime(nowMs);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const { rows } = await query(`INSERT INTO memory_supersessions (user_id, previous_memory_id, previous_revision,
           replacement_memory_id, replacement_revision, receipt_ids, created_at)
@@ -65,7 +65,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
           ON CONFLICT (previous_memory_id) DO NOTHING RETURNING previous_memory_id`,
         [owner, ns, previous, previousRevision, replacement, replacementRevision, receipts, us.toString()]);
         if (!rows.length) throw new CoreError("invalid_ref");
-        await advanceIndex(query, owner);
+        await advanceIndex(query, owner, run);
       });
     },
 
@@ -74,7 +74,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
       const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       const us = writeTime(nowMs);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const { rows } = await query(`UPDATE memories SET currentness = 'historical', revision = revision + 1,
           updated_at = ${timestampUs("$4")} WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3
@@ -82,7 +82,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
         if (!rows.length) return;
         await query(`DELETE FROM memory_conflicts WHERE user_id = $1
           AND (left_memory_id = $2 OR right_memory_id = $2)`, [owner, key]);
-        await advanceIndex(query, owner);
+        await advanceIndex(query, owner, run);
       });
     },
 
