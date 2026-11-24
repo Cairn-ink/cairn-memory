@@ -275,8 +275,8 @@ depends on its Raw-aware receipt ledger.
 
 `FinishResult.suppressedItems?: readonly number[]` lists distinct zero-based positions in the
 `items` passed to `CaptureFinish.finish` that the adapter's write policy suppressed. Core excludes
-every source position cited by those items' receipts from `raw.archive`, document-card touches,
-and lineage use during the capture run. Any suppressed citation excludes a source, including
-sources also cited by a written item, matching hosted's `suppressedSources`. Core rejects a
-malformed list with `internal_error` inside the finish transaction before archiving. Omitting the
-field preserves existing behavior.
+every source position cited by those items' receipts from `raw.archive` and from document-card
+touches when wired. Lineage proofs are recorded at admission, before finish. Any suppressed
+citation excludes a source, including sources also cited by a written item, matching hosted's
+`suppressedSources`. Core rejects a malformed list with `internal_error` inside the finish
+transaction before archiving. Omitting the field preserves existing behavior.

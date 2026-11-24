@@ -449,24 +449,25 @@ export function captureMethods(deps) {
       const excludedSources = new Set();
       /** @param {Tx} tx @param {readonly FinishItem[]} items */
       async function finish(tx, items) {
+        // Snapshot the message IDs that identify admitted source positions before handing items to the adapter.
+        const itemSourceIds = items.map(({ receipts }) => receipts.map(({ messageId }) => messageId));
         const result = await capture.finish(tx, token, items);
         const { suppressedItems } = result;
         if (suppressedItems === undefined) return result;
-        if (!Array.isArray(suppressedItems) || suppressedItems.length > items.length) {
+        if (!Array.isArray(suppressedItems) || suppressedItems.length > itemSourceIds.length) {
           throw new CoreError("internal_error");
         }
         const seen = new Set();
         for (let index = 0; index < suppressedItems.length; index++) {
           const position = suppressedItems[index];
           if (!Object.hasOwn(suppressedItems, index) || !Number.isInteger(position) ||
-              position < 0 || position >= items.length || seen.has(position)) {
+              position < 0 || position >= itemSourceIds.length || seen.has(position)) {
             throw new CoreError("internal_error");
           }
           seen.add(position);
         }
-        // A receipt identifies its admitted source position by the unique message ID.
         for (const position of seen) {
-          for (const { messageId } of items[position].receipts) excludedSources.add(messageId);
+          for (const messageId of itemSourceIds[position]) excludedSources.add(messageId);
         }
         return result;
       }

@@ -52,6 +52,18 @@ test("a suppressed receipt excludes a source also cited by a saved item", async 
   assert.deepEqual(f.archived(scope.owner), [messages[1]]);
 });
 
+test("finish suppression uses receipt sources recorded before adapter mutation", async () => {
+  const f = await setup();
+  f.hooks.finishSuppressedItems = items => {
+    items[0].receipts.length = 0;
+    return [0];
+  };
+  const done = await f.run();
+  assert.equal(done.status, "done");
+  assert.deepEqual(done.result.suppressedItems, [0]);
+  assert.deepEqual(f.archived(scope.owner), [messages[1]]);
+});
+
 test("when suppression excludes every source, the runner skips both Raw archive ports", async () => {
   const f = await setup({ suppressedItems: [1, 0] });
   assert.equal((await f.run()).status, "done");
