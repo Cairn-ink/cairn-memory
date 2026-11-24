@@ -5,6 +5,7 @@ export { applyMigrations } from "./migrate.mjs";
 export { canonicalDigests, factSlot } from "./facts.mjs";
 export { createPostgresSuppressionStore } from "./suppression-store.mjs";
 export { createPostgresCapturePorts } from "./capture.mjs";
+export { createPostgresRawPorts } from "./raw.mjs";
 export { createPostgresMemoryStore } from "./memory-store.mjs";
 export { backfillPostgresHostedDigests, createPostgresDigestGate } from "./digest-gate.mjs";
 export { createPostgresMemoryReads } from "./memory-read.mjs";

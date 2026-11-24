@@ -6,7 +6,17 @@ import { applyMigrations } from "../src/index.mjs";
 const url = process.env.CORE_PG_TEST_URL;
 export const migrationDbTest = { skip: !url, timeout: 20_000 };
 
-const captureIndexes = {
+const concurrentIndexes = {
+  "0022_core_raw_purge_idx.concurrent.sql": {
+    name: "raw_messages_core_purge_idx",
+    table: "raw_messages",
+    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, core_namespace, id)",
+  },
+  "0023_core_raw_ledger_idx.concurrent.sql": {
+    name: "capture_events_core_raw_ledger_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, core_namespace, client, event_id)",
+  },
   "0018_core_capture_lease_idx.concurrent.sql": {
     name: "capture_events_core_lease_idx",
     table: "capture_events",
@@ -97,7 +107,7 @@ export async function migrationDatabase(t, { migrate = true } = {}) {
       };
     }
     if (name.endsWith(".concurrent.sql")) {
-      const index = captureIndexes[name];
+      const index = concurrentIndexes[name];
       if (!index) throw new Error(`Missing index definition for ${name}`);
       return { id: name, sql, concurrent: true, index };
     }

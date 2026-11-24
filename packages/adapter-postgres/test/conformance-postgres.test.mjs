@@ -9,7 +9,7 @@ import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresDigestGate, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresPauseStore, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
+  createPostgresPauseStore, createPostgresRawPorts, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
@@ -43,6 +43,10 @@ const dumpSql = `SELECT jsonb_build_object(
     SELECT to_jsonb(s) || jsonb_build_object('fact_epoch', s.fact_epoch::text, 'index_revision', s.index_revision::text)
     FROM core_owner_state s ORDER BY s.user_id
   ),
+  'rawLineage', ARRAY(SELECT to_jsonb(l) FROM capture_raw_lineage l
+    ORDER BY l.user_id, l.client, l.session_id, l.message_mac, l.content_mac),
+  'rawFences', ARRAY(SELECT to_jsonb(f) FROM capture_raw_fences f ORDER BY f.user_id, f.client, f.session_id),
+  'rawMessages', ARRAY(SELECT to_jsonb(r) FROM raw_messages r ORDER BY r.user_id, r.id),
   'captureEvents', ARRAY(
     SELECT to_jsonb(e) FROM capture_events e ORDER BY e.user_id, e.client, e.event_id
   )
@@ -103,6 +107,16 @@ function trackedPool(connectionString, timeouts) {
 }
 
 const concurrentIndexes = {
+  "0022_core_raw_purge_idx.concurrent.sql": {
+    name: "raw_messages_core_purge_idx",
+    table: "raw_messages",
+    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, core_namespace, id)",
+  },
+  "0023_core_raw_ledger_idx.concurrent.sql": {
+    name: "capture_events_core_raw_ledger_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, core_namespace, client, event_id)",
+  },
   "0004_core_recent_index.concurrent.sql": {
     name: "memories_user_recent_c",
     table: "memories",
@@ -222,9 +236,13 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const suppressions = wrapSuppressions(createPostgresSuppressionStore());
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
-      const capture = createPostgresCapturePorts({ lineageSecret: randomUUID() });
+      const lineage = { lineageSecret: randomUUID() };
+      const capture = createPostgresCapturePorts(lineage);
+      const rawPorts = createPostgresRawPorts({ ...lineage, allowNonNullNamespace: true });
       const nearDuplicate = requested.nearDuplicate !== false;
-      const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true });
+      const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
+        rawArchive: requested.rawArchive === true, rawWindowHide: requested.rawWindowHide === true,
+        sessionLineage: requested.rawArchive === true });
       const memoryReads = createPostgresMemoryReads();
       // Exercise hydration's read filters on lexical matches for the memory cases.
       // The production lexical ranker and its own cases belong to the lexical lane.
@@ -268,7 +286,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, capture, lexical, ...memoryReads,
+          capabilities: flags, uow, suppressions, capture, lexical, ...memoryReads, ...(flags.rawArchive ? rawPorts : {}),
           memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true }),
           pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
@@ -298,6 +316,8 @@ const selected = new Set([
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
   "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
+  "K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
+  "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-10",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
 ]);
 
@@ -320,13 +340,13 @@ const notApplicable = {
   ],
   "snapshot.stateToken": ["K-ADM-7"],
   "suppressions.snapshot (capture text)": ["K-SRC-4"],
-  raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
-    "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  RawCandidates: ["K-RAW-1", "K-RAW-2", "K-RAW-3", "K-RAW-3w", "K-RAW-3c",
+    "K-RAW-4", "K-RAW-5", "K-RAW-7", "K-RAW-8w"],
+  "RawCandidates and capture.finish": ["K-RAW-6", "K-RAW-8"],
+  "rawSpans not declared": ["K-FACT-3r", "K-RAW-2s", "K-RAW-3s", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
-  "raw.recordLineage": ["K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
-    "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9", "K-FORK-10"],
-  "rawSpans not declared": ["K-FACT-3r"],
+  "raw.listRaw": ["K-FORK-9"],
   "hashed session refs required": ["K-HASH-1"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7"],

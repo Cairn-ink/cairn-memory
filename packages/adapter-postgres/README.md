@@ -160,6 +160,33 @@ checks and forget operations.
 Historical rows remain available for direct reads and export after the other
 visibility checks pass.
 
+## Raw writes and lineage
+
+Create the capture and Raw ports with the same stable `lineageSecret` and
+optional `hashSessionKey`. `createPostgresRawPorts` returns `raw` for archive and
+privacy writes and `sessionLineage` for proof resolution. Wire Raw search and
+listing before enabling `rawArchive`. The optional `importArchive` method is a
+separate integration.
+
+Run Raw mutations with `pauseLock: true`. Resolve a proven closure and pass it
+to `eraseSessions` inside that same transaction. Erasure fences the proven
+sessions, deletes their Raw rows, and blanks their ledger messages. An
+ID-only match withholds admission without joining the erase closure.
+`deleteConversation` deletes the conversation's Raw rows and preserves its
+ledger and any existing fence.
+
+Supply `fingerprintKeys(owner)` with the current and retained keys and their
+respective fingerprint pipelines to enable keyed Raw purge. Exact evidence
+and keyed containment can prove a match. Inconclusive evidence preserves the
+stored row. A scrub keeps the hosted ledger's object or encoded-string
+representation and retains the message positions and their IDs.
+
+The hosted profile uses the null namespace. Set `allowNonNullNamespace` only
+for isolated stores with no hosted writers. Migrations 0021–0023 add nullable
+Raw metadata and concurrent scan indexes. The hosted Raw identity and
+lineage MAC domains are unchanged. A timestamp beyond the hosted wire
+range retains its exact milliseconds in `core_occurred_at_ms`.
+
 ## Database tests
 
 Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with

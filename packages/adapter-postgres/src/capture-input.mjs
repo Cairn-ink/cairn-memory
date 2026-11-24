@@ -19,7 +19,7 @@ export function readInput(read) {
 }
 
 /** @param {unknown} value @returns {value is string} */
-function pgText(value) {
+export function pgText(value) {
   return typeof value === "string" && !/[\u0000\uD800-\uDFFF]/u.test(value);
 }
 
@@ -62,7 +62,7 @@ export function copyKey(tx, key) {
 /** Snapshot dense indexed data without calling a caller's iterator or any slot accessor.
  * @template T @param {readonly T[]} values @returns {T[]}
  */
-function copyArray(values) {
+export function copyArray(values) {
   try {
     if (!Array.isArray(values)) invalid();
     const length = Object.getOwnPropertyDescriptor(values, "length")?.value;
@@ -128,4 +128,18 @@ export function readFailure(failure) {
   const { code, retryable } = failure;
   if (!isErrorCode(code) || typeof retryable !== "boolean") invalid();
   return { code, retryable };
+}
+
+/** @param {object} value */
+export function jsonbSource(value) {
+  const json = JSON.stringify(value);
+  // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
+  return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
+}
+
+/** @param {number} time */
+export function hostedTime(time) {
+  if (Math.abs(time) > 8.64e15) return null;
+  const iso = new Date(time).toISOString();
+  return iso.length === 24 && !iso.startsWith("0000") ? iso : null;
 }

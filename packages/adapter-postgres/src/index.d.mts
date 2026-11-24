@@ -33,6 +33,8 @@ export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 export function factSlot(fact: SuppressionFact): string;
 export function createPostgresSuppressionStore(): Pick<SuppressionStore, "writeFact" | "epoch">;
 export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
+export { createPostgresRawPorts } from "./raw.mjs";
+export type { RawOptions } from "./raw-options.mjs";
 
 export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean; allowNonNullNamespace?: boolean }): MemoryStore;
 export function createPostgresDigestGate(uow: UnitOfWork,

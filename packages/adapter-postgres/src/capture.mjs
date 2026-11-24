@@ -1,10 +1,10 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
 import {
-  clockMs, copyKey, copyMessages, copyPositions, copyScope, identifier, readFailure,
+  clockMs, copyKey, copyMessages, copyPositions, copyScope, hostedTime, identifier, jsonbSource, readFailure,
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
+import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources } from "./capture-source.mjs";
-import { toPostgresError } from "./errors.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
@@ -23,15 +23,6 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
  *   } | null
  * }} CaptureRow */
 
-// The pause lock is acquired by the UnitOfWork before the owner write lock.
-// Inspect the lock held by this backend without acquiring it in reverse order.
-const HAS_PAUSE_LOCK = `SELECT EXISTS (
-  SELECT 1 FROM pg_catalog.pg_locks
-  CROSS JOIN (SELECT hashtextextended('cairn:memory-pause:' || $1, 0) AS key) AS pause
-  WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objsubid = 1 AND granted AND mode = 'ExclusiveLock'
-    AND classid::bigint = ((pause.key >> 32) & 4294967295)
-    AND objid::bigint = (pause.key & 4294967295)
-) AS held`;
 const IDENTITY = "user_id = $1 AND client = $2 AND event_id = $3";
 const TOKEN = "user_id = $1 AND core_lease_token = $2";
 // A failed attempt leaves the hosted event queued. Only its ingest job records the failure.
@@ -129,36 +120,9 @@ async function requireLiveToken(query, owner, token, now) {
   return row;
 }
 
-/**
- * Prepare inputs synchronously, then check the pause lock before touching capture state.
- * Guard and validation failures leave an otherwise usable run, as in the reference adapter.
- * @template T @param {Tx} tx @param {() => (query: Query) => Promise<T>} prepare
- */
-async function pauseLockedWrite(tx, prepare) {
-  requireLiveRun(tx, true);
-  /** @type {((query: Query) => Promise<T>) | undefined} */
-  let body;
-  /** @type {CoreError | undefined} */
-  let invalidInput;
-  try {
-    body = prepare();
-  } catch (error) {
-    invalidInput = toPostgresError(error);
-  }
-  const result = await runOperation(tx, async (query) => {
-    const { rows: [lock] } = await query(HAS_PAUSE_LOCK, [tx.owner]);
-    if (lock?.held !== true) return { error: new CoreError("internal_error") };
-    if (!body) return { error: invalidInput };
-    return { value: await body(query) };
-  });
-  if ("value" in result) return /** @type {T} */ (result.value);
-  throw result.error;
-}
-
 /** @param {CaptureOptions} options @returns {CapturePorts} */
 export function createPostgresCapturePorts(options) {
   const { now = Date.now, lineageSecret, hashSessionKey } = options ?? {};
-  if (typeof lineageSecret !== "string" || lineageSecret.length === 0) throw new CoreError("invalid_input");
   const captureProofs = createCaptureProofs(lineageSecret);
 
   return {
@@ -269,7 +233,7 @@ export function createPostgresCapturePorts(options) {
       requireLiveRun(tx);
       const [copy, batch] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyMessages(messages)]));
       return runOperation(tx, async (query) => filterSources(query, copy, batch.map(({ occurredAtMs }) => occurredAtMs),
-        await captureProofs(copy, batch), "read", hashSessionKey));
+        await captureProofs(copy, batch), "read", captureProofs, hashSessionKey));
     },
 
     async assertEligible(tx, key, positions) {
@@ -277,7 +241,7 @@ export function createPostgresCapturePorts(options) {
       const [copy, selected] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyPositions(positions)]));
       return runOperation(tx, async (query) => {
         /** @type {{rows: CaptureRow[]}} */
-        const { rows: [row] } = await query(SELECT_EVENT, identity(copy));
+        const { rows: [row] } = await query(SELECT_EVENT + " FOR UPDATE", identity(copy));
         if (!row || row.core_namespace !== copy.scope.namespace || row.core_payload_digest === null) {
           throw new CoreError("stale_admission");
         }
@@ -288,7 +252,7 @@ export function createPostgresCapturePorts(options) {
           if (position >= times.length) throw new CoreError("invalid_input");
           return times[position];
         });
-        await filterSources(query, copy, selectedTimes, proofs, "assert", hashSessionKey);
+        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey);
       });
     },
   };
@@ -314,13 +278,11 @@ function encodeRequest(key, batch) {
       ids.add(storedId);
       metadata[index] = { id };
     }
-    const time = occurredAtMs !== null && Math.abs(occurredAtMs) <= 8.64e15
-      ? new Date(occurredAtMs).toISOString() : undefined;
-    const occurredAt = time?.length === 24 && !time.startsWith("0000") ? time : undefined;
-    if (occurredAt === undefined && occurredAtMs !== null) {
+    const occurredAt = occurredAtMs === null ? null : hostedTime(occurredAtMs);
+    if (occurredAt === null && occurredAtMs !== null) {
       metadata[index] = { ...metadata[index], occurredAtMs };
     }
-    return { id: storedId, role, content, ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }) };
+    return { id: storedId, role, content, ...(occurredAt === null ? {} : { occurred_at: occurredAt }) };
   });
   const request = {
     client: requestIdentifier(key.client), event_id: requestIdentifier(key.eventId).padEnd(8, "-"),
@@ -331,13 +293,6 @@ function encodeRequest(key, batch) {
     raw: jsonbSource(request),
     metadata: Object.keys(metadata).length ? jsonbSource(metadata) : null,
   };
-}
-
-/** @param {object} value */
-function jsonbSource(value) {
-  const json = JSON.stringify(value);
-  // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
-  return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
 }
 
 /** @param {Query} query @param {Omit<CaptureKey, "payloadDigest">} selection @param {string | null} namespace */
