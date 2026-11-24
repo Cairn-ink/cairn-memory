@@ -1,5 +1,5 @@
 import { CoreError } from "@cairn-ink/core";
-import { contextDeadline, contextEpochs, evidenceEpochs } from "./context-read-state.mjs";
+import { contextDeadline, contextEpochs, namespaceEpochs } from "./context-read-state.mjs";
 import { exactReceiptTurn, reconcileRawInventory } from "./context-raw-read.mjs";
 import { anchorsVisible, receiptProjector, storedEvidence } from "./inspect.mjs";
 import { decodeJson, readEntry } from "./memory-rows.mjs";
@@ -66,7 +66,9 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
     observeIndex: index.observeIndex,
     lexical: index.lexical,
     async snapshotState(tx, readSet, types) {
-      return port(tx, readSet.owner, {}, db => evidenceEpochs(contextEpochs(db, readSet)).map(memory => ({
+      // Namespace epochs cover stored evidence and scoped suppression changes.
+      // Evidence fences recheck receipt safety, and Raw revalidates its own witness.
+      return port(tx, readSet.owner, {}, db => namespaceEpochs(db, readSet).map(memory => ({
         memory, ...(types.includes("card") && { card: 1 }),
       })));
     },

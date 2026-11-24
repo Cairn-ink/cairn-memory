@@ -6,6 +6,7 @@ import { check, equal, rejects, row, source } from "./support.mjs";
   ReadContextInput, ReadContractStorage, Receipt, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 /** @typedef {ReadContractStorage<StoredDocumentCardRecord> & {contextRead: ContextReadStore}} Storage */
+/** @typedef {Receipt & {createdAtMs: number}} FixtureReceipt */
 
 const encoder = new TextEncoder();
 const hex = (/** @type {ArrayBuffer} */ bytes) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
@@ -51,9 +52,9 @@ const selection = scope => ({ owner: scope.owner, namespaces: [scope.namespace],
 const query = { query: "albatross", types: ["memory"], intent: "current" };
 const retainedSession = { client: "fixture-client", sessionId: "fixture-session" };
 
-/** @param {number} id @param {string} excerpt @param {number | null} [occurredAtMs] @returns {Receipt} */
+/** @param {number} id @param {string} excerpt @param {number | null} [occurredAtMs] @returns {FixtureReceipt} */
 function receipt(id, excerpt, occurredAtMs = null) {
-  return { ...retainedSession, id: "receipt-" + id, messageId: "turn-" + id, role: "user", occurredAtMs, excerpt };
+  return { ...retainedSession, id: "receipt-" + id, messageId: "turn-" + id, role: "user", occurredAtMs, excerpt, createdAtMs: id };
 }
 
 /** @param {CaseContext} ctx @param {Scope} scope @param {string} body @param {readonly Receipt[]} [receipts] */
@@ -267,7 +268,36 @@ export const CONTEXT_ASSEMBLY_CASES = [
       const service = contextAssemblyService(storage);
       const before = await service.readContext(selection(scope), query);
       check(formatAssembly(before.assembly).includes(fenced), "The retained source can be delivered before its fence");
-      await storage.uow.run(ctx.owner, { pauseLock: true }, tx => raw.fenceSession(tx, scope, retainedSession));
+      const { snapshot } = before;
+      check(snapshot, "Expected a snapshot of the Memory with the retained source");
+
+      let meteredReceipt = false, fenceCommitted = false, recheckedMemory = false;
+      const { contextRead, uow } = storage;
+      const stale = contextAssemblyService({ ...storage,
+        uow: { async run(owner, options, action) {
+          if (meteredReceipt && !fenceCommitted) {
+            check(options.readOnly, "The fence must precede the final read");
+            await uow.run(owner, { pauseLock: true }, tx => raw.fenceSession(tx, scope, retainedSession));
+            fenceCommitted = true;
+          }
+          return uow.run(owner, options, action);
+        } },
+        contextRead: { ...contextRead, async evidence(...args) {
+          const rows = await contextRead.evidence(...args);
+          if (fenceCommitted) {
+            const [row] = rows;
+            recheckedMemory = row?.type === "memory" && row.ref.id === ref.id && row.receipts.length === 0;
+          }
+          return rows;
+        } },
+      }, { count(text) {
+        meteredReceipt ||= text.startsWith("{") && text.includes(fenced);
+        return fixtureCount(text);
+      } });
+      await rejects(() => stale.readContext(selection(scope), { ...query, raw: false }), "snapshot_stale");
+      check(recheckedMemory, "The final evidence read withholds the fenced receipt from the same Memory");
+      await rejects(() => service.fetchEvidence(selection(scope), { snapshot }), "snapshot_stale");
+
       const after = await service.readContext(selection(scope), query);
       const item = after.assembly.items[0];
       check(item && "sources" in item && item.body === body, "Session fence allows the Memory body");
