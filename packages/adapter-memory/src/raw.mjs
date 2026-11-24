@@ -397,8 +397,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [eraseLedger] */
-  function deleteSessions(tx, scope, prepare, eraseLedger = false) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
+  function deleteSessions(tx, scope, prepare) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -414,8 +414,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key))) : 0;
+        const ledgerBlanked = await blankCaptureMessages(state, namespace,
+          (key) => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
         if (ledgerBlanked) run.stateWritten = true;
@@ -607,7 +607,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
-      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), true);
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
     },
     async purgeWithheld(tx, scope, facts) {
       return port.write(tx, scope, "conditional", () => {
