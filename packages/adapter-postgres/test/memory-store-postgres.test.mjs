@@ -221,6 +221,39 @@ test("P1-5 keyed digest gate counts missing rows and HMAC-only visibility evalua
 });
 
 const hostedFingerprints = JSON.parse(readFileSync(new URL("./fixtures/fingerprint-labels.json", import.meta.url), "utf8"));
+
+test("Postgres digest records preserve distinct labels through insert and replacement", migrationDbTest, async (t) => {
+  const { pool, run, memories } = await fixture(t);
+  const digest = { alg: "hmac", value: hash("fixture digest"), keyId, pipeline: "core", redactionVersion: 2, label: "first" };
+  const digests = [digest, { ...digest, label: "second" }];
+  const readDigests = async (id) => (await pool.query("SELECT core_digests FROM memories WHERE id = $1", [id])).rows[0].core_digests;
+  const row = await run(owner, {}, tx => memories.insert(tx, scope, { ...content("original"), digests: [digest] }, [], 1));
+  assert.deepEqual(await readDigests(row.id), [digest]);
+  await run(owner, {}, tx => memories.replaceContent(tx, scope, row.id, row.revision, { ...content("edited"), digests }, null, 2));
+  assert.deepEqual(await readDigests(row.id), digests);
+});
+
+test("Postgres digest gate requires every live label and redaction version and counts each row once", migrationDbTest, async (t) => {
+  const { pool, run, uow, suppressions } = await fixture(t);
+  await hostedMemory(pool, "coverage", "coverage fixture");
+  const first = { alg: "hmac", value: hash("first fact"), keyId, pipeline: "core", redactionVersion: 1 };
+  const second = { ...first, value: hash("second fact"), redactionVersion: 2 };
+  for (const digest of [first, second]) {
+    await run(owner, {}, tx => suppressions.writeFact(tx, {
+      ...scope, actionId: "coverage", kind: "text", mode: "exact", origin: "forget", text: { digests: [digest] },
+    }, digest.value));
+  }
+  const missing = postgres.createPostgresDigestGate(uow, () => [keyId]);
+  const store = (digests) => pool.query("UPDATE memories SET core_digests = $1::jsonb WHERE id = 'coverage'", [JSON.stringify(digests)]);
+  const row = { ...first, value: hash("row") };
+  await store([{ ...row, label: "foreign" }]);
+  assert.equal(await missing(owner), 1, "A different label covers neither live domain");
+  await store([row]);
+  assert.equal(await missing(owner), 1, "The historical core label covers only the matching redaction version");
+  await store([row, { ...row, redactionVersion: 2, label: "core" }]);
+  assert.equal(await missing(owner), 0);
+  assert.deepEqual((await pool.query("SELECT core_digests->0 AS digest FROM memories WHERE id = 'coverage'")).rows[0].digest, row);
+});
 for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth-secret"]) {
   test(`P1-5 hosted HMAC domain ${caseId} fails closed until backfill`, migrationDbTest, async (t) => {
     const f = await fixture(t);
@@ -275,7 +308,7 @@ for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth
     const { rows: stored } = await f.pool.query("SELECT core_digests FROM memories WHERE user_id = $1 ORDER BY updated_at", [owner]);
     for (const [i, { core_digests }] of stored.entries()) {
       assert.deepEqual(core_digests.slice(0, rows[i].digests.length), rows[i].digests);
-      assert.deepEqual(core_digests.at(-1), { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
+      assert.deepEqual(core_digests.at(-1), { alg: "hmac", pipeline: "hosted-v1", label: "hosted-v1", redactionVersion: 1,
         keyId: hostedKeyId, value: await legacyExactMac(rows[i].text, key, labels) });
     }
     assert.deepEqual(await visible(), [ref(different.id)]);

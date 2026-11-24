@@ -22,7 +22,7 @@ function digestAliases({ textHash, legacyHash, digests = [] }) {
   const result = [...digests];
   for (const hash of [textHash, legacyHash]) {
     const value = hash === undefined ? null : digestValue(hash);
-    if (value && !result.some(digest => digest.alg === "sha256" && digest.value === value)) {
+    if (value && !result.some(digest => digest.alg === "sha256" && digest.label === undefined && digest.value === value)) {
       /** @type {TextDigest["pipeline"]} */
       const pipeline = hash === legacyHash ? "engine-legacy" : "core";
       result.push({ alg: "sha256", value, pipeline, redactionVersion: PRIVACY_REDACTION_VERSIONS.core, keyId: null });
@@ -45,9 +45,9 @@ function legacyFact(row, owner) {
     const digests = [];
     const sha = digestValue(text_hash);
     const hmacs = new Set([text_hash.startsWith("hmac:") ? text_hash.slice(5) : null, text_hmac].filter(Boolean));
-    const label = /** @type {const} */ ({ pipeline: "hosted-v1", redactionVersion: redaction_version });
-    if (sha) digests.push({ ...label, alg: "sha256", value: sha, keyId: null });
-    for (const value of hmacs) digests.push({ ...label, alg: "hmac", value, keyId: key_id });
+    const domain = /** @type {const} */ ({ pipeline: "hosted-v1", redactionVersion: redaction_version });
+    if (sha) digests.push({ ...domain, alg: "sha256", value: sha, keyId: null });
+    for (const value of hmacs) digests.push({ ...domain, alg: "hmac", label: "hosted-v1", value, keyId: key_id });
     body = { ...base, mode: "full", text: { digests, embedding: JSON.parse(embedding), shingles, keyId: key_id } };
   }
   return { fact: validateSuppressionFact(body), factId: id, incarnation: "", epoch: 0n, createdAtMs: 0 };

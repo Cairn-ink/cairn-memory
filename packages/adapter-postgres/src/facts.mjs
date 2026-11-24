@@ -105,6 +105,7 @@ const digestFields = {
   pipeline: copyString,
   redactionVersion: copyNumber,
   keyId: nullable(copyString),
+  label: optional(copyString),
 };
 const textFields = {
   digests: arrayOf((value) => copyObject(value, digestFields)),
@@ -171,13 +172,19 @@ function snapshotFact(fact) {
 /** @param {readonly TextDigest[]} digests */
 export function canonicalDigests(digests) {
   return [...digests].sort((a, b) => (
-    compareUtf8(a.alg, b.alg) || compareUtf8(a.value, b.value)
+    compareUtf8(a.alg, b.alg) || compareUtf8(a.value, b.value) ||
+    compareUtf8(JSON.stringify(digestTarget(a)), JSON.stringify(digestTarget(b)))
   ));
 }
 
+/** @param {TextDigest} digest */
+function digestTarget({ alg, value, keyId, label, pipeline, redactionVersion }) {
+  return label === undefined ? [alg, value] : [alg, value, keyId, label, pipeline, redactionVersion];
+}
+
 /**
- * The slot is the canonical JSON array [namespace ?? null, ...target]. The target is
- * the same in every store; pipeline, redactionVersion and keyId are not part of it.
+ * The slot keeps the historical target for unlabelled digests and distinguishes
+ * explicitly labelled digests by their full domain.
  * @param {SuppressionFact} fact The validated snapshot.
  */
 function encodeSlot(fact) {
@@ -190,7 +197,7 @@ function slotTarget(fact) {
     case "identity":
       return ["identity", fact.memoryId, fact.throughRevision ?? null];
     case "text": {
-      const target = canonicalDigests(fact.text.digests).map(({ alg, value }) => [alg, value]);
+      const target = canonicalDigests(fact.text.digests).map(digestTarget);
       return ["text", fact.mode, target, fact.sourceMemory?.id ?? null];
     }
     case "session": {

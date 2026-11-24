@@ -41,6 +41,9 @@ function stub({
           if (sql.startsWith("SELECT pg_try_advisory_lock")) {
             label = "try migration lock";
             rows = [{ locked }];
+          } else if (sql.startsWith("SELECT pg_advisory_unlock")) {
+            label = "unlock migration lock";
+            rows = [{ unlocked: true }];
           } else if (sql.startsWith("CREATE TABLE IF NOT EXISTS core_schema_migrations")) {
             label = "create ledger";
           } else if (sql === "SELECT id FROM core_schema_migrations") {
@@ -78,7 +81,7 @@ test("runner applies the manifest in order with a standalone concurrent statemen
     "BEGIN", first.sql, ["record migration", ["first"]], "COMMIT",
     recent.sql, ["inspect index", ["recent_idx", "public.first"]], ["record migration", ["recent"]],
     "BEGIN", last.sql, ["record migration", ["last"]], "COMMIT",
-    ["release", true],
+    "unlock migration lock", ["release", true],
   ]);
 });
 
@@ -86,12 +89,12 @@ test("runner skips applied migrations and applies only the new suffix", async ()
   const { source, statements } = stub({ applied: ["first"] });
   await applyMigrations(source, [first, last]);
   assert.deepEqual(statements, [
-    ...setup, "BEGIN", last.sql, ["record migration", ["last"]], "COMMIT", ["release", true],
+    ...setup, "BEGIN", last.sql, ["record migration", ["last"]], "COMMIT", "unlock migration lock", ["release", true],
   ]);
 
   const replay = stub({ applied: ["last", "first"] });
   await applyMigrations(replay.source, [first, last]);
-  assert.deepEqual(replay.statements, [...setup, ["release", true]]);
+  assert.deepEqual(replay.statements, [...setup, "unlock migration lock", ["release", true]]);
 });
 
 test("runner refuses downgrade, unknown applied IDs, and a gap in the applied prefix", async () => {

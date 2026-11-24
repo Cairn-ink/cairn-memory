@@ -38,6 +38,26 @@ async function setup(t, observe) {
   return { pool, uow, run, store, write };
 }
 
+test("Postgres snapshot keeps ineligible labels and distinct digest records", migrationDbTest, async (t) => {
+  const { run, store, write } = await setup(t);
+  const keyed = { alg: "hmac", value: "a".repeat(64), pipeline: "core", keyId: "fixture-key", redactionVersion: 2 };
+  const fact = { ...base, kind: "text", mode: "exact", text: { digests: [keyed] } };
+  const historical = await write(fact);
+  const snapshot = (digests) => run(owner, { readOnly: true }, tx => store.snapshot(tx, scope, {
+    passages: [{ digests, shingles: null, keyId: keyed.keyId }],
+  }));
+  const miss = { ...keyed, value: "b".repeat(64) };
+  assert.deepEqual((await snapshot([{ ...miss, label: "foreign" }])).passages.map(({ factId }) => factId), [historical.factId]);
+  assert.deepEqual((await snapshot([{ ...miss, label: "core" }, { ...miss, label: "foreign" }])).passages, []);
+
+  const digests = [{ ...keyed, label: "one" }, { ...keyed, label: "two" }];
+  const labelled = await write({ ...fact, text: { digests } });
+  const separate = await write({ ...fact, text: { digests: [digests[0]] } });
+  const result = await snapshot(digests);
+  assert.deepEqual(result.passages.map(({ factId }) => factId), [historical.factId, labelled.factId, separate.factId]);
+  assert.deepEqual(result.passages[1].fact.text.digests, digests);
+});
+
 test("Postgres snapshots use the indexed digest lookup with owner and epoch isolation", migrationDbTest, async (t) => {
   let lookup;
   const { pool, run, store, write } = await setup(t, (sql, values) => {

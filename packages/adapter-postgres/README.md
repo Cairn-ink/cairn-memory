@@ -71,22 +71,22 @@ numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
 `factSlot(fact)` uses `JSON.stringify` on the following target tuples.
 
-The slot is the canonical JSON array `[namespace ?? null, ...target]`. Every
-store uses the same target per kind; only its encoding is store-specific.
+The slot is the canonical JSON array `[namespace ?? null, ...target]`. A text
+digest contributes `[alg, value]` for historical unlabelled evidence or
+`[alg, value, keyId, label, pipeline, redactionVersion]` for labelled evidence.
+The fact body stores every digest. The lookup table indexes unlabelled evidence.
 
 | Kind | Target |
 | --- | --- |
 | Identity | `["identity", memoryId, throughRevision ?? null]` |
-| Text | `["text", mode, [[alg, value], …], sourceMemory?.id ?? null]` using every digest in canonical order |
+| Text | `["text", mode, [digest, …], sourceMemory?.id ?? null]` using every digest tuple in canonical order |
 | Session | `["session", client, "id", sessionId]` or `["session", client, "hash", sessionKeyHash]` |
 | Window | `["window", client, startMs, endMs, unknownTime === true, anchor ?? null]` |
 | Raw span | `["rawSpan", sessionKeyHash, messageKey, startUtf16, endUtf16]` |
 
 A null window client selects all clients. `canonicalDigests(digests)` sorts a
-copy by algorithm, then value, in UTF-8 byte order. Each digest contributes
-only its algorithm and value to the target: the pipeline, redaction version and
-key id are not part of it, so the same digest set under a different pipeline
-label is the same target. Reordering the same digests preserves the slot.
+copy by algorithm, then value, then the encoded target tuple, in UTF-8 byte
+order. Reordering the same digests preserves the slot.
 Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
@@ -168,9 +168,10 @@ requested visible depth or when an unchecked model gap remains.
 `rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
 The gate counts each row missing evidence for an accepted key or for any live
 HMAC-only fact domain, including hosted facts during dual-read. Require a zero
-count before enabling the adapter. For each fact, admission and visibility
-withhold candidates without a comparable MAC. MAC domains match on algorithm,
-key ID, and pipeline label.
+count before enabling the adapter. The gate requires the algorithm, key ID,
+label, pipeline, and redaction version for each live domain. Historical
+unlabelled MACs use their pipeline as the default label at comparison time.
+For each fact, admission and visibility use Core's comparability rules.
 
 Configure the fingerprint provider with the unit of work and the secrets
 available for staging. Call `publish(owner, keyId)` to activate a configured key
@@ -183,8 +184,9 @@ With the owner's memory writers paused, the host's cutover script can call
 `backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
 for each required hosted key. The callback receives stored text and returns the
 legacy exact MAC as 64 lowercase hex characters. The host keeps the signing key.
-The backfill appends missing `hosted-v1` digests in one transaction per call and
-returns the number of rows updated. Recheck the digest gate before cutover.
+The backfill appends digests for the `hosted-v1` signing domain at the requested
+redaction version in one transaction per call and returns the number of rows
+updated. Recheck the digest gate before cutover.
 
 A receipt with `forgotten_at` set is a replay tombstone. Its original memory ID
 serves as part of the storage key. Replacement and erasure delete active receipts

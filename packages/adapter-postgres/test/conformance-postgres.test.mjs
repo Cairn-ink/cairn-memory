@@ -5,7 +5,8 @@ import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
-import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { publishFingerprintKey, readFingerprintKeyId } from "../src/digest-gate.mjs";
 import { toPostgresError } from "../src/errors.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
@@ -18,6 +19,7 @@ import { requireLiveRun } from "../src/uow.mjs";
 import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
+/** @import { RetainedDigestFixture } from "@cairn-ink/conformance/factory" */
 
 const databaseUrl = process.env.CORE_PG_TEST_URL;
 const options = { timeout: 120_000, skip: databaseUrl ? false : "CORE_PG_TEST_URL is not set" };
@@ -264,9 +266,26 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
         sessionLineage: rawArchive, rawSpans: true, fingerprintKey, shingleSuppression: rawArchive && fingerprintKey,
         placement: true,
       });
-      const fixtureSecrets = new Map([["test-secret-a", randomUUID()], ["test-secret-rotation", randomUUID()]]);
+      const fixtureSecrets = new Map(["test-secret-a", "test-secret-rotation", "test-secret-later"]
+        .map(secret => [secret, randomUUID()]));
       const stagedSecrets = fingerprintKey ? [...fixtureSecrets.values()] : [];
-      const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      const provider = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      /** @type {Map<string, RetainedDigestFixture>} */
+      const retainedFixtures = new Map();
+      const keys = {
+        ...provider,
+        async retainedDigesters(owner) {
+          const fixture = retainedFixtures.get(owner);
+          if (!fixture) return [];
+          const scope = { owner, namespace: null };
+          const { passages } = await uow.run(owner, { readOnly: true }, tx => suppressions.snapshot(tx, scope, {}));
+          const live = passages.some(({ fact }) => fact.text.digests.every(({ alg }) => alg === "hmac") &&
+            fact.text.digests.some(({ keyId, label, pipeline }) => keyId === fixture.keyId && (label ?? pipeline) === fixture.label));
+          if (!live) return [];
+          return [{ alg: "hmac", keyId: fixture.keyId, label: fixture.label,
+            mac: (text) => createHmac("sha256", fixture.secret).update(text).digest("hex") }];
+        },
+      };
       const rawOptions = {
         lineageSecret, hashSessionKey,
         fingerprintKeys: async (owner) => {
@@ -283,26 +302,49 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate });
       /** @type {string[]} */
       const harnessOwners = [];
-      /** @type {Pick<TestHarness, "advanceClock" | "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret" | "seedClientlessRaw"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      /** @type {Omit<TestHarness, "counters"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         hashSessionKey,
         async advanceClock(ms) { elapsed += ms; },
+        keyedDigestGateCountsRows: true,
         rowsMissingKeyedDigest: createPostgresDigestGate(uow, async (owner) => {
           const key = await keys.userKey(owner);
           return key ? [key.id] : [];
         }),
+        async readStoredDigests(owner, id) {
+          const { rows: [row] } = await pool.query("SELECT core_digests FROM memories WHERE user_id = $1 AND id = $2", [owner, id]);
+          return row?.core_digests ?? null;
+        },
+        async setRetainedDigestFixture(owner, fixture) {
+          if (fixture === null) retainedFixtures.delete(owner);
+          else retainedFixtures.set(owner, fixture);
+        },
         async setFingerprintSecret(secret) {
-          assert.ok(fingerprintKey);
-          const key = await userFingerprintKey(fixtureSecrets.get(secret), harnessOwners[0], HOSTED_FINGERPRINT_LABELS);
-          assert.ok(key);
+          const fixtureSecret = fixtureSecrets.get(secret);
+          assert.ok(fingerprintKey && fixtureSecret);
           for (const owner of harnessOwners) {
+            const key = await userFingerprintKey(fixtureSecret, owner, HOSTED_FINGERPRINT_LABELS);
+            assert.ok(key);
             if (seedRetainedState && secret === "test-secret-rotation") {
               // This case starts from a retained fact and a newer active key.
               await uow.run(owner, {}, (tx) => query(tx,
                 "UPDATE core_owner_state SET fingerprint_key_id = $2 WHERE user_id = $1", [owner, key.id]));
-            } else {
-              await keys.publish(owner, key.id);
+              continue;
             }
+            // The host stages the new MACs before publication. Keep test staging and
+            // publication atomic so a refused rotation leaves the fixture untouched.
+            await uow.run(owner, {}, async (tx) => {
+              const runQuery = (sql, values) => query(tx, sql, values);
+              if (await readFingerprintKeyId(runQuery, owner) === key.id) return;
+              const { rows } = await runQuery("SELECT id, text FROM memories WHERE user_id = $1", [owner]);
+              for (const { id, text } of rows) {
+                const digest = await coreDigest(text, key);
+                await runQuery(`UPDATE memories SET core_digests = COALESCE(core_digests, '[]'::jsonb) || $3::jsonb
+                    WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([digest])]);
+              }
+              if (rows.length) await advanceIndex(runQuery, owner);
+              await publishFingerprintKey(tx, key.id);
+            });
           }
         },
         async seedClientlessRaw(scope, sessionId, { id, occurredAtMs, role, content }) {
@@ -384,9 +426,10 @@ const selected = new Set([
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
   "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
-  "K-KD-1", "K-KD-2", "K-HASH-1",
+  "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6",
+  "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9", "K-HASH-1",
   "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
-  "K-ADM-2", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14", "K-KD-3", "K-KD-5",
+  "K-ADM-2", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
   "K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k", "K-IMP-RAW-5",
   "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10",
   "K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-8w",
@@ -402,7 +445,6 @@ const notApplicable = {
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
-  "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "hosted raw is personal-only (namespace guard)": ["K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-8", "K-IMP-RAW-4", "K-IMP-RAW-4e"],
   "raw conflict counters": ["K-RAW-7"],
   "raw span purge": ["K-RAW-8s"],

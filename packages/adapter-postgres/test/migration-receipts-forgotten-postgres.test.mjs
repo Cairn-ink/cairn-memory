@@ -7,12 +7,22 @@ const readLedger = 'SELECT id, applied_at::text FROM core_schema_migrations ORDE
 
 test("Postgres adds the forgotten receipt column and partial index and can reapply all migrations", migrationDbTest, async (t) => {
   const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
-  await applyMigrations(source, migrations);
-  const { rows: applied } = await pool.query(readLedger);
-  assert.deepEqual(applied.map(({ id }) => id), migrations.map(({ id }) => id));
+  const first = await source.connect();
+  try {
+    // pg.Pool can return from release(true) before the server closes the session.
+    // Keep that session alive to exercise the reapply in that window every time.
+    await applyMigrations({ connect: async () => ({
+      query: first.query,
+      release: (destroy) => assert.equal(destroy, true),
+    }) }, migrations);
+    const { rows: applied } = await pool.query(readLedger);
+    assert.deepEqual(applied.map(({ id }) => id), migrations.map(({ id }) => id));
 
-  await applyMigrations(source, migrations);
-  assert.deepEqual((await pool.query(readLedger)).rows, applied);
+    await applyMigrations(source, migrations);
+    assert.deepEqual((await pool.query(readLedger)).rows, applied);
+  } finally {
+    await first.release(true);
+  }
 
   const { rows: columns } = await pool.query(`
     SELECT data_type, is_nullable, column_default FROM information_schema.columns

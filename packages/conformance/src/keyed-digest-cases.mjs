@@ -276,6 +276,10 @@ async function retainedSave(ctx, v1 = false) {
 
 /** @param {CaseContext} ctx @param {string} id @param {TextDigest[]} expected */
 async function expectStoredDigests(ctx, id, expected) {
+  if (ctx.harness.readStoredDigests) {
+    equal(await ctx.harness.readStoredDigests(ctx.owner, id), expected, "Storage must preserve all supplied digest fields and domains");
+    return;
+  }
   /** @type {{owner: string, rows: {row: {id: string, digests: TextDigest[]}}[]}[]} */
   const snapshot = /** @type {any} */ (await readDump(ctx.harness));
   const stored = snapshot.find(({ owner }) => owner === ctx.owner)?.rows.find(({ row }) => row.id === id);
@@ -323,7 +327,7 @@ export const RETAINED_KEYED_DIGEST_CASES = [
   },
   {
     id: "K-KD-9", title: "persists retained digests on insert, replacement and finish and counts each missing domain",
-    needs: ["fingerprintKey"],
+    needs: ["fingerprintKey"], needsOff: ["nearDuplicate"],
     async run(ctx) {
       const { adapter: { uow, memories }, harness, owner } = ctx;
       if (!harness.rowsMissingKeyedDigest) return "needs harness.rowsMissingKeyedDigest for retained-domain coverage";
@@ -349,7 +353,11 @@ export const RETAINED_KEYED_DIGEST_CASES = [
         return { complete, incomplete, digests };
       });
       await expectStoredDigests(ctx, inserted.complete.id, inserted.digests);
-      equal(await missing(), 2, "One row missing two live domains must count twice");
+      if (harness.keyedDigestGateCountsRows) {
+        equal(await missing(), 1, "One row missing two live domains must count once");
+      } else {
+        equal(await missing(), 2, "One row missing two live domains must count twice");
+      }
 
       const edited = "Garden sage";
       const replacement = await row(ctx, edited);

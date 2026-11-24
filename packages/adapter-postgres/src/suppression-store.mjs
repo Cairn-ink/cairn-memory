@@ -70,9 +70,13 @@ async function writeFact(tx, fact, incarnation, hashedSessions) {
     ]);
     const createdAtMs = readCreatedAtMs(inserted?.created_at_us);
     if (stored.kind === "text") {
-      const digests = canonicalDigests(stored.digests);
-      await query(INSERT_DIGESTS, [owner, factId, digests.map((d) => d.alg), digests.map((d) => d.value),
-        digests.map((d) => d.pipeline), digests.map((d) => d.redactionVersion), digests.map((d) => d.keyId)]);
+      // The legacy lookup is keyed by algorithm and value. Keep labelled
+      // evidence in the authoritative body, where separate domains fit.
+      const digests = canonicalDigests(stored.digests.filter(({ label }) => label === undefined));
+      if (digests.length) {
+        await query(INSERT_DIGESTS, [owner, factId, digests.map((d) => d.alg), digests.map((d) => d.value),
+          digests.map((d) => d.pipeline), digests.map((d) => d.redactionVersion), digests.map((d) => d.keyId)]);
+      }
     }
     return { factId, epoch, createdAtMs, created: true };
   });

@@ -82,7 +82,7 @@ function copyList(value, copy, max = MAX_POSITIONS) {
 function copyPassage(value) {
   const digests = copyList(field(value, "digests"), (digest) => ({
     alg: field(digest, "alg"), value: field(digest, "value"), keyId: field(digest, "keyId"),
-    pipeline: field(digest, "pipeline"), redactionVersion: field(digest, "redactionVersion"),
+    pipeline: field(digest, "pipeline"), redactionVersion: field(digest, "redactionVersion"), label: field(digest, "label"),
   }), 128);
   const shingleList = field(value, "shingles");
   const shingles = shingleList == null ? null : copyList(shingleList, (item) => {
@@ -162,7 +162,8 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
     }
     const { client, sessionId, occurredAtMs, passages } = copy;
     let digestValues = null;
-    if (passages?.length && passages.every(({ digests }) => digests.some(({ alg }) => alg === "sha256"))) {
+    if (passages?.length && passages.every(({ digests }) =>
+      digests.some(({ alg, label }) => alg === "sha256" && label === undefined))) {
       const values = new Set(passages.flatMap(({ digests }) => digests.map(({ value }) => value)));
       if (values.size <= MAX_POSITIONS) digestValues = [...values];
     }

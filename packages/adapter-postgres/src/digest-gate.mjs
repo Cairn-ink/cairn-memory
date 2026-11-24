@@ -4,16 +4,26 @@ import { advanceIndex } from "./memory-rows.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
-/** @import { StoredFact, Tx, UnitOfWork } from "../../core/src/index.mjs" */
+/** @import { StoredFact, TextDigest, Tx, UnitOfWork } from "../../core/src/index.mjs" */
 /** @import { Query } from "./memory-rows.mjs" */
 
 const macPattern = "^[0-9a-f]{64}$";
 const maxRotationFacts = 4096;
 const validMac = `d->>'alg' = 'hmac' AND d->>'pipeline' IN ('core', 'hosted-v1', 'engine-legacy')
   AND jsonb_typeof(d->'keyId') = 'string' AND length(d->>'keyId') BETWEEN 1 AND 64
+  AND (NOT d ? 'label' OR (jsonb_typeof(d->'label') = 'string' AND length(d->>'label') BETWEEN 1 AND 512))
   AND jsonb_typeof(d->'value') = 'string' AND d->>'value' ~ '${macPattern}'
   AND jsonb_typeof(d->'redactionVersion') = 'number' AND d->>'redactionVersion' ~ '^[1-9][0-9]{0,15}$'
   AND d->'redactionVersion' <= '9007199254740991'::jsonb`;
+
+// Historical records use their pipeline as the signing label, without changing stored JSON.
+const macDomain = `jsonb_build_array(d->>'alg', d->>'keyId', COALESCE(d->>'label', d->>'pipeline'),
+  d->>'pipeline', d->'redactionVersion')`;
+
+/** @param {Omit<TextDigest, "value">} digest */
+function encodeDomain({ alg, keyId, label, pipeline, redactionVersion }) {
+  return JSON.stringify([alg, keyId, label ?? pipeline, pipeline, redactionVersion]);
+}
 
 /** @param {Query} query @param {string} owner @param {readonly string[]} keys @param {ReadonlySet<string>} required */
 async function countMissingDigests(query, owner, keys, required) {
@@ -29,8 +39,7 @@ async function countMissingDigests(query, owner, keys, required) {
     )) OR EXISTS (
       SELECT 1 FROM required WHERE NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(core_digests) d
-        WHERE ${validMac} AND d->>'pipeline' = domain->>0 AND d->>'keyId' = domain->>1
-          AND (domain->>2 IS NULL OR d->>'redactionVersion' = domain->>2)
+        WHERE ${validMac} AND ${macDomain} = domain
       )
     )
   )`, [owner, keys, [...required]]);
@@ -42,9 +51,9 @@ function requiredDomains(facts, currentKeyId) {
   const required = new Set();
   for (const { fact } of facts) {
     if (fact.kind !== "text" || fact.text.digests.some(d => d.alg !== "hmac")) continue;
-    for (const { pipeline, keyId } of fact.text.digests) {
-      if (currentKeyId !== undefined && keyId !== currentKeyId) throw new CoreError("fingerprint_key_mismatch");
-      required.add(JSON.stringify([pipeline, keyId]));
+    for (const digest of fact.text.digests) {
+      if (currentKeyId !== undefined && digest.keyId !== currentKeyId) throw new CoreError("fingerprint_key_mismatch");
+      required.add(encodeDomain(digest));
     }
   }
   return required;
@@ -89,7 +98,7 @@ export async function publishFingerprintKey(tx, nextKeyId) {
     }
     if (facts.length > maxRotationFacts) throw new CoreError("fingerprint_key_mismatch");
     const required = requiredDomains(facts, currentKeyId);
-    required.add(JSON.stringify(["core", nextKeyId, PRIVACY_REDACTION_VERSIONS.core]));
+    required.add(encodeDomain({ alg: "hmac", keyId: nextKeyId, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core }));
     if (await countMissingDigests(query, tx.owner, [], required) !== 0) {
       throw new CoreError("fingerprint_key_mismatch");
     }
@@ -108,18 +117,18 @@ export async function backfillPostgresHostedDigests(uow, owner, { keyId, redacti
   if (!inputText(owner) || !inputText(keyId) || keyId.length > 64 ||
       !Number.isSafeInteger(redactionVersion) || redactionVersion < 1 || typeof macForText !== "function") invalid();
   const mac = new RegExp(macPattern, "u");
+  const domain = /** @type {const} */ ({ alg: "hmac", keyId, label: "hosted-v1", pipeline: "hosted-v1", redactionVersion });
   return uow.run(owner, {}, tx => runOperation(tx, async (query, run) => {
     const { rows } = await query(`SELECT id, text FROM memories
       WHERE user_id = $1 AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(core_digests) d
-        WHERE ${validMac} AND d->>'pipeline' = 'hosted-v1' AND d->>'keyId' = $2
-      ) ORDER BY id COLLATE "C" FOR UPDATE`, [owner, keyId]);
+        WHERE ${validMac} AND ${macDomain} = $2::jsonb
+      ) ORDER BY id COLLATE "C" FOR UPDATE`, [owner, encodeDomain(domain)]);
     for (const { id, text } of rows) {
       const value = await macForText(text);
       if (typeof value !== "string" || !mac.test(value)) invalid();
-      const digest = { alg: "hmac", pipeline: "hosted-v1", keyId, redactionVersion, value };
       await query(`UPDATE memories SET core_digests = COALESCE(core_digests, '[]'::jsonb) || $3::jsonb
-        WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([digest])]);
+        WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([{ ...domain, value }])]);
     }
     if (rows.length) await advanceIndex(query, owner, run);
     return rows.length;
