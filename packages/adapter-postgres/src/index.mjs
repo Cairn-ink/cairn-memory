@@ -8,6 +8,8 @@ export { createPostgresSuppressionStore } from "./suppression-store.mjs";
 export { createPostgresCapturePorts } from "./capture.mjs";
 export { createPostgresMemoryStore } from "./memory-store.mjs";
 export { backfillPostgresHostedDigests, createPostgresDigestGate } from "./digest-gate.mjs";
+export { createPostgresMemoryCandidates } from "./memory-candidates.mjs";
+export { createPostgresRawReads } from "./raw-read.mjs";
 export { createPostgresMemoryReads } from "./memory-read.mjs";
 export { createPostgresPauseStore } from "./pause-store.mjs";
 export { createPostgresSupersessionStore } from "./supersession-store.mjs";

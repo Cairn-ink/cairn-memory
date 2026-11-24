@@ -87,10 +87,10 @@ export function usesSource({ fact }) {
 }
 
 /** @param {Query} query @param {string} owner
- * @param {{ textOnly?: boolean, source?: Pick<CaptureKey, "scope" | "client" | "sessionId">,
+ * @param {{ textOnly?: boolean, rawSpans?: boolean, source?: Pick<CaptureKey, "scope" | "client" | "sessionId">,
  *   legacyOnly?: boolean, allowPendingLegacy?: boolean, limit?: number }} [options] */
 export async function readVisibilityFacts(query, owner, {
-  textOnly = false, source, legacyOnly = false, allowPendingLegacy = false, limit,
+  textOnly = false, rawSpans = false, source, legacyOnly = false, allowPendingLegacy = false, limit,
 } = {}) {
   // Both halves see the same statement snapshot while legacy writers are still active.
   const { rows } = await query(`WITH owner_state AS (
@@ -99,7 +99,8 @@ export async function readVisibilityFacts(query, owner, {
   )
   SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
     trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us, kind, origin, mode, slot
-    FROM core_suppression_facts WHERE user_id = $1 AND kind IN ('identity', 'text', 'session', 'window')
+    FROM core_suppression_facts WHERE user_id = $1
+      AND (kind IN ('identity', 'text', 'session', 'window') OR ($10::boolean AND kind = 'rawSpan'))
       AND (NOT $2::boolean OR kind = 'text') AND NOT $3::boolean
       AND (NOT $6::boolean OR (
         kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $7::text
@@ -122,7 +123,7 @@ export async function readVisibilityFacts(query, owner, {
         OR kind = 'session' AND client = $8::text AND session_id <> $9::text
       ))
     LIMIT $4`, [owner, textOnly, legacyOnly, limit ?? null, allowPendingLegacy,
-    source !== undefined, source?.scope.namespace ?? null, source?.client ?? null, source?.sessionId ?? null]);
+    source !== undefined, source?.scope.namespace ?? null, source?.client ?? null, source?.sessionId ?? null, rawSpans]);
   if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
   return rows.map(row => row.legacy ? legacyFact(row.body, owner) : decodeCoreFact(row, owner));
 }
@@ -184,9 +185,14 @@ export async function readVisibility(query, owner, hashSessionKey) {
     facts.push(stored);
   }
 
-  /** @param {Scope["namespace"]} namespace @param {{exact?: boolean, distance?: boolean}} [options] */
-  function candidateColumns(namespace, { exact, distance } = {}) {
-    const facts = byNamespace.get(namespace) ?? [];
+  /** @param {readonly Scope["namespace"][]} namespaces */
+  function selectedFacts(namespaces) {
+    return namespaces.flatMap(namespace => byNamespace.get(namespace) ?? []);
+  }
+
+  /** @param {readonly Scope["namespace"][]} namespaces @param {{exact?: boolean, distance?: boolean, skipEmbedding?: boolean}} [options] */
+  function candidateColumns(namespaces, { exact, distance, skipEmbedding } = {}) {
+    const facts = selectedFacts(namespaces);
     const textFacts = facts.flatMap(({ fact }) => fact.kind === "text" ? [fact] : []);
     const aliases = textFacts.some(fact => fact.text.digests.some(d => d.alg === "sha256"));
     const vector = textFacts.some(fact => fact.mode === "full" && fact.text.embedding != null);
@@ -195,7 +201,7 @@ export async function readVisibility(query, owner, hashSessionKey) {
     if (textFacts.length) columns.push("core_digests");
     if (aliases) columns.push("text");
     if (facts.some(usesSource)) columns.push("source_client", "source_session_id", `${CREATED_MS}::text AS created_ms`);
-    if (vector || distance) columns.push("embedding::text");
+    if (!skipEmbedding && (vector || distance)) columns.push("embedding::text");
     return columns.join(", ");
   }
 
@@ -233,5 +239,5 @@ export async function readVisibility(query, owner, hashSessionKey) {
       sessionBlocksIncoming(stored, scope, { client, sessionId }, capture)) ?? false;
   }
 
-  return { check, blocks, blocksSession, candidateColumns };
+  return { check, blocks, blocksSession, candidateColumns, selectedFacts };
 }
