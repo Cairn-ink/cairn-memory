@@ -21,6 +21,7 @@ async function fixture(t, options = {}) {
   const owner = randomUUID();
   const other = randomUUID();
   await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, other]);
+  await pool.query("INSERT INTO core_owner_state (user_id, legacy_facts_ready) VALUES ($1, true), ($2, true)", [owner, other]);
   const lineageSecret = randomBytes(32).toString("hex");
   const mac = (domain) => createHmac("sha256", lineageSecret).update(domain).digest("hex");
   const rawOptions = { lineageSecret, ...options };
@@ -219,6 +220,25 @@ test("Raw archive refuses session and window facts, preserving supplied position
   assert.equal(await write((tx) => raw.archiveAllowed(tx, root)), false);
   assert.deepEqual(await write((tx) => raw.archive(tx, root, [message("birch chest", 4)])), { archived: 0 });
   assert.deepEqual(await write((tx) => raw.deleteConversation(tx, root.scope, root)), { rawDeleted: 3 });
+});
+
+test("a pending legacy copy refuses Raw archive and capture eligibility without writing", migrationDbTest, async (t) => {
+  const { pool, owner, capture, raw, key, read, write } = await fixture(t);
+  const event = key();
+  const messages = [message("oak shelf", 3_000)];
+  await pool.query("UPDATE core_owner_state SET legacy_facts_ready = false WHERE user_id = $1", [owner]);
+  await pool.query(`INSERT INTO suppressions (id, user_id, kind, client, window_start, window_end, origin)
+    VALUES ($1, $2, 'window', $3, to_timestamp(1), to_timestamp(2), 'forget')`, [randomUUID(), owner, client]);
+
+  await Promise.all([
+    assert.rejects(write((tx) => raw.archive(tx, event, messages)), { code: "ineligible" }),
+    assert.rejects(read((tx) => capture.eligible(tx, event, messages)), { code: "ineligible" }),
+  ]);
+  for (const table of ["raw_messages", "capture_events", "capture_raw_lineage", "capture_raw_fences"]) {
+    assert.deepEqual((await pool.query(`SELECT 1 FROM ${table} WHERE user_id = $1`, [owner])).rows, []);
+  }
+  assert.deepEqual((await pool.query("SELECT index_revision FROM core_owner_state WHERE user_id = $1", [owner])).rows,
+    [{ index_revision: "0" }]);
 });
 
 test("purge deletes definite text matches and retains doubt or session-only rows", migrationDbTest, async (t) => {

@@ -1,4 +1,5 @@
 import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
+import { readVisibilityFacts } from "./memory-visibility.mjs";
 import { CHECK_LINEAGE, LEGACY_EVENTS } from "./raw-lineage-query.mjs";
 
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
@@ -8,17 +9,8 @@ import { CHECK_LINEAGE, LEGACY_EVENTS } from "./raw-lineage-query.mjs";
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 
-const SOURCE_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
-  WHERE user_id = $1 AND (
-    kind = 'window' AND (body ->> 'namespace') IS NOT DISTINCT FROM $2
-    OR kind = 'session' AND body #>> '{session,client}' = $3
-  )
-  UNION ALL
-  SELECT 'window', jsonb_build_object('kind', 'window', 'origin', 'backfill', 'client', client,
-    'window', jsonb_build_object('startMs', floor(EXTRACT(EPOCH FROM window_start) * 1000),
-      'endMs', ceil(EXTRACT(EPOCH FROM window_end) * 1000))), id
-  FROM suppressions WHERE user_id = $1 AND $2::text IS NULL AND kind = 'window'
-    AND (client IS NULL OR client = $3)`;
+const ANCESTOR_SESSION_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
+  WHERE user_id = $1 AND kind = 'session' AND body #>> '{session,client}' = $2`;
 
 const encoder = new TextEncoder();
 
@@ -56,8 +48,8 @@ export function createCaptureProofs(secret) {
 /** @typedef {ReturnType<typeof createCaptureProofs>} Signer */
 
 /** @param {Connection["query"]} query @param {Source} source */
-async function sourceFacts(query, { scope, client }) {
-  const { rows } = await query(SOURCE_FACTS, [scope.owner, scope.namespace, client]);
+async function readAncestorFacts(query, { scope, client }) {
+  const { rows } = await query(ANCESTOR_SESSION_FACTS, [scope.owner, client]);
   return /** @type {StoredFact[]} */ (rows.map(({ kind, body, action_id: actionId }) => {
     if (body?.kind !== kind) throw new CoreError("suppressed");
     return { fact: { ...body, owner: scope.owner, actionId } };
@@ -108,7 +100,7 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
  * @param {boolean} raw
  * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
  */
-async function lineageVerdict(query, source, proofs, { incoming, ancestors = incoming }, signer, hashSessionKey, raw) {
+async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey, raw) {
   if (proofs === null) return "unknown";
   const { scope, client, sessionId } = source;
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
@@ -121,6 +113,8 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors = inc
 
   // Ancestor matching needs Core session facts in their own namespaces. An
   // incoming-scope visibility read can omit a plain fact for the same session ID.
+  // The lineage SQL's FENCES still reads legacy session suppressions directly.
+  ancestors ??= await readAncestorFacts(query, source);
   const fences = [];
   const hashes = [];
   for (const stored of ancestors) {
@@ -180,7 +174,7 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors = inc
  */
 export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey) {
   const { scope, client, sessionId } = source;
-  const facts = await sourceFacts(query, source);
+  const facts = await readVisibilityFacts(query, scope.owner, { source });
   const candidate = { scope, passages: [], session: { client, sessionId } };
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
   const windows = facts.filter(({ fact }) => fact.kind === "window");
@@ -199,6 +193,6 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [raw]
  */
 export async function checkSourceLineage(query, source, signer, hashSessionKey, raw = true) {
-  const incoming = await sourceFacts(query, source);
+  const incoming = await readVisibilityFacts(query, source.scope.owner, { source });
   return lineageVerdict(query, source, [], { incoming }, signer, hashSessionKey, raw);
 }
