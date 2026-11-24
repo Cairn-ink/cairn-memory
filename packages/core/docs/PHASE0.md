@@ -807,13 +807,15 @@ code honors the committed fences.
 
 ### Registration and transaction ownership
 
-Add `hostWriteHooks?: HostWriteHooks` to the full `createMemoryService` dependencies. The adapter
-advertises `hostWriteHooks: true` exactly when it supplies the matching transaction and effect-metadata
-port. The flag defaults to false. Service registration binds a complete hook set once. A malformed or
-partial set raises `invalid_input`. A set on an adapter without the capability raises
-`capability_unavailable`. Capability alone leaves the hooks disabled. With the option omitted, keep the
-current calls, write results, persisted payloads and replay bytes identical. Do no extra hook-related
-queries or materialization. The Postgres read-lock change below is independent of hook registration.
+Add `hostWriteHooks?: HostWriteHooks` to the full `createMemoryService` dependencies. Register
+`hostWriteHooks` at runtime like the optional write-parity flags, outside the `Capability` union.
+The flag defaults to false. Adapter registration requires the matching transaction and effect-metadata
+port when the flag is true and requires the flag to be true when the port is present. Service
+registration binds a complete hook set once. A malformed or partial set raises `invalid_input`. A set
+on an adapter without the capability raises `capability_unavailable`. Capability alone leaves the hooks
+disabled. With the option omitted, keep the current calls, write results, persisted payloads and replay
+bytes identical. Do no extra hook-related queries or materialization. The Postgres read-lock change
+below is independent of hook registration.
 
 ```ts
 interface HostWriteHooks {
@@ -853,9 +855,14 @@ adapter drains or cancels pending operations before rolling back and rejects any
 revoked executor. Hooks cannot call the service, start a nested unit of work for any owner, acquire
 another connection, or launch work that survives the callback. A hook may use local computation and
 operations on its assigned transaction. Provider calls, network calls and foreign I/O stay outside the
-run. The hosted composition guards re-entry before lock acquisition, including a call to another service
-entry from an async continuation of the hook. Use the same lock order for participating legacy
-operations.
+run. Core uses a run-scoped marker while invoking a hook and refuses same-owner service re-entry
+before lock acquisition, including from the hook's async continuations. The hosted composition also
+guards re-entry before lock acquisition. Use the same lock order for participating legacy operations.
+
+At the end of the hooked write run, after the hooks and all index-affecting effects, use Addendum 18's
+`MemoryStore.committedIndexRevision(tx)` to sample the owner revision. Use that single value in the
+returned write result and when finalizing replay metadata on the live `Tx`, including the stored
+capture finish result or the explicit-save envelope as applicable.
 
 ### Hook inputs and ordering
 
@@ -879,18 +886,19 @@ run. Claim, admission, dispatch, exits before finish and `rawReplay` skip the ho
   only a memory whose verified receipt cites that card's eligible source. A surviving memory citation of
   an excluded source gives the card no authority to use that source.
 
-A hook-capable Postgres adapter must record exact successful item positions, active receipt attribution
-and all suppressed item positions during finish. Immediately after `finish` and before Raw archival,
-core reads that metadata on the live `Tx` through the capability port. Apply the private
-`suppressedItems` to core's finish filtering even when the adapter historically supplied just a count.
-Refresh the reported memory revisions and validate route source eligibility after the archive step. Keep
-hook-only metadata out of capture replies and replay storage. A compacted `FinishResult.memories` array,
-an input receipt list or a count is insufficient to reconstruct attribution. Ambiguous required
-attribution fails the write closed. The hosted host revalidates prepared routing against these effects
-in the transaction and writes cards, amendments and bindings through the transaction executor. Use
-event/source identity and stable card identity for idempotency. Flush the final owner index revision
-into both the returned and stored finish result after Raw and hosted effects. Keep the no-hook result
-path as before.
+Immediately after `finish` and before Raw archival, core uses the public `FinishResult.suppressedItems`
+for Addendum 16's finish filtering. The hook-capable Postgres adapter supplies exact successful item
+positions and active receipt attribution through the capability port on the live `Tx` at that point.
+Refresh the reported memory revisions and validate route source eligibility after the archive step.
+Keep hook-only metadata out of capture replies and replay storage. A compacted `FinishResult.memories`
+array, an input receipt list or a count is insufficient to reconstruct attribution. Ambiguous required
+attribution fails the write closed.
+
+Each store has one owner for capture card routing. When core `capture-documents` routing is enabled,
+core routes the cards in the finish transaction after source withholding, and the hook must not route
+the same cards. When the hosted hook owns routing, it revalidates any prepared plan against the
+verified effects and writes cards, amendments and bindings through the transaction executor. Use event
+and source identity and stable card identity for idempotency.
 
 **`beforeSave` and `onSave`.** Apply to explicit save sources (`mcp` and `web`). The hosted composition
 may supply `SaveOptions.hostRequest?: { key: string; fingerprint: string }` on its trusted service call.
@@ -915,12 +923,13 @@ valid duplicate whose row revision is unchanged. `SaveContext` is
 `{ scope, source, request, status, memory, receipts }`, with `request: null` for an unkeyed save and
 `receipts` limited to attachments from this save's input. A missing optional receipt yields an empty
 list. For a supplied receipt, reuse the exact persisted attachment on redelivery, including the
-event-to-message identity from Addendum 18. The hosted host records its explicit-save receipt and then
-persists the envelope for a keyed request. If those effects change indexed visibility, they advance the
-owner index through the same run before sampling the pending revision for the envelope. The envelope
-write then changes only bookkeeping. An envelope uniqueness violation after a successful precheck aborts
-the whole write. A caller reconciling a lost commit acknowledgement looks up the same envelope and
-re-fences the memory. A no-op replay never touches the duplicate row or advances the index.
+event-to-message identity from Addendum 18. The hosted host records its explicit-save receipt and
+prepares the envelope metadata for a keyed request in the hook. Effects that change indexed visibility
+advance the owner index through the same run. Finalize the envelope using the sampled result revision
+in that transaction. Envelope persistence changes only bookkeeping. An envelope uniqueness violation
+after a successful precheck aborts the whole write. A caller reconciling a lost commit acknowledgement
+looks up the same envelope and re-fences the memory. A no-op replay never touches the duplicate row or
+advances the index.
 
 **`onForget` and `onCorrect`.** Both receive the same predecessor fields.
 
@@ -939,20 +948,25 @@ re-fences the memory. A no-op replay never touches the duplicate row or advances
   additional rows. Use the same transaction to apply a fact to those wider results; never infer an
   unbounded purge from an empty list.
 
-The adapter's capability port snapshots any required predecessor receipt and lineage metadata before
-core destroys it, after the revision/visibility checks and while the locks are held. It projects the
-legacy suppression equivalent through scoped adapter operations on the stored fact references and any
-already-authorized legacy matching material prepared in the same run. This projection preserves retained
-keyed domains and the existing legacy identity, cutoff, time and matching rules. For a needed legacy
-representation that cannot be proved, fail closed. A persistent scoped refusal is acceptable only if
-every legacy entry honors it and it keeps an eligible correction replacement distinct from the
-predecessor. An empty verified lineage result is distinct from unresolved lineage or compatibility
-state.
+The adapter's capability port takes a read-only snapshot of the required predecessor receipt and
+lineage metadata on the live `Tx` while the locks are held. For forget, take the snapshot after
+resolving the row and passing Addendum 18's `expectedRevision` guard when supplied. The snapshot must
+precede the fact write, which is the first privacy mutation. For correct, take it after resolving the
+predecessor and passing the in-transaction conflict checks, before writing the predecessor fact.
 
-- `ForgetContext` adds `status: "forgotten"` and `removedSimilar`. Run after the existing resolve, fact
-  write, session fence, Raw purge, span suppression, dependent invalidation, memory and receipt erase,
-  and any core `ForgetLog.record`, before final index revision sampling. The hosted host records the
-  legacy forget log, mirrors the suppression, and installs the legacy receipt, Raw, and card barriers.
+The port projects the legacy suppression equivalent through scoped adapter operations on the stored
+fact references and any already-authorized legacy matching material prepared in the same run. This
+projection preserves retained keyed domains and the existing legacy identity, cutoff, time and matching
+rules. For a needed legacy representation that cannot be proved, fail closed. A persistent scoped
+refusal is acceptable only if every legacy entry honors it and it keeps an eligible correction
+replacement distinct from the predecessor. An empty verified lineage result is distinct from
+unresolved lineage or compatibility state.
+
+- `ForgetContext` adds `status: "forgotten"` and `removedSimilar`. Run after the resolve, revision guard,
+  read-only predecessor snapshot, fact write, session fence, Raw purge, span suppression, dependent
+  invalidation, memory and receipt erase, and any core `ForgetLog.record`, before final index revision
+  sampling. The hosted host records the legacy forget log, mirrors the suppression, and installs the
+  legacy receipt, Raw, and card barriers.
   If `ForgetLog` already writes the legacy log in this transaction, the hook shares that effect and does
   not record it twice. Receipt and Raw replay tombstones outlive memory and active receipt deletion.
   Card fencing covers source bindings and amendments and drops memberships where required. A missing
@@ -972,18 +986,24 @@ state.
 
 ### Failure and delivery
 
-A hook throw, rejection, invalid decision or failed hook statement aborts the write transaction,
-including earlier core and hosted statements, epoch and index advances, and any ledger completion or
-envelope. Add `host_write_hook_failed` to `ERROR_CODES` as `unavailable` with `retryable: false`. Save,
-forget and correct reject with this `CoreError`. The capture runner returns
-`{ status: "failed", code: "host_write_hook_failed" }`, and may record the code by abandoning the same
-claim in its existing separate cleanup run after rollback. That cleanup cannot release a successor's
-lease or turn a hook failure into a different public code. Preserve the hook code even if the UoW has
-already latched the native statement error. A callback that catches a failed SQL statement cannot cause
-a successful commit. Keep existing mappings for failures outside the hooks and `commit_outcome_unknown`
-for an unacknowledged write commit. Capture reconciliation uses the durable event result and the
-existing lease protocol. Retry only from the durable operation identity, with the hook effects and core
-write either both committed or both rolled back.
+A hook-related failure aborts the transaction and rolls back earlier core and hosted effects, including
+epoch and index advances and any ledger completion or envelope. A SQL statement failure inside a hook
+keeps its native error mapping and retryability. SQLSTATEs `40001` and `40P01` stay retryable as
+`storage_busy`, and `lock_timeout` and `statement_timeout` stay retryable. The UoW preserves its
+latched statement error even if the hook catches it or throws another error afterward. A callback that
+catches a failed SQL statement cannot commit. For a retryable statement failure, capture uses its
+existing retryable claim cleanup so the operation can be retried.
+
+Only hook-originated failures map to `host_write_hook_failed`. These are a throw, a rejection, an
+invalid decision from hook code, or an operation still pending when the hook settles. Add this code to
+`ERROR_CODES` as `unavailable` with `retryable: false`. Save, forget and correct reject with this
+`CoreError`. The capture runner returns `{ status: "failed", code: "host_write_hook_failed" }`, and may
+record the code by abandoning the same claim in its existing separate cleanup run after rollback. That
+cleanup cannot release a successor's lease or turn a hook failure into a different public code. Keep
+existing mappings for failures outside the hooks and `commit_outcome_unknown` for an unacknowledged
+write commit. Capture reconciliation uses the durable event result and the existing lease protocol.
+Retry only from the durable operation identity, with the hook effects and core write either both
+committed or both rolled back.
 
 Core returns write results only after the commit acknowledgement. Save and correct keep their normal
 delivery fence. A post-commit concurrent forget or correction may cause delivery to refuse even though
@@ -1046,9 +1066,12 @@ work, are unchanged.
 Run each hook case through the actual service entry and inspect effects from the same `Tx` inside the
 hook and from an independent transaction after completion. For each write hook, make a hosted write
 and then throw. Assert no core or hosted effect from the failed run, including receipt, index, fact
-epoch and completion/envelope changes where applicable. Repeat with a failed SQL statement, a pending
-operation at callback settlement, and a hook that attempts re-entry. Exercise `beforeSave` rejection
-and its read-only operation boundary separately.
+epoch and completion/envelope changes where applicable. Assert `host_write_hook_failed` for a hook
+throw, rejection, invalid decision or pending operation at settlement. For failed SQL statements,
+verify rollback and preservation of the native code and retryability, including when the hook catches
+the statement error. Exercise capture retry after `storage_busy` for `40001` and `40P01`, `lock_timeout`
+and `statement_timeout`. Verify core refuses same-owner service re-entry even without the hosted guard.
+Exercise `beforeSave` rejection and its read-only operation boundary separately.
 
 | Case | Same-transaction success and rollback assertions |
 | --- | --- |
@@ -1076,24 +1099,31 @@ SQLite hosts opt out. Their runner, schema, public calls, statuses and replay be
 byte-identical. Keep the no-hook golden cases and compare result bytes and durable rows with
 deterministic IDs and clocks. Enable the hosted bridge only after schema and receipt/lineage backfill,
 legacy fact and signing-domain reconciliation, a verified reverse compatibility projection, adapter
-conformance and pooler qualification. Every supported legacy read and replay path must enforce the
-mirrored fences. Switch writer ownership per owner under the existing pause/owner barrier and drain or
-fence in-flight work before changing routing. Include the ownership check in the locked mutation path so
-a worker prepared before cutover cannot write afterward using stale routing. Reconcile any legacy writes
-made after a switch back before enabling core again. A switch back retains the committed database and
-compatibility state. It must never restore an earlier database image, remove tombstones or reactivate a
-writer that ignores the fences. Keep the legacy projection until reverse cutover is retired.
+conformance and pooler qualification. Reconcile any legacy writes made after a switch back before
+enabling core again. A switch back retains the committed database and compatibility state. It must
+never restore an earlier database image, remove tombstones or reactivate a writer that ignores the
+fences. Keep the legacy projection until reverse cutover is retired.
 
-### Open questions for the orchestrator owner
+### Resolved positions
 
-- Which legacy readers, replay consumers and maintenance jobs must honor the reverse projection, and
-  which existing schema operations can express predecessor-qualified corrections, receipt reuse and
-  keyed-only facts?
-- Which explicit-save request fields, key lifetime and previous envelope versions must remain
-  compatible, including existing envelopes that contain bodies?
-- Which hosted card operations require Raw to be archived and visible at finish, and which
-  already-authorized routing plans can be prepared outside the lock?
-- What per-owner cutover and drain signal will prevent legacy and core from running as simultaneous
-  memory writers, and what evidence retires reverse cutover?
-- Which transaction-pool capacity, fairness budget and failure signals can the deployment guarantee for
-  two-backend setup?
+1. **Legacy fence coverage.** While core owns an owner's writes, legacy writers for that owner are
+   disabled. Every legacy read path applies the mirrored fences, including reads by replay consumers
+   and maintenance jobs. The orchestrator owner and hosted host owner enumerate those paths and verify
+   their fence coverage before enabling the hosted bridge.
+2. **Explicit-save envelope compatibility.** Core needs only the opaque `{ key, fingerprint }`,
+   stores metadata and guarded references without bodies, and replays metadata only. Existing envelopes
+   with bodies stay host-side. The hosted host owner decides whether to honor or migrate those
+   envelopes and sets the key lifetime.
+3. **Raw visibility at capture finish.** When core `capture-documents` routing is enabled, core routes
+   cards in the finish UoW after source withholding and needs no separate Raw-visibility guarantee from
+   the hook. Hosted-only card bookkeeping in the hook uses only the positively verified `sources`.
+   Revalidate any plan prepared outside the lock in the hook.
+4. **Writer cutover and drain.** Check a per-owner writer-ownership marker under the owner write lock
+   in every core write run and every legacy write path. Refuse a write if the marker assigns ownership
+   to the other writer. The lane owner implements the core check in the adapter, and the hosted host
+   owner ensures every legacy write path checks it. Switch ownership under the existing pause and
+   owner lock barrier and drain or fence in-flight work before changing routing. The lane owner and
+   orchestrator owner set the clean period for retiring reverse cutover, with zero legacy writes and
+   a clean shadow comparison throughout that period.
+5. **Pool operation.** The deployment owner sets transaction-pool capacity, fairness budgets and
+   failure signals for the two-backend setup using workload numbers from the orchestrator owner.
