@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { CoreError, receiptExcerpt } from "@cairn-ink/core";
 import { receiptAddressDenial, receiptExcerptDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
-import { scopeKey } from "./storage-values.mjs";
+import { invalidInput, scopeKey, writeTime } from "./storage-values.mjs";
 
 /** @import { TextDigest } from "@cairn-ink/core" */
 /** @import { MemoryRow, Receipt, Scope } from "@cairn-ink/core/ports" */
@@ -54,6 +54,22 @@ export function readEntry(db, scope, id) {
   return record && decodeEntry(scope, record);
 }
 
+/** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof import("./storage-values.mjs").encodeContent>} content
+ * @param {readonly Receipt[]} receipts @param {number} nowMs @param {number} [createdAtMs]
+ */
+export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts, nowMs, createdAtMs = nowMs) {
+  const time = writeTime(nowMs);
+  if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
+  const id = randomUUID();
+  const inserted = db.prepare(`INSERT INTO cairn_memories
+    (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
+    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?) RETURNING id`)
+    .get(...scopeKey(scope), id, createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
+  if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
+  const { receiptIds } = attachReceipts(db, scope, inserted.id, receipts, nowMs);
+  return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} id @returns {StoredReceipt[]} */
 export function readReceipts(db, scope, id) {
   return db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
@@ -86,8 +102,10 @@ export function suppressReceiptSources(db, scope, id, text) {
   }
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts @param {number} nowMs */
-export function attachReceipts(db, scope, id, receipts, nowMs) {
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
+ * @param {number} nowMs @param {boolean} [checkReplay]
+ */
+export function attachReceipts(db, scope, id, receipts, nowMs, checkReplay = false) {
   /** @type {string[]} */
   const receiptIds = [];
   let added = 0;
@@ -98,7 +116,7 @@ export function attachReceipts(db, scope, id, receipts, nowMs) {
     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (owner_id, namespace_key, memory_id, source_key) DO NOTHING`);
   const insertInspect = db.prepare(`INSERT INTO cairn_inspect_receipts
     (owner_id, namespace_key, memory_id, ordinal, id, excerpt, created_at_us) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const findId = db.prepare(`SELECT i.id
+  const findReceipt = db.prepare(`SELECT i.id, i.excerpt
     FROM cairn_receipts r JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE r.owner_id = ? AND r.namespace_key = ? AND r.memory_id = ? AND r.source_key = ?`);
   const keys = [...scopeKey(scope), id];
@@ -114,9 +132,12 @@ export function attachReceipts(db, scope, id, receipts, nowMs) {
       receiptIds.push(receiptId);
       added++;
     } else {
-      const receiptId = findId.get(...keys, sourceKey)?.id;
-      if (typeof receiptId !== "string") throw new CoreError("storage_error");
-      receiptIds.push(receiptId);
+      const existing = findReceipt.get(...keys, sourceKey);
+      if (typeof existing?.id !== "string") throw new CoreError("storage_error");
+      if (checkReplay && excerpt !== undefined && typeof existing.excerpt === "string" && excerpt !== existing.excerpt) {
+        throw new CoreError("invalid_input");
+      }
+      receiptIds.push(existing.id);
     }
   }
   return { receiptIds, added };

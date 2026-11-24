@@ -1,5 +1,5 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
-import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
+import { attachReceipts, clearReceipts, decodeEntry, insertMemory, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import {
@@ -134,25 +134,10 @@ export function readWritePolicy(db, scope, input, source, mode, hashSession, edi
   };
 }
 
-/** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof encodeContent>} content
- * @param {readonly Receipt[]} receipts @param {number} nowMs @param {number} [createdAtMs]
- */
-export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts, nowMs, createdAtMs = nowMs) {
-  const time = writeTime(nowMs);
-  if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
-  const inserted = db.prepare(`INSERT INTO cairn_memories
-    (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
-    VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
-    .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
-  if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-  const { receiptIds } = attachReceipts(db, scope, inserted.id, receipts, nowMs);
-  return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
-}
-
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
- * @param {DuplicateMerge} merge @param {number} nowMs
+ * @param {DuplicateMerge} merge @param {number} nowMs @param {boolean} [checkReplay]
  */
-export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
+export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkReplay = false) {
   validateId(id);
   validateMerge(merge);
   const evidence = copyReceipts(receipts);
@@ -163,7 +148,7 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   const confidence = row.historical ? row.confidence : merge.confidence;
   const kind = row.historical ? row.kind : merge.kind ?? row.kind;
   const origin = row.historical ? row.origin : merge.origin ?? row.origin;
-  const { receiptIds, added } = attachReceipts(db, scope, id, evidence, nowMs);
+  const { receiptIds, added } = attachReceipts(db, scope, id, evidence, nowMs, checkReplay);
   const changed = added !== 0 || confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
   const revision = row.revision + Number(changed);
   db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
@@ -219,7 +204,7 @@ export function createMemoryStore(port, hashSession, index) {
 
     touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        const result = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        const result = touchDuplicate(db, scope, id, receipts, merge, nowMs, true);
         index.markDirty(db, tx);
         return result;
       });

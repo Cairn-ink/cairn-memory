@@ -1,6 +1,6 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
-import { readEntry } from "./memory-rows.mjs";
-import { insertMemory, readWritePolicy, touchDuplicate } from "./memories.mjs";
+import { insertMemory, readEntry } from "./memory-rows.mjs";
+import { readWritePolicy, touchDuplicate } from "./memories.mjs";
 import { copyReceipts, encodeContent, invalidInput } from "./storage-values.mjs";
 
 /** @import { CaptureKey, FinishItem, FinishResult, SourceRef } from "@cairn-ink/core/ports" */
