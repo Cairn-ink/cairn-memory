@@ -73,7 +73,7 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
-    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections({ ...suppressions,
       async receiptWithheld(tx, scope, receipt, admitted) {

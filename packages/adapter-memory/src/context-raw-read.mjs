@@ -66,8 +66,9 @@ function receiptLinks(state, readSet, candidates, expired) {
 
 /** @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links
  * @param {Archive["sourceLineageVisible"]} sourceLineageVisible
- * @param {(ref: ContextMemoryRef) => Promise<readonly QualifiedReceipt[]>} readQualified */
-function checkLineage(state, links, sourceLineageVisible, readQualified) {
+ * @param {(ref: ContextMemoryRef) => Promise<readonly QualifiedReceipt[]>} readQualified
+ * @param {(ref: ContextMemoryRef, receipt: StoredReceipt) => boolean} [retainsAddress] */
+function checkLineage(state, links, sourceLineageVisible, readQualified, retainsAddress) {
   /** @type {Map<string, readonly QualifiedReceipt[]>} */
   const qualified = new Map();
   /** @param {Scope} scope @param {RawEntry} row */
@@ -78,7 +79,11 @@ function checkLineage(state, links, sourceLineageVisible, readQualified) {
     // A possible receipt link must still point to a qualified current Memory.
     // Missing ancestry is a denial.
     for (const { ref, receipt } of links.get(sourceSlot(scope, row)) ?? []) {
-      if (!receipt.id || !exactLineage(state, ref, receipt, row)) return false;
+      if (!receipt.id) {
+        if (!retainsAddress || !exactLineage(state, ref, receipt, row) || !retainsAddress(ref, receipt)) return false;
+        continue;
+      }
+      if (!exactLineage(state, ref, receipt, row)) return false;
       const key = JSON.stringify([ref.scope.namespace, ref.id]);
       let receipts = qualified.get(key);
       if (!receipts) {
@@ -103,8 +108,15 @@ export function createCardRawSourceCheck({ findVisibleSource, sourceLineageVisib
     const links = receiptLinks(state, { owner: scope.owner, namespaces: [scope.namespace] },
       new Set([sourceSlot(scope, row)]), () => false);
     if (!links) return false;
-    const current = checkLineage(state, links, sourceLineageVisible, ref =>
-      currentMemoryReceipts(state, ref, matchFacts(state.facts, ref.scope), receiptReadSafety));
+    const policy = matchFacts(state.facts, scope);
+    const current = checkLineage(state, links, sourceLineageVisible,
+      ref => currentMemoryReceipts(state, ref, policy, receiptReadSafety),
+      ({ id, revision }, receipt) => {
+        const entry = state.rows.get(scope.namespace)?.get(id);
+        return entry?.row.revision === revision && !entry.row.historical && !policy.hides(entry) &&
+          entry.receipts.some(source => source.client === receipt.client && source.sessionId === receipt.sessionId &&
+            source.messageId === receipt.messageId && source.captureEventId === receipt.captureEventId);
+      });
     return current(scope, row);
   };
 }

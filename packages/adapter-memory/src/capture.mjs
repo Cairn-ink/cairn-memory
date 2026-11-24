@@ -64,12 +64,12 @@ function copyResult(stored, pending) {
  * @param {() => number} now
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {boolean} embeddingRequiredOnInsert
- * @param {RawLineage} [lineage]
- * @param {boolean} [retainReceipts]
+ * @param {RawLineage | undefined} lineage
+ * @param {{contextRead: boolean, documentCards: boolean, inspect: boolean}} flags
  * @returns {import("./index.d.mts").MemoryAdapter["capture"]}
  */
 export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert,
-  lineage, retainReceipts = false) {
+  lineage, { contextRead: retainReceipts, documentCards, inspect }) {
   return {
     async claim(tx, key, messages, options) {
       const scope = admissionScope(tx, key);
@@ -166,15 +166,22 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           /** @type {number[]} */
           const suppressedItems = [];
           let duplicateCount = 0;
-          const sources = retainReceipts ? new Map(claim.messages?.map(message => [message.id, message])) : undefined;
+          const retainCardLineage = documentCards && lineage !== undefined;
+          const sources = retainReceipts || retainCardLineage
+            ? new Map(claim.messages?.map(message => [message.id, message])) : undefined;
 
           for (const [position, { row, receipts: sourceRefs }] of batch.entries()) {
-            const receipts = sources ? sourceRefs.map(({ client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs }) => {
-              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs };
+            const receipts = sources ? sourceRefs.map(receipt => {
+              const { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs } = receipt;
               const retained = sources.get(messageId);
-              if (!retained?.content || sourceClient !== client || sourceSession !== sessionId || role !== retained.role) {
-                return link;
+              const admitted = retained?.content && sourceClient === client && sourceSession === sessionId && role === retained.role;
+              if (!retainReceipts) {
+                // Inspect assigns an ID to receipts with excerpts. Preserve their existing lineage rules.
+                return admitted && !receipt.id && !(inspect && receipt.excerpt !== undefined)
+                  ? { ...receipt, captureEventId: eventId } : receipt;
               }
+              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs };
+              if (!admitted) return link;
               const excerpt = receiptExcerpt(cleanContent(retained.content));
               return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt, captureEventId: eventId }) };
             }) : sourceRefs;
