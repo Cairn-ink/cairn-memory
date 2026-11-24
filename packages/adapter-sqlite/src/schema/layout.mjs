@@ -1,8 +1,9 @@
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
 // separate schema version sequence from the legacy engine. Version 5 adds
 // migration compatibility tables to the inspect and Context Read layout.
+// Version 6 adds procedural tags.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 5;
+export const SQLITE_PHYSICAL_VERSION = 6;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -49,6 +50,20 @@ export const STORAGE_SCHEMA = `
     UNIQUE (owner_id, namespace_key, memory_id, source_key),
     FOREIGN KEY (owner_id, namespace_key, memory_id)
       REFERENCES cairn_memories (owner_id, namespace_key, id)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE cairn_procedural_tags (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    tag_revision INTEGER NOT NULL CHECK (tag_revision > 0),
+    positive INTEGER NOT NULL CHECK (positive IN (0, 1)),
+    origin TEXT CHECK (origin IN ('explicit', 'inferred')),
+    anchors TEXT,
+    PRIMARY KEY (owner_id, namespace_key, memory_id),
+    FOREIGN KEY (owner_id, namespace_key, memory_id)
+      REFERENCES cairn_memories (owner_id, namespace_key, id) ON DELETE CASCADE,
+    CHECK ((positive = 1 AND anchors IS NOT NULL) OR (positive = 0 AND origin IS NULL AND anchors IS NULL))
   ) STRICT, WITHOUT ROWID;
 
   CREATE TABLE cairn_suppression_facts (

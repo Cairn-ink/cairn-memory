@@ -295,15 +295,20 @@ test("lexical scores and snapshot tokens survive a cold reopen", async t => {
   }
 });
 
-test("receipt-only touches invalidate snapshot tokens without changing revision or sort time", async t => {
-  const { adapter, close } = await fixture();
-  t.after(close);
+test("a new receipt advances the revision and invalidates snapshots without changing sort time", async t => {
+  const opened = await fixture();
+  const { adapter } = opened;
+  t.after(opened.close);
   const ref = await store(adapter, personal, "orchard", 5);
   const before = await read(adapter, view, tx => adapter.snapshot.stateToken(tx, view));
-  await adapter.uow.run(personal.owner, {}, async tx => {
-    const touch = await adapter.memories.touchDuplicate(tx, personal, ref.id, [receipt], { confidence: 1 }, 5);
-    assert.deepEqual(touch, { outcome: "touched", revision: 1 });
-  });
+  const touch = () => adapter.uow.run(personal.owner, {}, tx =>
+    adapter.memories.touchDuplicate(tx, personal, ref.id, [receipt], { confidence: 1 }, 5));
+  const attached = await touch();
+  const { id: storedId } = await testAccess(opened, personal, {}, db => db.prepare(
+    "SELECT id FROM cairn_inspect_receipts WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?"
+  ).get(...scopeKey(personal), ref.id));
+  assert.deepEqual(attached, { outcome: "changed", revision: 2, receiptIds: [storedId] });
+  assert.deepEqual(await touch(), { outcome: "touched", revision: 2, receiptIds: [storedId] });
   await read(adapter, view, async tx => {
     await assert.rejects(adapter.snapshot.assertUnchanged(tx, view, before), { code: "cursor_stale" });
     const [item] = await adapter.hydrate.hydrate(tx, view, [ref], "read");

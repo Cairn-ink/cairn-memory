@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { receiptExcerpt } from "@cairn-ink/core";
+import { CoreError, receiptExcerpt } from "@cairn-ink/core";
 import { receiptAddressDenial, receiptExcerptDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 
@@ -88,20 +88,36 @@ export function suppressReceiptSources(db, scope, id, text) {
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts @param {number} nowMs */
 export function attachReceipts(db, scope, id, receipts, nowMs) {
-  if (!receipts.length) return;
+  /** @type {string[]} */
+  const receiptIds = [];
+  let added = 0;
+  if (!receipts.length) return { receiptIds, added };
   const select = db.prepare(`SELECT COALESCE(MAX(ordinal), 0) AS last FROM cairn_receipts
     WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?`);
   const insert = db.prepare(`INSERT INTO cairn_receipts (owner_id, namespace_key, memory_id, ordinal, source_key, body)
     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (owner_id, namespace_key, memory_id, source_key) DO NOTHING`);
   const insertInspect = db.prepare(`INSERT INTO cairn_inspect_receipts
     (owner_id, namespace_key, memory_id, ordinal, id, excerpt, created_at_us) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const findId = db.prepare(`SELECT i.id
+    FROM cairn_receipts r JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
+    WHERE r.owner_id = ? AND r.namespace_key = ? AND r.memory_id = ? AND r.source_key = ?`);
   const keys = [...scopeKey(scope), id];
   let ordinal = Number(select.get(...keys)?.last);
   const createdAtUs = BigInt(nowMs) * 1000n;
   for (const { excerpt, ...receipt } of receipts) {
     const storedReceipt = { ...receipt, ...(excerpt !== undefined && { receiptKey: receiptIdentityKey({ ...receipt, excerpt }) }) };
-    const stored = insert.run(...keys, ++ordinal,
-      JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]), JSON.stringify(storedReceipt));
-    if (stored.changes) insertInspect.run(...keys, ordinal, randomUUID(), excerpt ?? null, createdAtUs);
+    const sourceKey = JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]);
+    const stored = insert.run(...keys, ordinal + 1, sourceKey, JSON.stringify(storedReceipt));
+    if (stored.changes) {
+      const receiptId = randomUUID();
+      insertInspect.run(...keys, ++ordinal, receiptId, excerpt ?? null, createdAtUs);
+      receiptIds.push(receiptId);
+      added++;
+    } else {
+      const receiptId = findId.get(...keys, sourceKey)?.id;
+      if (typeof receiptId !== "string") throw new CoreError("storage_error");
+      receiptIds.push(receiptId);
+    }
   }
+  return { receiptIds, added };
 }
