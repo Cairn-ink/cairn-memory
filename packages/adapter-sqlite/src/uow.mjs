@@ -9,7 +9,8 @@ import { assertMigrationComplete, assertServingFilename } from "./migrate/guard.
 import { sqlitePortScope } from "./port-scope.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
-/** @typedef {{ db: DatabaseSync, pauseLock: boolean, failure?: CoreError, transactionEnded?: boolean, executing?: boolean }} LiveRun */
+/** @typedef {{ db: DatabaseSync, pauseLock: boolean, failure?: CoreError, transactionEnded?: boolean, executing?: boolean,
+ * arrivalRefusal?: (db: PortConnection) => void }} LiveRun */
 /** @typedef {ReturnType<typeof sqlitePortScope>["connection"]} PortConnection */
 
 /** @type {AsyncLocalStorage<Tx>} */
@@ -116,6 +117,7 @@ function openUnitOfWork(filename, migration) {
   }
   const writer = openingWriter;
   const reader = openingReader;
+  const migratedRaw = Boolean(writer.prepare("SELECT 1 FROM sqlite_schema WHERE name='cairn_migrated_raw_privacy'").get());
   const writerLock = new Mutex();
   const readerLock = new Mutex();
   /** @type {Map<OwnerId, { lock: Mutex, users: number }>} */
@@ -166,8 +168,10 @@ function openUnitOfWork(filename, migration) {
       const tx = Object.freeze({ owner, readOnly, __adapter: undefined });
       const run = /** @type {LiveRun} */ ({ db, pauseLock });
       let callbackFailed = false;
+      const protectArrival = migratedRaw && pauseLock && !readOnly;
       try {
         db.exec(readOnly ? "BEGIN" : "BEGIN IMMEDIATE");
+        if (protectArrival) db.exec("SAVEPOINT capture_arrival");
         // A deferred BEGIN alone does not establish a SQLite read snapshot.
         if (readOnly) db.prepare("SELECT rootpage FROM main.sqlite_schema LIMIT 1").get();
         live.set(tx, run);
@@ -185,11 +189,21 @@ function openUnitOfWork(filename, migration) {
         db.exec("COMMIT");
         return result;
       } catch (error) {
+        const refusal = protectArrival && db.isTransaction && !run.transactionEnded && run.arrivalRefusal;
         try {
-          if (db.isTransaction) db.exec("ROLLBACK");
-        } catch {
+          if (refusal) {
+            // Discard every ordinary write. Only the privacy refusal survives,
+            // under the original writer lock, before the error reaches core.
+            db.exec("ROLLBACK TO capture_arrival");
+            const scope = sqlitePortScope(db, operation => operation());
+            try { refusal(scope.connection); }
+            finally { scope.revoke(); }
+            db.exec("COMMIT");
+          } else if (db.isTransaction) db.exec("ROLLBACK");
+        } catch (cleanupError) {
           unusable = true;
           try { if (db.isOpen) db.close(); } catch { /* Retry cleanup during shutdown. */ }
+          if (refusal) throw toSqliteError(cleanupError);
         }
         throw callbackFailed && !isNativeSqliteError(error) ? error : toSqliteError(error);
       }
@@ -198,6 +212,14 @@ function openUnitOfWork(filename, migration) {
       releasePause?.();
       if (pause && --pause.users === 0) pauseLocks.delete(owner);
     }
+  }
+
+  /** @param {Tx} tx @param {NonNullable<LiveRun["arrivalRefusal"]>} effect */
+  function preserveArrivalRefusal(tx, effect) {
+    const run = live.get(tx);
+    if (!run || !migratedRaw || !run.pauseLock || tx.readOnly) throw new CoreError("internal_error");
+    assertTransaction(tx, run);
+    run.arrivalRefusal ??= effect;
   }
 
   /** @param {Tx} tx @param {LiveRun} run */
@@ -268,7 +290,7 @@ function openUnitOfWork(filename, migration) {
     return closing;
   }
 
-  return { uow, port, close };
+  return { uow, port, close, preserveArrivalRefusal };
 }
 
 /** @param {DatabaseSync | undefined} reader @param {DatabaseSync | undefined} writer @param {DatabaseSync | undefined} reservation */

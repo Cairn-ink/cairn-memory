@@ -1,9 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
-import { createContentReadMemo, receiptReadSafety } from "../../../../core/content-safety.mjs";
+import { contentReadSafety, createContentReadMemo, receiptReadSafety } from "../../../../core/content-safety.mjs";
 import { contentSafetyInventory } from "../../../../core/content-safety-migration.mjs";
+import { attestContentSafety } from "../../../../core/content-safety-schema.mjs";
 import { identifier } from "../../../../core/validation.mjs";
 import { verifyLegacyBackupAgainstSource } from "./backup.mjs";
 import { readLegacySnapshot } from "./inventory.mjs";
+import { readLegacyArchive } from "./migration-archive.mjs";
 import { readRawPrivacy } from "./migration-raw.mjs";
 import { privateLocation } from "./paths.mjs";
 import { LegacyRefusal } from "./refusal.mjs";
@@ -23,7 +25,7 @@ function rows(db, sql, ...args) {
 export function readMigrationInput(input) {
   const { path, destination, expectedStoreId } = input;
   const { inventory, file } = readLegacySnapshot(path, { expectedStoreId });
-  if (![18, 29].includes(inventory.physical)) refuse("legacy_cross_version");
+  if (![18, 29, 48, 53].includes(inventory.physical)) refuse("legacy_cross_version");
   if (inventory.privacy.raw?.savedSealFormats.some(({ format }) => format !== "local-plain-v1")) {
     refuse("legacy_raw_format_unrepresentable");
   }
@@ -39,18 +41,36 @@ export function readMigrationInput(input) {
     db.exec("PRAGMA query_only = ON; PRAGMA trusted_schema = OFF; BEGIN");
     if (db.prepare("PRAGMA journal_mode").get().journal_mode !== "delete") refuse("legacy_unsafe_path");
     if (contentSafetyInventory(db) !== proof.logicalDigest) refuse("legacy_backup_stale");
-    const memories = rows(db, "SELECT * FROM memories ORDER BY id");
-    const byId = new Map(memories.map(row => [row.id, row]));
+    const safety = inventory.suppressionRevision ? {
+      facts: rows(db, "SELECT * FROM content_suppressions ORDER BY owner_id, epoch_hi, epoch_lo"),
+      reservations: rows(db, "SELECT * FROM content_identity_reservations ORDER BY owner_id, scope, project_id, kind, stable_key"),
+      epochs: rows(db, "SELECT * FROM owner_suppression_epochs ORDER BY owner_id"),
+    } : null;
+    if (safety) attestContentSafety(db, inventory.physical);
     const memo = createContentReadMemo(db);
+    const memories = rows(db, "SELECT * FROM memories ORDER BY id").map(row => {
+      if (!safety || row.deleted === 1n || row.review_state === "awaiting") return row;
+      const namespace = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
+      const read = contentReadSafety(db, { namespace, memo, intent: "history",
+        ref: { type: "memory", memoryId: row.id, revision: Number(row.revision), namespace } });
+      return read.allowed ? row : { ...row, deleted: 1n, content: null };
+    });
+    const byId = new Map(memories.map(row => [row.id, row]));
     const receipts = rows(db, "SELECT * FROM receipts ORDER BY memory_id, created_at, id");
     let withheldReceipts = 0;
     const visibleReceipts = receipts.filter(receipt => {
       const memory = byId.get(receipt.memory_id);
       const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
-      const allowed = receiptReadSafety(db, { namespace, receipt, memo }).allowed;
+      const allowed = memory.deleted !== 1n && receiptReadSafety(db, { namespace, receipt, memo }).allowed;
       if (!allowed) withheldReceipts++;
       return allowed;
     });
+    const rawPrivacy = readRawPrivacy(db, inventory);
+    const archive = readLegacyArchive(db, file, rawPrivacy, visibleReceipts);
+    const admissions = db.prepare(`SELECT owner_id, scope, project_id, client, event_id,
+      state FROM admission_claims ORDER BY owner_id, scope, project_id, client, event_id`).all();
+    const registered = inventory.raw ? db.prepare(`SELECT owner_id, scope, project_id, client,
+      event_id FROM raw_capture_events ORDER BY owner_id, scope, project_id, client, event_id`).all() : [];
     const result = {
       storeId: inventory.storeId, physical: inventory.physical, logicalDigest: proof.logicalDigest,
       target: target.path, checkSource: file.check, withheldReceipts,
@@ -62,7 +82,7 @@ export function readMigrationInput(input) {
       consent: inventory.localControls
         ? rows(db, "SELECT * FROM local_capture_controls ORDER BY owner_id, scope, project_id, client") : [],
       rawControls: inventory.raw ? rows(db, "SELECT * FROM raw_capture_controls ORDER BY owner_id, client") : [],
-      rawPrivacy: readRawPrivacy(db, inventory),
+      rawPrivacy, archive, admissions, registered, safety, localRawPrivacy: inventory.localRawPrivacy,
       dropped: Object.fromEntries(Object.entries({
         rawConversations: "raw_conversations", rawMessages: "raw_messages", rawParts: "raw_parts",
         rawEvents: "raw_events", rawCaptureEvents: "raw_capture_events", rawSourceMaps: "raw_source_maps",
@@ -71,7 +91,7 @@ export function readMigrationInput(input) {
         cards: "private_cards", submittedNotes: "card_notes", captureAdmissions: "admission_claims",
       }).map(([category, table]) => [category,
         db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?").get(table)
-          ? db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n : 0])),
+          ? db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n - (archive.counts[category] ?? 0) : 0])),
     };
     file.check();
     return result;

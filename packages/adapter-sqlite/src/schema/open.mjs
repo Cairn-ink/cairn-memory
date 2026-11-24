@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
+import { readMigratedControls } from "../migrate/capture-controls.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
@@ -41,14 +42,18 @@ function classifyStore(db) {
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
   const migrated = tables.some(table => table.name === "cairn_migration");
   const rawPrivacy = migrated && tables.some(table => table.name === "cairn_migrated_raw_privacy");
-  if (tables.length !== layoutTables.length + Number(migrated) + Number(rawPrivacy) ||
+  const rawMaps = rawPrivacy && tables.some(table => table.name === "cairn_migrated_raw_maps");
+  const safety = rawMaps && tables.some(table => table.name === "cairn_migrated_safety");
+  if (tables.length !== layoutTables.length + Number(migrated) + Number(rawPrivacy) + Number(rawMaps) + Number(safety) ||
       !layoutTables.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
   }
   if (migrated) assertMigrationComplete(db);
   const legacyRawHashing = rawPrivacy && db.prepare(
     "SELECT json_type(source_evidence, '$.legacyRawHashing') AS kind FROM cairn_migration").get()?.kind === "true";
-  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing };
+  const controls = migrated ? readMigratedControls(db) : undefined;
+  if (controls && !safety) throw new CoreError("storage_error");
+  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing, controls };
 }
 
 /** @param {string} filename */
@@ -93,7 +98,7 @@ export async function openStorage(filename) {
         const existingKey = classifyStore(db);
         if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
         db.exec("PRAGMA secure_delete = ON");
-        return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
+        return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false, controls: undefined };
       }));
     return { ...connection, ...identity };
   } catch (error) {

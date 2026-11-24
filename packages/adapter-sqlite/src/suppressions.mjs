@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
-import { legacyRawHash } from "./migrate/raw-privacy.mjs";
+import { legacyRawHash, opaqueSessionHash } from "./migrate/raw-privacy.mjs";
 import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
@@ -9,6 +9,7 @@ import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./stora
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
+/** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
 
 const matchPolicy = { rowShingles: false };
@@ -30,12 +31,12 @@ function hasNoShingleEvidence(evidence) {
 export function sessionHasher(key, legacy = false) {
   const secret = Buffer.from(key, "hex");
   return (scope, client, sessionId) =>
-    (legacy ? legacyRawHash(key, scope, "episode-v1", client, sessionId) : null) ??
+    (legacy ? opaqueSessionHash(sessionId) ?? legacyRawHash(key, scope, "episode-v1", client, sessionId) : null) ??
     createHmac("sha256", secret).update(JSON.stringify(["cairn-sqlite-session", ...scopeKey(scope), client, sessionId])).digest("hex");
 }
 
 /** @param {SuppressionFact} fact */
-function factSlot(fact) {
+export function factSlot(fact) {
   switch (fact.kind) {
     case "identity":
       return JSON.stringify([fact.kind, fact.memoryId, fact.throughRevision ?? null]);
@@ -149,7 +150,9 @@ export function scopedSuppression(db, scope, hashSession) {
   /** @param {ReadonlyArray<Receipt & { legacyReceiptKey?: string }>} [receipts] */
   function blocksReceipts(receipts) {
     return hasLegacyReceipts && (receipts?.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
-      (legacyReceiptKey !== undefined && legacy.has("rs1:i:" + legacyReceiptKey)) ||
+      // Stored migration receipts already passed legacy's canonical read.
+      // Keep address denials for newly written receipts.
+      legacyReceiptKey === undefined &&
       legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role]))))
       ?? false);
   }
@@ -267,9 +270,9 @@ export function scopedSuppression(db, scope, hashSession) {
 
 /** @param {Port} port @param {SessionHasher} hashSession
  * @param {(db: Connection, tx: Tx) => void} [markDirty]
- * @param {MigratedRawPolicy} [migratedRaw] @returns {SuppressionStore}
+ * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls] @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty, migratedRaw) {
+export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -299,8 +302,13 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
     },
     snapshot(tx, scope, candidates) {
       return port(tx, scope?.owner, {}, db => {
-        const result = scopedSuppression(db, scope, hashSession).snapshot(candidates);
         const { client, sessionId } = candidates;
+        // Enqueue starts with a session-only snapshot. Explicit Memory writes
+        // supply passage or time evidence and have their own authority.
+        if (!tx.readOnly && client && sessionId && candidates.passages === undefined && candidates.occurredAtMs === undefined) {
+          controls?.assertCapture({ scope, client });
+        }
+        const result = scopedSuppression(db, scope, hashSession).snapshot(candidates);
         if (client && sessionId && migratedRaw?.blocks(db, scope, { client, sessionId }, [])) result.blockedSession = true;
         return result;
       });

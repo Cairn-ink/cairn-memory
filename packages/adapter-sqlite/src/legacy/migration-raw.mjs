@@ -97,15 +97,17 @@ export function readRawPrivacy(db, inventory) {
     }
   }
   const exclusions = db.prepare(`SELECT c.owner_id, c.scope, c.project_id, c.client, c.session_key,
-      x.message_id, x.start, x.end, x.generation
+      x.message_id, x.start, x.end, x.generation, m.total_units
     FROM raw_source_exclusions x JOIN raw_conversations c ON c.id = x.conversation_id
+    LEFT JOIN raw_messages m ON m.conversation_id=x.conversation_id AND m.message_id=x.message_id
     ORDER BY x.conversation_id, x.message_id, x.start, x.end`).all();
   for (const row of exclusions) {
     integers(row.start, row.end, row.generation);
     for (const hash of hashKeys(row)) {
-      // A standalone partial exclusion needs the archive's source and part
-      // mapping. This replacement admits exclusions covered by a session fence.
-      if (!fences.has(JSON.stringify([...scopeKey(keys(row)), hash]))) refuse();
+      // A fence proves closure even after physical message removal. Otherwise
+      // the retained message must prove exactly which coordinates were denied.
+      if (!fences.has(JSON.stringify([...scopeKey(keys(row)), hash])) &&
+          (!Number.isSafeInteger(row.total_units) || row.start < 0 || row.end > row.total_units || row.end <= row.start)) refuse();
       rule(row, row.client, "span", hash, [row.message_id, row.start, row.end, row.generation]);
     }
   }
