@@ -1,5 +1,7 @@
 import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
-import { copyArray, copyKey, copyMessages, copyScope, decodeRequest, hostedTime, identifier, pgText, readInput } from "./capture-input.mjs";
+import {
+  copyArray, copyKey, copyMessages, copyScope, decodeOutboxMessages, decodeRequest, hostedTime, identifier, pgText, readInput,
+} from "./capture-input.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { namespaceKey } from "./memory-input.mjs";
@@ -130,9 +132,10 @@ export function createPostgresRawPorts(options) {
           const params = [scope.owner, client, sessionId, eventId, payloadDigest, "content:" + await captureProofs.keyId()];
           const identity = `user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
             AND core_namespace IS NULL AND core_payload_digest = $5 AND raw_lineage_key_id IS DISTINCT FROM $6`;
-          const { rows: [outbox] } = await query(`SELECT raw_request FROM capture_events WHERE ${identity} FOR UPDATE`, params);
+          const { rows: [outbox] } = await query(`SELECT raw_request, core_outbox_metadata
+            FROM capture_events WHERE ${identity} FOR UPDATE`, params);
           if (outbox) {
-            const { messages: stored } = decodeRequest(outbox.raw_request);
+            const stored = decodeOutboxMessages(outbox.raw_request, outbox.core_outbox_metadata);
             if (stored.length === batch.length && batch.every(({ id, content }, index) =>
               stored[index].id === id && stored[index].content === content)) {
               await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, params);

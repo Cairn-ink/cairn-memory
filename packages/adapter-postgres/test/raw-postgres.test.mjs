@@ -562,6 +562,23 @@ test("recordLineage stamps a JSONB-string ledger with the full proof key", migra
   assert.deepEqual(ledger, { encoding: "string", raw_lineage_key_id: "content:" + mac(keyIdDomain) });
 });
 
+test("recordLineage stamps an exact batch using the original long message ID", migrationDbTest, async (t) => {
+  const { pool, owner, mac, key, capture, raw, write } = await fixture(t);
+  const event = key();
+  const item = { ...message("cedar box"), id: "m".repeat(201) };
+  const ledger = async () => (await pool.query(`SELECT raw_lineage_key_id, raw_request #>> '{messages,0,id}' AS stored_id
+    FROM capture_events WHERE user_id = $1 AND client = $2 AND event_id = $3`, [owner, client, event.eventId])).rows[0];
+  assert.deepEqual(await write((tx) => capture.admit(tx, event, [item])), { status: "admitted" });
+
+  await write((tx) => raw.recordLineage(tx, event, [{ ...item, content: "maple box" }]));
+  const mismatch = await ledger();
+  assert.notEqual(mismatch.stored_id, item.id);
+  assert.equal(mismatch.raw_lineage_key_id, null);
+
+  await write((tx) => raw.recordLineage(tx, event, [item]));
+  assert.equal((await ledger()).raw_lineage_key_id, "content:" + mac(keyIdDomain));
+});
+
 for (const writer of ["recordLineage", "recordAnchors"]) {
   test(`${writer} erases a fork newly proven after a concurrent erase`, migrationDbTest, async (t) => {
     const f = await fixture(t);
