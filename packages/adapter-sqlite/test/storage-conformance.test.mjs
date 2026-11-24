@@ -2,17 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES, runCase } from "@cairn-ink/conformance";
 import { SQLITE_ERROR_MAP } from "../src/index.mjs";
-import { readReceipts } from "../src/memory-rows.mjs";
 import { fixture, seedFact, setWriteTime, testAccess } from "./storage-fixtures.mjs";
 
 const excluded = new Map([
   ["K-UOW-2", "the installation file has one writer across owners"],
   ["K-UOW-3", "the installation file has one writer across owners"],
-  ["K-HIDE-1", "requires the retrieval fence and hydration ports"],
-  ["K-HIDE-2", "requires the retrieval fence and hydration ports"],
-  ["K-HIDE-3", "requires the lexical and recent ports"],
-  ["K-HIDE-4", "requires the retrieval fence and hydration ports"],
-  ["K-HASH-1", "requires the retrieval fence and hydration ports"],
 ]);
 
 function fixtureFactory(owner) {
@@ -20,25 +14,10 @@ function fixtureFactory(owner) {
     name: "sqlite",
     async open() {
       const opened = await fixture();
-      const { adapter, port } = opened;
-      // A receipt assertion view for the memory touch case. The production API
-      // does not register a hydrate port. Visibility comes from memories.get.
-      const hydrate = {
-        async hydrate(tx, { owner, namespaces }, refs) {
-          assert.equal(refs.length, 1);
-          const [ref] = refs;
-          assert.equal(ref.type, "memory");
-          assert.deepEqual(namespaces, [ref.namespace]);
-          const scope = { owner, namespace: ref.namespace };
-          const memory = await adapter.memories.get(tx, scope, ref.id);
-          if (!memory) return [];
-          const receipts = await port(tx, owner, {}, db => readReceipts(db, scope, ref.id));
-          return [{ ref, memory, receipts }];
-        },
-      };
+      const { adapter } = opened;
 
       return {
-        adapter: { ...adapter, hydrate },
+        adapter,
         embeddingDimensions: 4,
         sessionRefs: "hashed",
         nativeErrorMap: SQLITE_ERROR_MAP,
