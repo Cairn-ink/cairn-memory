@@ -1,9 +1,9 @@
-import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
+import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { DuplicateQuery, PassageFingerprint, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
@@ -57,7 +57,7 @@ function snapshotPassageList(value) {
   }
 }
 
-/** @param {FactMatchIncoming["passages"]} passages @returns {FactMatchIncoming["passages"]} */
+/** @param {readonly PassageFingerprint[]} passages @returns {readonly PassageFingerprint[]} */
 function projectPassages(passages) {
   const copy = snapshotPassageList(passages);
   if (!Array.isArray(copy)) return copy;
@@ -95,9 +95,12 @@ function projectPassages(passages) {
 function hasNoShingleEvidence(value) {
   try {
     if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
-    return ["shingles", "keyId"].every((key) => {
+    return ["shingles", "keyId", "retainedShingles"].every((key) => {
       const field = evidenceDescriptor(value, key);
-      return field === undefined || (Object.hasOwn(field, "value") && field.value == null);
+      if (field === undefined) return true;
+      if (!Object.hasOwn(field, "value")) return false;
+      if (key !== "retainedShingles") return field.value == null;
+      return field.value === undefined || (Array.isArray(field.value) && field.value.length === 0);
     });
   } catch {
     return false;
@@ -252,20 +255,20 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
       },
     };
 
-    /** @param {StoredFact<TextFact>[]} stored @param {FactMatchIncoming["passages"]} passages */
+    /** @param {StoredFact<TextFact>[]} stored @param {readonly PassageFingerprint[]} passages */
     function matchingPassages(stored, passages) {
       if (stored.length === 0) return [];
       const incoming = { scope, passages };
       const hasCandidates = Array.isArray(passages) && passages.length > 0;
       const unkeyed = hasCandidates && passages.every(hasNoShingleEvidence);
       return stored.filter((fact) => {
-        // On both sides of a no-key comparison, shingles and key IDs are absent.
-        // Skip containment there so a comparable digest miss in the exact-only
-        // profile can clear the fact. Core still detects other ineligible evidence.
-        const rules = unkeyed && fact.fact.mode === "full" && hasNoShingleEvidence(fact.fact.text)
-          ? capture : snapshotCapture;
+        const exactOnly = unkeyed && fact.fact.mode === "full" && hasNoShingleEvidence(fact.fact.text);
+        const rules = exactOnly ? capture : snapshotCapture;
         const result = factBlocksIncoming(fact, incoming, rules);
-        return result !== false || (hasCandidates && requiresLegacyMacDomain(fact.fact));
+        // Core validates the full fact even with no passages. Use validation alone
+        // in the exact-only profile, where the matcher already checks the candidates.
+        return result !== false || withholdsAnyPassage(exactOnly ? [] : passages, [fact.fact]) ||
+          (hasCandidates && requiresLegacyMacDomain(fact.fact));
       });
     }
   };

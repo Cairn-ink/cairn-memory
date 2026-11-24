@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CAPTURE_CONTAINMENT_CASES, PRIVACY_MATCH_CASES, runCase } from "@cairn-ink/conformance";
-import { coreDigest } from "@cairn-ink/core";
+import { coreDigest, factBlocksIncoming, withholdsAnyPassage } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
 
@@ -36,16 +36,7 @@ const forgotten = "The orchard has a cedar gate and a path lined with rosemary";
 const containing = `At the trailhead, ${forgotten} next to the creek.`;
 const unrelated = "Copper conducts electricity.";
 
-async function assertCaptureWithholds(createAdapter) {
-  const storage = createAdapter({ capabilities: { fingerprintKey: true, shingleSuppression: true } });
-  const scope = { owner: "test-owner", namespace: null };
-  const key = await storage.keys.userKey(scope.owner);
-  assert.ok(key);
-  const [text] = await fingerprintMemoryPassages(forgotten, forgotten, key);
-  await storage.harness.seedFact(scope.owner, {
-    owner: scope.owner, actionId: "test-forget", kind: "text", mode: "full", origin: "forget", text,
-  });
-
+async function runCapture(storage, scope, { content = containing, duringExtraction } = {}) {
   let extracted = false;
   const service = createMemoryService({
     storage,
@@ -54,7 +45,8 @@ async function assertCaptureWithholds(createAdapter) {
       async call(stage) {
         assert.equal(stage, "extract");
         extracted = true;
-        return { items: [{ kind: "fact", content: containing, confidence: 0.9, sourceIndices: [0] }] };
+        await duringExtraction?.();
+        return { items: [{ kind: "fact", content, confidence: 0.9, sourceIndices: [0] }] };
       },
     },
     embedder: {
@@ -78,7 +70,20 @@ async function assertCaptureWithholds(createAdapter) {
   const completed = await service.runCapture(scope, selection);
   assert.equal(completed.status, "done");
   assert.equal(extracted, true, "Capture must process the admitted source");
-  assert.deepEqual(completed.result.memories, [], "Core capture finish inserted the containing output");
+  return completed.result.memories;
+}
+
+async function assertCaptureWithholds(createAdapter) {
+  const storage = createAdapter({ capabilities: { fingerprintKey: true, shingleSuppression: true } });
+  const scope = { owner: "test-owner", namespace: null };
+  const key = await storage.keys.userKey(scope.owner);
+  assert.ok(key);
+  const [text] = await fingerprintMemoryPassages(forgotten, forgotten, key);
+  await storage.harness.seedFact(scope.owner, {
+    owner: scope.owner, actionId: "test-forget", kind: "text", mode: "full", origin: "forget", text,
+  });
+
+  assert.deepEqual(await runCapture(storage, scope), [], "Core capture finish inserted the containing output");
 }
 
 test("core capture admission and finish withhold a containing model output", async () => {
@@ -119,6 +124,70 @@ test("snapshot keeps a legacy MAC fact on a comparable core digest miss", async 
   const passages = await fingerprintMemoryPassages(unrelated, unrelated, key);
   const result = await uow.run(scope.owner, { readOnly: true }, (tx) => suppressions.snapshot(tx, scope, { passages }));
   assert.deepEqual(result.passages.map(({ fact }) => fact.actionId), ["test-forget"]);
+});
+
+async function captureWithNewFact(storage, scope, text) {
+  const fact = { ...scope, kind: "text", mode: "full", origin: "forget", actionId: "test-forget", text };
+  const { snapshot } = storage.suppressions;
+  let passages;
+  let factIds;
+  storage.suppressions.snapshot = async (tx, scope, candidates) => {
+    const result = await snapshot(tx, scope, candidates);
+    if (passages === undefined && candidates.passages?.length) {
+      passages = candidates.passages;
+      factIds = result.passages.map(({ fact }) => fact.actionId);
+    }
+    return result;
+  };
+  const memories = await runCapture(storage, scope, {
+    content: "A ladder stands against the wall.",
+    duringExtraction: () => storage.uow.run(scope.owner, {},
+      (tx) => storage.suppressions.writeFact(tx, fact, "test-incarnation")),
+  });
+  assert.ok(passages?.length, "Capture must supply candidate passages");
+  return { fact, passages, outcome: { factIds, memories: memories.length } };
+}
+
+for (const evidenceSide of ["candidate", "fact"]) {
+  test(`capture keeps a SHA-miss fact when only the ${evidenceSide} carries retained shingles`, async () => {
+    const storage = createMemoryAdapter();
+    const scope = { owner: "test-owner", namespace: null };
+    const keyId = "retained-key";
+    if (evidenceSide === "candidate") {
+      storage.keys.retainedDigesters = async () => [{
+        alg: "hmac", label: "core", keyId,
+        async mac(value) { return createHmac("sha256", "test-key").update(value).digest("hex"); },
+      }];
+    }
+    const text = {
+      digests: [await coreDigest(forgotten)], shingles: null, keyId: null,
+      ...(evidenceSide === "fact" && { retainedShingles: [{ keyId, shingles: ["ab"] }] }),
+    };
+    const { fact, passages, outcome } = await captureWithNewFact(storage, scope, text);
+    for (const passage of passages) {
+      assert.equal(passage.shingles, null);
+      assert.equal(passage.keyId, null);
+      assert.equal(Boolean(passage.retainedShingles?.[0]?.shingles.length), evidenceSide === "candidate");
+    }
+    assert.equal(factBlocksIncoming({ fact }, { scope, passages }, { mode: "capture", rowShingles: false }), false);
+    assert.equal(factBlocksIncoming({ fact }, { scope, passages }, { mode: "capture" }), "ineligible");
+    assert.deepEqual(outcome, { factIds: [fact.actionId], memories: 0 });
+  });
+}
+
+test("capture withholds on a keyed fact with a malformed retained shingle entry", async () => {
+  const storage = createMemoryAdapter({ capabilities: { fingerprintKey: true, shingleSuppression: true } });
+  const scope = { owner: "test-owner", namespace: null };
+  const key = await storage.keys.userKey(scope.owner);
+  assert.ok(key);
+  const [text] = await fingerprintMemoryPassages(forgotten, forgotten, key);
+  const { fact, passages, outcome } = await captureWithNewFact(storage, scope, {
+    ...text, retainedShingles: [{ keyId: key.id, shingles: null }],
+  });
+  assert.equal(factBlocksIncoming({ fact }, { scope, passages }, { mode: "capture" }), false);
+  assert.equal(withholdsAnyPassage(passages, [{ ...fact, text }]), false, "The valid keyed evidence must miss");
+  assert.equal(withholdsAnyPassage(passages, [fact]), true, "Capture validation must withhold on the malformed entry");
+  assert.deepEqual(outcome, { factIds: [fact.actionId], memories: 0 });
 });
 
 async function mutantAdapter(name, before, after) {
