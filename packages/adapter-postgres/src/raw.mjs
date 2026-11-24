@@ -5,6 +5,7 @@ import {
 import { refreshFinishRevisions } from "./capture-finish.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
+import { terminateDirectClaims } from "./capture.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
@@ -81,8 +82,9 @@ async function erase(query, run, scope, sessions) {
   const fenced = await changeSessions(query, scope, sessions, FENCE);
   const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
   const rawDeleted = await changeSessions(query, scope, sessions, DELETE);
-  const ledgerBlanked = sessions.length ? await scrubLedger(query, scope, sessions) : 0;
-  if (fenced || suppressed || rawDeleted || ledgerBlanked) await advanceIndex(query, scope.owner, run);
+  const { ledgerBlanked, ledgerChanged } = sessions.length ? await scrubLedger(query, scope, sessions) :
+    { ledgerBlanked: 0, ledgerChanged: false };
+  if (fenced || suppressed || rawDeleted || ledgerChanged) await advanceIndex(query, scope.owner, run);
   return { rawDeleted, ledgerBlanked };
 }
 
@@ -306,9 +308,9 @@ export function createPostgresRawPorts(options) {
             ? [/** @type {StoredFact<TextFact>} */ ({ fact: snap })] : [];
         });
         return async (query, run) => {
-          const result = await purgeRawText(query, target, selected, fingerprintKeys);
-          if (result.rawDeleted || result.ledgerBlanked) await advanceIndex(query, target.owner, run);
-          return result;
+          const { rawDeleted, ledgerBlanked, ledgerChanged } = await purgeRawText(query, target, selected, fingerprintKeys);
+          if (rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
+          return { rawDeleted, ledgerBlanked };
         };
       });
     },
@@ -318,8 +320,10 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
         return async (query, run) => {
+          const claimsTerminated = await terminateDirectClaims(query, target.owner, ref);
           const rawDeleted = await changeSessions(query, target, [ref], DELETE);
-          if (rawDeleted) await advanceIndex(query, target.owner, run);
+          const { ledgerChanged } = await scrubLedger(query, target, [ref]);
+          if (claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });

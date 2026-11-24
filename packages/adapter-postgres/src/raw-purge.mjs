@@ -68,7 +68,7 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
 /** @param {Query} query @param {Scope} scope @param {readonly StoredFact<TextFact>[]} facts
  * @param {RawOptions["fingerprintKeys"]} fingerprintKeys */
 export async function purgeRawText(query, scope, facts, fingerprintKeys) {
-  if (!facts.length) return { rawDeleted: 0, ledgerBlanked: 0 };
+  if (!facts.length) return { rawDeleted: 0, ledgerBlanked: 0, ledgerChanged: false };
   const keys = await fingerprintKeys?.(scope.owner) ?? [];
   /** @param {LedgerMessage} message */
   const matches = ({ content, legacy_fingerprint }) => definitelyWithheld(content, legacy_fingerprint, keys, facts, scope);
@@ -90,7 +90,7 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys) {
     }
     after = rows.at(-1).id;
   }
-  return { rawDeleted, ledgerBlanked: await scrubLedger(query, scope, [], matches) };
+  return { rawDeleted, ...await scrubLedger(query, scope, [], matches) };
 }
 
 /** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions
@@ -98,6 +98,7 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys) {
 export async function scrubLedger(query, scope, sessions, matches) {
   const targets = JSON.stringify(sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId })));
   let ledgerBlanked = 0;
+  let ledgerChanged = false;
   /** @type {string | null} */
   let afterClient = null;
   /** @type {string | null} */
@@ -112,7 +113,7 @@ export async function scrubLedger(query, scope, sessions, matches) {
         ))
       ORDER BY e.client, e.event_id LIMIT 16 FOR UPDATE`,
     [scope.owner, afterClient, afterEvent, targets, matches !== undefined]);
-    if (!rows.length) return ledgerBlanked;
+    if (!rows.length) return { ledgerBlanked, ledgerChanged };
     for (const { client, event_id, raw_request } of rows) {
       const legacy = typeof raw_request === "string";
       const request = legacy ? JSON.parse(raw_request) : raw_request;
@@ -141,6 +142,7 @@ export async function scrubLedger(query, scope, sessions, matches) {
         await query(`UPDATE capture_events SET raw_request = $4::jsonb
           WHERE user_id = $1 AND core_namespace IS NULL AND client = $2 AND event_id = $3`,
         [scope.owner, client, event_id, patch]);
+        ledgerChanged = true;
       }
     }
     ({ client: afterClient, event_id: afterEvent } = rows.at(-1));

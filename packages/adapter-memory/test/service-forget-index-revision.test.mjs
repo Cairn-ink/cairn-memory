@@ -26,15 +26,17 @@ function fixture(capabilities) {
   return { storage, service, write, read, readRevision, insert };
 }
 
-test("forget reports the committed index revision with the reference adapter", async () => {
-  const { service, write, readRevision, insert } = fixture();
+test("forget reports start and committed index revisions with the reference adapter", async () => {
+  const { storage, service, write, readRevision, insert } = fixture();
   const { forget } = service();
   const { id, revision } = await write(tx => insert(tx));
   const start = await readRevision();
+  const before = await storage.harness.dump();
 
-  assert.deepEqual(await forget(scope, id, source, { expectedRevision: revision + 1 }),
-    { status: "conflict" });
-  assert.equal(await readRevision(), start);
+  const conflict = await forget(scope, id, source, { expectedRevision: revision + 1 });
+  assert.deepEqual(conflict, { status: "conflict", indexRevision: start });
+  assert.equal(await readRevision(), conflict.indexRevision);
+  assert.deepEqual(await storage.harness.dump(), before);
 
   const forgotten = await forget(scope, id, source, { expectedRevision: revision });
   assert.deepEqual(forgotten, { status: "forgotten", removedSimilar: 0, indexRevision: await readRevision() });
@@ -86,14 +88,32 @@ test("the reference committed index revision equals the next run's start", async
   assert.ok(committed > start);
 });
 
-test("forget with a start-only adapter reports the revision only for not_found", async () => {
+test("forget with a start-only adapter reports the revision for conflict and not_found", async () => {
   const { storage, service, write, readRevision, insert } = fixture();
   const { committedIndexRevision: _committed, ...memories } = storage.memories;
   const { forget } = service({ ...storage, memories });
-  const { id } = await write(tx => insert(tx));
+  const { id, revision } = await write(tx => insert(tx));
+  const before = await readRevision();
+
+  assert.deepEqual(await forget(scope, id, source, { expectedRevision: revision + 1 }),
+    { status: "conflict", indexRevision: before });
+  assert.equal(await readRevision(), before);
 
   assert.deepEqual(await forget(scope, id, source), { status: "forgotten", removedSimilar: 0 });
   const start = await readRevision();
   assert.deepEqual(await forget(scope, id, source), { status: "not_found", indexRevision: start });
   assert.equal(await readRevision(), start);
+});
+
+test("forget omits the conflict revision when the adapter has no start accessor", async () => {
+  const { storage, service, write, readRevision, insert } = fixture();
+  const { indexRevision: _start, ...memories } = storage.memories;
+  const { forget } = service({ ...storage, memories });
+  const { id, revision } = await write(tx => insert(tx));
+  const start = await readRevision();
+  const before = await storage.harness.dump();
+
+  assert.deepEqual(await forget(scope, id, source, { expectedRevision: revision + 1 }), { status: "conflict" });
+  assert.equal(await readRevision(), start);
+  assert.deepEqual(await storage.harness.dump(), before);
 });

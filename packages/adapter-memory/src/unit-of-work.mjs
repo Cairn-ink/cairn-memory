@@ -24,6 +24,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
 /** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number,
+ * updatedAtUs?: bigint, embedding?: {model: string, vector: number[], textVersion: number},
  * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */

@@ -183,7 +183,7 @@ test("SQLite follows the installed 0.6.11 Context Read sequence", async t => {
   await assert.rejects(service.readContext(readSet, { ...search, semantic: true }), refused);
   checkAssembly(await service.readContext(readSet, card), counter, [], [], "partial", "card", noCards);
 
-  assert.deepEqual(await writes.correct(scope, ref.id, 12, corrected, source), { status: "conflict" });
+  assert.deepEqual(await writes.correct(scope, ref.id, 12, corrected, source), { status: "conflict", indexRevision: 2 });
   // Explicit correction in the keyed write service requires a fingerprint
   // provider. Apply the canonical revision through the SQLite write port.
   assert.deepEqual(await storage.uow.run(scope.owner, {}, tx => storage.memories.replaceContent(tx, scope, ref.id, 2,

@@ -6,6 +6,7 @@ import type { StoredDocumentCardRecord } from "./document-card.d.ts";
 import type { RawSegment, RetrievalScope } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 import type { StorageAdapter } from "./index.d.ts";
+import type { DocumentCardFindItem } from "../routing/index.mjs";
 
 export interface SessionStartGroup {
   /** Hosted v1: commitments is disabled, the other groups are enabled. */
@@ -65,10 +66,20 @@ interface FindOptions {
 
 interface FindResult {
   memories: MemoryRow[];
-  cards: [];
+  cards: DocumentCardFindItem[];
   raw: RawSegment[];
   layers: { memory: Layer; card: Layer; raw: Layer };
 }
+
+export type CardReadResult = { status: "not_found" } | {
+  status: "found";
+  card: Pick<StoredDocumentCardRecord, "id" | "body" | "date"> & {
+    title: string | null;
+    origin: NonNullable<StoredDocumentCardRecord["origin"]> | null;
+    sourceClient: string | null;
+    sourceMemoryIds: string[];
+  };
+};
 
 export type ContextReadType = "memory" | "card";
 export type ContextReadIntent = "current" | "history";
@@ -589,13 +600,15 @@ export interface MemoryService {
   >;
   forget(scope: Scope, id: string, source: SourceRef): Promise<ForgetResult>;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
-  /** A null query leaves the raw layer empty. */
-  find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "raw"> & { raw: [] }>;
+  /** A null query leaves the card and raw layers empty. */
+  find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "cards" | "raw"> & { cards: []; raw: [] }>;
+  find(scope: Scope, query: string | null, options: FindOptions & { kinds: ("memory" | "raw")[] }): Promise<Omit<FindResult, "cards"> & { cards: [] }>;
   find(scope: Scope, query: string | null, options: FindOptions): Promise<FindResult>;
   read(scope: Scope, ref: { type: "memory" | "card"; id: string }): Promise<
     { status: "found"; item: MemoryRow; receipts: Receipt[]; sourceDates: { firstMs: number | null; lastMs: number | null } | null } |
     { status: "not_found" }
   >;
+  readCard(scope: Scope, id: string): Promise<CardReadResult>;
   recent(scope: Scope, options: { limit: number; cursor: string | null }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
   /** maxTokens ≤ 2000, maxChars ≤ 8000; projectId selects the engine project namespace. */
   sessionStart(scope: Scope, options: { maxTokens: number; maxChars: number; projectId?: string | null }): Promise<SessionContext>;
