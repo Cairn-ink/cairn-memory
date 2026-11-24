@@ -1,4 +1,6 @@
-import { assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES } from "../capabilities.mjs";
+import {
+  assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES, WRITE_PARITY_CAPABILITIES,
+} from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
@@ -69,13 +71,17 @@ function requireMethods(port, ...methods) {
   }
 }
 
-/** @param {import("./index.d.mts").KeylessInspectServiceDeps["storage"]} storage */
+/**
+ * @param {import("./index.d.mts").KeylessInspectServiceDeps["storage"] &
+ *   Pick<import("../ports/index.d.ts").StorageAdapter, "proceduralTags">} storage
+ */
 function validateReadRegistration(storage) {
-  validateObject(storage.capabilities, [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES]);
+  validateObject(storage.capabilities, [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES, ...WRITE_PARITY_CAPABILITIES]);
   if (Object.values(storage.capabilities).some(value => typeof value !== "boolean")) {
     throw new CoreError("invalid_input");
   }
   assertReadContractCapabilities(storage);
+  if (storage.capabilities.proceduralTags === true) requireMethods(storage.proceduralTags, "write", "clear", "read");
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} input */

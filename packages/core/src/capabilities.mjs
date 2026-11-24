@@ -36,14 +36,17 @@ export const READ_CONTRACT_CAPABILITIES = Object.freeze([
   "inspect", // exact-scope Memory and receipt paging
 ]);
 
-const registeredCapabilities = [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES];
+export const WRITE_PARITY_CAPABILITIES = Object.freeze(["proceduralTags", "receiptAttachAdvancesRevision"]);
+
+const optionalCapabilities = [...READ_CONTRACT_CAPABILITIES, ...WRITE_PARITY_CAPABILITIES];
+const registeredCapabilities = [...CAPABILITIES, ...optionalCapabilities];
 
 /** @param {Partial<Record<string, boolean>>} flags */
 export function capabilities(flags) {
   /** @type {Record<string, boolean>} */
   const out = {};
   for (const name of CAPABILITIES) out[name] = flags[name] === true;
-  for (const name of READ_CONTRACT_CAPABILITIES) {
+  for (const name of optionalCapabilities) {
     if (Object.hasOwn(flags, name)) out[name] = flags[name] === true;
   }
   for (const name of Object.keys(flags)) {
