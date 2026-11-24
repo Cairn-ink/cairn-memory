@@ -77,14 +77,12 @@ async function runOpenedCase(factory, testCase) {
     const retry = { ...capabilities };
     // A factory can reject these requests during setup. Check the actual flags after reopening.
     if (retry.rawArchive === true && !testCase.needs.includes("rawArchive")) delete retry.rawArchive;
-    const lineageFlags = /** @type {const} */ (["sessionLineage", "spanLineage"]);
-    const declined = lineageFlags.filter(flag => retry[flag] === true && testCase.needs.includes(flag));
-    for (const flag of declined) delete retry[flag];
-    if (retry.rawArchive === capabilities.rawArchive && declined.length === 0) throw error;
+    if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
+    if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
     opened = await factory.open({ capabilities: retry });
     // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
     // capability after all, the first rejection was a real setup failure and must not become a pass.
-    if (declined.some(flag => opened.adapter?.capabilities?.[flag])) {
+    if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
       await opened.close();
       throw error;
     }

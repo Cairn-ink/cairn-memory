@@ -24,14 +24,14 @@ Both timing options must be finite and greater than zero when supplied. The runn
 
 ### Capability handshake
 
-Honor a requested flag setting when the store supports it. To decline a setting and let the kit report a skip where appropriate, return the adapter with the actual flag value. For `capability_unavailable` during `open`, the runner can retry without a preferred `rawArchive` request or a required `sessionLineage` or `spanLineage` request. It rethrows the original error if the reopened adapter still advertises a required lineage flag omitted from the retry.
+Honor a requested flag setting when the store supports it. To decline a setting and let the kit report a skip where appropriate, return the adapter with the actual flag value. For `capability_unavailable` during `open`, the runner can retry without a preferred `rawArchive` request or a required `sessionLineage` request. It rethrows the original error if the reopened adapter still advertises `sessionLineage`.
 
 - `needs` requests flags on. The runner returns `needs <flag>` for the first required flag that is off.
 - `needsOff` requests flags off. The runner returns `needs <flag> off` for the first required-off flag that is on, after checking `needs`.
 - `requests` supplies additional preferences at open. The runner applies `requests`, then `needs`, then `needsOff`. It checks only explicit requirements for automatic capability skips. A case can branch on the actual flags or return its own reason.
 - `pending` returns the given skip reason before opening an adapter. `followUp` runs with its own requests on a fresh open after the first run succeeds and closes.
 
-`runCase` returns `null` on success, a reason string on a skip, and rejects on failure. Pass the string to `t.skip(reason)` so `node:test` reports a skipped test with its reason. Treat a skip as missing coverage, even if an earlier check ran successfully. `defineConformanceTests(factory)` from `@cairn-ink/conformance/node-test` does this for `CASES` and `SPAN_LINEAGE_CASES`.
+`runCase` returns `null` on success, a reason string on a skip, and rejects on failure. Pass the string to `t.skip(reason)` so `node:test` reports a skipped test with its reason. Treat a skip as missing coverage, even if an earlier check ran successfully. `defineConformanceTests(factory)` from `@cairn-ink/conformance/node-test` does this for `CASES`.
 
 ### Test harness hooks
 

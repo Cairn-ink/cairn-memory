@@ -83,18 +83,64 @@ test("K-SPAN-2 detects an empty result for an unknown memory", async () => {
   await assert.rejects(runCase(mutant, unknownMemory), { message: "Expected operation to reject" });
 });
 
-test("the runner keeps a rejected span lineage request as a failure when the port is available on reopen", async () => {
+/** Wraps the fixture's unit of work so a resolver can see whether it runs in the pause-locked write run forget uses. */
+function trackingFactory(wrap) {
   const base = factory();
-  const rejection = new CoreError("capability_unavailable");
-  let closed = false;
-  const refusing = {
+  return {
     ...base,
     async open(request) {
-      if (request.capabilities.spanLineage) throw rejection;
       const opened = await base.open(request);
-      return { ...opened, async close() { await opened.close(); closed = true; } };
+      const { adapter } = opened;
+      let locked = false;
+      const uow = {
+        ...adapter.uow,
+        async run(owner, options, fn) {
+          return adapter.uow.run(owner, options, async (tx) => {
+            const previous = locked;
+            locked = options?.pauseLock === true;
+            try { return await fn(tx); } finally { locked = previous; }
+          });
+        },
+      };
+      const { resolveSpans } = adapter.spanLineage;
+      return { ...opened, adapter: { ...adapter, uow, spanLineage: { resolveSpans: wrap(resolveSpans, () => locked) } } };
     },
   };
+}
+
+test("K-SPAN-1 resolves in the pause-locked run forget uses", async () => {
+  // Throws once Raw is gone only on the write path forget takes.
+  const writerThrows = trackingFactory((resolve, locked) => async (...args) => {
+    const spans = await resolve(...args);
+    if (!spans.length && locked()) throw new CoreError("raw_lineage_unavailable");
+    return spans;
+  });
+  await assert.rejects(runCase(writerThrows, deletedRaw), { code: "raw_lineage_unavailable" });
+  // A resolver that requires the pause lock satisfies the contract.
+  const lockedOnly = trackingFactory((resolve, locked) => async (...args) => {
+    if (!locked()) throw new CoreError("raw_lineage_unavailable");
+    return resolve(...args);
+  });
+  assert.equal(await runCase(lockedOnly, deletedRaw), null);
+  assert.equal(await runCase(lockedOnly, unknownMemory), null);
+});
+
+test("K-SPAN-1 accepts store-defined span granularity and keys", async () => {
+  const split = factory(resolve => async (...args) => (await resolve(...args)).flatMap((span) => {
+    const middle = Math.floor(span.endUtf16 / 2);
+    return [{ ...span, messageKey: `opaque-${span.messageKey}-a`, endUtf16: middle },
+      { ...span, messageKey: `opaque-${span.messageKey}-b`, startUtf16: middle }];
+  }));
+  assert.equal(await runCase(split, deletedRaw), null);
+});
+
+test("a factory that rejects a needed span lineage request at open fails the case instead of skipping", async () => {
+  const rejection = new CoreError("capability_unavailable");
+  // An opt-in store whose span port wiring is broken: asked for span lineage it fails, otherwise it opens without it.
+  const plain = rawFactory();
+  const refusing = { ...plain, async open(request) {
+    if (request.capabilities.spanLineage === true) throw rejection;
+    return plain.open(request);
+  } };
   await assert.rejects(runCase(refusing, deletedRaw), error => error === rejection);
-  assert.equal(closed, true);
 });

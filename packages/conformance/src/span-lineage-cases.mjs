@@ -32,10 +32,12 @@ export const SPAN_LINEAGE_CASES = [
 
       const { archived } = await uow.run(owner, { pauseLock: true }, tx => raw.archive(tx, key, [message]));
       equal(archived, 1, "The fixture must archive its source message");
-      const resolve = () => uow.run(owner, { readOnly: true }, tx => spanLineage.resolveSpans(tx, scope, memory.id));
+      // Forget resolves spans inside its pause-locked write run, so the case does the same.
+      const resolve = () => uow.run(owner, { pauseLock: true }, tx => spanLineage.resolveSpans(tx, scope, memory.id));
       const spans = await resolve();
-      equal(spans.map(({ kind, messageKey }) => ({ kind, messageKey })),
-        [{ kind: "rawSpan", messageKey: message.id }], "The archived source must resolve to one span for its message");
+      // Span granularity and keys are store-defined; the contract only requires the archived source to resolve.
+      check(Array.isArray(spans) && spans.length > 0 && spans.every(span => span?.kind === "rawSpan"),
+        "The archived source must resolve to at least one raw span");
 
       const { rawDeleted } = await uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, session));
       equal(rawDeleted, 1, "The fixture must delete its source message");
@@ -49,7 +51,7 @@ export const SPAN_LINEAGE_CASES = [
       check(spanLineage, "spanLineage requires the span lineage port");
       const scope = ctx.scope(null);
       const id = crypto.randomUUID();
-      await rejects(() => uow.run(owner, { readOnly: true }, tx => spanLineage.resolveSpans(tx, scope, id)),
+      await rejects(() => uow.run(owner, { pauseLock: true }, tx => spanLineage.resolveSpans(tx, scope, id)),
         "raw_lineage_unavailable");
     },
   },
