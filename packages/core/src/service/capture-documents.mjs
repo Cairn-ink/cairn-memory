@@ -2,8 +2,9 @@ import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
 import { writeLedgerQuantities } from "../ledger/index.mjs";
-import { sha256Hex } from "../privacy/fingerprint.mjs";
-import { receiptExcerpt } from "../privacy/text.mjs";
+import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
+import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
+import { withholdsAnyPassage } from "../privacy/withholds.mjs";
 import {
   buildDocumentCard, detectCardAmendments, documentCardMemoryLinks, documentCardSearchText,
   documentCardVisible, routeDocumentMessages,
@@ -73,7 +74,7 @@ const readScope = ({ owner, namespace }) => ({ owner, namespaces: [namespace] })
  */
 export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbort) {
   const { storage, config, model, embedder, clock, gate, diagnostics } = deps;
-  const { capabilities, uow, suppressions, raw, hydrate, fence, pause } = storage;
+  const { capabilities, uow, suppressions, raw, hydrate, fence, pause, keys } = storage;
   const cards = capabilities.documentCards && config.documentCards?.enabled ? storage.documentCards : undefined;
   const skipExtraction = model === null;
   const ledger = !skipExtraction && capabilities.quantityLedger && config.quantityLedger?.enabled
@@ -179,10 +180,24 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const canonicalSessionKey = cards && sessionKey({ client, sessionId });
     if (cards && canonicalSessionKey) {
       const cardSources = allowed.filter(({ id }) => !ambiguous.has(id) && (!embedder || screenedForEmbedding?.has(id)));
-      for (const { position } of routeDocumentMessages(cardSources).chosen) {
+      const { chosen } = routeDocumentMessages(cardSources);
+      // Whole-source and extracted-memory checks can both miss an exact forget
+      // of one sentence retained verbatim in a card.
+      const facts = chosen.length ? (await suppressions.snapshot(tx, scope, {})).passages
+        .map(({ fact }) => fact).filter(({ origin }) => origin === "forget") : [];
+      const fingerprintKey = facts.length && capabilities.fingerprintKey
+        ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
+      const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
+      for (const { position } of chosen) {
         const message = cardSources[position];
         const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card) continue;
+        if (facts.length) {
+          const sentences = new Set(card.sentences.map(({ start, end }) => card.body.slice(start, end)));
+          const passages = await Promise.all([...sentences].map(sentence =>
+            fingerprintMemoryPassages(sentence, prepareCoreText(sentence), fingerprintKey, undefined, digesters)));
+          if (withholdsAnyPassage(passages.flat(), facts)) continue;
+        }
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         const embedding = vectors?.get(documentCardSearchText(card));
