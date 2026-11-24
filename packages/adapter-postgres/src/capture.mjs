@@ -231,7 +231,7 @@ export function createPostgresCapturePorts(options) {
         };
       });
 
-      const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories, hashSessionKey, allowNonNullNamespace);
+      const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories);
       return runOperation(tx, async (query) => {
         result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);

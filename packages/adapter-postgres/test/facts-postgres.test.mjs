@@ -53,10 +53,11 @@ async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
 
 function insertDigest(pool, owner, factId, candidate) {
   return pool.query(`
-    INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id, label)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   `, [
     owner, factId, candidate.alg, candidate.value, candidate.pipeline, candidate.redactionVersion, candidate.keyId,
+    candidate.label ?? candidate.pipeline,
   ]);
 }
 
@@ -134,7 +135,7 @@ test("slot and insert read each caller field and array element once", async () =
   }
   const [, ...digests] = await captureInsert(full);
   assert.deepEqual(digests, full.text.digests.map(({ alg, value, pipeline, redactionVersion, keyId }) => [
-    "owner", "fact", alg, value, pipeline, redactionVersion, keyId,
+    "owner", "fact", alg, value, pipeline, redactionVersion, keyId, pipeline,
   ]));
 });
 
@@ -177,6 +178,38 @@ test("suppression migrations upgrade the existing prefix and match the structura
   } finally {
     connection.release();
   }
+});
+
+test("migration 0024 refuses to rewrite 10,001 existing digest rows", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const migrationIndex = migrations.findIndex(({ id }) => id === "0024_core_fact_digest_domains.sql");
+  assert.ok(migrationIndex > 0);
+  await applyMigrations(source, migrations.slice(0, migrationIndex));
+  await pool.query("INSERT INTO users (id) VALUES ('owner')");
+  await pool.query(`INSERT INTO core_suppression_facts
+      (user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body)
+    SELECT 'owner', 'fact', 'slot', repeat('0', 64), repeat('0', 64), 'action', 1, 'forget', 'text', 'exact', '{}'`);
+  const { rowCount } = await pool.query(`INSERT INTO core_fact_digests
+      (user_id, fact_id, alg, value, pipeline, redaction_version)
+    SELECT 'owner', 'fact', 'sha256', lpad(to_hex(n), 64, '0'), 'core', 1 FROM generate_series(1, 10001) n`);
+  assert.equal(rowCount, 10_001);
+  const before = await readFactsCatalog(pool);
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    try {
+      await assert.rejects(connection.query(migrations[migrationIndex].sql), {
+        code: "P0001",
+        message: /0024 requires a populated-table variant when core_fact_digests has more than 10,000 rows/u,
+      });
+    } finally {
+      await connection.query("ROLLBACK");
+    }
+  } finally {
+    connection.release();
+  }
+  assert.deepEqual(await readFactsCatalog(pool), before);
+  assert.deepEqual((await pool.query("SELECT count(*)::int FROM core_fact_digests")).rows, [{ count: 10_001 }]);
 });
 
 test("the suppression catalog snapshot detects a change to the created_at default", migrationDbTest, async (t) => {
@@ -222,7 +255,7 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
   await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac" }), {
     code: "23514", constraint: "core_fact_digests_key_check",
   });
-  await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, keyId: "unexpected" }), {
+  await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, keyId: null, label: "unexpected" }), {
     code: "23514", constraint: "core_fact_digests_key_check",
   });
   await insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac", keyId: "digest-key" });
