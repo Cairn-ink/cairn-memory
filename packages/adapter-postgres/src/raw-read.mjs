@@ -86,7 +86,7 @@ export function createPostgresRawReads(options) {
     const { cursor, limit } = page;
     const start = cursor === null ? null : pageAfter(cursor);
     return runOperation(tx, async (query, run) => {
-      const token = await readStateToken(query, selection, run.indexAdvanced);
+      const token = await readStateToken(query, selection, run);
       if (start && start.token !== token) throw new CoreError("cursor_stale");
       if (!selection.keys.includes(null)) return { items: [], nextCursor: null };
       const visibility = await readVisibility(query, selection.owner, selection.clients);

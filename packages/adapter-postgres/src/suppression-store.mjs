@@ -15,7 +15,7 @@ const SELECT_SLOT = `SELECT fact_id, slot, incarnation, epoch::text, ${CREATED_A
   FROM core_suppression_facts WHERE user_id = $1 AND slot_hash = $2`;
 const ADVANCE_OWNER = `INSERT INTO core_owner_state (user_id, fact_epoch, index_revision) VALUES ($1, 1, 1)
   ON CONFLICT (user_id) DO UPDATE SET fact_epoch = core_owner_state.fact_epoch + 1,
-  index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text`;
+  index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text, index_revision::text`;
 const ADVANCE_FACT_EPOCH = `UPDATE core_owner_state SET fact_epoch = fact_epoch + 1
   WHERE user_id = $1 RETURNING fact_epoch::text`;
 const INSERT_FACT = `INSERT INTO core_suppression_facts (
@@ -59,8 +59,9 @@ async function writeFact(tx, fact, incarnation, hashedSessions) {
     }
 
     // A new fact always gets its own epoch. Its index advance is shared with ordinary writes.
-    const { rows: [state] } = await query(run.indexAdvanced ? ADVANCE_FACT_EPOCH : ADVANCE_OWNER, [owner]);
-    run.indexAdvanced = true;
+    const firstAdvance = run.indexStart === undefined;
+    const { rows: [state] } = await query(firstAdvance ? ADVANCE_OWNER : ADVANCE_FACT_EPOCH, [owner]);
+    if (firstAdvance) run.indexStart = readEpoch(state?.index_revision, 1n) - 1n;
     const epoch = readEpoch(state?.fact_epoch, 1n);
     const factId = crypto.randomUUID();
     const { rows: [inserted] } = await query(INSERT_FACT, [

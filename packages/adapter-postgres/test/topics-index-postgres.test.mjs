@@ -90,6 +90,29 @@ test("a memory insert and placement share the same Postgres index advance", migr
   assert.deepEqual(await db.counters(), { hosted: 7, core: 1, facts: 0 });
 });
 
+test("two guarded placements and a memory insert share one Postgres index advance", migrationDbTest, async (t) => {
+  const db = await setup(t);
+  const existing = await db.write((tx) => db.seed(tx, "Source created before this run"));
+  const counters = await db.counters();
+  const start = await db.read(db.status);
+
+  await db.write(async (tx) => {
+    const first = await db.place(tx, existing, "First topic", start.indexRevision);
+    const inserted = await db.seed(tx, "Source created between placements");
+    const second = await db.place(tx, inserted, "Second topic", start.indexRevision);
+    assert.equal(first.placed[0].memoryId, existing.memoryId);
+    assert.equal(second.placed[0].memoryId, inserted.memoryId);
+    assert.equal((await db.catalog(tx)).indexRevision, start.indexRevision);
+    assert.equal(await db.token(tx), start.stateToken);
+  });
+
+  const after = await db.read(db.status);
+  assert.deepEqual(after.items.map(({ title }) => title), ["First topic", "Second topic"]);
+  assert.equal(after.indexRevision, start.indexRevision + 1);
+  assert.notEqual(after.stateToken, start.stateToken);
+  assert.deepEqual(await db.counters(), { ...counters, core: counters.core + 1 });
+});
+
 test("another Postgres run sees the index advance only after commit", migrationDbTest, async (t) => {
   const db = await setup(t);
   const guard = await db.write((tx) => db.seed(tx, "Source for concurrent read"));

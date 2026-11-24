@@ -4,7 +4,7 @@ import { isReadStatement } from "./read-only.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexAdvanced: boolean }} Run */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexStart?: bigint }} Run */
 
 const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
@@ -155,7 +155,7 @@ export function createPostgresUnitOfWork(source) {
     try {
       const connection = await source.connect();
       /** @type {Run} */
-      const state = { connection, pending: new Set(), pauseLock: pauseLock === true, indexAdvanced: false };
+      const state = { connection, pending: new Set(), pauseLock: pauseLock === true };
       let committed = false;
       let sharedPauseHeld = false;
       try {

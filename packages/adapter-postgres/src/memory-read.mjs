@@ -113,13 +113,13 @@ export function createPostgresMemoryReads(options = {}) {
       async stateToken(tx, scope) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
-        return runOperation(tx, (query, run) => readStateToken(query, selection, run.indexAdvanced));
+        return runOperation(tx, (query, run) => readStateToken(query, selection, run));
       },
       async assertUnchanged(tx, scope, token) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         validateToken(token, allowNonNullNamespace);
-        if (await runOperation(tx, (query, run) => readStateToken(query, selection, run.indexAdvanced)) !== token) throw new CoreError("cursor_stale");
+        if (await runOperation(tx, (query, run) => readStateToken(query, selection, run)) !== token) throw new CoreError("cursor_stale");
       },
     },
     hydrate: {
