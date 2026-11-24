@@ -654,18 +654,27 @@ test("Postgres scopes relation mutations and advances the index only for real co
   const foreignScope = { ...scope, owner: other };
   const foreign = await run(other, {}, tx => memories.insert(tx, foreignScope, content("unrelated"), [], 1));
   const edge = conflict(first, second);
+  const readToken = () => run(owner, readOnly, tx => snapshot.stateToken(tx, readSet));
+  const beforeNoOps = await readToken();
+  await run(owner, {}, async tx => {
+    assert.deepEqual(await conflicts.insert(tx, scope, conflict(first, foreign), 2), { inserted: false });
+    assert.equal(await conflicts.invalidate(tx, scope, foreign.id), 0);
+  });
+  const afterNoOps = await readToken();
+  assert.equal(afterNoOps, beforeNoOps);
   await run(owner, {}, async tx => {
     const before = await snapshot.stateToken(tx, readSet);
-    assert.deepEqual(await conflicts.insert(tx, scope, conflict(first, foreign), 2), { inserted: false });
-    assert.equal(await snapshot.stateToken(tx, readSet), before);
     assert.deepEqual(await conflicts.insert(tx, scope, edge, 2), { inserted: true });
-    const inserted = await snapshot.stateToken(tx, readSet);
-    assert.notEqual(inserted, before);
+    assert.equal(await snapshot.stateToken(tx, readSet), before);
+  });
+  const afterInsert = await readToken();
+  assert.notEqual(afterInsert, afterNoOps);
+  await run(owner, {}, async tx => {
     assert.deepEqual(await conflicts.insert(tx, scope, edge, 3), { inserted: false });
     assert.equal(await conflicts.invalidate(tx, scope, foreign.id), 0);
-    assert.equal(await snapshot.stateToken(tx, readSet), inserted);
     await supersession.record(tx, scope, { previous: first, replacement: second }, [], 2);
   });
+  assert.notEqual(await readToken(), afterInsert);
   await assert.rejects(run(other, {}, tx => conflicts.invalidate(tx, scope, first.id)), { code: "internal_error" });
   await assert.rejects(run(other, {}, tx => supersession.record(tx, foreignScope, {
     previous: foreign, replacement: second,
@@ -676,12 +685,12 @@ test("Postgres scopes relation mutations and advances the index only for real co
     assert.equal(await conflicts.degree(tx, foreignScope, first.id), 0);
     assert.equal(await conflicts.invalidate(tx, foreignScope, first.id), 0);
   });
+  const beforeInvalidate = await readToken();
   await run(owner, {}, async tx => {
-    const before = await snapshot.stateToken(tx, readSet);
     assert.equal(await conflicts.invalidate(tx, scope, first.id), 1);
-    assert.notEqual(await snapshot.stateToken(tx, readSet), before);
     assert.equal(await supersession.incomingCount(tx, scope, second.id), 1);
   });
+  assert.notEqual(await readToken(), beforeInvalidate);
 });
 
 test("Postgres forget removes relation rows atomically and delivers only the unavailable marker", migrationDbTest, async (t) => {
