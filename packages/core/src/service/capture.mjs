@@ -467,10 +467,9 @@ export function captureMethods(deps) {
         const digesters = candidates.length ? await keys.retainedDigesters?.(owner) : undefined;
         const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
         const excludedSources = new Set();
-        /** @param {Tx} tx @param {PreparedCandidate[]} batch */
-        const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
-          client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
-        });
+        // Capture containment needs the full scoped text snapshot, including shingles.
+        /** @param {Tx} tx */
+        const readFacts = tx => suppressions.snapshot(tx, scope, { client, sessionId });
         /** @param {Tx} tx */
         const abandonKeyMismatch = async tx => {
           await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
@@ -484,7 +483,7 @@ export function captureMethods(deps) {
             return abandonKeyMismatch(tx);
           }
           const allowedByPassage = prepared.length
-            ? filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources) : prepared;
+            ? filterCaptureCandidates(prepared, await readFacts(tx), scope, excludedSources) : prepared;
           const survivors = allowedByPassage.filter(({ item }) =>
             item.receipts.every(({ messageId }) => eligibleIds.has(messageId)));
           return { stillEligible, survivors };
@@ -499,7 +498,7 @@ export function captureMethods(deps) {
           if (prepared.length && keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== fingerprintKey?.id) {
             return abandonKeyMismatch(tx);
           }
-          const snapshot = await readFacts(tx, embedded);
+          const snapshot = await readFacts(tx);
           if (prepared.length && !keys.userKeyForWrite && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
             return abandonKeyMismatch(tx);
           }

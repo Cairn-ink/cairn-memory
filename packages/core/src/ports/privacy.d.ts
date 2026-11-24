@@ -20,7 +20,7 @@ export interface SuppressionSnapshot {
   blockedSession: boolean;
   /** Capture message positions blocked by session/window/lineage facts. */
   blockedMessages: number[];
-  /** Text facts relevant to the candidates (for core's withholds / blocks decisions). */
+  /** Live text facts per the snapshot contract, including their shingle evidence. */
   passages: Array<StoredFact<Extract<SuppressionFact, { kind: "text" }>>>;
 }
 
@@ -32,7 +32,14 @@ export interface SuppressionStore {
    * A new fact advances the owner epoch by exactly 1.
    */
   writeFact(tx: Tx, fact: SuppressionFact, incarnation: string): Promise<{ factId: string; epoch: bigint; createdAtMs: number; created: boolean }>;
-  /** Facts that apply to a capture/write candidate set. Uncertain or unbounded → throws ineligible (fail closed). */
+  /**
+   * With `candidates.passages` omitted, returns every live text fact in `passages`, including
+   * full text facts and their shingles, filtered only by owner and namespace. The client,
+   * session and time candidates govern `blockedSession` and `blockedMessages` only.
+   * Candidate `passages` may narrow text facts only for row-level decisions. Capture-time
+   * containment always uses the complete scoped text snapshot, regardless of `rowShingles`.
+   * Uncertain or unbounded → throws ineligible (fail closed).
+   */
   snapshot(tx: Tx, scope: Scope, candidates: { client?: string; sessionId?: string; occurredAtMs?: ReadonlyArray<number | null>; passages?: readonly PassageFingerprint[] }): Promise<SuppressionSnapshot>;
   /** Facts that target one item; "ineligible" when the store cannot decide. */
   factsFor(tx: Tx, scope: Scope, target: { memoryId: string }): Promise<StoredFact[] | "ineligible">;
