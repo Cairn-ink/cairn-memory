@@ -85,6 +85,8 @@ export function importMethod(deps) {
       /** @type {ImportResult} */
       const counts = { imported: 0, duplicate: 0, suppressed: 0, invalid: 0 };
       const paused = () => /** @type {const} */ ({ status: "paused", ...counts });
+      /** @type {readonly import("../ports/privacy.d.ts").RetainedDigester[] | undefined} */
+      let digesters;
       for (let start = 0; start < rows.length; start += batchSize) {
         const inputBatch = rows.slice(start, start + batchSize);
         let validationTime;
@@ -100,8 +102,9 @@ export function importMethod(deps) {
         const before = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
         if (before.paused) return paused();
         const key = await keys.userKey(owner);
+        digesters ??= await keys.retainedDigesters?.(owner) ?? [];
         const prepared = await Promise.all(batch.map(async ({ raw, ...item }) => {
-          const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text));
+          const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text), digesters);
           return { ...item, query, passages };
         }));
         const embeddings = await embedImport(owner, prepared.map(({ text }) => text), key);

@@ -42,11 +42,17 @@ function validateDigests(digests) {
   if (!Array.isArray(digests) || digests.length === 0) fail();
   const seen = new Set();
   for (const d of digests) {
-    if (!d || typeof d !== "object" || (d.alg !== "sha256" && d.alg !== "hmac")) fail();
+    if (!d || typeof d !== "object") fail();
     if (!isHex64(d.value) || !DIGEST_PIPELINES.includes(d.pipeline)) fail();
     if (!Number.isSafeInteger(d.redactionVersion) || d.redactionVersion < 1) fail();
-    if (d.alg === "hmac" ? !str(d.keyId, 64) : d.keyId !== null) fail();
-    const key = `${d.alg}:${d.value}`;
+    if (d.label === undefined) {
+      if (d.alg !== "sha256" && d.alg !== "hmac") fail();
+      if (d.alg === "hmac" ? !str(d.keyId, 64) : d.keyId !== null) fail();
+    } else if (!str(d.alg) || !str(d.keyId, 64) || !str(d.label)) {
+      fail();
+    }
+    const key = d.label === undefined ? `${d.alg}:${d.value}` :
+      JSON.stringify([d.alg, d.keyId, d.label, d.pipeline, d.redactionVersion, d.value]);
     if (seen.has(key)) fail();
     seen.add(key);
   }

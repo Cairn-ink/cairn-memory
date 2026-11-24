@@ -35,6 +35,7 @@ export declare const IMPORT_TIME_CASES: readonly ConformanceCase[];
 export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];
 export declare const SOURCE_FILTER_CASES: readonly ConformanceCase[];
 export declare const KEYED_DIGEST_CASES: readonly ConformanceCase[];
+export declare const RETAINED_KEYED_DIGEST_CASES: readonly ConformanceCase[];
 export declare const RATIONALE_CASES: readonly ConformanceCase[];
 export declare const RETRIEVAL_WINDOW_CASES: readonly ConformanceCase[];
 export declare const FENCE_INTENT_CASES: readonly ConformanceCase[];

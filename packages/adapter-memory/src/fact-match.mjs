@@ -30,9 +30,9 @@ function digestsFor({ textHash, legacyHash }) {
 
 /** @param {Pick<DuplicateQuery, "textHash" | "legacyHash" | "digests">} candidate */
 function withDigestAliases(candidate) {
-  const aliases = digestsFor(candidate);
-  const supplied = candidate.digests?.filter(({ alg, value }) =>
-    !aliases.some((alias) => alias.alg === alg && alias.value === value)) ?? [];
+  const supplied = candidate.digests ?? [];
+  const aliases = digestsFor(candidate).filter((alias) => !supplied.some(({ alg, label, value }) =>
+    label === undefined && alg === alias.alg && value === alias.value));
   return [...aliases, ...supplied];
 }
 
@@ -71,14 +71,14 @@ function projectPassages(passages) {
       if (isRecord) {
         // Preserve descriptor-based validation of every other field in core.
         const record = {};
-        for (const key of ["digests", "shingles", "keyId", "embedding"]) {
+        for (const key of ["digests", "shingles", "keyId", "embedding", "retainedShingles"]) {
           const field = evidenceDescriptor(passage, key);
           if (!field) continue;
           if (key === "embedding" && field.value != null) {
             const embedding = readEmbedding(field.value, "passage");
             field.value = embedding.length === 0 ? undefined : embedding;
           }
-          if (key === "digests" || key === "shingles") {
+          if (key === "digests" || key === "shingles" || key === "retainedShingles") {
             if (Object.hasOwn(field, "value")) field.value = snapshotPassageList(field.value);
           }
           Object.defineProperty(record, key, field);

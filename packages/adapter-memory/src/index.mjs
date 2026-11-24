@@ -30,10 +30,10 @@ export function createMemoryAdapter(options = {}) {
   let clockOffset = 0;
   const now = () => clock() + clockOffset;
   const work = createUnitOfWork(nativeErrorMap, now, flags.placement);
-  const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } = work;
+  const { uow, port, dump, runSeed, setWriteTime, rowsMissingKeyedDigest } = work;
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey, sessionRefs);
-  const { keys, ringKeys, labels, setFingerprintSecret } =
-    createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
+  const { keys, ringKeys, labels, setFingerprintSecret, setRetainedDigestFixture } =
+    createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
@@ -78,6 +78,7 @@ export function createMemoryAdapter(options = {}) {
       ...(rationale && createRationaleHarness(port, runSeed)),
       setWriteTime,
       setFingerprintSecret,
+      setRetainedDigestFixture,
       rowsMissingKeyedDigest(owner) { return rowsMissingKeyedDigest(owner, ringKeys); },
       async advanceClock(ms) {
         validateTime(ms);
