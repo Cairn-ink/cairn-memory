@@ -101,6 +101,11 @@ for (const phase of ["model", "embedding"]) {
         await t.test("suppresses capture at the final eligibility check", () => {
           assert.deepEqual(interrupted, { status: "failed", code: "suppressed" });
         });
+      } else {
+        await t.test("finishes at the model-stage recheck with no memories", () => {
+          assert.equal(interrupted.status, "done");
+          assert.equal(interrupted.result.memories.length, 0);
+        });
       }
 
       assert.deepEqual(await service.enqueueCapture(scope, { ...control, messages: [controlMessage] }),
@@ -154,9 +159,6 @@ test("deleting a conversation withdraws its ledger messages from capture", async
     await assert.rejects(write(tx => capture.assertEligible(tx, key, [0])), { code: "suppressed" },
       "assertEligible accepted a withdrawn position");
   });
-  await t.test("withholds receipts for withdrawn ledger-only messages", async () => {
-    assert.equal(await receiptWithheld(), true);
-  });
   await t.test("the same message ID in another session stays eligible", async () => {
     const controlKey = { ...key, ...control };
     await admitAndClaim(f, controlKey, [controlMessage]);
@@ -181,15 +183,114 @@ test("deleting a Raw-only message withdraws its address from a new event", async
   });
 });
 
+async function rawVisibility({ storage, read }, { client, sessionId }, batch) {
+  const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGenerations: [1] };
+  return read(async tx => {
+    const query = batch.map(({ content }) => content).join(" ");
+    const { turns } = await storage.contextRead.raw.search(tx, readSet, query, { limit: 10, lexicalOnly: true });
+    const withheld = await Promise.all(batch.map(({ id, content, role, occurredAtMs }) =>
+      storage.suppressions.receiptWithheld(tx, scope, { client, sessionId, messageId: id, role,
+        occurredAtMs, excerpt: content })));
+    return { messageIds: turns.map(({ messageId }) => messageId).sort(), withheld };
+  });
+}
+
+test("resending a deleted conversation keeps different text at the same message ID visible", async () => {
+  const f = fixture({ contextRead: true, contextRawRead: true });
+  const service = captureService(f.storage);
+  assert.deepEqual(await service.enqueueCapture(scope, { ...target, messages }), { status: "accepted" });
+  assert.deepEqual(await f.remove(), { rawDeleted: 0 });
+  const resend = { ...target, eventId: resent.eventId };
+  assert.deepEqual(await service.enqueueCapture(scope, { ...resend, messages }), { status: "accepted" });
+  const replay = await service.runCapture(scope, resend);
+  assert.equal(replay.status, "done");
+  assert.equal(replay.result.memories.length, 0);
+
+  const batch = [controlMessage];
+  assert.deepEqual(await service.enqueueCapture(scope, { ...control, messages: batch }), { status: "accepted" });
+  const result = await service.runCapture(scope, control);
+  assert.equal(result.status, "done");
+  assert.equal(result.result.memories.length, 1);
+  assert.deepEqual((await f.page()).items.map(({ sessionId, content }) => [sessionId, content]),
+    [[control.sessionId, controlMessage.content]]);
+  assert.deepEqual(await rawVisibility(f, control, batch), { messageIds: [controlMessage.id], withheld: [false] });
+});
+
+test("explicitly importing ledger-only deleted messages makes their Raw and receipts readable", async () => {
+  const f = fixture({ contextRead: true, contextRawRead: true });
+  const service = captureService(f.storage);
+  assert.deepEqual(await service.enqueueCapture(scope, { ...target, messages }), { status: "accepted" });
+  assert.deepEqual(await f.remove(), { rawDeleted: 0 });
+  const { client, sessionId } = target;
+  assert.deepEqual(await service.importRawMessages(scope, [{ client, sessionId, messages }]),
+    { imported: 2, duplicate: 0, suppressed: 0, invalid: 0 });
+  const messageIds = messages.map(({ id }) => id).sort();
+  assert.deepEqual((await f.page()).items.map(({ messageId }) => messageId).sort(), messageIds);
+  assert.deepEqual(await rawVisibility(f, target, messages), { messageIds, withheld: [false, false] });
+});
+
+for (const prearchived of [false, true]) {
+  test(`deleting a directly claimed conversation prevents writeback ${prearchived ? "with" : "without"} prearchived Raw`, async () => {
+    const { storage: { capture, raw, harness }, read, write, remove, page } = fixture();
+    const [message] = messages;
+    const batch = [message];
+    if (prearchived) assert.deepEqual(await write(tx => raw.archive(tx, key, batch)), { archived: 1 });
+    const claim = await write(tx => capture.claim(tx, key, batch, { leaseMs: 60_000 }));
+    assert.equal(claim.status, "claimed");
+    assert.equal(await read(tx => capture.load(tx, key)), null);
+    await write(tx => capture.beginDispatch(tx, claim.token));
+    assert.deepEqual(await remove(), { rawDeleted: prearchived ? 1 : 0 });
+
+    const content = extracted.get(message.content);
+    const textHash = "sha256:" + createHash("sha256").update(content.toLowerCase()).digest("hex");
+    const { client, sessionId } = key;
+    const { id: messageId, role, occurredAtMs } = message;
+    const item = { content, kind: "fact", confidence: 1, embedding: null, textHash,
+      receipts: [{ client, sessionId, messageId, role, occurredAtMs }] };
+    await assert.rejects(write(async tx => {
+      await capture.assertEligible(tx, key, [0]);
+      await capture.finish(tx, claim.token, [item]);
+      await raw.archive(tx, key, batch);
+    }), { code: "suppressed" });
+    const [{ rows }] = await harness.dump();
+    assert.deepEqual(rows, []);
+    assert.deepEqual((await page()).items, []);
+  });
+}
+
+async function textPurgeFact(message) {
+  return {
+    factId: "fact", incarnation: "test", epoch: 1n, createdAtMs: 1,
+    fact: { ...scope, actionId: "purge", kind: "text", mode: "exact", origin: "forget",
+      text: { digests: [await coreDigest(message.content)] } },
+  };
+}
+
+test("deleting an already blank ledger slot stops writeback from the loaded text", async () => {
+  const { storage, write, page } = fixture();
+  const [message] = messages;
+  const fact = await textPurgeFact(message);
+  let purged, erased;
+  const service = captureService(storage, { async duringModel() {
+    purged = await write(tx => storage.raw.purgeWithheld(tx, scope, [fact]));
+    erased = await write(tx => storage.raw.eraseSessions(tx, scope, [target]));
+  } });
+  assert.deepEqual(await service.enqueueCapture(scope, { ...target, messages: [message] }), { status: "accepted" });
+  const result = await service.runCapture(scope, target);
+  assert.deepEqual(purged, { rawDeleted: 0, ledgerBlanked: 1 });
+  assert.deepEqual(erased, { rawDeleted: 0, ledgerBlanked: 0 });
+  assert.equal(result.status, "done");
+  assert.equal(result.result.memories.length, 0);
+  const [{ rows }] = await storage.harness.dump();
+  assert.deepEqual(rows, []);
+  assert.deepEqual((await page()).items, []);
+});
+
 test("a ledger slot blanked by text purge alone stays eligible", async () => {
   const f = fixture();
   const { storage: { capture, raw }, read, write } = f;
   await admitAndClaim(f, key, messages);
-  const stored = {
-    factId: "fact", incarnation: "test", epoch: 1n, createdAtMs: 1,
-    fact: { ...scope, actionId: "purge", kind: "text", mode: "exact", origin: "forget",
-      text: { digests: [await coreDigest(messages[0].content)] } },
-  };
+  const stored = await textPurgeFact(messages[0]);
   assert.deepEqual(await write(tx => raw.purgeWithheld(tx, scope, [stored])), { rawDeleted: 0, ledgerBlanked: 1 });
   const { messages: batch } = await read(tx => capture.load(tx, key));
   assert.deepEqual(batch, [{ ...messages[0], content: "" }, messages[1]]);

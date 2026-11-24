@@ -12,7 +12,8 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "lineageFenced">} RawLineage */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
- * occurredAtMs: ReadonlyArray<number | null>, proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
+ * messageIds: readonly string[], occurredAtMs: ReadonlyArray<number | null>,
+ * proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
 /** @typedef {{key: CaptureKey, messages?: CaptureMessage[]} & (Lease | {status: "pending"} |
  * {status: "finished", result: FinishResult} |
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
@@ -82,7 +83,6 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       return port.capture(tx, scope, () => {
         const copy = scope.copyKey();
         const copied = copyCaptureMessages(messages);
-        const occurredAtMs = copied.map((message) => message.occurredAtMs);
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new CoreError("invalid_input");
         const { leaseMs } = options;
         if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0) throw new CoreError("invalid_input");
@@ -103,13 +103,15 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
           const token = crypto.randomUUID();
           const admitted = previous?.messages;
+          const batch = admitted ?? copied;
           // An admitted event is claimed with its stored outbox, so its proofs come from those messages.
-          const proofMetadata = lineage && { proofs: await lineage.captureProofs(copy.scope, copy.client, admitted ?? copied) };
+          const proofMetadata = lineage && { proofs: await lineage.captureProofs(copy.scope, copy.client, batch) };
           if (previous?.status === "leased") state.activeTokens.delete(previous.token);
           state.claims.set(identity, {
             key: previous?.key ?? copy, messages: admitted, status: "leased", token,
             expiresAtMs: nowMs + leaseMs, dispatched: false,
-            occurredAtMs: admitted ? admitted.map((message) => message.occurredAtMs) : occurredAtMs,
+            messageIds: batch.map(({ id }) => id),
+            occurredAtMs: batch.map(({ occurredAtMs }) => occurredAtMs),
             ...proofMetadata,
           });
           state.activeTokens.set(token, identity);
@@ -289,9 +291,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             throw new CoreError("suppressed");
           }
           const { deletedMessages } = state;
-          if (deletedMessages.size > 0 && claim.messages) {
+          if (deletedMessages.size > 0) {
             for (const position of selected) {
-              if (await messageDeleted(deletedMessages, claim.key, claim.messages[position].id)) throw new CoreError("suppressed");
+              if (await messageDeleted(deletedMessages, claim.key, claim.messageIds[position])) throw new CoreError("suppressed");
             }
           }
           if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
