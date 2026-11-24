@@ -1,7 +1,7 @@
-// Keep these tables distinct from the legacy layout so a forward migration can
-// copy into them inside the same file after attesting the source.
-export const SQLITE_APPLICATION_ID = 0x43414952;
-export const SQLITE_PHYSICAL_VERSION = 54;
+// ASCII "CNXT" identifies core-next stores. Their user_version starts a
+// separate schema version sequence from the legacy engine.
+export const SQLITE_APPLICATION_ID = 0x434e5854;
+export const SQLITE_PHYSICAL_VERSION = 1;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';

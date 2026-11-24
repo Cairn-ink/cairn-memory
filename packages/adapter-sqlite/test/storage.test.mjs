@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { allDigests, CoreError, engineLegacyDigest } from "@cairn-ink/core";
-import { openSqliteAdapter, SQLITE_PHYSICAL_VERSION } from "../src/index.mjs";
-import { assertForwardTarget, assertLegacyOpen } from "../src/legacy/refusal.mjs";
+import { openSqliteAdapter } from "../src/index.mjs";
+import { assertForwardTarget, assertLegacyOpen, LEGACY_RULES } from "../src/legacy/refusal.mjs";
 import { inventoryLegacyStore } from "../src/legacy/inventory.mjs";
 import { readReceipts } from "../src/memory-rows.mjs";
 import { scopeKey } from "../src/storage-values.mjs";
@@ -159,7 +159,7 @@ test("tombstones remove text, hashes and evidence and hide rows after a committe
   });
 });
 
-test("the same visibility rule gates by-ID reads, exact matches and paged exports", async t => {
+test("by-ID and revision reads resolve live rows hidden from duplicates and exports", async t => {
   const { adapter } = await withStore(t);
   const { memories, suppressions } = adapter;
   const row = content("suppressed passages");
@@ -177,8 +177,8 @@ test("the same visibility rule gates by-ID reads, exact matches and paged export
   await read(adapter, left, async tx => {
     for (const [id, textHash, reason] of [[hidden.id, row.textHash, "text"],
       [sourceHidden.id, content("suppressed source").textHash, "session"]]) {
-      assert.equal(await memories.get(tx, left, id), null);
-      assert.equal(await memories.readRevision(tx, left, id), null);
+      assert.equal((await memories.get(tx, left, id)).textHash, textHash);
+      assert.deepEqual(await memories.readRevision(tx, left, id), { revision: 1, textHash });
       const query = [{ textHash }];
       assert.deepEqual(await memories.findDuplicates(tx, left, query, near), [[]]);
       // Write policy intentionally reports hidden match IDs to let Core refuse dedupe.
@@ -194,7 +194,7 @@ test("the same visibility rule gates by-ID reads, exact matches and paged export
   assert.equal((await read(adapter, right, tx => memories.get(tx, right, sameDigest.id))).text, row.text);
 });
 
-test("matches exact core and engine digests and preserves legacy denial evidence in scope", async t => {
+test("matches stored canonical hashes and preserves legacy denial evidence in scope", async t => {
   const opened = await withStore(t);
   const { adapter } = opened;
   const { memories, suppressions } = adapter;
@@ -209,21 +209,23 @@ test("matches exact core and engine digests and preserves legacy denial evidence
   const kept = await insert(adapter, left, row, 1);
   const similarlyNamed = await insert(adapter, right, row, 1);
   const legacyQuery = [{ textHash: "sha256:" + row.digests[0].value }];
+  const canonicalQuery = [{ textHash: row.textHash }];
   await read(adapter, left, async tx => {
     const [matches] = await memories.findDuplicates(tx, left, legacyQuery, near);
-    assert.equal(matches[0].id, kept.id);
+    assert.deepEqual(matches, []);
     const aliasOnly = [{ textHash: "sha256:" + sha256("different normalize"), legacyHash: row.textHash }];
     assert.equal((await memories.findDuplicates(tx, left, aliasOnly, near))[0][0].id, kept.id);
-    assert.deepEqual(await memories.findDuplicates(tx, left, legacyQuery, { ...near, excludeId: kept.id }), [[]]);
+    assert.deepEqual(await memories.findDuplicates(tx, left, canonicalQuery, { ...near, excludeId: kept.id }), [[]]);
   });
   await testAccess(opened, left, { write: true }, db => {
     db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?)").run(...scopeKey(left), row.digests[0].value);
   });
   await read(adapter, left, async tx => {
-    assert.equal(await memories.get(tx, left, kept.id), null);
-    assert.equal(await memories.readRevision(tx, left, kept.id), null);
-    assert.deepEqual(await memories.findDuplicates(tx, left, legacyQuery, near), [[]]);
-    assert.equal((await memories.exportPage(tx, left, { cursor: null, limit: 1 })).nextCursor, null);
+    assert.equal((await memories.get(tx, left, kept.id)).text, row.text);
+    assert.deepEqual(await memories.readRevision(tx, left, kept.id), { revision: 1, textHash: row.textHash });
+    assert.deepEqual(await memories.findDuplicates(tx, left, canonicalQuery, near), [[]]);
+    assert.deepEqual(await memories.exportPage(tx, left, { cursor: null, limit: 1 }), { items: [], nextCursor: null });
+    assert.deepEqual((await memories.readWritePolicy(tx, left, canonicalQuery, source, "hash")).hiddenIds, [kept.id]);
     assert.deepEqual((await memories.readWritePolicy(tx, left, legacyQuery, source, "hash")).blockedPositions, [0]);
     assert.equal(await suppressions.factsFor(tx, left, { memoryId: kept.id }), "ineligible");
     await assert.rejects(suppressions.snapshot(tx, left,
@@ -251,8 +253,8 @@ test("reads both receipt denial forms while isolating their scope", async t => {
     insert.run(...scopeKey(left), "rs1:a:" + address);
   });
   await read(adapter, left, async tx => {
-    assert.equal(await memories.get(tx, left, addressRow.id), null);
-    assert.equal(await memories.get(tx, left, byKey.id), null);
+    assert.equal((await memories.get(tx, left, addressRow.id)).text, "denied address");
+    assert.equal((await memories.get(tx, left, byKey.id)).text, "denied receipt key");
     assert.deepEqual(await memories.exportPage(tx, left, { cursor: null, limit: 1 }), { items: [], nextCursor: null });
   });
   assert.equal((await read(adapter, right, tx => memories.get(tx, right, rightRow.id))).text, "retained receipt");
@@ -327,7 +329,8 @@ test("fresh file metadata, facts, pause, and hashed fences survive factory reope
   const reopened = await openSqliteAdapter(path);
   try {
     await read(reopened, left, async tx => {
-      assert.equal(await reopened.memories.get(tx, left, saved.id), null);
+      assert.equal((await reopened.memories.get(tx, left, saved.id)).text, row.text);
+      assert.deepEqual(await reopened.memories.exportPage(tx, left, { cursor: null, limit: 1 }), { items: [], nextCursor: null });
       assert.equal(await reopened.suppressions.epoch(tx, left.owner), 1n);
       assert.deepEqual(await reopened.pause.get(tx, left.owner), { paused: true, generation: 1 });
     }, { pauseLock: true });
@@ -348,8 +351,9 @@ test("refuses an inventoried legacy file before changing its database bytes", as
   await assert.rejects(openSqliteAdapter(path), { code: "storage_error" });
   assert.deepEqual(readFileSync(path), before);
   assert.deepEqual(inventoryLegacyStore(path), inventory);
-  assert.doesNotThrow(() => assertForwardTarget(inventory.physical, SQLITE_PHYSICAL_VERSION));
-  assert.throws(() => assertLegacyOpen({ ...inventory, physical: SQLITE_PHYSICAL_VERSION }, inventory),
+  const legacySuccessor = LEGACY_RULES.firstPossibleSuccessor;
+  assert.doesNotThrow(() => assertForwardTarget(inventory.physical, legacySuccessor));
+  assert.throws(() => assertLegacyOpen({ ...inventory, physical: legacySuccessor }, inventory),
     { name: "LegacyRefusal", code: "legacy_downgrade" });
 });
 

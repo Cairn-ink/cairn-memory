@@ -62,14 +62,17 @@ function matchOrder(a, b) {
   return compareSortKey(b.writeTimeUs, a.writeTimeUs) || compareUtf8(b.id, a.id);
 }
 
-/** @param {Connection} db @param {Scope} scope */
-function exactCandidates(db, scope) {
+/** @param {Connection} db @param {Scope} scope @param {boolean} [includeStoredLegacy] */
+function exactCandidates(db, scope, includeStoredLegacy = false) {
   const select = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM cairn_memories WHERE ${LIVE_SCOPE}
-    AND (text_hash IN (?, ?) OR legacy_hash IN (?, ?))`);
+    AND (text_hash IN (?, ?) ${includeStoredLegacy ? "OR legacy_hash IN (?, ?)" : ""})`);
   const keys = scopeKey(scope);
   /** @param {string} canonical @param {string | undefined | null} legacy */
-  return (canonical, legacy) => select.all(...keys, canonical, legacy ?? null, canonical, legacy ?? null)
-    .map(row => decodeEntry(scope, row));
+  return (canonical, legacy) => {
+    const hashes = [canonical, legacy ?? null];
+    const bindings = includeStoredLegacy ? [...hashes, ...hashes] : hashes;
+    return select.all(...keys, ...bindings).map(row => decodeEntry(scope, row));
+  };
 }
 
 /**
@@ -107,11 +110,10 @@ function duplicateMatches(db, scope, batch, policy, excludeId, hiddenIds) {
 /** @param {Port} port @param {SessionHasher} hashSession @returns {MemoryStore} */
 export function createMemoryStore(port, hashSession) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
-  function visibleRow(tx, scope, id) {
+  function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
       validateId(id);
-      const entry = readEntry(db, scope, id);
-      return entry && !scopedSuppression(db, scope, hashSession).hides(entry) ? entry.row : null;
+      return readEntry(db, scope, id)?.row ?? null;
     });
   }
 
@@ -185,10 +187,10 @@ export function createMemoryStore(port, hashSession) {
       });
     },
 
-    get: visibleRow,
+    get: liveRow,
 
     async readRevision(tx, scope, id) {
-      const row = await visibleRow(tx, scope, id);
+      const row = await liveRow(tx, scope, id);
       return row && { revision: row.revision, textHash: row.textHash };
     },
 
@@ -207,7 +209,8 @@ export function createMemoryStore(port, hashSession) {
         if (row.textHash === textHash) return { outcome: "unchanged", revision: row.revision };
 
         const policy = scopedSuppression(db, scope, hashSession);
-        const candidates = exactCandidates(db, scope)(textHash, legacyHash);
+        // Replacement collision checks also consider stored legacy digests.
+        const candidates = exactCandidates(db, scope, true)(textHash, legacyHash);
         if (candidates.some(other => other.row.id !== id && !policy.hides(other))) throw new CoreError("memory_conflict");
         const revision = row.revision + 1;
         db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?, text_hash = ?, legacy_hash = ?, body = ?

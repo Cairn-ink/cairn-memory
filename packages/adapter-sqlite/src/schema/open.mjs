@@ -13,42 +13,64 @@ const layoutTables = [
 ];
 
 /** @param {Reader} db */
-function isFresh(db) {
+function readSessionHashKey(db) {
+  const identities = db.prepare("SELECT singleton, store_id, session_hash_key FROM cairn_store LIMIT 2").all();
+  const [identity] = identities;
+  if (identities.length !== 1 || identity.singleton !== 1 ||
+      typeof identity.store_id !== "string" || !identity.store_id ||
+      typeof identity.session_hash_key !== "string" || !/^[0-9a-f]{64}$/u.test(identity.session_hash_key)) {
+    throw new CoreError("storage_error");
+  }
+  return identity.session_hash_key;
+}
+
+/** Return the session hash key for an attested store, or null for an empty store.
+ * @param {Reader} db
+ */
+function classifyStore(db) {
   const app = db.prepare("PRAGMA application_id").get()?.application_id;
   const version = db.prepare("PRAGMA user_version").get()?.user_version;
-  if (app === 0 && version === 0 && !db.prepare("SELECT 1 FROM sqlite_schema LIMIT 1").get()) return true;
+  if (db.prepare("PRAGMA encoding").get()?.encoding !== "UTF-8") throw new CoreError("storage_error");
+  if (app === 0 && version === 0 && !db.prepare("SELECT 1 FROM sqlite_schema LIMIT 1").get()) return null;
   if (app !== SQLITE_APPLICATION_ID || version !== SQLITE_PHYSICAL_VERSION) {
     throw new CoreError("storage_error");
   }
-  return false;
+  const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
+  if (tables.length !== layoutTables.length || !layoutTables.every(name => tables.some(table => table.name === name))) {
+    throw new CoreError("storage_error");
+  }
+  return readSessionHashKey(db);
 }
 
 /** @param {string} filename */
 function preflight(filename) {
   if (typeof filename !== "string" || !filename || filename === ":memory:" ||
       filename.startsWith("file:") || filename.includes("\0")) throw new CoreError("invalid_input");
-  let exists = true;
   try {
     if (!statSync(filename).isFile()) throw new CoreError("invalid_input");
   } catch (error) {
     if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") throw error;
-    exists = false;
+    return false;
   }
-  // Preflight older and foreign stores read-only before the writer can change
-  // journal mode. A new, empty file contains no data until the UoW commits.
-  const db = new DatabaseSync(filename, { readOnly: exists });
+  // Classify the header, tables and identity in one read snapshot before the
+  // writer can change journal mode.
+  const db = new DatabaseSync(filename, { readOnly: true });
   try {
-    isFresh(db);
+    db.exec("BEGIN");
+    classifyStore(db);
   } finally {
     db.close();
   }
-  if (!exists) chmodSync(filename, 0o600);
+  return true;
 }
 
 /** @param {string} filename */
 export async function openStorage(filename) {
   try {
-    preflight(filename);
+    if (!preflight(filename)) {
+      new DatabaseSync(filename).close();
+      chmodSync(filename, 0o600);
+    }
   } catch (error) {
     throw toSqliteError(error);
   }
@@ -57,19 +79,10 @@ export async function openStorage(filename) {
   try {
     const sessionHashKey = await connection.uow.run(owner, {}, (tx) =>
       connection.port(tx, owner, { write: true }, (db) => {
-        if (isFresh(db)) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
-        if (db.prepare("PRAGMA encoding").get()?.encoding !== "UTF-8") throw new CoreError("storage_error");
+        const existingKey = classifyStore(db);
+        if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
         db.exec("PRAGMA secure_delete = ON");
-        const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
-        if (!layoutTables.every(name => tables.some(table => table.name === name))) {
-          throw new CoreError("storage_error");
-        }
-        const identity = db.prepare("SELECT store_id, session_hash_key FROM cairn_store WHERE singleton = 1").get();
-        if (typeof identity?.store_id !== "string" || !identity.store_id ||
-            typeof identity.session_hash_key !== "string" || !/^[0-9a-f]{64}$/u.test(identity.session_hash_key)) {
-          throw new CoreError("storage_error");
-        }
-        return identity.session_hash_key;
+        return existingKey ?? readSessionHashKey(db);
       }));
     return { ...connection, sessionHashKey };
   } catch (error) {
