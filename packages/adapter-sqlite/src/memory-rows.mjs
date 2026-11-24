@@ -7,6 +7,10 @@ import { scopeKey } from "./storage-values.mjs";
 /** @import { MemoryRow, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { Connection } from "./storage-values.mjs" */
 /** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[] }} Entry */
+/** @typedef {Receipt & {legacyReceiptKey?: string, legacy?: {
+ * canonicalRead?: boolean,
+ * spans?: Array<{sessionId: string, start: number, end: number, precision: string}>
+ * }}} StoredReceipt */
 
 export const MEMORY_COLUMNS =
   "id, revision, historical, created_at_ms, CAST(updated_at_us AS TEXT) AS sort_key, text_hash, legacy_hash, body";
@@ -50,7 +54,7 @@ export function readEntry(db, scope, id) {
   return record && decodeEntry(scope, record);
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @returns {Array<Receipt & {legacyReceiptKey?: string}>} */
+/** @param {Connection} db @param {Scope} scope @param {string} id @returns {StoredReceipt[]} */
 export function readReceipts(db, scope, id) {
   return db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
     WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? ORDER BY ordinal`)

@@ -33,9 +33,14 @@ function phases(plan, source) {
     [
       ["cairn_legacy_denials", plan.markers],
       ["cairn_suppression_epochs", plan.epochs],
+      ["cairn_suppression_facts", plan.safety.facts],
+      ["cairn_migrated_safety", plan.safety.rows],
       ["cairn_pause", plan.pause],
       ["cairn_raw_fences", source.rawPrivacy?.fences ?? []],
-      ["cairn_migrated_raw_privacy", source.rawPrivacy?.rules ?? []],
+      ["cairn_migrated_raw_privacy", [...(source.rawPrivacy?.rules ?? []), ...source.archive.reservations, ...plan.closed]],
+      ["cairn_raw_messages", source.archive.rows],
+      ["cairn_raw_anchors", plan.anchors],
+      ["cairn_migrated_raw_maps", source.archive.maps],
     ],
   ].map(phase => /** @type {Array<[string, SQLInputValue[][]]>} */ (phase));
 }
@@ -175,7 +180,8 @@ export async function migrateLegacyStore(input) {
     memories: plan.memoryRows.length, receipts: plan.receiptRows.length, denials: plan.markers.length,
     withheldReceipts: plan.withheldReceipts, pausedOwners: plan.pausedOwners,
     rawFences: source.rawPrivacy?.fences.length ?? 0, rawPrivacyFacts: source.rawPrivacy?.rules.length ?? 0,
-    dropped: source.dropped,
+    archived: source.archive.counts, ledger: plan.ledger, safetyFacts: source.safety?.facts.length ?? 0,
+    identityReservations: source.safety?.reservations.length ?? 0, dropped: source.dropped,
   };
   if (observed.checkpoint === 3) return { ...result, attestation: String(observed.attestation) };
 
