@@ -2,21 +2,25 @@ import { CoreError, isErrorCode } from "@cairn-ink/core";
 import { finishCapture, validateFinishItems } from "./capture-finish.mjs";
 import { decodeJson } from "./memory-rows.mjs";
 import { readPause } from "./pause.mjs";
+import { rawFactPolicy } from "./raw-facts.mjs";
+import { blocksRawSession } from "./raw-lineage.mjs";
 import { invalidInput, ownerKey, scopeKey, writeTime } from "./storage-values.mjs";
-import { scopedSuppression } from "./suppressions.mjs";
+import { readFacts } from "./suppressions.mjs";
 
 /** @import { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, FinishResult, Scope, SourceFilter } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @typedef {Pick<CaptureKey, "scope" | "client" | "eventId">} Identity */
 /** @typedef {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} IndexRevisions */
+/** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} Lineage */
+/** @typedef {Pick<CaptureMessage, "id" | "occurredAtMs">} SourcePosition */
 
 const identityColumns = "owner_id, client_key, event_key";
 const identityWhere = "owner_id = ? AND client_key = ? AND event_key = ?";
-const clearLease = "token = NULL, expires_at_ms = NULL, dispatched = 0, source_times = NULL";
+const clearLease = "token = NULL, expires_at_ms = NULL, dispatched = 0, source_positions = NULL, source_proofs = NULL";
 const claimWrite = { write: true, pauseLock: true };
 const selectClaim = `SELECT namespace_key, client_key, event_key, session_key, payload_digest,
-    status, token, CAST(expires_at_ms AS TEXT) AS expires, source_times, messages, result
+    status, token, CAST(expires_at_ms AS TEXT) AS expires, source_positions, source_proofs, messages, result
   FROM cairn_capture_claims LEFT JOIN cairn_capture_outbox USING (${identityColumns})`;
 
 /** @param {Identity} key */
@@ -31,7 +35,7 @@ function requiredString(value) {
 }
 
 /** @param {CaptureKey} key @param {Scope} scope @returns {CaptureKey} */
-function captureKey({ client, eventId, sessionId, payloadDigest }, scope) {
+export function captureKey({ client, eventId, sessionId, payloadDigest }, scope) {
   scopeKey(scope);
   if (typeof payloadDigest !== "string" || !/^[0-9a-f]{64}$/u.test(payloadDigest)) invalidInput();
   return { scope, client: requiredString(client), eventId: requiredString(eventId),
@@ -39,7 +43,7 @@ function captureKey({ client, eventId, sessionId, payloadDigest }, scope) {
 }
 
 /** @template T @param {readonly T[]} input @returns {T[]} */
-function copyBatch(input) {
+export function copyBatch(input) {
   if (!Array.isArray(input)) invalidInput();
   const copy = [];
   for (let i = 0, length = input.length; i < length; i++) {
@@ -51,7 +55,7 @@ function copyBatch(input) {
 }
 
 /** @param {readonly CaptureMessage[]} messages */
-function copyMessages(messages) {
+export function copyMessages(messages) {
   return copyBatch(messages).map(message => {
     if (!message) invalidInput();
     const { id, role, content, occurredAtMs } = message;
@@ -109,26 +113,33 @@ function assertUnpaused(db, owner) {
   if (readPause(db, owner).paused) throw new CoreError("capture_paused");
 }
 
-/** @param {Connection} db @param {CaptureKey} key @param {"pending" | "leased"} status */
-function insertClaim(db, key, status, /** @type {bigint | null} */ expires, /** @type {string | null} */ sourceTimes) {
+/** @param {Connection} db @param {CaptureKey} key @param {"pending" | "leased"} status
+ * @param {bigint | null} expires @param {string | null} positions @param {string | null} proofs
+ */
+function insertClaim(db, key, status, expires, positions, proofs) {
   return db.prepare(`INSERT INTO cairn_capture_claims
-    (${identityColumns}, namespace_key, session_key, payload_digest, status, token, expires_at_ms, source_times)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'leased' THEN lower(hex(randomblob(16))) END, ?, ?) RETURNING token`)
+    (${identityColumns}, namespace_key, session_key, payload_digest, status, token, expires_at_ms, source_positions, source_proofs)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'leased' THEN lower(hex(randomblob(16))) END, ?, ?, ?) RETURNING token`)
     .get(...claimIdentity(key), JSON.stringify(key.scope.namespace), JSON.stringify(key.sessionId),
-      key.payloadDigest, status, status, expires, sourceTimes);
+      key.payloadDigest, status, status, expires, positions, proofs);
 }
 
-/** @param {Connection} db @param {CaptureKey} key @param {readonly (number | null)[]} times @param {SessionHasher} hashSession */
-function sourcePolicy(db, { scope, client, sessionId }, times, hashSession) {
-  const policy = scopedSuppression(db, scope, hashSession);
-  if (policy.blocksSession(client, sessionId)) return { blockedSession: true, blockedMessages: [] };
-  return policy.snapshot({ client, sessionId, occurredAtMs: [...times] });
+/** @param {Connection} db @param {CaptureKey} key @param {SessionHasher} hashSession */
+function sourcePolicy(db, key, hashSession) {
+  const { scope, client } = key;
+  const facts = readFacts(db, scope);
+  const policy = rawFactPolicy(scope, key, facts, hashSession);
+  return {
+    blockedSession: blocksRawSession(scope, client, policy.sessionKeyHash, facts),
+    blocks: (/** @type {SourcePosition} */ position) => policy.refusesSource(position, true),
+  };
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @param {IndexRevisions} index @param {() => number} [now]
+/** @param {Port} port @param {SessionHasher} hashSession @param {IndexRevisions} index @param {Lineage} lineage
+ * @param {() => number} [now]
  * @returns {Required<CaptureClaim> & CaptureFinish & SourceFilter}
  */
-export function createCapturePorts(port, hashSession, index, now = Date.now) {
+export function createCapturePorts(port, hashSession, index, lineage, now = Date.now) {
   const time = () => writeTime(now()).updatedAtMs;
   return {
     admit(tx, input, messages) {
@@ -142,7 +153,7 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         if (active(row, time())) return { status: "processing" };
         if (row) return { status: "duplicate" };
         assertUnpaused(db, tx.owner);
-        insertClaim(db, key, "pending", null, null);
+        insertClaim(db, key, "pending", null, null, null);
         db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, messages) VALUES (?, ?, ?, ?)`)
           .run(...claimIdentity(key), JSON.stringify(batch));
         return { status: "admitted" };
@@ -192,12 +203,13 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         assertUnpaused(db, tx.owner);
         /** @type {CaptureMessage[]} */
         const batch = typeof row?.messages === "string" ? decodeJson(row.messages) : copied;
-        const times = JSON.stringify(batch.map(message => message.occurredAtMs));
+        const positions = JSON.stringify(batch.map(({ id, occurredAtMs }) => ({ id, occurredAtMs })));
+        const proofs = JSON.stringify(lineage.proofs(tx.owner, key.client, batch));
         const expires = BigInt(nowMs) + BigInt(leaseMs);
         const leased = row ? db.prepare(`UPDATE cairn_capture_claims SET status = 'leased',
-          token = lower(hex(randomblob(16))), expires_at_ms = ?, source_times = ?, dispatched = 0, failure_code = NULL
-          WHERE ${identityWhere} RETURNING token`).get(expires, times, ...claimIdentity(key))
-          : insertClaim(db, key, "leased", expires, times);
+          token = lower(hex(randomblob(16))), expires_at_ms = ?, source_positions = ?, source_proofs = ?, dispatched = 0, failure_code = NULL
+          WHERE ${identityWhere} RETURNING token`).get(expires, positions, proofs, ...claimIdentity(key))
+          : insertClaim(db, key, "leased", expires, positions, proofs);
         if (typeof leased?.token !== "string") throw new CoreError("internal_error");
         return { status: "claimed", token: leased.token };
       });
@@ -251,11 +263,10 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
       const scope = input?.scope;
       return port(tx, scope?.owner, {}, db => {
         const key = captureKey(input, { owner: tx.owner, namespace: scope.namespace });
-        const times = copyMessages(messages).map(message => message.occurredAtMs);
-        const { blockedSession, blockedMessages } = sourcePolicy(db, key, times, hashSession);
-        if (blockedSession) return [];
-        const blocked = new Set(blockedMessages);
-        return Array.from(times.keys()).filter(position => !blocked.has(position));
+        const batch = copyMessages(messages);
+        const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
+        if (blockedSession || lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch))) return [];
+        return Array.from(batch.keys()).filter(position => !blocks(batch[position]));
       });
     },
 
@@ -271,11 +282,16 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         if (row && row.namespace_key !== JSON.stringify(key.scope.namespace)) throw new CoreError("stale_admission");
         assertSamePayload(row, key);
         if (!row || !active(row, time())) throw new CoreError("stale_admission");
-        /** @type {(number | null)[]} */
-        const times = decodeJson(row.source_times);
-        if (selected.some(position => position >= times.length)) invalidInput();
-        const { blockedSession, blockedMessages } = sourcePolicy(db, key, selected.map(position => times[position]), hashSession);
-        if (blockedSession || blockedMessages.length) throw new CoreError("suppressed");
+        /** @type {SourcePosition[]} */
+        const sources = decodeJson(row.source_positions);
+        if (selected.some(position => position >= sources.length)) invalidInput();
+        const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
+        if (blockedSession || selected.some(position => blocks(sources[position]))) throw new CoreError("suppressed");
+        // An admitted batch may have been scrubbed since claim. Its current
+        // blank slots carry ID-only proofs; standalone claims keep their proofs.
+        const proofs = typeof row.messages === "string" ?
+          lineage.proofs(tx.owner, key.client, decodeJson(row.messages)) : decodeJson(row.source_proofs);
+        if (lineage.fenced(db, key.scope, key, proofs)) throw new CoreError("lineage_fenced");
       });
     },
   };

@@ -25,6 +25,7 @@ const indexState = [
   `SELECT namespace_key, memory_id, ordinal FROM cairn_receipts
     WHERE owner_id = ? ORDER BY namespace_key, memory_id, ordinal`,
   "SELECT epoch FROM cairn_suppression_epochs WHERE owner_id = ?",
+  "SELECT revision FROM cairn_index_revisions WHERE owner_id = ?",
   `SELECT namespace_key, fingerprint FROM cairn_legacy_denials
     WHERE owner_id = ? ORDER BY namespace_key, fingerprint`,
 ];

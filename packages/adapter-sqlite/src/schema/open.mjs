@@ -11,6 +11,7 @@ const layoutTables = [
   "cairn_store", "cairn_memories", "cairn_receipts", "cairn_suppression_facts",
   "cairn_suppression_epochs", "cairn_legacy_denials", "cairn_pause",
   "cairn_capture_claims", "cairn_capture_outbox", "cairn_capture_abandoned_tokens", "cairn_index_revisions",
+  "cairn_raw_messages", "cairn_raw_fences", "cairn_raw_anchors",
 ];
 
 /** @param {Reader} db */
