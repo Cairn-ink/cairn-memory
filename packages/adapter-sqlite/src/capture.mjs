@@ -74,6 +74,33 @@ function readClaim(db, key) {
 
 /** @typedef {NonNullable<ReturnType<typeof readClaim>>} ClaimRow */
 
+/** @param {ClaimRow | undefined} row @param {CaptureKey} key @param {Lineage} lineage */
+function outboxSources(row, key, lineage) {
+  if (typeof row?.messages !== "string") return null;
+  /** @type {CaptureMessage[]} */
+  const messages = decodeJson(row.messages);
+  const proofs = lineage.proofs(key.scope.owner, key.client, messages);
+  const leased = row.status === "leased";
+  /** @type {SourcePosition[] | null} */
+  const admitted = leased ? decodeJson(row.source_positions) : null;
+  /** @type {typeof proofs | null} */
+  const admittedProofs = leased ? decodeJson(row.source_proofs) : null;
+  return {
+    messages, proofs,
+    /** @param {number} position */
+    matchesClaim(position) {
+      if (!leased) return true;
+      const message = messages[position];
+      const proof = proofs[position];
+      const saved = admitted?.[position];
+      const savedProof = admittedProofs?.[position];
+      return message !== undefined && saved !== undefined && savedProof !== undefined &&
+        message.id === saved.id && message.occurredAtMs === saved.occurredAtMs &&
+        proof[0] === savedProof[0] && proof[1] === savedProof[1];
+    },
+  };
+}
+
 /** @param {ClaimRow} row @param {string} owner @returns {CaptureKey} */
 function storedKey(row, owner) {
   return {
@@ -289,11 +316,21 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         const key = captureKey(input, { owner: tx.owner, namespace: scope.namespace });
         controls?.assertCapture(key);
         const batch = copyMessages(messages);
+        const row = db.prepare(`${selectClaim} WHERE ${identityWhere} AND namespace_key = ?`)
+          .get(...claimIdentity(key), JSON.stringify(key.scope.namespace));
+        if (row && (row.session_key !== JSON.stringify(key.sessionId) || row.payload_digest !== key.payloadDigest)) return [];
+        const current = outboxSources(row, key, lineage);
         const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
         if (blockedSession || migratedRaw?.blocksEvent(db, key) || migratedRaw?.blocks(db, key.scope, key, batch) ||
             lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch))) return [];
-        return Array.from(batch.keys()).filter(position => !blocks(batch[position]) &&
-          !migratedRaw?.blocksSpan(db, key.scope, key, batch[position].id));
+        return Array.from(batch.keys()).filter(position => {
+          const message = batch[position];
+          const slot = current?.messages[position];
+          if (current && (!slot?.content || slot.content !== message.content || slot.id !== message.id ||
+              slot.role !== message.role || slot.occurredAtMs !== message.occurredAtMs ||
+              !current.matchesClaim(position))) return false;
+          return !blocks(message) && !migratedRaw?.blocksSpan(db, key.scope, key, message.id);
+        });
       });
     },
 
@@ -317,10 +354,12 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
         if (blockedSession || selected.some(position => blocks(sources[position]) ||
             migratedRaw?.blocksSpan(db, key.scope, key, sources[position].id))) throw new CoreError("suppressed");
-        // An admitted batch may have been scrubbed since claim. Its current
-        // blank slots carry ID-only proofs; standalone claims keep their proofs.
-        const proofs = typeof row.messages === "string" ?
-          lineage.proofs(tx.owner, key.client, decodeJson(row.messages)) : decodeJson(row.source_proofs);
+        const current = outboxSources(row, key, lineage);
+        if (current) {
+          if (selected.some(position => current.messages[position]?.content === "")) throw new CoreError("suppressed");
+          if (selected.some(position => !current.matchesClaim(position))) throw new CoreError("stale_admission");
+        }
+        const proofs = current?.proofs ?? decodeJson(row.source_proofs);
         if (lineage.fenced(db, key.scope, key, proofs)) throw new CoreError("lineage_fenced");
       });
     },
