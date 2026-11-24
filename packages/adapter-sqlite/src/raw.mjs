@@ -11,6 +11,7 @@ import { advanceSuppressionEpoch, readFacts, readLegacyDenials } from "./suppres
 /** @import { IndexRevisions } from "./capture.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
+/** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} Lineage */
 
 const write = { write: true };
@@ -42,8 +43,10 @@ function withheldPositions(options, length) {
   return unique;
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @param {Lineage} lineage @param {IndexRevisions} index */
-export function createRawStore(port, hashSession, lineage, index) {
+/** @param {Port} port @param {SessionHasher} hashSession @param {Lineage} lineage @param {IndexRevisions} index
+ * @param {MigratedRawPolicy} [migratedRaw]
+ */
+export function createRawStore(port, hashSession, lineage, index, migratedRaw) {
   let rawKeyConflict = 0;
 
   /** @type {RawStore & RawCapture} */
@@ -57,8 +60,11 @@ export function createRawStore(port, hashSession, lineage, index) {
 
     archiveAllowed(tx, input) {
       return port(tx, input?.scope?.owner, {}, db => {
-        const { scope, client, sessionId } = captureKey(input, { owner: tx.owner, namespace: input.scope.namespace });
-        return allowsRawSession(db, scope, client, hashSession(scope, client, sessionId));
+        const key = captureKey(input, { owner: tx.owner, namespace: input.scope.namespace });
+        const { scope, client, sessionId } = key;
+        return allowsRawSession(db, scope, client, hashSession(scope, client, sessionId)) &&
+          !migratedRaw?.blocksEvent(db, key) &&
+          !migratedRaw?.blocks(db, scope, { client, sessionId }, []);
       });
     },
 
@@ -69,7 +75,9 @@ export function createRawStore(port, hashSession, lineage, index) {
         const { scope, client } = key;
         const facts = readFacts(db, scope);
         const policy = rawFactPolicy(scope, key, facts, hashSession);
-        if (!batch.length || !allowsRawSession(db, scope, client, policy.sessionKeyHash, facts)) return { archived: 0 };
+        if (!batch.length || !allowsRawSession(db, scope, client, policy.sessionKeyHash, facts) ||
+            migratedRaw?.blocksEvent(db, key) ||
+            migratedRaw?.blocks(db, scope, key, batch)) return { archived: 0 };
         const legacy = readLegacyDenials(db, scope);
         const insert = rawWriter(db, scope, key);
         let archived = 0;
@@ -96,6 +104,7 @@ export function createRawStore(port, hashSession, lineage, index) {
         const facts = readFacts(db, selection);
         const policy = rawFactPolicy(selection, session, facts, hashSession);
         if (!allowsRawSession(db, selection, session.client, policy.sessionKeyHash, facts) ||
+            migratedRaw?.blocks(db, selection, session, batch) ||
             lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
           return { ...counts, withheld: batch.length };
         }

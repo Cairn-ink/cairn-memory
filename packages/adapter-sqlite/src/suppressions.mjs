@@ -1,12 +1,14 @@
 import { createHmac } from "node:crypto";
 import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
+import { legacyRawHash } from "./migrate/raw-privacy.mjs";
 import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
+/** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
 
 const matchPolicy = { rowShingles: false };
@@ -24,11 +26,12 @@ function hasNoShingleEvidence(evidence) {
   });
 }
 
-/** @param {string} key @returns {SessionHasher} */
-export function sessionHasher(key) {
+/** @param {string} key @param {boolean} [legacy] @returns {SessionHasher} */
+export function sessionHasher(key, legacy = false) {
   const secret = Buffer.from(key, "hex");
-  return (scope, client, sessionId) => createHmac("sha256", secret)
-    .update(JSON.stringify(["cairn-sqlite-session", ...scopeKey(scope), client, sessionId])).digest("hex");
+  return (scope, client, sessionId) =>
+    (legacy ? legacyRawHash(key, scope, "episode-v1", client, sessionId) : null) ??
+    createHmac("sha256", secret).update(JSON.stringify(["cairn-sqlite-session", ...scopeKey(scope), client, sessionId])).digest("hex");
 }
 
 /** @param {SuppressionFact} fact */
@@ -263,9 +266,10 @@ export function scopedSuppression(db, scope, hashSession) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession
- * @param {(db: Connection, tx: Tx) => void} [markDirty] @returns {SuppressionStore}
+ * @param {(db: Connection, tx: Tx) => void} [markDirty]
+ * @param {MigratedRawPolicy} [migratedRaw] @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty) {
+export function createSuppressionStore(port, hashSession, markDirty, migratedRaw) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -294,7 +298,12 @@ export function createSuppressionStore(port, hashSession, markDirty) {
       });
     },
     snapshot(tx, scope, candidates) {
-      return port(tx, scope?.owner, {}, db => scopedSuppression(db, scope, hashSession).snapshot(candidates));
+      return port(tx, scope?.owner, {}, db => {
+        const result = scopedSuppression(db, scope, hashSession).snapshot(candidates);
+        const { client, sessionId } = candidates;
+        if (client && sessionId && migratedRaw?.blocks(db, scope, { client, sessionId }, [])) result.blockedSession = true;
+        return result;
+      });
     },
     factsFor(tx, scope, { memoryId }) {
       return port(tx, scope?.owner, {}, db => scopedSuppression(db, scope, hashSession)
