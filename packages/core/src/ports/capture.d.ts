@@ -66,6 +66,8 @@ export interface FinishResult {
   indexRevision: number;
   memories: Array<{ id: string; revision: Revision; outcome: "inserted" | "touched" | "changed" }>;
   suppressedCount: number;
+  /** Zero-based positions in the `items` passed to `finish` that the write policy suppressed. */
+  suppressedItems?: readonly number[];
   duplicateCount: number;
   counters: Counters;
 }
