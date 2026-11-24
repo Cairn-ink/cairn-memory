@@ -15,9 +15,11 @@ import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
 /** @import {CaptureKey, CaptureMessage, RetainedDigester, Tx} from "../ports/index.d.ts" */
 /** @import {CallOptions} from "../ports/common.d.ts" */
 /** @import {ModelRequest} from "../ports/model.d.ts" */
+/** @import {SuppressionSnapshot} from "../ports/privacy.d.ts" */
 /** @typedef {ReturnType<typeof createCaptureDeadline>} CaptureDeadline */
 /** @typedef {Awaited<ReturnType<import("../ports/privacy.d.ts").FingerprintKeyProvider["userKey"]>>} FingerprintKey */
 /** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
+/** @typedef {ReturnType<typeof prepareMessage>} CaptureSource */
 
 // Engine core/capture.mjs:144 gives a plain capture a 125-second admission lease.
 const DEFAULT_LEASE_MS = 125_000;
@@ -54,7 +56,7 @@ function prepareMessage(raw) {
   return { message: { ...message, content: prepareMessageContent(cleanContent(originalContent)) }, originalContent };
 }
 
-/** @param {import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]} passages */
+/** @param {SuppressionSnapshot["passages"]} passages */
 export function captureTextWithholding(passages) {
   const textFacts = passages.map(({ fact }) => fact);
   const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
@@ -63,6 +65,50 @@ export function captureTextWithholding(passages) {
   const matches = async (originalContent, preparedContent, key) =>
     withholdsAnyPassage(await fingerprintMemoryPassages(originalContent, preparedContent, key), textFacts);
   return { legacyKeyUnavailable, matches: textFacts.length ? matches : null };
+}
+
+/**
+ * @param {CaptureSource[]} sources
+ * @param {FingerprintKey | null} key
+ * @param {readonly RetainedDigester[] | undefined} digesters
+ */
+async function retainedSourceEvidence(sources, key, digesters) {
+  return digesters?.length ? Promise.all(sources.map(({ message, originalContent }) =>
+    fingerprintMemoryPassages(originalContent, message.content, key, undefined, digesters))) : null;
+}
+
+/**
+ * @param {CaptureSource[]} sources
+ * @param {number[]} positions
+ * @param {SuppressionSnapshot["passages"]} passages
+ * @param {FingerprintKey | null} preparedKey
+ * @param {Awaited<ReturnType<typeof retainedSourceEvidence>>} preparedEvidence
+ * @param {FingerprintKey | null} refreshKey
+ */
+async function filterCaptureSources(sources, positions, passages, preparedKey, preparedEvidence, refreshKey) {
+  const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+  if (!matches) return positions;
+  const textFacts = preparedEvidence && passages.map(({ fact }) => fact);
+  const allowed = await Promise.all(positions.map(async index => {
+    const { message, originalContent } = sources[index];
+    if (preparedEvidence && textFacts) {
+      const retained = preparedEvidence[index];
+      let evidence = retained;
+      if (refreshKey) {
+        const current = await fingerprintMemoryPassages(originalContent, message.content, refreshKey);
+        // Spelling order is independent of the key. Reuse the retained evidence for each spelling.
+        evidence = current.map((passage, position) => {
+          const { digests, retainedShingles } = retained[position];
+          return { ...passage, digests: [...passage.digests, ...digests.filter(digest => digest.label !== undefined)],
+            retainedShingles };
+        });
+      }
+      return !withholdsAnyPassage(evidence, textFacts);
+    }
+    return !legacyKeyUnavailable && (!message.content ||
+      !await matches(originalContent, message.content, refreshKey ?? preparedKey));
+  }));
+  return positions.filter((_, index) => allowed[index]);
 }
 
 /** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */
@@ -154,7 +200,7 @@ function prepareCaptureCandidates(candidates, messages, { client, sessionId }, f
 /**
  * @template {PreparedCandidate} T
  * @param {T[]} candidates
- * @param {import("../ports/privacy.d.ts").SuppressionSnapshot} snapshot
+ * @param {SuppressionSnapshot} snapshot
  * @param {CaptureKey["scope"]} scope
  * @param {Set<string>} excludedSources
  */
@@ -210,6 +256,9 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
 export function captureMethods(deps) {
   const { storage, clock, model, gate, config, diagnostics } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
+  /** @param {Tx} tx @param {SuppressionSnapshot["passages"]} passages */
+  const sourceWriteKey = (tx, passages) =>
+    capabilities.fingerprintKey && passages.length && keys.userKeyForWrite ? keys.userKeyForWrite(tx) : null;
   return {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
@@ -231,8 +280,7 @@ export function captureMethods(deps) {
       const key = { scope, client, sessionId, eventId, payloadDigest };
       const preparedKey = capabilities.fingerprintKey && !keys.userKeyForWrite ? await keys.userKey(scope.owner) : null;
       const digesters = await keys?.retainedDigesters?.(scope.owner);
-      const preparedEvidence = digesters?.length ? await Promise.all(incoming.map(({ message, originalContent }) =>
-        fingerprintMemoryPassages(originalContent, message.content, preparedKey, undefined, digesters))) : null;
+      const preparedEvidence = await retainedSourceEvidence(incoming, preparedKey, digesters);
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
         if (pauseResult(await pause.get(tx, scope.owner)).paused) return { status: "paused" };
         const session = { client, sessionId };
@@ -250,32 +298,9 @@ export function captureMethods(deps) {
             positions.some(position => !Number.isInteger(position) || position < 0 || position >= prepared.length)) {
           throw new CoreError("internal_error");
         }
-        const eligible = new Set(positions);
-        const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
-        const transactionKey = capabilities.fingerprintKey && keys.userKeyForWrite && matches
-          ? await keys.userKeyForWrite(tx) : null;
-        const textFacts = preparedEvidence && passages.map(({ fact }) => fact);
-        const admitted = await Promise.all(incoming.map(async ({ message, originalContent }, index) => {
-          const scrubbed = { ...message, content: "" };
-          if (!eligible.has(index)) return scrubbed;
-          // The reference filter checks the source and its time. Compare snapshot text facts too.
-          if (preparedEvidence && textFacts) {
-            const retained = preparedEvidence[index];
-            let evidence = retained;
-            if (transactionKey) {
-              const current = await fingerprintMemoryPassages(originalContent, message.content, transactionKey);
-              // Spelling order is independent of the key. Reuse the retained evidence for each spelling.
-              evidence = current.map((passage, position) => {
-                const { digests, retainedShingles } = retained[position];
-                return { ...passage, digests: [...passage.digests, ...digests.filter(digest => digest.label !== undefined)],
-                  retainedShingles };
-              });
-            }
-            return withholdsAnyPassage(evidence, textFacts) ? scrubbed : message;
-          }
-          return legacyKeyUnavailable || (matches && message.content &&
-            await matches(originalContent, message.content, transactionKey ?? preparedKey)) ? scrubbed : message;
-        }));
+        const allowed = new Set(await filterCaptureSources(incoming, [...new Set(positions)], passages, preparedKey,
+          preparedEvidence, await sourceWriteKey(tx, passages)));
+        const admitted = prepared.map((message, index) => allowed.has(index) ? message : { ...message, content: "" });
         const { status } = await admit.call(capture, tx, key, admitted);
         switch (status) {
           case "duplicate": case "processing": case "rawReplay":
@@ -375,9 +400,8 @@ export function captureMethods(deps) {
             case "duplicate": case "processing": return { status: claim.status };
             case "claimed": {
               const positions = await readEligible(tx, key, messages);
-              const selected = positions.filter(position => messages[position].content !== "");
-              return { ...claim, key, positions: selected, admittedMessages: messages,
-                messages: selected.map(position => messages[position]) };
+              return { ...claim, key, positions: positions.filter(position => messages[position].content !== ""),
+                admittedMessages: messages };
             }
             default: throw new CoreError("internal_error");
           }
@@ -388,8 +412,8 @@ export function captureMethods(deps) {
         throw failure;
       }
       if (claimed.status !== "claimed") return claimed;
-      const { key, positions, messages, admittedMessages } = claimed;
-      let { token } = claimed;
+      const { key, admittedMessages } = claimed;
+      let { token, positions } = claimed;
 
       /** @param {Tx} tx */
       async function pauseChanged(tx) {
@@ -412,6 +436,15 @@ export function captureMethods(deps) {
         });
       }
 
+      /** @param {Tx} tx */
+      async function abandonKeyMismatch(tx) {
+        await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
+        return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
+      }
+
+      /** @param {Tx} tx */
+      const selectWriteKey = tx => keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner);
+
       let retryableExtraction = false;
       try {
         if (positions.length === 0) {
@@ -419,21 +452,57 @@ export function captureMethods(deps) {
           return result === null ? { status: "paused" } : { status: "done", result };
         }
 
-        const { system, input, schema } = plainExtractionSpec(messages);
-        const inputTokens = countTokens(model, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
-        const maxOutputTokens = Math.min(HOSTED_EXTRACT_OUTPUT_TOKENS,
-          model.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
-        if (maxOutputTokens < MODEL_OUTPUT_TOKENS) throw new CoreError("context_budget_exceeded");
-        /** @type {ModelRequest} */
-        const request = { system, input, schema, schemaName: "extract_memories", maxOutputTokens };
-        const { properties } = /** @type {{properties: {items: {maxItems: number}}}} */ (schema);
-        const policy = { sourceCount: messages.length, itemLimit: properties.items.maxItems };
-        const dispatch = await runAtGeneration(async tx => {
-          await capture.assertEligible(tx, key, positions);
-          return capture.beginDispatch(tx, token);
-        });
-        if (dispatch === null) return { status: "paused" };
-        token = dispatch.token;
+        // The outbox retains only the prepared text. Use it to derive the available historical spellings.
+        const sources = admittedMessages.map(message => ({ message, originalContent: message.content }));
+        // Retained signers omit the current Core key. Bind their evidence to that key's generation.
+        const sourceKey = capabilities.fingerprintKey ? await keys.userKey(owner) : undefined;
+        const digesters = await keys.retainedDigesters?.(owner);
+        const sourceEvidence = await retainedSourceEvidence(sources, null, digesters);
+        /** @param {Tx} tx @param {number[]} selected */
+        const readSourcePassages = async (tx, selected) => {
+          const { blockedSession, blockedMessages, passages } = await suppressions.snapshot(tx, scope, {
+            client, sessionId, occurredAtMs: selected.map(position => admittedMessages[position].occurredAtMs),
+          });
+          if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
+          return passages;
+        };
+        /** @type {{request: ModelRequest, messages: CaptureMessage[], policy: {sourceCount: number, itemLimit: number}} | undefined} */
+        let extraction;
+        for (;;) {
+          const dispatch = await runAtGeneration(async tx => {
+            const passages = await readSourcePassages(tx, positions);
+            const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
+            if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
+              return abandonKeyMismatch(tx);
+            }
+            const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
+            await capture.assertEligible(tx, key, allowed);
+            if (!allowed.length) return { result: await capture.finish(tx, token, []) };
+            if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
+            return { allowed };
+          });
+          if (dispatch === null) return { status: "paused" };
+          if ("status" in dispatch) return dispatch;
+          if ("result" in dispatch) return { status: "done", result: dispatch.result };
+          if ("token" in dispatch) {
+            token = dispatch.token;
+            break;
+          }
+
+          // Size only screened text, outside the lock. The next check can only shrink the batch.
+          positions = dispatch.allowed;
+          const messages = positions.map(position => admittedMessages[position]);
+          const { system, input, schema } = plainExtractionSpec(messages);
+          const inputTokens = countTokens(model, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
+          const maxOutputTokens = Math.min(HOSTED_EXTRACT_OUTPUT_TOKENS,
+            model.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
+          if (maxOutputTokens < MODEL_OUTPUT_TOKENS) throw new CoreError("context_budget_exceeded");
+          const { properties } = /** @type {{properties: {items: {maxItems: number}}}} */ (schema);
+          extraction = { messages, request: { system, input, schema, schemaName: "extract_memories", maxOutputTokens },
+            policy: { sourceCount: messages.length, itemLimit: properties.items.maxItems } };
+        }
+        if (!extraction) throw new CoreError("internal_error");
+        const { request, messages, policy } = extraction;
         const signal = options?.signal;
         const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
         await gate.assertOpen(owner, "pre-send");
@@ -464,18 +533,12 @@ export function captureMethods(deps) {
         transport.check();
         const candidates = hostedCandidates(output, policy, diagnostics);
         const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
-        const digesters = candidates.length ? await keys.retainedDigesters?.(owner) : undefined;
         const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
         const excludedSources = new Set();
         /** @param {Tx} tx @param {PreparedCandidate[]} batch */
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
         });
-        /** @param {Tx} tx */
-        const abandonKeyMismatch = async tx => {
-          await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
-          return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
-        };
         const preEmbed = await runAtGeneration(async tx => {
           const eligible = new Set(await readEligible(tx, key, admittedMessages));
           const stillEligible = positions.filter(position => eligible.has(position));
@@ -496,18 +559,34 @@ export function captureMethods(deps) {
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
           await capture.assertEligible(tx, key, preEmbed.stillEligible);
-          if (prepared.length && keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== fingerprintKey?.id) {
-            return abandonKeyMismatch(tx);
+          let writeKey;
+          if (prepared.length && keys.userKeyForWrite) {
+            writeKey = await keys.userKeyForWrite(tx);
+            if (writeKey?.id !== fingerprintKey?.id) return abandonKeyMismatch(tx);
           }
           const snapshot = await readFacts(tx, embedded);
-          if (prepared.length && !keys.userKeyForWrite && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
-            return abandonKeyMismatch(tx);
+          if (prepared.length && !keys.userKeyForWrite) {
+            writeKey = await keys.userKey(owner);
+            if (writeKey?.id !== fingerprintKey?.id) return abandonKeyMismatch(tx);
           }
-          const items = filterCaptureCandidates(embedded, snapshot, scope, excludedSources).map(candidate => candidate.item);
+          const allowedCandidates = filterCaptureCandidates(embedded, snapshot, scope, excludedSources);
+
+          // Source checks need the same unprojected text facts as admission.
+          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
+          let currentSourceKey = null;
+          if (capabilities.fingerprintKey && sourcePassages.length) {
+            currentSourceKey = writeKey === undefined ? await selectWriteKey(tx) : writeKey;
+            if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
+          }
+          const allowedPositions = await filterCaptureSources(sources, preEmbed.stillEligible, sourcePassages,
+            null, sourceEvidence, currentSourceKey);
+          const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
+          const allowedIds = new Set(allowedMessages.map(({ id }) => id));
+          const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>
+            receipts.every(({ messageId }) => allowedIds.has(messageId)));
           checkCaptureAbort(signal, deadline);
           const result = await capture.finish(tx, token, items);
-          const rawMessages = preEmbed.stillEligible.map(position => admittedMessages[position])
-            .filter(({ id }) => !excludedSources.has(id));
+          const rawMessages = allowedMessages.filter(({ id }) => !excludedSources.has(id));
           if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
             await archive.archive(tx, key, rawMessages);
           }
