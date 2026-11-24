@@ -49,9 +49,12 @@ The helper rejects calls to `pg_advisory_lock*`, `pg_advisory_unlock*`, and
 `pg_try_advisory*` functions. A session-level advisory lock acquired indirectly
 by a probe lasts until the run ends unless explicitly released. A prohibited
 probe, a probe that assigns a transaction ID or loses its savepoint, or a
-non-boolean result fails with `invalid_input`. Catching a probe error in the
-hook still fails the migration with `invalid_input`. A failed hook rolls back
-the migration and stops the run. Earlier committed entries remain recorded.
+non-boolean result fails with `invalid_input`. The migration still fails with
+`invalid_input` if the hook catches an error from a prohibited probe or an error
+that invalidates the transaction or savepoint. A client-side serialization
+error before the probe is sent leaves the transaction and savepoint intact, so
+the hook can catch it and continue. A failed hook rolls back the migration and
+stops the run. Earlier committed entries remain recorded.
 
 After each successful adoption hook, the runner checks that its session still
 holds the migration lock before executing the migration SQL or recording its

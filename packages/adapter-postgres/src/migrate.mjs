@@ -12,9 +12,11 @@ const MIGRATION_UNLOCK = `SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY}) AS un
 // PostgreSQL stores the two halves of a bigint advisory key in classid and objid.
 const HOLDS_MIGRATION_LOCK = `SELECT EXISTS (
   SELECT 1 FROM pg_catalog.pg_locks
-  WHERE locktype = 'advisory' AND granted AND pid = pg_catalog.pg_backend_pid()
-    AND mode = 'ExclusiveLock' AND objsubid = 1
-    AND ((classid::bigint << 32) | objid::bigint) = ${MIGRATION_LOCK_KEY}
+  WHERE locktype OPERATOR(pg_catalog.=) 'advisory' AND granted
+    AND pid OPERATOR(pg_catalog.=) pg_catalog.pg_backend_pid()
+    AND mode OPERATOR(pg_catalog.=) 'ExclusiveLock' AND objsubid OPERATOR(pg_catalog.=) 1
+    AND ((classid::pg_catalog.int8 OPERATOR(pg_catalog.<<) 32)
+      OPERATOR(pg_catalog.|) objid::pg_catalog.int8) OPERATOR(pg_catalog.=) ${MIGRATION_LOCK_KEY}
 ) AS locked`;
 const CREATE_LEDGER = `CREATE TABLE IF NOT EXISTS core_schema_migrations (
   id text PRIMARY KEY,
@@ -68,35 +70,81 @@ function decodeUnicodeIdentifier(name, escape) {
   });
 }
 
+/** @param {string} text @param {RegExp} token */
+function nextProbeToken(text, token) {
+  while (token.lastIndex < text.length) {
+    const match = /** @type {RegExpExecArray} */ (token.exec(text));
+    const [value] = match;
+    if (value === "/*") {
+      const comment = /\/\*|\*\//g;
+      comment.lastIndex = token.lastIndex;
+      let depth = 1;
+      while (depth) {
+        const delimiter = comment.exec(text)?.[0];
+        if (!delimiter) return null;
+        depth += delimiter === "/*" ? 1 : -1;
+      }
+      token.lastIndex = comment.lastIndex;
+    } else if (!/^[\t\n\v\f\r ]/.test(value) && !value.startsWith("--")) {
+      return match;
+    }
+  }
+}
+
+/** @param {string} text @param {RegExp} token */
+function isCteColumnList(text, token) {
+  const lookahead = new RegExp(token);
+  lookahead.lastIndex = token.lastIndex;
+  const next = () => nextProbeToken(text, lookahead);
+  let delimiter;
+  do {
+    const [, unicodeQuote, quotedName, , word] = next() ?? [];
+    if (quotedName === undefined && word === undefined) return false;
+    delimiter = next();
+    if (unicodeQuote && delimiter?.[4]?.toUpperCase() === "UESCAPE") {
+      next(); // The main scan validates the escape literal.
+      delimiter = next();
+    }
+  } while (delimiter?.[0] === ",");
+  if (delimiter?.[0] !== ")" || next()?.[4]?.toUpperCase() !== "AS") return false;
+
+  let body = next();
+  if (body?.[4]?.toUpperCase() === "NOT") {
+    body = next();
+    if (body?.[4]?.toUpperCase() !== "MATERIALIZED") return false;
+  }
+  if (body?.[4]?.toUpperCase() === "MATERIALIZED") body = next();
+  if (body?.[0] !== "(") return false;
+
+  // A function in FROM can also be followed by AS and a column definition list.
+  // Require a query at the start of the body to distinguish a CTE declaration.
+  const query = next();
+  const keyword = query?.[4]?.toUpperCase();
+  return query?.[0] === "(" || keyword === "SELECT" || keyword === "WITH"
+    || keyword === "TABLE" || (keyword === "VALUES" && next()?.[0] === "(");
+}
+
 /** @param {string} text */
 function isReadProbe(text) {
   if (typeof text !== "string" || text.includes("\0")) return false;
   // Consume complete PostgreSQL lexical tokens before checking words or semicolons.
   // Require E strings for backslashes so ordinary strings are unambiguous in any session.
   const token = /[\t\n\v\f\r ]+|--[^\r\n]*|\/\*|[Ee]'(?:''|\\[\s\S]|[^'\\])*'|'(?:''|[^'\\])*'|(U&)?"((?:""|[^"])*)"|(\$(?:[a-z_\u0080-\uffff][a-z_0-9\u0080-\uffff]*)?\$)|([a-z_\u0080-\uffff][a-z_0-9$\u0080-\uffff]*)|[\s\S]/iy;
-  const comment = /\/\*|\*\//g;
   let started = false;
   let terminated = false;
   let parentheses = 0;
   let cases = 0;
   let identifier;
+  let identifierIntroducer;
+  let previousToken;
   let unicodeName;
   let awaitingEscape = false;
   let readEscape = false;
-  while (token.lastIndex < text.length) {
-    const [value, unicodeQuote, quotedName, dollarQuote, word] = /** @type {RegExpExecArray} */ (token.exec(text));
-    if (value === "/*") {
-      comment.lastIndex = token.lastIndex;
-      let depth = 1;
-      while (depth) {
-        const delimiter = comment.exec(text)?.[0];
-        if (!delimiter) return false;
-        depth += delimiter === "/*" ? 1 : -1;
-      }
-      token.lastIndex = comment.lastIndex;
-      continue;
-    }
-    if (/^[\t\n\v\f\r ]/.test(value) || value.startsWith("--")) continue;
+  while (true) {
+    const match = nextProbeToken(text, token);
+    if (match === null) return false;
+    if (!match) break;
+    const [value, unicodeQuote, quotedName, dollarQuote, word] = match;
     if (terminated) return false;
     const keyword = word?.toUpperCase();
     if (awaitingEscape) {
@@ -116,9 +164,12 @@ function isReadProbe(text) {
     }
     if (value === "(") {
       const name = unicodeName === undefined ? identifier : decodeUnicodeIdentifier(unicodeName, "\\");
-      if (name !== undefined && ADVISORY_LOCK_FUNCTION.test(name)) return false;
+      if (name !== undefined && ADVISORY_LOCK_FUNCTION.test(name) && identifierIntroducer !== "AS"
+        && (identifierIntroducer === "." || !isCteColumnList(text, token))) return false;
     }
     identifier = word ?? quotedName?.replaceAll('""', '"');
+    identifierIntroducer = previousToken;
+    previousToken = keyword ?? value;
     unicodeName = unicodeQuote ? identifier : undefined;
     if (!started) {
       if (keyword !== "SELECT" && keyword !== "WITH") return false;

@@ -7,7 +7,20 @@ import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 const prefixMigration = { id: "001", concurrent: false, sql: "CREATE TABLE lock_guard_target (id int)" };
 const migrationSql = "INSERT INTO lock_guard_target VALUES (1)";
 const readLedger = "SELECT id, applied_at::text FROM core_schema_migrations ORDER BY id";
-const migrationKey = "hashtextextended('core_schema_migrations', 0)";
+const shadowMigrationKey = "public.hashtextextended('core_schema_migrations', 0)";
+
+async function installLockKeyShadows(pool) {
+  await pool.query(`
+    CREATE FUNCTION public.mask_bigint_or(bigint, bigint) RETURNS bigint
+      LANGUAGE sql IMMUTABLE STRICT AS
+      'SELECT ($1 OPERATOR(pg_catalog.|) $2) OPERATOR(pg_catalog.&) 4294967295::pg_catalog.int8';
+    CREATE OPERATOR public.| (
+      FUNCTION = public.mask_bigint_or, LEFTARG = bigint, RIGHTARG = bigint
+    );
+    CREATE FUNCTION public.hashtextextended(text, bigint) RETURNS bigint
+      LANGUAGE sql IMMUTABLE STRICT AS 'SELECT 81985529216486895::pg_catalog.int8';
+  `);
+}
 
 function trace(source) {
   const queries = [];
@@ -43,6 +56,8 @@ test("adoption rejects advisory lock calls before sending them even if the hook 
     "SELECT pg_catalog.PG_ADVISORY_UNLOCK /* outer /* inner */ comment */ (1)",
     'SELECT "pg_catalog"."pg_advisory_lock_shared"\n-- comment\n(1)',
     "WITH probe AS (SELECT pg_try_advisory_xact_lock(1)) SELECT * FROM probe",
+    "WITH pg_advisory_lock(n) AS (SELECT 1::bigint) SELECT pg_advisory_lock(n) FROM pg_advisory_lock",
+    "WITH probe(n) AS (SELECT 1::bigint) SELECT * FROM probe, pg_advisory_lock(n) AS materialized(values)",
     String.raw`SELECT pg_catalog.U&"pg_adv\0069sory_unlock_all"()`,
     `SELECT pg_catalog.U&"pg_adv!0069sory_lock" UESCAPE /* comment */ '!' (1)`,
   ];
@@ -89,9 +104,42 @@ test("adoption accepts advisory function names inside literals, comments and col
   assert.deepEqual((await pool.query(readLedger)).rows.map(({ id }) => id), [migration.id]);
 });
 
+test("adoption accepts advisory names in CTE and column alias declarations", migrationDbTest, async (t) => {
+  const { source } = await migrationDatabase(t, { migrate: false });
+  await applyMigrations(source, [{
+    ...prefixMigration,
+    async adopt(query) {
+      assert.deepEqual(await query(`
+        WITH pg_advisory_locks(n) AS (
+          SELECT count(*) FROM pg_catalog.pg_locks WHERE locktype = 'advisory'
+        ), "pg_advisory_lock" /* comment */ (pg_advisory_unlock) AS NOT MATERIALIZED (
+          VALUES (42)
+        )
+        SELECT pg_advisory_unlock FROM "pg_advisory_lock" AS pg_try_advisory_lock(pg_advisory_unlock)
+        WHERE EXISTS (SELECT 1 FROM pg_advisory_locks WHERE n > 0)
+      `), [{ pg_advisory_unlock: 42 }]);
+      return true;
+    },
+  }]);
+});
+
+test("adoption verifies its lock with public operator and hash shadows installed", migrationDbTest, async (t) => {
+  const { pool, source } = await migrationDatabase(t, { migrate: false });
+  await installLockKeyShadows(pool);
+  const migration = {
+    ...prefixMigration,
+    sql: "SELECT 1 / 0",
+    async adopt() { return true; },
+  };
+
+  await applyMigrations(source, [migration]);
+  assert.deepEqual((await pool.query(readLedger)).rows.map(({ id }) => id), [migration.id]);
+});
+
 for (const adopted of [true, false]) {
   test(`adoption rolls back on lock loss when the hook returns ${adopted}`, migrationDbTest, async (t) => {
     const { pool, source } = await migrationDatabase(t, { migrate: false });
+    await installLockKeyShadows(pool);
     const traced = trace(source);
     const otherSession = await source.connect();
     let prefix;
@@ -107,11 +155,11 @@ for (const adopted of [true, false]) {
         assert.ok(contender.queries.every(({ sql }) => !sql.includes("CREATE TABLE IF NOT EXISTS")));
 
         // Simulate a hook side effect on the runner session outside the guarded query helper.
-        const { rows: [released] } = await traced.session.query(`SELECT pg_advisory_unlock(${migrationKey}) AS ok`);
+        const { rows: [released] } = await traced.session.query(`SELECT pg_advisory_unlock(${shadowMigrationKey}) AS ok`);
         assert.equal(released.ok, true);
-        const { rows: [acquired] } = await otherSession.query(`SELECT pg_try_advisory_lock(${migrationKey}) AS ok`);
+        const { rows: [acquired] } = await otherSession.query(`SELECT pg_try_advisory_lock(${shadowMigrationKey}) AS ok`);
         assert.equal(acquired.ok, true);
-        await traced.session.query(`SELECT pg_advisory_lock(${migrationKey} # 1)`);
+        await traced.session.query(`SELECT pg_advisory_lock(${shadowMigrationKey} # 1)`);
         return adopted;
       },
     };
