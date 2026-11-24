@@ -29,6 +29,7 @@ export type ConformanceCase = CaseRun & {
 
 export declare const CASES: readonly ConformanceCase[];
 export declare const PRIVACY_CASES: readonly ConformanceCase[];
+/** Capture claims, finish decisions, and optional finish suppression positions. */
 export declare const CAPTURE_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_CONTAINMENT_CASES: readonly ConformanceCase[];
 export declare const ADMISSION_CASES: readonly ConformanceCase[];
