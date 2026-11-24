@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "8fd66882cfc5b96f3bff2f4d04ff33777df15d56a93fe61072833eb8dd56a100",
-  "bytes": 1495521,
+  "sha256": "3cc1520b699dfc842d5945f200846cd84de4f01921e2779580c070a0245f09bd",
+  "bytes": 1497179,
   "files": [
     "LICENSE",
     "README.md",
@@ -436,11 +436,11 @@
     "core/confirmation-storage.mjs": "02917ae3e6e10150def0b673ae999f1ce5601b255b8019b41770381782bf5ffa",
     "core/relation-limits.mjs": "dc4e2a2b63e526f3decc7549d49e496cf247aab4d3117c08d8fd21acd80e09cf",
     "core/episode-schema.mjs": "f69f29986233a10715f0ffb84f96212052e3072b52d69c92627a2aed9a00c549",
-    "core/episode-storage.mjs": "3ad7f1b779339b0b55f7e0d8c6b59ab0322d3ef20081661e1030ae26eabd024f",
+    "core/episode-storage.mjs": "889b5b1937412f69295c1114d723b44a6fffc159d7d254547bfd7929bb658277",
     "core/episode-reads.mjs": "3aab36f3457011a7dabb600811923b8a462df5fb93f0bcfbce4ab7f771d0d03f",
-    "core/session-context.mjs": "6f4a0354636212afde3d295c3c5996f0f7ce15b95d4e79642306bef4f5b8a0d2",
+    "core/session-context.mjs": "1f2c3221bec5841cdf7ac1d0a9220a62eba822ce1034c5d1d3c62b320305de71",
     "core/episode-input.mjs": "41b88513c9d75b06470b16a9647de700a1666dc322ee40b7f565f913279435e9",
-    "core/episode-capture.mjs": "06acb3390e7649fc80dc61781ca4e076f23ce12c95359f972ffeb59d1e42fbc4",
+    "core/episode-capture.mjs": "65259ce3662ac2ea80f8237e921cabdcbf01a73b614e0a42d1a1066a8e801b96",
     "core/prompts/interpret-episode.md": "5823a86c2545d3c915dd1e1bce20c5882af259f74260c284f40b77a7f5660d7c",
     "core/prompts/extract-episode-sources.md": "1aca4b000bba2cb12506287b4af35d9117ea0b0157421a1caef4f2c9f9442671",
     "core/prompts/qualify-episode-candidates.md": "2c1846c35a442ba02c2c7e898e52dabbd0a9c6919fe035d9dff68e86750765b2",
@@ -562,7 +562,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "2d12a272349964ffc4242c5cc7186d22f1f689ef748e4aba64d8854113bb5991",
-    "core/runtime.mjs": "86fc7e06f3e82225d700c21c284a97b5a3769c84bfb96f5c7c8e5fb9028ea158",
+    "core/runtime.mjs": "492f5ba07452f020e51aca85900f44473e3ee316ab15997b143809238990216a",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "5cb6781a2cf0482c2ae7ac2b7839759430d1ccd7c0646924942fb9cf2f3631c8"
+    "engine-build.json": "c3d30445454c407f764a748a3ac30c34b6eb8efb753388ee7ad1f6513fe80f6d"
   }
 }
