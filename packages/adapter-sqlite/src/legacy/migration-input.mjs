@@ -1,12 +1,11 @@
-import { chmodSync, closeSync, fsyncSync, linkSync, mkdtempSync, openSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createContentReadMemo, receiptReadSafety } from "../../../../core/content-safety.mjs";
 import { contentSafetyInventory } from "../../../../core/content-safety-migration.mjs";
 import { identifier } from "../../../../core/validation.mjs";
 import { verifyLegacyBackupAgainstSource } from "./backup.mjs";
 import { readLegacySnapshot } from "./inventory.mjs";
-import { entry, privateLocation } from "./paths.mjs";
+import { readRawPrivacy } from "./migration-raw.mjs";
+import { privateLocation } from "./paths.mjs";
 import { LegacyRefusal } from "./refusal.mjs";
 
 export { LegacyRefusal };
@@ -25,6 +24,9 @@ export function readMigrationInput(input) {
   const { path, destination, expectedStoreId } = input;
   const { inventory, file } = readLegacySnapshot(path, { expectedStoreId });
   if (![18, 29].includes(inventory.physical)) refuse("legacy_cross_version");
+  if (inventory.privacy.raw?.savedSealFormats.some(({ format }) => format !== "local-plain-v1")) {
+    refuse("legacy_raw_format_unrepresentable");
+  }
   const target = privateLocation(destination);
   if (target.parent !== privateLocation(file.path).parent || target.path === file.path ||
       ["-wal", "-shm", "-journal"].some(suffix => target.path.endsWith(suffix))) {
@@ -60,6 +62,16 @@ export function readMigrationInput(input) {
       consent: inventory.localControls
         ? rows(db, "SELECT * FROM local_capture_controls ORDER BY owner_id, scope, project_id, client") : [],
       rawControls: inventory.raw ? rows(db, "SELECT * FROM raw_capture_controls ORDER BY owner_id, client") : [],
+      rawPrivacy: readRawPrivacy(db, inventory),
+      dropped: Object.fromEntries(Object.entries({
+        rawConversations: "raw_conversations", rawMessages: "raw_messages", rawParts: "raw_parts",
+        rawEvents: "raw_events", rawCaptureEvents: "raw_capture_events", rawSourceMaps: "raw_source_maps",
+        rawReceiptLineage: "raw_receipt_lineage", rawReceiptOrigins: "raw_receipt_origins",
+        episodes: "session_episodes", stagedEvidence: "staged_capture_evidence",
+        cards: "private_cards", submittedNotes: "card_notes", captureAdmissions: "admission_claims",
+      }).map(([category, table]) => [category,
+        db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?").get(table)
+          ? db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n : 0])),
     };
     file.check();
     return result;
@@ -75,41 +87,4 @@ export function readMigrationInput(input) {
 export function legacyIdentifier(value) {
   try { return identifier(value); }
   catch { return refuse("legacy_incomplete"); }
-}
-
-export function targetExists(path) {
-  const location = privateLocation(path);
-  const stat = entry(location.path);
-  if (!stat) return false;
-  // A crash between link and unlink can leave the private bootstrap link.
-  if (!stat.isFile() || stat.uid !== BigInt(process.getuid?.() ?? -1) || (stat.mode & 0o7777n) !== 0o600n) {
-    refuse("legacy_unsafe_path");
-  }
-  return true;
-}
-
-// Initialize under a private name; publish by linking only after SQLite
-// has closed and checkpointed. A concurrent publisher cannot be overwritten.
-export async function installMigrationTarget(target, bootstrapName, initialize) {
-  const location = privateLocation(target);
-  const directory = mkdtempSync(join(location.parent, ".sqlite-migration-"));
-  try {
-    const file = join(directory, bootstrapName);
-    new DatabaseSync(file).close();
-    chmodSync(file, 0o600);
-    await initialize(file);
-    for (const suffix of ["-wal", "-shm", "-journal"]) {
-      if (entry(file + suffix)) refuse("legacy_incomplete");
-    }
-    location.check();
-    try { linkSync(file, target); }
-    catch (error) {
-      if (error.code !== "EEXIST" || !targetExists(target)) throw error;
-    }
-    const fd = openSync(location.parent, "r");
-    try { fsyncSync(fd); }
-    finally { closeSync(fd); }
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 }

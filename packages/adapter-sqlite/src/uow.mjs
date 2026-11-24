@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { types } from "node:util";
 import { CoreError } from "@cairn-ink/core";
 import { isNativeSqliteError, toSqliteError } from "./errors.mjs";
+import { assertMigrationComplete, assertServingFilename } from "./migrate/guard.mjs";
 import { sqlitePortScope } from "./port-scope.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
@@ -69,6 +70,16 @@ function hasThenableResult(value) {
  * @param {string} filename
  */
 export function openSqliteUnitOfWork(filename) {
+  return openUnitOfWork(filename, false);
+}
+
+/** @param {string} filename */
+export function openMigrationUnitOfWork(filename) {
+  return openUnitOfWork(filename, true);
+}
+
+/** @param {string} filename @param {boolean} migration */
+function openUnitOfWork(filename, migration) {
   if (typeof filename !== "string" || !filename || filename === ":memory:") throw new CoreError("invalid_input");
   if (runContext.getStore()) throw new CoreError("internal_error");
 
@@ -80,11 +91,16 @@ export function openSqliteUnitOfWork(filename) {
   let reservation;
   try {
     const path = realpathSync(filename);
+    if (!migration) {
+      assertServingFilename(filename);
+      assertServingFilename(path);
+    }
     const identity = fileIdentity(path);
     reservation = reserveFile(identity);
     const uri = pathToFileURL(path);
     uri.searchParams.set("mode", "rw");
     openingWriter = new DatabaseSync(uri.href);
+    if (!migration) assertMigrationComplete(openingWriter);
     const journalMode = openingWriter.prepare("PRAGMA main.journal_mode = WAL").get()?.journal_mode;
     if (journalMode !== "wal") throw new CoreError("storage_error");
     openingReader = new DatabaseSync(path, { readOnly: true });

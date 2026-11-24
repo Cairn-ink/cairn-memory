@@ -167,7 +167,9 @@ export function planMigration(source) {
   const revisions = Array.from(owners.keys(), owner => [owner, 1]);
   return {
     memoryRows, receiptRows, markers, epochs, pause, revisions, withheldReceipts,
-    evidence: encodeEvidence({ history, namespaceEpochs, episodeControls, consent, rawControls, withheldReceipts }),
+    evidence: encodeEvidence({ history, namespaceEpochs, episodeControls, consent, rawControls, withheldReceipts,
+      legacyRawHashing: source.rawPrivacy !== null, rawDeletionActions: source.rawPrivacy?.actions ?? [],
+      rawDeletionEffects: source.rawPrivacy?.effects ?? [], dropped: source.dropped }),
     pausedOwners: pause.filter(([, paused]) => paused === 1).map(([owner]) => String(owner)).sort(),
   };
 }

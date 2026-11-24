@@ -10,4 +10,13 @@ export const MIGRATION_SCHEMA = `
     attestation TEXT,
     CHECK ((checkpoint = 3) = (attestation IS NOT NULL))
   ) STRICT;
+  CREATE TABLE cairn_migrated_raw_privacy (
+    owner_id TEXT NOT NULL,
+    namespace_key TEXT NOT NULL,
+    client_key TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('uuid', 'window', 'range', 'span', 'event')),
+    selector TEXT NOT NULL,
+    body TEXT NOT NULL,
+    PRIMARY KEY (owner_id, namespace_key, client_key, kind, selector, body)
+  ) STRICT, WITHOUT ROWID;
 `;

@@ -13,6 +13,7 @@ import { readFacts } from "./suppressions.mjs";
 /** @typedef {Pick<CaptureKey, "scope" | "client" | "eventId">} Identity */
 /** @typedef {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} IndexRevisions */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} Lineage */
+/** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {Pick<CaptureMessage, "id" | "occurredAtMs">} SourcePosition */
 
 const identityColumns = "owner_id, client_key, event_key";
@@ -137,10 +138,17 @@ function sourcePolicy(db, key, hashSession) {
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {IndexRevisions} index @param {Lineage} lineage
  * @param {() => number} [now]
+ * @param {MigratedRawPolicy} [migratedRaw]
  * @returns {Required<CaptureClaim> & CaptureFinish & SourceFilter}
  */
-export function createCapturePorts(port, hashSession, index, lineage, now = Date.now) {
+export function createCapturePorts(port, hashSession, index, lineage, now = Date.now, migratedRaw) {
   const time = () => writeTime(now()).updatedAtMs;
+  /** @param {Connection} db @param {CaptureKey} key @param {readonly SourcePosition[]} positions */
+  function requireMigratedSources(db, key, positions) {
+    if (migratedRaw?.blocksEvent(db, key) || migratedRaw?.blocks(db, key.scope, key, positions)) {
+      throw new CoreError("lineage_fenced");
+    }
+  }
   return {
     admit(tx, input, messages) {
       const scope = input?.scope;
@@ -153,6 +161,10 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         if (active(row, time())) return { status: "processing" };
         if (row) return { status: "duplicate" };
         assertUnpaused(db, tx.owner);
+        if (migratedRaw?.blocksEvent(db, key)) throw new CoreError("lineage_fenced");
+        // Core can persist an all-blank outbox after filtering. Retain the
+        // positions, but never admit a blocked batch with source text intact.
+        if (batch.some(message => message.content)) requireMigratedSources(db, key, batch);
         insertClaim(db, key, "pending", null, null, null);
         db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, messages) VALUES (?, ?, ?, ?)`)
           .run(...claimIdentity(key), JSON.stringify(batch));
@@ -203,6 +215,7 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         assertUnpaused(db, tx.owner);
         /** @type {CaptureMessage[]} */
         const batch = typeof row?.messages === "string" ? decodeJson(row.messages) : copied;
+        requireMigratedSources(db, key, batch);
         const positions = JSON.stringify(batch.map(({ id, occurredAtMs }) => ({ id, occurredAtMs })));
         const proofs = JSON.stringify(lineage.proofs(tx.owner, key.client, batch));
         const expires = BigInt(nowMs) + BigInt(leaseMs);
@@ -219,8 +232,10 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
       return port(tx, tx?.owner, claimWrite, db => {
         const row = liveClaim(db, tx.owner, token, time());
         assertUnpaused(db, tx.owner);
+        const key = storedKey(row, tx.owner);
+        if (migratedRaw) requireMigratedSources(db, key, decodeJson(row.source_positions));
         db.prepare(`UPDATE cairn_capture_claims SET dispatched = 1 WHERE ${identityWhere} AND dispatched = 0`)
-          .run(...claimIdentity(storedKey(row, tx.owner)));
+          .run(...claimIdentity(key));
         return { token };
       });
     },
@@ -248,6 +263,7 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         const row = liveClaim(db, tx.owner, token, nowMs);
         assertUnpaused(db, tx.owner);
         const key = storedKey(row, tx.owner);
+        if (migratedRaw) requireMigratedSources(db, key, decodeJson(row.source_positions));
         const finished = finishCapture(db, key, batch, nowMs, hashSession);
         const identity = claimIdentity(key);
         const result = { indexRevision: index.finish(db, tx, identity, finished.memories.length > 0), ...finished };
@@ -265,7 +281,8 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         const key = captureKey(input, { owner: tx.owner, namespace: scope.namespace });
         const batch = copyMessages(messages);
         const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
-        if (blockedSession || lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch))) return [];
+        if (blockedSession || migratedRaw?.blocksEvent(db, key) || migratedRaw?.blocks(db, key.scope, key, batch) ||
+            lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch))) return [];
         return Array.from(batch.keys()).filter(position => !blocks(batch[position]));
       });
     },
@@ -284,6 +301,7 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         if (!row || !active(row, time())) throw new CoreError("stale_admission");
         /** @type {SourcePosition[]} */
         const sources = decodeJson(row.source_positions);
+        requireMigratedSources(db, key, sources);
         if (selected.some(position => position >= sources.length)) invalidInput();
         const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
         if (blockedSession || selected.some(position => blocks(sources[position]))) throw new CoreError("suppressed");

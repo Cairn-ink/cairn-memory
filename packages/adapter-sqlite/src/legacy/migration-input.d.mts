@@ -33,10 +33,16 @@ export interface LegacyInput {
   episodeControls: Array<NamespaceRow & { generation: string; paused: bigint; enabled: bigint; ordinal: bigint }>;
   consent: Array<NamespaceRow & { revision: bigint; automatic_capture_enabled: bigint }>;
   rawControls: Array<{ owner_id: string; revision: bigint; enabled: bigint }>;
+  rawPrivacy: {
+    key: string;
+    fences: string[][];
+    rules: string[][];
+    actions: unknown[];
+    effects: unknown[];
+  } | null;
+  dropped: Record<string, number>;
 }
 export function readMigrationInput(input: MigrationInput): LegacyInput;
 export class LegacyRefusal extends Error { readonly code: string }
 export function legacyIdentifier(value: string): string;
 export function refuse(code: string): never;
-export function targetExists(path: string): boolean;
-export function installMigrationTarget(target: string, bootstrapName: string, initialize: (filename: string) => Promise<void>): Promise<void>;
