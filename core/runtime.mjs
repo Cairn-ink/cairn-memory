@@ -732,7 +732,7 @@ export function createMemoryRuntime(input, internal) {
     const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     if (qualificationStorage.inspect(row, qualificationOptions) === false) return null;
-    if (qualificationOptions?.withholdDenied && cachedContentLayout(db)?.suppressionRevision) {
+    if (qualificationOptions?.withholdDenied) {
       return sessionSourceEvidence(ns, row, original);
     }
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
@@ -748,21 +748,27 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function sessionSourceEvidence(ns, row, original) {
-    const total = storedReceiptCount(row.id), memo = createContentReadMemo(db);
+    const { total, hasMarkers } = db.prepare(`SELECT count(*) AS total,
+      EXISTS(SELECT 1 FROM suppressed WHERE ${where} AND fingerprint GLOB 'rs1:*') AS hasMarkers
+      FROM receipts WHERE memory_id = ?`).get(ns.ownerId, ns.scope, ns.projectId ?? '', row.id);
+    const memo = createContentReadMemo(db);
+    const safety = cachedContentLayout(db)?.suppressionRevision;
     const ref = { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision };
     const readable = receipts => contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref, receipts }).allowed;
-    if (total <= 100) {
+    const withheldReceiptIds = hasMarkers ? withheldReceiptIdsInside(db, ns, original) : new Set();
+    if (total <= 100 && (!safety || !withheldReceiptIds.size)) {
       const full = sourceEvidence(row, original, total, receiptKey);
-      if (readable(original)) return full;
-    } else if (cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length === 0) {
-      fail('context_item_too_large');
+      const allowed = readable(original);
+      if (allowed && !withheldReceiptIds.size) return full;
+      if (!allowed && !safety) fail('revision_conflict');
     }
 
-    const receipts = [], withheldReceiptIds = new Set();
+    const receipts = [];
     let batch = original, scanned = original.length;
     while (true) {
       for (const receipt of batch) {
-        if (receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed) receipts.push(receipt);
+        if (withheldReceiptIds.has(receipt.id)) continue;
+        if (!safety || receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed) receipts.push(receipt);
         else withheldReceiptIds.add(receipt.id);
       }
       if (receipts.length > 100) fail('context_item_too_large');
@@ -770,6 +776,7 @@ export function createMemoryRuntime(input, internal) {
       batch = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101 OFFSET ?').all(row.id, scanned);
       if (!batch.length) fail('storage_error');
       scanned += batch.length;
+      if (hasMarkers) for (const id of withheldReceiptIdsInside(db, ns, batch)) withheldReceiptIds.add(id);
     }
     if (!readable(receipts)) fail('revision_conflict');
     return { ...sourceEvidence(row, receipts, receipts.length, receiptKey, { allowEmpty: true }), withheldReceiptIds };

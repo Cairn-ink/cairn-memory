@@ -1,6 +1,6 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { hasCommitDispatcher } from './commit-dispatch.mjs';
-import { contentReadSafety, bindReceiptMarkerKeys } from './content-safety.mjs';
+import { contentReadSafety, bindReceiptMarkerKeys, withheldReceiptIdsInside } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
@@ -16,6 +16,8 @@ const GAP_CODES = new Set(['forgotten', 'discarded', 'expired', 'capacity', 'omi
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId];
+const episodeReceiptKey = (client, sessionId, eventId, role, excerpt) =>
+  createHash('sha256').update(JSON.stringify({ client, sessionId, eventId, role, excerpt })).digest('hex');
 const eventWhere = `${where} AND client=? AND event_id=?`;
 const eventKey = (ns, input) => [...boundary(ns), input.client, input.eventId];
 const iso = () => new Date().toISOString();
@@ -1134,8 +1136,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         const count = pages.keep.limit + 1, result = [];
         const reviewRetainedSources = safety &&
           (deniedSources?.size || cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length !== 0);
-        const retainedDecisions = new Map();
-        let lookup;
+        const currentSourceIds = new Set(sources.map(source => source.id));
+        const retainedSources = new Map(), retainedDecisions = new Map();
+        let lookup, hasReceiptMarkers;
         let after = pages.keep.after ?? 0;
         while (true) {
           const batch = statement.all(row.id, after, count);
@@ -1144,7 +1147,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
             if (sourceIds.some(keepSourceDenied)) continue;
             result.push({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
               createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
-              errorCode: action.keep_error_code, sourceCoverage: { sourceIds: sourceIds.filter(id => !withheldSources.has(id)),
+              errorCode: action.keep_error_code, sourceCoverage: { sourceIds: sourceIds.filter(keepSourceVisible),
                 revision: action.revision, sourceFence: action.source_fence } });
             if (result.length === count) break;
           }
@@ -1152,13 +1155,36 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           after = batch.at(-1).keep_ordinal;
         }
 
+        function retainedSource(id) {
+          lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
+            FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
+          if (!retainedSources.has(id)) retainedSources.set(id, lookup.get(id));
+          return retainedSources.get(id);
+        }
+
+        function keepSourceVisible(id) {
+          if (withheldSources.has(id)) return false;
+          if (currentSourceIds.has(id) || checkedSources?.has(id)) return true;
+          const source = retainedSource(id);
+          if (!source) {
+            // A replaced source ID has no receipt identity to check against a later marker.
+            hasReceiptMarkers ??= Boolean(db.prepare(`SELECT 1 FROM suppressed WHERE ${where}
+              AND fingerprint GLOB 'rs1:*' LIMIT 1`).get(...boundary(ns)));
+            return !hasReceiptMarkers;
+          }
+          if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+              source.project_id !== (ns.projectId ?? '') || source.deleted) return false;
+          if (source.episode_id === row.id) return true;
+          const receipt_key = episodeReceiptKey(source.client, source.session_key, source.message_id, source.role, source.text);
+          return !withheldReceiptIdsInside(db, ns, [{ id, receipt_key, client: source.client,
+            session_id: source.session_key, event_id: source.message_id, role: source.role }]).has(id);
+        }
+
         function keepSourceDenied(id) {
           if (deniedSources?.has(id)) return true;
           if (!reviewRetainedSources || checkedSources?.has(id)) return false;
           if (retainedDecisions.has(id)) return retainedDecisions.get(id);
-          lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
-            FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
-          const source = lookup.get(id);
+          const source = retainedSource(id);
           let denied = false;
           if (source) {
             denied = Boolean(source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
@@ -1173,7 +1199,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
               }
             }
           }
-          // Historical coverage survives ordinary draft replacement.
           retainedDecisions.set(id, denied);
           return denied;
         }
@@ -1190,8 +1215,7 @@ export function withheldEpisodeSourcesInside(db, ns, ids, receiptIds = []) {
   if (!db.isTransaction) fail('storage_error');
   bindReceiptMarkerKeys(db);
   if (!episodeMarkerFunctions.has(db)) {
-    db.function('episode_receipt_key', { deterministic: true }, (client, sessionId, eventId, role, excerpt) =>
-      createHash('sha256').update(JSON.stringify({ client, sessionId, eventId, role, excerpt })).digest('hex'));
+    db.function('episode_receipt_key', { deterministic: true }, episodeReceiptKey);
     episodeMarkerFunctions.add(db);
   }
   return db.prepare(`WITH candidates(kind,id,episode_id,receipt_key,client,session_id,event_id,role) AS (
