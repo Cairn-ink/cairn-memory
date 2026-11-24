@@ -14,6 +14,7 @@ import {
   createPostgresTopicStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
+import { requireLiveRun } from "../src/uow.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 
@@ -310,7 +311,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
               WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3`,
             [owner, namespace === null ? null : JSON.stringify(namespace), id, updatedAtUs.toString()]);
             assert.equal(result.rowCount, 1);
-            await advanceIndex((sql, values) => query(tx, sql, values), owner);
+            await advanceIndex((sql, values) => query(tx, sql, values), owner, requireLiveRun(tx, true));
           });
         },
         async seedFact(owner, fact) {

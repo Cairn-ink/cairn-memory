@@ -138,7 +138,11 @@ test("Postgres topic visibility follows guarded revisions and hosted and core su
   assert.deepEqual(await store.read("forMemories", [source.memoryId]), [{ memoryId: source.memoryId, topics: [] }]);
   await store.fact({ kind: "identity", memoryId: member.memoryId, namespace: "project" });
   assert.deepEqual(await store.read("forMemory", member.memoryId), [child.id]);
+  await store.apply([source], [item(source, [child.id])]);
+  assert.deepEqual((await store.read("list", firstPage)).items.map(({ title, memberCount }) => [title, memberCount]), [[child.title, 2]]);
   await store.fact({ kind: "identity", memoryId: source.memoryId });
+  assert.deepEqual((await store.read("list", firstPage)).items.map(({ title, memberCount }) => [title, memberCount]), [[null, 1]]);
+  assert.deepEqual((await store.read("members", child.id, firstPage)).items.map(({ id }) => id), [member.memoryId]);
   await pool.query("UPDATE memories SET revision = 2 WHERE id = $1", [updated.memoryId]);
   await pool.query("UPDATE memories SET currentness = 'historical' WHERE id = $1", [old.memoryId]);
   assert.deepEqual((await store.read("catalog", firstPage)).items, [{ ...child, title: null }]);
@@ -149,16 +153,24 @@ test("Postgres topic visibility follows guarded revisions and hosted and core su
   await assert.rejects(store.apply([source], [item(source, [child.id])]), { code: "revision_conflict" });
 
   const vectorMatch = await store.seed("vector match", { embedding: vector(1, 0) });
-  const savedLater = await store.seed("explicit save", { embedding: vector(1, 0), kind: "mcp" });
+  const savedLater = await store.seed("explicit save", { kind: "mcp" });
   const hashMatch = await store.seed("exact match");
   const logged = await store.seed("forgotten log");
   const receiptLinked = await store.seed("receipt linked");
   await store.apply([vectorMatch, savedLater, hashMatch, logged, receiptLinked],
     [vectorMatch, savedLater, hashMatch, logged, receiptLinked].map((guard) => item(guard, [child.id])));
+  const { createdTopics: [hosted] } = await store.apply([hashMatch], [item(hashMatch, [child.id], topic("Hosted title"))]);
+  await store.apply([savedLater], [item(savedLater, [child.id, hosted.id])]);
+  const hostedList = async () => (await store.read("list", firstPage)).items.filter(({ id }) => id === hosted.id)
+    .map(({ title, memberCount }) => [title, memberCount]);
+  assert.deepEqual(await hostedList(), [[hosted.title, 2]]);
+  await pool.query("UPDATE core_owner_state SET legacy_facts_ready = true WHERE user_id = $1", [store.scope.owner]);
   await pool.query(`
     INSERT INTO suppressions (id, user_id, kind, text_hash, embedding, origin, created_at)
-    VALUES ('legacy vector', 'owner', 'text', 'different', $1, 'forget', 'epoch'),
-           ('legacy exact', 'owner', 'text', $2, $1, 'edit', 'epoch')`, [vector(1, 0), digest(hashMatch.memoryId)]);
+    VALUES ('legacy vector', 'owner', 'text', $3, $1, 'forget', 'epoch'),
+           ('legacy exact', 'owner', 'text', $2, $1, 'edit', 'epoch')`, [vector(1, 0), digest(hashMatch.memoryId), digest("different")]);
+  assert.deepEqual(await hostedList(), [[null, 1]]);
+  assert.deepEqual((await store.read("members", hosted.id, firstPage)).items.map(({ id }) => id), [savedLater.memoryId]);
   await pool.query("INSERT INTO memory_forget_log (user_id, memory_id) VALUES ('owner', $1)", [logged.memoryId]);
   await pool.query(`
     INSERT INTO core_memory_receipts (user_id, memory_id, client, session_id, message_id, role)
