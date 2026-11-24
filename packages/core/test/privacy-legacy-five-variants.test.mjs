@@ -128,6 +128,45 @@ for (const [field, stored] of [["body", "J\u030c ab"], ["title", "H\u0331 yz"]])
   }
 }
 
+const composedStored = "\u01f0a \u01f0b \u01f0c \u01f0d \u01f0e \u01f0f \u01f0g";
+const combiningOriginal = "J\u030ca J\u030cb J\u030cc J\u030cd J\u030ce J\u030cf J\u030cg";
+const combiningWithSuffix = combiningOriginal + " extra notes";
+
+for (const [form, stored] of [["composed", composedStored], ["one-pass", combiningOriginal]]) {
+  const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(stored, key, labels);
+  const digest = { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 2, keyId, label: "hosted-v1", value: text_hmac };
+  const full = textFact({ digests: [digest], shingles, keyId }, "full");
+
+  for (const field of ["title", "body"]) {
+    test(`a ${form} hosted full fact hides the combining-mark ${field} with a suffix`, async () => {
+      const original = await fingerprintLegacyCapture(combiningWithSuffix, key, labels);
+      const normalized = await fingerprintLegacyCapture(normalizeForHash(combiningWithSuffix), key, labels);
+      assert.notEqual(original.text_hmac, text_hmac);
+      assert.notEqual(normalized.text_hmac, text_hmac);
+      const matching = new Set((form === "composed" ? normalized : original).shingles);
+      const other = new Set((form === "composed" ? original : normalized).shingles);
+      assert.equal(shingles.length, form === "composed" ? 17 : 24);
+      assert.equal(shingles.filter(shingle => matching.has(shingle)).length, shingles.length);
+      assert.equal(shingles.filter(shingle => other.has(shingle)).length, 0);
+      assert.deepEqual(await documentCardVisible({
+        ...read, card: { ...card, [field]: combiningWithSuffix }, textFacts: [full], containmentThreshold: 0.6,
+      }), withheld);
+    });
+  }
+}
+
+for (const field of ["title", "body"]) {
+  test(`a composed hosted exact fact hides the combining-mark ${field} without a suffix`, async () => {
+    const digest = {
+      ...await legacyDigest(composedStored), label: "hosted-v1", redactionVersion: 2,
+    };
+    assert.deepEqual(await documentCardVisible({
+      ...read, card: { ...card, [field]: combiningOriginal }, textFacts: [textFact({ digests: [digest] })],
+      containmentThreshold: 0.6,
+    }), withheld);
+  });
+}
+
 const labelledDigest = async (text, redactionVersion) => ({
   ...await legacyDigest(text), label: "hosted-v1", redactionVersion,
 });

@@ -77,9 +77,11 @@ Use the adapter's frozen legacy domain labels and derive the key with
 `userFingerprintKey(secret, owner, labels)`. For each field, Core compares
 legacy exact MACs and keyed shingles under those labels for the cleaned
 original, V1 redacted text, hosted-current redacted text, Core-prepared text,
-NFKC then V1, and NFKC then hosted-current capture redaction. Equal normalized
-spellings share one signature per field and retain every associated redaction
-version for labelled facts. For full legacy facts, `containmentThreshold` sets
+NFKC then V1, and NFKC then hosted-current capture redaction. The signer
+normalizes its input. Core signs both the original and already-normalized
+forms of each spelling when that produces different bytes. Each signature
+keeps its own shingles and associated redaction versions for labelled facts.
+For full legacy facts, `containmentThreshold` sets
 the shingle cutoff. It defaults to 0.6 and must be greater than zero and at
 most one. An invalid cutoff withholds the card. A fact with both legacy and
 Core aliases can match through either comparison. A host holding both kinds

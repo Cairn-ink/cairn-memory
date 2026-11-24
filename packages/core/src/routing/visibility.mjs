@@ -47,24 +47,47 @@ async function readLegacyFingerprint(input) {
 async function legacyCardPassages(text, { key, labels }) {
   const spellings = textVariants(text, prepareCoreText(text));
   spellings.push([prepareHostedCaptureText(text), "hosted-v1", PRIVACY_REDACTION_VERSIONS.hostedCurrent]);
-  /** @type {Map<string, { original: string, versions: Set<number> }>} */
+  /** @type {Map<string, Set<number>>} */
   const variants = new Map();
   for (const [spelling, , version] of spellings) {
-    const normalized = normalizeForHash(spelling);
-    const variant = variants.get(normalized) ?? { original: spelling, versions: new Set() };
-    variant.versions.add(version);
-    variants.set(normalized, variant);
+    const versions = variants.get(spelling) ?? new Set();
+    versions.add(version);
+    variants.set(spelling, versions);
   }
-  const passages = await Promise.all(Array.from(variants.values(), async ({ original, versions }) => {
-    // The signer normalizes the original spelling once.
-    const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(original, key, labels);
-    const digests = Array.from(versions, (redactionVersion) =>
-      /** @satisfies {TextDigest} */ ({ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }));
-    return { digests, shingles, keyId };
+
+  /** @type {Map<string, ReturnType<typeof fingerprintLegacyCapture>>} */
+  const signatures = new Map();
+  // Reuse signing work for identical bytes while keeping each spelling's version set.
+  /** @param {string} input @param {string} signedText */
+  function sign(input, signedText) {
+    const existing = signatures.get(signedText);
+    if (existing) return existing;
+    const pending = fingerprintLegacyCapture(input, key, labels);
+    signatures.set(signedText, pending);
+    return pending;
+  }
+
+  const signed = await Promise.all(Array.from(variants).flatMap(([spelling, versions]) => {
+    const normalized = normalizeForHash(spelling);
+    const normalizedAgain = normalizeForHash(normalized);
+    const candidates = [sign(spelling, normalized)];
+    // Hosted forget signs stored text. Older card lookups signed already normalized text.
+    if (normalizedAgain !== normalized) candidates.push(sign(normalized, normalizedAgain));
+    return candidates.map(async candidate => ({ ...await candidate, versions }));
   }));
+  const passages = new Map();
+  for (const { text_hmac, shingles, key_id: keyId, versions } of signed) {
+    const redactionVersions = [...versions].sort((a, b) => a - b);
+    const identity = `${text_hmac}:${keyId}:${redactionVersions.join(",")}`;
+    if (passages.has(identity)) continue;
+    const digests = redactionVersions.map((redactionVersion) =>
+      /** @satisfies {TextDigest} */ ({ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }));
+    passages.set(identity, { digests, shingles, keyId });
+  }
+  const retained = [...passages.values()];
   // Compare every exact alias before checking each spelling's own shingles.
-  const digests = passages.flatMap(passage => passage.digests);
-  return passages.map(({ shingles, keyId }) => ({ digests, shingles, keyId }));
+  const digests = retained.flatMap(passage => passage.digests);
+  return retained.map(({ shingles, keyId }) => ({ digests, shingles, keyId }));
 }
 
 /** @param {DocumentCardVisibilityInput} input @returns {Promise<DocumentCardVisibility>} */
