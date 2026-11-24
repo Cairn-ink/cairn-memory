@@ -819,18 +819,25 @@ The memory adapter supplies document cards to the Context Read `card` channel
 when both capabilities are enabled. It scores exactly `documentCardSearchText`
 with the memory lexical scorer and keeps memory corpus statistics independent.
 The card ref carries the record revision and the title/body revision. The
-snapshot binds the owner card generation alongside the namespace memory epoch.
+snapshot binds each namespace's card generation alongside its memory epoch.
+Card writes in excluded namespaces leave the read set's card generations and
+candidate cursors unchanged.
 
 Core checks `documentCards.visibilityInputs` and `documentCardVisible` inside
 the evidence read transaction and again in the final assembly snapshot. Missing,
-failed, or withheld inputs make document-card evidence unavailable. Without
-the loader, the document-card channel is empty. For assembly, Core checks each
-selected amendment against the card verdict and its own whole-message Raw
-projection in the same snapshot. Render up to five amendments in date order
-with their source quotes. Neither the card nor its amendment sources emit
-session IDs.
+failed, or withheld inputs make document-card evidence unavailable. Adapters
+without the loader can still serve legacy engine and lineage cards with their
+existing index counts. For assembly, Core checks each amendment against the
+card verdict and its whole-message Raw projection in the same snapshot. The
+source must pass Context Raw's turn rule, including receipt ancestry. The
+quote must occur in the archived user turn, which must have no recorded
+conflict. Select up to five visible amendments, newest first, and render them
+in date order with their source quotes. The card and its amendment sources
+omit session IDs.
 
 At the card's rank in the shared whole-item budget, count the complete body,
 suffix, and sources against the remaining tokens. Drop the oldest amendments
-first, keeping the bare card when no suffix fits. A selected card occupies one
-item slot and replaces any memory it cites by its qualified ref.
+first, keeping the bare card when no suffix fits. With Raw enabled or disabled,
+a selected card occupies one item slot and replaces a cited memory at the
+card's own rank if the resulting pack fits. The citation uses the binding's
+stored revision, and replacement requires an exact qualified ref match.

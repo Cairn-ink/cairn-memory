@@ -1,5 +1,5 @@
 import { CoreError } from "../errors.mjs";
-import { documentCardAmendmentVisible, selectAmendmentsForRead } from "../routing/amendment-read.mjs";
+import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
 import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./context-read-fetch.mjs";
 import { itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
@@ -28,8 +28,9 @@ async function qualifyForAssembly(row, signer, lineageEnabled, amendments, docum
 }
 
 /** @typedef {Awaited<ReturnType<typeof qualifyForAssembly>>} AssemblyEvidence */
-/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "uow" | "fence" | "documentCards" | "capabilities">} storage */
-export function fetchForAssembly({ contextRead: store, uow, fence, documentCards, capabilities }) {
+/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "uow" | "fence" | "documentCards">} storage */
+export function fetchForAssembly({ contextRead: store, uow, fence, documentCards }) {
+  const cardsEnabled = hasContextCardLoader(documentCards);
   /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {Generations} observed
    * @param {readonly ContextReadRef[]} refs */
   return async (readSet, { intent, types }, observed, refs) => {
@@ -53,7 +54,7 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
         /** @type {ReadAmendment[]} */
         const amendments = [];
         const lineage = expected[namespaceSlot(readSet, ref.scope)].lineage !== undefined;
-        const legacy = !documentCards && !capabilities.documentCards && legacyContextCard(row, lineage);
+        const legacy = !cardsEnabled && legacyContextCard(row, lineage);
         const documentCard = row.type === "card" && !legacy;
         if (documentCard) {
           const cardVisibility = await contextCardVerdict(documentCards, tx, ref, row.item);
@@ -62,17 +63,15 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
             ? await Promise.resolve().then(() => documentCards.get(tx, ref.scope, ref.id)).catch(() => null) : null;
           const stored = card?.id === ref.id && card.scope.owner === ref.scope.owner && card.scope.namespace === ref.scope.namespace
             ? card.amendments : [];
-          for (const amendment of selectAmendmentsForRead(stored)) {
+          const visible = await selectVisibleAmendmentsForRead(stored, async ({ sourceMessage, quote }) => {
             try {
-              const projection = await readStore.documentCardAmendmentSource?.(tx, ref.scope, amendment.sourceMessage);
-              if (projection && documentCardAmendmentVisible({ ...projection, scope: ref.scope, cardVisibility })) {
-                const { date, sentence, quote } = amendment;
-                amendments.push({ date, sentence, quote });
-              }
+              const projection = await readStore.documentCardAmendmentSource?.(tx, readSet, ref.scope, { sourceMessage, quote });
+              return !!projection && documentCardAmendmentVisible({ ...projection, scope: ref.scope, cardVisibility });
             } catch {
-              // Unavailable Raw evidence only withholds this amendment.
+              return false;
             }
-          }
+          });
+          for (const { date, sentence, quote } of visible) amendments.push({ date, sentence, quote });
         }
         return qualifyForAssembly(row, signer, lineage, amendments, documentCard);
       }));
@@ -83,7 +82,7 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       const scope = await signer.bind("snapshot-scope", readSetBinding(readSet));
       const rows = await evidence(tx, signer, refs);
       const selection = { owner: readSet.owner, namespaces: readSet.namespaces };
-      const fenceRefs = hasContextCardLoader(documentCards) ? refs.filter(ref => ref.type !== "card") : refs;
+      const fenceRefs = cardsEnabled ? refs.filter(ref => ref.type !== "card") : refs;
       const visible = fenceRefs.length ? await fence.assertVisible(tx, selection, fenceRefs.map(itemRef),
         intent === "history" ? "read" : undefined) : [];
       return { scope, rows: rows.map((row, i) => row?.documentCard || visible.some(({ id, type, namespace }) =>

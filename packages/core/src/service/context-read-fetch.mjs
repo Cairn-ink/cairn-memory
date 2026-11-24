@@ -77,6 +77,7 @@ export function evidenceFence(signer, item, row, lineageEnabled) {
 /** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "capabilities" | "uow" | "fence" | "documentCards">} storage
  * @returns {NonNullable<MemoryService["fetchEvidence"]>} */
 export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fence, documentCards }) {
+  const cardsEnabled = hasContextCardLoader(documentCards);
   return entry(async (/** @type {ContextReadSet} */ value, /** @type {FetchEvidenceInput} */ args,
     /** @type {CallOptions} */ options = {}) => {
     const readSet = contextReadSet(value);
@@ -100,7 +101,7 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
       const rows = structuredClone(await store.evidence(tx, readSet, refs, intent));
       const failures = await Promise.all(refs.map(async (ref, i) => {
         const row = rows[i];
-        const legacy = !documentCards && !capabilities.documentCards && row &&
+        const legacy = !cardsEnabled && row &&
           legacyContextCard(row, generations[namespaceSlot(readSet, ref.scope)].lineage !== undefined);
         if (row?.type === "card" && !legacy && !await contextCardVerdict(documentCards, tx, ref, row.item)) {
           return "evidence_unavailable";
@@ -108,7 +109,7 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
         return checkRow(ref, row);
       }));
       const unavailable = previous ? "snapshot_stale" : "evidence_unavailable";
-      const fenceRefs = hasContextCardLoader(documentCards) ? refs.filter(ref => ref.type !== "card") : refs;
+      const fenceRefs = cardsEnabled ? refs.filter(ref => ref.type !== "card") : refs;
       if (failures.includes("evidence_unavailable")) throw new CoreError(unavailable);
       if (failures.includes("revision_conflict")) {
         await assertContextVisible(fence, tx, readSet, fenceRefs, intent, unavailable);

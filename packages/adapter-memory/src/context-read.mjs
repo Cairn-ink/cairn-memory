@@ -16,11 +16,14 @@ const MAX_PROJECTIONS = 8;
 /** @param {State} state @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {boolean} cards */
 function canonicalBinding(state, readSet, { types }, cards) {
   const memory = types.includes("memory");
+  // Keep other index invalidations while binding card writes only within the read set.
+  let nonCardRevision = state.indexRevision;
+  if (cards) for (const generation of state.cardGenerations.values()) nonCardRevision -= generation;
   return JSON.stringify(readSet.namespaces.map(namespace => {
     if (!memory && !cards) return [namespace];
     const facts = [...state.facts.values()].filter(({ fact }) => (fact.namespace ?? null) === namespace);
     return [namespace, state.contextEpochs.get(namespace) ?? 1, facts.at(-1)?.epoch.toString() ?? "0",
-      ...(cards ? [state.indexRevision] : [])];
+      ...(cards ? [nonCardRevision, state.cardGenerations.get(namespace) ?? 0] : [])];
   }));
 }
 
@@ -132,10 +135,10 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
     if (!entry || !card || card.scope.owner !== scope.owner || card.scope.namespace !== scope.namespace) return null;
     const memoryRows = state.rows.get(scope.namespace);
     const policy = matchFacts(state.facts, scope);
-    const triggerMemoryRefs = card.sourceMemories.flatMap(({ id }) => {
+    const triggerMemoryRefs = card.sourceMemories.flatMap(({ id, revision }) => {
       const memory = memoryRows?.get(id);
       return memory && eligible(memory, intent, policy)
-        ? [{ type: /** @type {const} */ ("memory"), scope, id, revision: memory.row.revision }] : [];
+        ? [{ type: /** @type {const} */ ("memory"), scope, id, revision }] : [];
     });
     return { type: "card", lineageStamp: null, item: {
       type: "card", ref: cardRef(scope, card.id, entry), title: card.title ?? "", body: card.body,
@@ -211,14 +214,10 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
     },
     async snapshotState(tx, readSet, types) {
       return port(tx, readSet, false, state => readSet.namespaces.map(namespace => ({
-        memory: state.contextEpochs.get(namespace) ?? 1, ...(types.includes("card") && { card: loadCardInputs ? state.cardGeneration : 1 }),
+        memory: state.contextEpochs.get(namespace) ?? 1,
+        ...(types.includes("card") && { card: loadCardInputs ? state.cardGenerations.get(namespace) ?? 0 : 1 }),
       })));
     },
-    ...(loadCardInputs && archive && {
-      async documentCardAmendmentSource(tx, scope, source) {
-        return port(tx, scope, false, state => archive.amendmentSource(state, scope, source));
-      },
-    }),
     async evidence(tx, readSet, refs, intent) {
       return port(tx, readSet, false, async state => {
         if (refs.some(({ scope }) => scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace))) {

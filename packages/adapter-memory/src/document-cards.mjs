@@ -1,6 +1,7 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
 import { DOCUMENT_CARD_SEARCH_TEXT_VERSION } from "@cairn-ink/core/routing";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
+import { recordCardWrite } from "./unit-of-work.mjs";
 import { copyScope, readEmbedding, snapshotArray, validateCardId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideSelector, DocumentCardSourceMessage,
@@ -91,7 +92,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             hidden++;
           }
         }
-        if (hidden) run.cardWrites++;
+        if (hidden) recordCardWrite(run, namespace);
         return { hidden };
       };
     });
@@ -146,7 +147,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             bodyRevision: (previous?.bodyRevision ?? 0) + Number(bodyChanged),
           });
           state.documentCards.set(namespace, cards);
-          run.cardWrites++;
+          recordCardWrite(run, namespace);
           return { status: previous ? "replaced" : "inserted" };
         };
       });
@@ -173,7 +174,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             id === existing[index].id && revision === existing[index].revision)) return { status: "unchanged" };
           entry.card = { ...entry.card, sourceMemories };
           entry.revision++;
-          run.cardWrites++;
+          recordCardWrite(run, scope.namespace);
           return { status: "linked" };
         };
       });
@@ -192,7 +193,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           if (amendments.has(copy.amendmentId)) return { status: "unchanged" };
           amendments.set(copy.amendmentId, copy);
           entry.revision++;
-          run.cardWrites++;
+          recordCardWrite(run, scope.namespace);
           return { status: "inserted" };
         };
       });
@@ -208,7 +209,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           if (!entry?.amendments?.get(amendmentId)) return;
           entry.amendments.set(amendmentId, null);
           entry.revision++;
-          run.cardWrites++;
+          recordCardWrite(run, scope.namespace);
         };
       });
     },
@@ -238,7 +239,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             entry.card = { ...entry.card, stale: [...entry.card.stale, stale] };
             entry.revision++;
           }
-          run.cardWrites++;
+          recordCardWrite(run, namespace);
         };
       });
     },

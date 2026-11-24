@@ -38,7 +38,8 @@ function exactLineage(state, { scope, id }, receipt, raw) {
   return Boolean(admitted?.content && admitted.content === raw.content && admitted.role === raw.role && raw.role === receipt.role);
 }
 
-/** @param {State} state @param {ContextReadSet} readSet @param {Set<string>} candidates @param {() => boolean} expired */
+/** @param {State} state @param {Pick<ContextReadSet, "owner" | "namespaces">} readSet
+ * @param {Set<string>} candidates @param {() => boolean} expired */
 function receiptLinks(state, readSet, candidates, expired) {
   /** @type {Map<string, { ref: ContextMemoryRef, receipt: StoredReceipt }[]>} */
   const links = new Map();
@@ -62,8 +63,10 @@ function receiptLinks(state, readSet, candidates, expired) {
 
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>} archive @param {ContextReadStore} store
+ * @param {{ raw: boolean, amendments: boolean }} options
  * @returns {ContextReadStore} */
-export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible }, store) {
+export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible, amendmentSource }, store,
+  { raw: rawEnabled, amendments }) {
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
   function checkLineage(tx, readSet, state, links) {
     /** @type {Map<string, readonly QualifiedReceipt[]>} */
@@ -89,6 +92,20 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
       return true;
     };
   }
+  /** @type {ContextReadStore} */
+  const context = amendments ? {
+    ...store,
+    async documentCardAmendmentSource(tx, readSet, scope, { sourceMessage, quote }) {
+      if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace)) return null;
+      return port(tx, scope, false, state => amendmentSource(state, scope, sourceMessage, quote, async row => {
+        const links = receiptLinks(state, { owner: scope.owner, namespaces: [scope.namespace] },
+          new Set([sourceSlot(scope, row)]), () => false);
+        return links !== null && await checkLineage(tx, readSet, state, links)(scope, row);
+      }));
+    },
+  } : store;
+  if (!rawEnabled) return context;
+
   /** @type {ContextRawReadStore} */
   const raw = {
     async search(tx, readSet, query, { limit, deadlineAtMs, signal }) {
@@ -167,7 +184,7 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
     },
   };
   return {
-    ...store, raw,
+    ...context, raw,
     async evidence(tx, readSet, refs, intent) {
       const rows = await store.evidence(tx, readSet, refs, intent);
       return port(tx, readSet, false, state => Promise.all(rows.map(async row => {

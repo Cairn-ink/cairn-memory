@@ -29,7 +29,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGeneration: number, contextEpochs: Map<Namespace, number>,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
  * receiptDenials: Set<string>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
@@ -47,6 +47,13 @@ export function indexRevisionAfterRun(run) {
   const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes + run.cardWrites;
   if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
   return revision;
+}
+
+/** @param {IssuedRun} run @param {Namespace} namespace */
+export function recordCardWrite(run, namespace) {
+  const { cardGenerations } = run.state;
+  cardGenerations.set(namespace, (cardGenerations.get(namespace) ?? 0) + 1);
+  run.cardWrites++;
 }
 
 /** @param {Row} row */
@@ -133,7 +140,7 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), documentCards: new Map(), cardGeneration: 0, contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
+    topics: new Map(), documentCards: new Map(), cardGenerations: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
     pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
     nextInspectReceiptPosition: 1, receiptDenials: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
@@ -227,7 +234,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
             finish.indexRevision = revision;
           }
           state.indexRevision = revision;
-          state.cardGeneration += issuedRun.cardWrites;
           if (trackContextEpochs && revision !== current.committed.indexRevision) advanceContextEpochs(current.committed, state);
           current.committed = state;
         }

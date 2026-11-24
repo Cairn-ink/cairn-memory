@@ -10,7 +10,9 @@ import { CONTEXT_HORIZON, contextReadSet, findCandidatesInput, itemRef, readSetB
 import { CONTEXT_VERSION, isReadMac, newRankingId, readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @import { CallOptions, ClockAndHash, ContextCandidateDiagnostics, ContextReadSet, FindCandidatesInput,
-  FindCandidatesResult, ContextIndexObservation, ContextReadRef, ContextReadType, ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
+  FindCandidatesResult, ContextIndexObservation, ContextReadRef, ContextReadStore, ContextReadType,
+  ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
+/** @typedef {Awaited<ReturnType<ContextReadStore["snapshotState"]>>} Generations */
 /** @typedef {FindCandidatesResult["items"]} Items */
 /** @typedef {{ items: Items, diagnostics: ContextCandidateDiagnostics, token: Cursor }} Ranking */
 /** @typedef {{v: 1, r: string, b: string, c: string, a: string, g: string, e: number, p: number}} Cursor */
@@ -102,14 +104,15 @@ async function page({ items, diagnostics, token }, position, limit, signer) {
 export function findCandidatesMethod({ storage, clock }) {
   const { contextRead: store, fence, uow, documentCards } = storage;
   const cardsEnabled = hasContextCardLoader(documentCards);
+  const documentCardsOnly = storage.capabilities.documentCards && !storage.capabilities.cards;
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadRef} ref
-   * @param {FindCandidatesInput["intent"]} intent */
-  async function visibleCard(tx, readSet, ref, intent) {
+   * @param {FindCandidatesInput["intent"]} intent @param {Generations | undefined} generations */
+  async function visibleCard(tx, readSet, ref, intent, generations) {
     if (cardsEnabled) return !!await contextCardVerdict(documentCards, tx, ref);
-    if (!store || documentCards || storage.capabilities.documentCards) return false;
-    // Legacy adapters can still supply qualified engine Cards.
+    if (!store) return false;
     const [row] = await store.evidence(tx, readSet, [ref], intent ?? "current");
-    return !!row && legacyContextCard(row) && !checkRow(ref, row);
+    const lineageEnabled = generations?.[namespaceSlot(readSet, ref.scope)]?.lineage !== undefined;
+    return !!row && legacyContextCard(row, lineageEnabled) && !checkRow(ref, row);
   }
 
   /** @param {Items} items */
@@ -170,8 +173,10 @@ export function findCandidatesMethod({ storage, clock }) {
         const current = await store.observeIndex(tx, readSet, selection);
         if (!current.ready || await signer.bind("index", current.indexState) !== token.g) throw new CoreError("cursor_stale");
         const result = await page(ranking, token.p, limit, signer);
+        const generations = !cardsEnabled && result.items.some(({ ref }) => ref.type === "card")
+          ? await store.snapshotState(tx, readSet, types) : undefined;
         for (const { ref } of result.items) {
-          if (ref.type === "card" && !await visibleCard(tx, readSet, ref, intent)) throw new CoreError("cursor_stale");
+          if (ref.type === "card" && !await visibleCard(tx, readSet, ref, intent, generations)) throw new CoreError("cursor_stale");
         }
         await assertContextVisible(fence, tx, readSet, fenceRefs(result.items), intent, "cursor_stale");
         return { result };
@@ -197,22 +202,23 @@ export function findCandidatesMethod({ storage, clock }) {
         if (namespaceSlot(readSet, ref.scope) < 0 || !types.includes(ref.type)) throw new CoreError("index_unavailable");
         return { ref: itemRef(ref), qualified: ref, score };
       });
-      const accepted = lexicalRows.some(({ ref }) => ref.type === "card") ?
+      const hasCardHits = lexicalRows.some(({ ref }) => ref.type === "card");
+      const generations = forAssembly || (!cardsEnabled && hasCardHits) ? await store.snapshotState(tx, readSet, types) : undefined;
+      const accepted = hasCardHits ?
         (await Promise.all(lexicalRows.map(async row =>
-          row.ref.type !== "card" || await visibleCard(tx, readSet, row.qualified, intent) ? row : null
+          row.ref.type !== "card" || await visibleCard(tx, readSet, row.qualified, intent, generations) ? row : null
         ))).filter(row => row !== null) : lexicalRows;
       const fused = fuseCandidates(accepted, [], { preset: config.preset });
       if (fused.mode !== "lexical") throw new CoreError("internal_error");
       const items = fused.rows.map(({ qualified: ref, fusionScore, channels }, i) => ({ ref, rank: i + 1, fusionScore, channels }));
       diagnostics.trace.timings.fusionMs = clock.monotonicMs() - fusionStarted;
-      const coverage = types.includes("card") && !cardsEnabled && !accepted.some(({ ref }) => ref.type === "card")
+      const coverage = types.includes("card") && !cardsEnabled && documentCardsOnly && !accepted.some(({ ref }) => ref.type === "card")
         ? { ...observed, byType: { ...observed.byType, card: { eligible: 0, indexed: 0 } } } : observed;
       completeCoverage(diagnostics, types, coverage, accepted.length === lexical.rows.length ? lexical.matched : null);
 
       // Assembly consumes the qualified horizon and its namespace fence in
       // the search snapshot (legacy context-read-facade.mjs:773–796).
       if (forAssembly) {
-        const generations = await store.snapshotState(tx, readSet, types);
         await assertContextVisible(fence, tx, readSet, fenceRefs(items), intent, "evidence_unavailable");
         /** @type {FindCandidatesResult} */
         const result = { ...diagnostics, items, version: CONTEXT_VERSION, nextCursor: null };

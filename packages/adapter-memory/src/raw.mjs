@@ -299,22 +299,20 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   }
 
   /** @param {State} state @param {Scope} scope
-   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
-  async function amendmentSource(state, scope, source) {
-    const id = rawId(scope, source, source.messageId);
-    const row = state.rawRows.get(id);
-    if (!row?.content || row.role !== "user" || state.rawConflicts.has(id)) return null;
+   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source @param {string} quote
+   * @param {(row: RawEntry) => Promise<boolean>} isCurrent */
+  async function amendmentSource(state, scope, source, quote, isCurrent) {
+    const row = await findVisibleSource(state, scope, source);
+    if (row?.role !== "user" || typeof quote !== "string" || !quote || !row.content.includes(quote) ||
+        !await isCurrent(row)) return null;
     const sessionKeyHash = await spanSessionHash(row);
     if (!sessionKeyHash) return null;
     const facts = scopedFacts(state, scope);
     const raw = await readEvidence(scope, facts, sessionKeyHash)(row);
-    const sourceExcluded = state.rawFences.has(sessionSlot(scope.namespace, row)) ||
-      (state.receiptDenials.size > 0 && state.receiptDenials.has(await receiptAddressKey(scope.namespace, row))) ||
-      !await sourceLineageVisible(state, scope, row);
     return {
       sourceIdentity: { sessionKeyHash, messageKey: source.messageId },
       source: { rawRows: [raw], sourceLengthUtf16: row.content.length,
-        facts: structuredClone(facts), sourceExcluded, policy: { ...policy } },
+        facts: structuredClone(facts), sourceExcluded: false, policy: { ...policy } },
     };
   }
 

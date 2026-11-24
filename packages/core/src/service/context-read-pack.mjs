@@ -1,7 +1,7 @@
 import { isWellFormedText } from "../capture/validate.mjs";
 import { renderCardAmendments } from "../routing/amendment-read.mjs";
 import { CoreError } from "../errors.mjs";
-import { cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
+import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
 
 /** @import { ContextAssemblyDiagnostics, ContextAssemblyPolicy, ContextAssemblyRepresentation,
   ContextAssemblySource, ContextAssemblyValue } from "../ports/index.d.ts" */
@@ -170,7 +170,7 @@ export function packContext(items, options, metering) {
     if (!source && item.engine && !hits.has(item) && [...chosen.keys()].some(memory =>
       memory.rank < item.rank && citesMemory(item, memory))) return;
     if (!source && item.compact.type === "memory" && [...chosen.keys()].some(card => citesMemory(card, item))) return;
-    const mayReplace = item.engine || item.evidence.documentCard;
+    const mayReplace = canReplaceCitedMemory(item);
     if (!source && chosen.size >= budget.maxItems && !mayReplace) { stops.items = true; return; }
     const current = chosen.get(item);
     if (source && !current) return;

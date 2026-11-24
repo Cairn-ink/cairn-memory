@@ -61,10 +61,12 @@ function fixture({ loader = true, sourceProjection, forgetDuringEvidence = false
         if (forgetDuringEvidence) visibility.memoryStates.set("link", { status: "forgotten" });
         return [{ type: "card", item, lineageStamp: null }];
       },
-      ...(sourceProjection && { async documentCardAmendmentSource(tx, requestedScope, source) {
+      ...(sourceProjection && { async documentCardAmendmentSource(tx, requestedSet, requestedScope, { sourceMessage, quote }) {
         assert.equal(tx, current);
+        assert.deepEqual(requestedSet, readSet);
         assert.deepEqual(requestedScope, scope);
-        assert.deepEqual(source, amendment.sourceMessage);
+        assert.deepEqual(sourceMessage, amendment.sourceMessage);
+        assert.equal(quote, amendment.quote);
         return sourceProjection();
       } }),
     },

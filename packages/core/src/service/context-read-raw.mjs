@@ -4,7 +4,8 @@ import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
 import { fitCardAmendments } from "./context-read-pack.mjs";
-import { cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey, wireItem } from "./context-read-projection.mjs";
+import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey,
+  wireItem } from "./context-read-projection.mjs";
 
 /** @import { CallOptions, ContextAssemblyRawExcerpt, ContextAssemblyRepresentation, ContextRawCoverage,
   ContextRawReadStore, ContextRawTurn, ContextReadSet, UnitOfWork } from "../ports/index.d.ts" */
@@ -258,7 +259,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     const breadth = /\b(how many|how often|number of|count|total|list|all|which)\b|\bhow much\b(?!\s+(earlier|later|more|less|longer|shorter)\b)/iu.test(query);
     /** @param {Unit[]} proposed @returns {Projection} */
     function project(proposed) {
-      const cards = proposed.flatMap(unit => unit.members).filter(item => item.engine || item.evidence.documentCard);
+      const cards = proposed.flatMap(unit => unit.members).filter(canReplaceCitedMemory);
       const surviving = proposed.flatMap(unit => {
         const members = unit.members.filter(item => !cards.some(card => citesMemory(card, item)));
         if (members.length === unit.members.length) return [unit];
@@ -308,7 +309,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       const trial = project([...selected, unit]);
       if (trial.value.items.length > budget.maxItems) { stops.items = true; continue; }
       if (trial.value.items.length === accepted.value.items.length &&
-          trial.selected.length === accepted.selected.length && !unit.members.some(item => item.engine)) continue;
+          trial.selected.length === accepted.selected.length && !unit.members.some(canReplaceCitedMemory)) continue;
       const value = check(trial, p => diagnostics(p, selected.length + 1));
       active();
       if (!value?.fits) { stops.budget = true; continue; }

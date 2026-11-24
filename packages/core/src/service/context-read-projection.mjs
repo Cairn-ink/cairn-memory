@@ -66,6 +66,9 @@ export function prepareItem(evidence, readSet, rank, intent) {
   };
 }
 
+/** @param {PreparedItem} item */
+export const canReplaceCitedMemory = item => item.engine || item.evidence.documentCard;
+
 /** @param {PreparedItem} card @param {PreparedItem} memory */
 export function citesMemory(card, memory) {
   const { item } = card.evidence, { ref } = memory.evidence.item;
