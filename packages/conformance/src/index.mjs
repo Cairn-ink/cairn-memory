@@ -36,6 +36,7 @@ export { CAPTURE_QUANTITY_LEDGER_CASES } from "./capture-quantity-ledger-cases.m
 export { CAPTURE_DOCUMENT_FORGET_CASES } from "./capture-document-forget-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
+export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];

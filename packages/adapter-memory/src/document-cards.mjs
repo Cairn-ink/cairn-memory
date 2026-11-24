@@ -1,6 +1,7 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
+import { DOCUMENT_CARD_SEARCH_TEXT_VERSION } from "@cairn-ink/core/routing";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
-import { copyScope, snapshotArray, validateCardId, validateTime, writeNamespace } from "./validation.mjs";
+import { copyScope, readEmbedding, snapshotArray, validateCardId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideOptions, DocumentCardHideSelector, DocumentCardSourceMessage,
  * DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
@@ -10,7 +11,8 @@ import { copyScope, snapshotArray, validateCardId, validateTime, writeNamespace 
 /** @typedef {import("./unit-of-work.mjs").CardEntry} CardEntry */
 /** @typedef {import("./unit-of-work.mjs").AmendmentEntry} AmendmentEntry */
 /** @typedef {import("./unit-of-work.mjs").State} State */
-/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardVisibility>} CardVisibility */
+/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardVisibilityInput>} CardVisibilityInput */
+/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardAmendmentWithholding>} CardAmendmentWithholding */
 /** @typedef {{ card: (card: CardWrite) => boolean,
  * amendment?: (amendment: DocumentCardAmendment) => boolean }} HideMatcher */
 
@@ -91,6 +93,7 @@ function hideMatching(state, namespace, match, reason, { purge = false, retainTe
         entry.hiddenCard = card;
       }
       entry.card = null;
+      delete entry.embedding;
       if (purge || !retainText) delete entry.amendments;
       changed = true;
       continue;
@@ -120,9 +123,10 @@ export function purgeDeletedDocumentSources(state, namespace, isDeleted) {
   }, "raw_deleted", { purge: true });
 }
 
-/** @param {Port} port @param {() => number} now @param {CardVisibility["input"]} visibilityInput
- * @param {CardVisibility["amendmentWithheld"]} amendmentWithheld @returns {DocumentCardStore<StoredDocumentCardRecord>} */
-export function createDocumentCardStore(port, now, visibilityInput, amendmentWithheld) {
+/** @param {Port} port @param {() => number} now
+ * @param {CardVisibilityInput} buildVisibilityInput @param {CardAmendmentWithholding} amendmentWithheld
+ * @param {boolean} searchEnabled @returns {DocumentCardStore<StoredDocumentCardRecord>} */
+export function createDocumentCardStore(port, now, buildVisibilityInput, amendmentWithheld, searchEnabled) {
   /** @param {Tx} tx @param {Scope} scope @param {() => HideMatcher} prepare */
   function hideCards(tx, scope, prepare, /** @type {string} */ reason, /** @type {DocumentCardHideOptions} */ options = {}) {
     return port.write(tx, scope, "conditional", () => {
@@ -138,7 +142,7 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
   }
 
   return {
-    async put(tx, scope, card) {
+    async put(tx, scope, card, embedding) {
       return port.write(tx, scope, "conditional", () => {
         const namespace = writeNamespace(scope);
         const copy = structuredClone(card);
@@ -148,6 +152,16 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
         if (!Array.isArray(copy.sourceMemories) || !Array.isArray(copy.stale)) throw new CoreError("invalid_input");
         Reflect.deleteProperty(copy, "amendments");
         copy.stale = copy.stale.map(({ memoryId, replacementMemoryId }) => ({ memoryId, replacementMemoryId }));
+        /** @type {CardEntry["embedding"]} */
+        let indexedEmbedding;
+        if (searchEnabled && embedding) {
+          requireString(embedding.model);
+          indexedEmbedding = {
+            model: embedding.model, vector: readEmbedding(embedding.vector, "passage"),
+            textVersion: DOCUMENT_CARD_SEARCH_TEXT_VERSION,
+          };
+          if (!indexedEmbedding.vector.length) throw new CoreError("invalid_input");
+        }
         return (getState, _markDirty, run) => {
           const state = getState();
           const cards = state.documentCards.get(namespace) ?? new Map();
@@ -163,8 +177,14 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
           }
           const createdAtMs = previous?.createdAtMs ?? now();
           validateTime(createdAtMs);
+          let searchIndex;
+          if (searchEnabled) {
+            const updatedAtMs = previous ? now() : createdAtMs;
+            validateTime(updatedAtMs);
+            searchIndex = { updatedAtUs: writeTime(updatedAtMs).updatedAtUs, embedding: indexedEmbedding };
+          }
           if (previous) dropCardPlacement(state, namespace, copy.id);
-          cards.set(copy.id, { ...previous, card: copy, createdAtMs });
+          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex });
           state.documentCards.set(namespace, cards);
           run.cardWrites++;
           return { status: previous ? "replaced" : "inserted" };
@@ -273,7 +293,7 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
             amendments.push({ amendmentId, sourceMessage, sourceWithheld });
           }
           if (!selected && amendments.length === 0) continue;
-          const input = selected ? await visibilityInput(state, scope, card, true, facts) : null;
+          const input = selected ? await buildVisibilityInput(tx, state, scope, card, false, facts) : null;
           candidates.push(structuredClone({ cardId: card.id, input, amendments }));
         }
         return candidates;
@@ -305,6 +325,26 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
     async list(tx, scope) {
       return port(tx, scope, false, (state) => [...(state.documentCards.get(scope.namespace)?.values() ?? [])]
         .map(readCard).filter((card) => card !== null));
+    },
+
+    async visibilityInputs(tx, scope, refs) {
+      return port.read(tx, scope, getState => {
+        const requestedScope = copyScope(scope);
+        const state = getState();
+        const cards = state.documentCards.get(requestedScope.namespace);
+        return Promise.all(Array.from(refs, async ref => {
+          try {
+            if (ref?.type !== "card" || ref.namespace !== requestedScope.namespace ||
+                typeof ref.id !== "string" || !ref.id) return null;
+            const card = cards?.get(ref.id)?.card;
+            if (!card || card.scope.owner !== requestedScope.owner ||
+                card.scope.namespace !== requestedScope.namespace) return null;
+            return structuredClone(await buildVisibilityInput(tx, state, requestedScope, card, true));
+          } catch {
+            return null;
+          }
+        }));
+      });
     },
   };
 }

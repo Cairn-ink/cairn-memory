@@ -5,11 +5,12 @@ import { createContextRawRead, reconcileRawInventory } from "./context-raw-read.
 import { createContextReadStore } from "./context-read.mjs";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
-import { createInspectStore } from "./inspect.mjs";
+import { anchorsVisible, createInspectStore, receiptProjector } from "./inspect.mjs";
 import { createMemoryStore } from "./memories.mjs";
 import { migratedCaptureControls } from "./migrate/capture-controls.mjs";
 import { createMigratedRawPolicy } from "./migrate/raw-privacy.mjs";
 import { createPauseStore } from "./pause.mjs";
+import { createProceduralTagStore } from "./procedural-tags.mjs";
 import { createRawStore } from "./raw.mjs";
 import { createRawLineage, createSpanLineage } from "./raw-lineage.mjs";
 import { createRawReads } from "./raw-read.mjs";
@@ -39,7 +40,8 @@ export async function openSqliteAdapter(filename, options) {
 export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal },
   { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
-    contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false });
+    contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
+    embeddingRequiredOnInsert: false, receiptAttachAdvancesRevision: true, proceduralTags: true });
   if (flags.contextRawRead && !flags.contextRead) throw new CoreError("capability_unavailable");
   const hashSessionKey = sessionHasher(sessionHashKey, legacyRawHashing);
   const migratedRaw = legacyRawHashing ?
@@ -51,6 +53,8 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
   const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
   const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety);
+  const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
+    anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
   const rawContext = flags.contextRawRead
     ? createContextRawRead(port, hashSessionKey, sessionHashKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, captureControls) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(uow, port, hashSessionKey, receiptReadSafety, inspect.identity,
@@ -60,7 +64,8 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     capabilities: flags,
     uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw, captureControls, preserveArrivalRefusal),
-    memories: createMemoryStore(port, hashSessionKey, index.markDirty),
+    memories: createMemoryStore(port, hashSessionKey, index),
+    proceduralTags,
     inspect,
     ...(contextRead && { contextRead }),
     ...(rawContext && {
