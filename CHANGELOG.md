@@ -7,7 +7,7 @@
 - Engine features that local setup does not turn on by default also changed:
   - Forgetting a memory can finish when a topic title came from an earlier source you already forgot.
   - Pausing stops new model requests from background Card updates. Saved conversation searches that match only on words skip the embedding service.
-  - Forgetting now also hides forgotten text that other conversations repeated: Session Start Next Steps and Episode Keep no longer bring back content you forgot, and reopening a saved Episode or retrying a Keep leaves out sources affected by the forget. Known limit: a Next Steps item is withdrawn when its text matches forgotten content exactly. A forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet.
+  - Session Start Next Steps and Episode Keep leave out sources that share a message with something you forgot, and Next Steps withdraws an item whose text exactly matches a forgotten memory. Reopening a saved Episode or retrying a Keep also leaves out those shared sources when their identity can be checked. Known limits: the same text repeated in a different conversation is not detected unless it exactly matches the forgotten memory; a forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet; and a Keep saved before 0.6.12 can still list a forgotten source's ID if that source had already been removed from its draft.
 
 ## 0.3.11 — 2026-11-23: turn off capture for one session or project
 
