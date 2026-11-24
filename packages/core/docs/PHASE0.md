@@ -799,7 +799,9 @@ The MCP host uses these status mappings.
 
 A full text suppression fact may persist `explicitSaveExemptAfterUs` as a
 canonical integer string of microseconds since the Unix epoch. The matcher
-skips vector and shingle matching for a memory with physical source kind `mcp`
-or `web` and a physical creation time strictly later than that timestamp.
-Exact digests still apply. When the field is absent, full text matching uses
-the existing policy. The exemption applies to memory visibility.
+skips vector matching for a memory with physical source kind `mcp` or `web`
+and a physical creation time strictly later than that timestamp. Exact digests
+and any containment checks enabled by the caller still apply. On writes, only
+a new `mcp` or `web` save qualifies, using the server clock in the save
+transaction. When the field is absent, full text matching follows the caller's
+existing policy.

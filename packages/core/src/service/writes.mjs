@@ -5,6 +5,7 @@ import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/i
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
+import { factBlocksIncoming } from "../privacy/fact-match.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { redactAmendmentText } from "../routing/redaction.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
@@ -17,6 +18,7 @@ import { pauseResult } from "./pause.mjs";
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
+const sentenceSegmenter = new Intl.Segmenter("und", { granularity: "sentence" });
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
 
 /** @param {number | undefined} indexRevision */
@@ -275,20 +277,36 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
  * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
  * @param {TextFact["sourceMemory"]} [edit]
+ * @param {{ raw: string, explicitSaveCreatedAtUs: bigint, sha256Hex: (text: string) => Promise<string>,
+ *   digesters?: readonly RetainedDigester[] }} [explicitSave]
  */
-async function withheld(suppressions, tx, scope, source, passages, key, edit) {
+async function withheld(suppressions, tx, scope, source, passages, key, edit, explicitSave) {
   const snapshot = await writeSnapshot(suppressions, tx, scope, source, { passages });
   if (snapshot.blockedSession || snapshot.blockedMessages.length) return true;
-  const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
+  const stored = snapshot.passages.slice();
   if (passages.length > 1) {
     // The candidate snapshot may omit forget facts needed for multi-passage containment.
     const scoped = await suppressions.snapshot(tx, scope, {});
-    for (const { fact } of scoped.passages) {
-      if (fact?.origin === "forget") passagesInSnapshot.push(fact);
+    for (const entry of scoped.passages) {
+      if (entry.fact?.origin === "forget" || entry.fact?.explicitSaveExemptAfterUs !== undefined) stored.push(entry);
     }
   }
-  const facts = scopedPassageFacts(scope, passagesInSnapshot);
-  return facts === null || blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
+  const facts = scopedPassageFacts(scope, stored.map(({ fact }) => fact));
+  if (facts === null) return true;
+  if (explicitSave === undefined) return blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
+  if (blocksMemoryPassage(passages, facts.filter(fact => fact.explicitSaveExemptAfterUs === undefined), key)) return true;
+  const legacy = stored.filter(({ fact }) => fact.explicitSaveExemptAfterUs !== undefined &&
+    fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
+  if (!legacy.length) return false;
+
+  const { raw, explicitSaveCreatedAtUs, sha256Hex, digesters } = explicitSave;
+  // Whole-text variants preserve legacy digest and shingle evidence. Sentence
+  // fingerprints also let exact passage matches block a multi-sentence save.
+  const sentences = Array.from(sentenceSegmenter.segment(raw), ({ segment }) => segment.trim()).filter(Boolean);
+  const candidates = sentences.length > 1 ? passages.concat((await Promise.all(sentences.map(sentence =>
+    fingerprintMemoryPassages(sentence, prepareCoreText(sentence), key, sha256Hex, digesters)))).flat()) : passages;
+  return legacy.some(entry => factBlocksIncoming(entry, { scope, passages: candidates, explicitSaveCreatedAtUs },
+    { mode: "explicitSave", key }) !== false);
 }
 
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
@@ -407,14 +425,20 @@ export function writeMethods(deps) {
         if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
-        if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
-            await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
-        const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
+        if (receipts.length && await withheldReceipt(tx, scope, receipts[0])) return suppressed();
+        const now = explicit ? clock.nowMs() : undefined;
+        const explicitSave = now === undefined ? undefined : {
+          raw, explicitSaveCreatedAtUs: BigInt(now) * 1000n, sha256Hex, digesters,
+        };
+        if (await withheld(suppressions, tx, scope, source, passages, key, undefined, explicitSave)) return suppressed();
+        const policy = await memories.readWritePolicy(tx, scope, [query], source, mode, undefined, explicitSave && {
+          explicitSaveCreatedAtUs: explicitSave.explicitSaveCreatedAtUs,
+        });
         const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
         if (decision.status === "suppressed") return suppressed();
         let id, written;
         if (decision.status === "saved") {
-          written = await memories.insert(tx, scope, row, receipts, clock.nowMs());
+          written = await memories.insert(tx, scope, row, receipts, now ?? clock.nowMs());
           id = written.id;
         } else {
           const duplicateId = decision.id;
@@ -425,7 +449,7 @@ export function writeMethods(deps) {
           if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed();
           const { merge } = planDuplicateMerge(current, current);
           if (tag && kind !== current.kind) merge.kind = kind;
-          written = await memories.touchDuplicate(tx, scope, duplicateId, receipts, merge, clock.nowMs());
+          written = await memories.touchDuplicate(tx, scope, duplicateId, receipts, merge, now ?? clock.nowMs());
         }
         if (tag && proceduralTags) {
           const receiptId = written.receiptIds?.[0];

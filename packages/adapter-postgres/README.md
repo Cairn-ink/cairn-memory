@@ -97,9 +97,11 @@ The helper returns a validated fact with the supplied owner and `actionId: "lega
 The copy still supplies storage IDs and epochs. Text rows with `origin = 'edit'`
 use exact mode with their stored digest aliases. Text rows with origin `forget`,
 `correct`, or `backfill` use full mode and exempt physical `mcp` or `web` memories
-created strictly after the suppression from vector and shingle matching. Exact
-matches still hide those memories. Text rows with a null origin use full mode
-without a timestamp exemption.
+created strictly after the suppression from vector matching. Reads also check
+exact digests. On writes, the exemption applies only to new explicit saves and
+uses the server clock for the save transaction. Exact passage and applicable
+shingle containment checks still run. Text rows with a null origin use full
+mode without a timestamp exemption.
 
 The slot helper and insert builder in `src/facts.mjs` snapshot the fact before
 running core validation and the adapter's storage checks. They derive all

@@ -132,7 +132,7 @@ function matchReader() {
       const passage = (value) => record(value, useShingles ? ["keyId"] : [], {
         ...(useShingles ? passageLists : fingerprintDigests), embedding: candidateEmbedding,
       });
-      return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs"], {
+      return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs", "explicitSaveCreatedAtUs"], {
         scope, passages: (value) => list(value, passage, true), session: source, sourceMemory: incarnation,
       })));
     },
@@ -211,10 +211,10 @@ function checksExplicitPassages(fact, edit, passages) {
  * precedence over unavailable evidence from another comparison.
  * @param {readonly TextCandidate[]} passages @param {TextFact} fact @param {FactMatchPolicy} policy
  * @param {IncomingFactMatchPolicy} [explicit] @param {FactMatchIncoming["sourceMemory"]} [edit]
- * @param {boolean} [digestOnly]
+ * @param {boolean} [skipVector]
  * @returns {FactMatchResult}
  */
-function matchPassages(passages, fact, policy, explicit, edit, digestOnly = false) {
+function matchPassages(passages, fact, policy, explicit, edit, skipVector = false) {
   const threshold = policy.containmentThreshold === undefined ? CONTAINMENT_THRESHOLD : policy.containmentThreshold;
   if (!Array.isArray(passages) || !isValidFingerprint(fact.text) || !isValidThreshold(threshold)) return "ineligible";
   if (explicit && ((explicit.key != null && !nonempty(explicit.key.id)) ||
@@ -234,7 +234,7 @@ function matchPassages(passages, fact, policy, explicit, edit, digestOnly = fals
     if (digest === "ineligible") result = "ineligible";
     candidates.push(passage);
   }
-  if (fact.mode === "exact" || digestOnly) return result;
+  if (fact.mode === "exact") return result;
 
   const useShingles = policy.rowShingles !== false;
   const checkContainment = useShingles && (!explicit || checksExplicitPassages(fact, edit, passages));
@@ -246,7 +246,7 @@ function matchPassages(passages, fact, policy, explicit, edit, digestOnly = fals
     const shingles = useShingles &&
       shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable);
     if (shingles === true) return true;
-    const vector = explicit ? false : vectorMatch(passage, fact, policy);
+    const vector = skipVector ? false : vectorMatch(passage, fact, policy);
     if (vector === true) return true;
     if (shingles === "ineligible" || vector === "ineligible") result = "ineligible";
   }
@@ -324,9 +324,14 @@ function blocksIncoming(fact, incoming, policy) {
   if (scoped !== true) return scoped;
   if (policy?.mode !== "capture" && policy?.mode !== "explicitSave") return "ineligible";
   switch (fact.kind) {
-    case "text":
-      return matchPassages(incoming.passages, fact, policy,
-        policy.mode === "explicitSave" ? policy : undefined, incoming.sourceMemory);
+    case "text": {
+      const explicit = policy.mode === "explicitSave" ? policy : undefined;
+      const cutoff = fact.explicitSaveExemptAfterUs;
+      const createdAtUs = incoming.explicitSaveCreatedAtUs;
+      const skipVector = explicit !== undefined && (cutoff === undefined ||
+        (incoming.sourceMemory == null && typeof createdAtUs === "bigint" && createdAtUs > BigInt(cutoff)));
+      return matchPassages(incoming.passages, fact, policy, explicit, incoming.sourceMemory, skipVector);
+    }
     case "session":
       return sessionMatches(fact.session, incoming.session, policy);
     case "window":
@@ -358,7 +363,7 @@ export function factHidesRow(storedFact, row, policy = {}) {
 
 /**
  * `rowShingles` defaults to true. Set it to false to skip containment for full text facts.
- * Enabled vectors still apply in capture mode. Explicit saves use exact digests.
+ * Enabled vectors apply in capture mode and to explicit saves that do not meet a fact's cutoff.
  * @param {StoredFact} storedFact @param {FactMatchIncoming} incoming @param {IncomingFactMatchPolicy} policy @returns {FactMatchResult}
  */
 export function factBlocksIncoming(storedFact, incoming, policy) {

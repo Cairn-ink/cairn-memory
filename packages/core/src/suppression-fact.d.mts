@@ -43,7 +43,7 @@ export interface IdentityFact extends FactBase {
 export interface TextFact extends FactBase {
   kind: "text";
   mode: FactMode;
-  /** Full mode only. Canonical integer epoch microseconds. Later physical mcp/web saves match only digests. */
+  /** Full mode only. Canonical integer epoch microseconds. Later physical mcp/web saves skip vector matching. */
   explicitSaveExemptAfterUs?: string;
   text: {
     /** Non-empty, deduped by (alg, value) for old digests and by signing domain, pipeline, version and value for labelled MACs. */

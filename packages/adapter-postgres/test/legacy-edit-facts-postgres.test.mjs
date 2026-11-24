@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { factHidesRow, factIncarnationBody, hostedV1Digest, validateSuppressionFact } from "../../core/src/index.mjs";
 import {
+  capabilities, coreDigest, coreFingerprintLabels, factHidesRow, factIncarnationBody, hostedV1Digest,
+  passageShingles, userFingerprintKey, validateSuppressionFact,
+} from "../../core/src/index.mjs";
+import { createMemoryService } from "../../core/src/service/index.mjs";
+import {
+  createPostgresCapturePorts, createPostgresPauseStore,
   createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
   createPostgresSuppressionStore, createPostgresUnitOfWork, legacySuppressionToFact,
 } from "../src/index.mjs";
@@ -43,11 +48,13 @@ async function fixture(t) {
     [id, owner, text, value, JSON.stringify(vector), model, kind, created, later, JSON.stringify(digests), logicalMs]);
   }
 
-  async function legacyText(origin, text = original, { textHash, textHmac = null, key = null, shingles = null, id = "legacy-text" } = {}) {
+  async function legacyText(origin, text = original, {
+    textHash, textHmac = null, key = null, shingles = null, id = "legacy-text", created = cutoff,
+  } = {}) {
     const { value } = await hostedV1Digest(text);
     await pool.query(`INSERT INTO suppressions (id, user_id, kind, origin, text_hash, embedding, created_at, text_hmac, key_id, shingles)
       VALUES ($1, $2, 'text', $3, $4, $5, $6, $7, $8, $9)`,
-    [id, owner, origin, textHash ?? value, JSON.stringify(embedding), cutoff, textHmac, key, shingles]);
+    [id, owner, origin, textHash ?? value, JSON.stringify(embedding), created, textHmac, key, shingles]);
   }
 
   async function visible(ids, wanted) {
@@ -70,7 +77,8 @@ async function fixture(t) {
     const digest = await hostedV1Digest(text);
     const incoming = [{ textHash: `sha256:${digest.value}`, embedding: close, digests: [digest, ...digests] }];
     const policy = await runRead(tx => memoryStore.readWritePolicy(tx, scope, incoming,
-      { kind: "web", client: null, sessionId: null }, "hash"));
+      { kind: "web", client: null, sessionId: null }, "hash", undefined,
+      { explicitSaveCreatedAtUs: BigInt(cutoffUs) + 100n }));
     assert.deepEqual(policy.blockedPositions, [0], "the fact itself blocks an exact admission");
   }
 
@@ -93,7 +101,7 @@ async function fixture(t) {
     await pool.query("UPDATE core_owner_state SET legacy_writes_reconciled = true WHERE user_id = $1", [owner]);
   }
 
-  return { pool, memory, legacyText, visible, exactResaveIsBlocked, legacyRows, copyFacts };
+  return { pool, uow, memory, memoryStore, suppressions, legacyText, visible, exactResaveIsBlocked, legacyRows, copyFacts };
 }
 
 test("legacy edit facts hide exact SHA and HMAC aliases and leave a captured edit replacement visible", migrationDbTest, async t => {
@@ -158,7 +166,7 @@ test("public converter agrees with the read union for every legacy kind and pres
   assert.deepEqual(byId.get("range").fact.window, { startMs: 1735689600000, endMs: 1735689600001 });
 });
 
-test("the core exemption has a strict format and skips shingles only for later physical explicit memories", async () => {
+test("the core exemption has a strict format and preserves shingle matching for later physical explicit memories", async () => {
   const digests = [await hostedV1Digest(original)];
   const fact = { ...scope, actionId: "test", kind: "text", mode: "full", origin: "forget",
     explicitSaveExemptAfterUs: cutoffUs, text: { digests, keyId, shingles: ["ab"] } };
@@ -179,9 +187,114 @@ test("the core exemption has a strict format and skips shingles only for later p
   const row = { scope, memoryId: "memory", sourceKind: "web", createdAtUs: BigInt(cutoffUs) + 100n,
     digests: [await hostedV1Digest("Notebook moved")], keyId, shingles: ["ab"] };
   const stored = { fact };
-  assert.equal(factHidesRow(stored, row), false);
+  assert.equal(factHidesRow(stored, row), true);
   assert.equal(factHidesRow(stored, { ...row, digests }), true);
   assert.equal(factHidesRow(stored, { ...row, createdAtUs: BigInt(cutoffUs) }), true);
   assert.equal(factHidesRow(stored, { ...row, sourceKind: "plugin" }), true);
   assert.equal(factHidesRow(stored, { ...row, type: "raw" }), true);
+});
+
+const web = { kind: "web", client: null, sessionId: null };
+const mcp = { ...web, kind: "mcp" };
+const forgottenSentence = "The lantern is stored in the cellar.";
+const nearSentence = "A light fixture rests downstairs.";
+const unrelatedSentence = "A bicycle needs new tires.";
+const cutoffMs = Number(BigInt(cutoffUs) / 1000n);
+const far = [0, 1, ...Array(1534).fill(0)];
+
+async function writeFixture(t) {
+  const f = await fixture(t);
+  const key = await userFingerprintKey("fixture secret", owner, coreFingerprintLabels);
+  const reads = createPostgresMemoryReads();
+  let now = cutoffMs + 1;
+  const unused = () => assert.fail("unexpected dependency call");
+  const service = createMemoryService({
+    storage: {
+      name: "postgres", uow: f.uow, memories: f.memoryStore, ...reads,
+      pause: createPostgresPauseStore(), suppressions: f.suppressions,
+      keys: { userKey: async () => key }, capabilities: capabilities({ embeddingRequiredOnInsert: true }),
+    },
+    config: {}, model: null,
+    embedder: { model, dimensions: 1536, async embed(inputs) {
+      return inputs.map(text => new Float32Array(text === unrelatedSentence.toLowerCase() ? far : close));
+    } },
+    gate: { async assertOpen() {} }, tokens: { countTokens: unused },
+    clock: { nowMs: () => now, monotonicMs: unused, sha256Hex: input => createHash("sha256").update(input).digest("hex"), hmacHex: unused },
+  });
+  const shingles = await passageShingles(forgottenSentence, key, coreFingerprintLabels);
+  return { ...f, service, setClock: ms => { now = ms; },
+    forget: (origin = "forget", created) => f.legacyText(origin, forgottenSentence, { key: key.id, shingles, created }),
+    fence: id => f.uow.run(owner, { readOnly: true }, tx => reads.fence.assertVisible(tx, readSet, [ref(id)])),
+  };
+}
+
+test("a pre-forget memory stays hidden while a later vector-close explicit save is visible", migrationDbTest, async t => {
+  const f = await writeFixture(t);
+  f.setClock(cutoffMs);
+  const before = await f.service.save(scope, nearSentence, web);
+  assert.equal(before.status, "saved");
+  await f.forget();
+  assert.deepEqual(await f.fence(before.item.id), []);
+
+  f.setClock(cutoffMs + 1);
+  const after = await f.service.save(scope, "The light fixture rests downstairs.", mcp);
+  assert.equal(after.status, "saved");
+  assert.equal(after.item.createdAtMs, cutoffMs + 1);
+  assert.deepEqual(await f.fence(after.item.id), [ref(after.item.id)]);
+});
+
+test("later explicit saves still withhold an exact re-save and multi-sentence containment", migrationDbTest, async t => {
+  const f = await writeFixture(t);
+  await f.forget();
+  const cases = [
+    ["exact re-save", forgottenSentence],
+    ["exact sentence", `A journal entry follows. ${forgottenSentence}`],
+    ["multi-sentence shingle containment", `A journal entry follows. The note reads: ${forgottenSentence}`],
+  ];
+  for (const [label, text] of cases) {
+    assert.equal((await f.service.save(scope, text, web)).status, "suppressed", label);
+  }
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
+});
+
+test("a capture finishing after the forget still withholds vector-close text", migrationDbTest, async t => {
+  const f = await writeFixture(t);
+  await f.forget();
+  const capture = createPostgresCapturePorts({ lineageSecret: "fixture", now: () => cutoffMs + 1 });
+  const key = { scope, client: "fixture", sessionId: "source", eventId: "capture", payloadDigest: "a".repeat(64) };
+  const message = { id: "message", role: "user", content: nearSentence, occurredAtMs: cutoffMs + 1 };
+  const run = body => f.uow.run(owner, { pauseLock: true }, body);
+  assert.deepEqual(await run(tx => capture.admit(tx, key, [message])), { status: "admitted" });
+  const claim = await run(tx => capture.claim(tx, key, [message], { leaseMs: 60_000 }));
+  assert.equal(claim.status, "claimed");
+  const digest = await coreDigest(nearSentence);
+  const item = { content: nearSentence, kind: "fact", confidence: 1, textHash: `sha256:${digest.value}`,
+    embedding: { model, vector: close }, receipts: [{ client: key.client, sessionId: key.sessionId,
+      messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }] };
+  const result = await run(tx => capture.finish(tx, claim.token, [item]));
+  assert.deepEqual(result.suppressedItems, [0]);
+  assert.deepEqual(result.memories, []);
+});
+
+for (const source of [mcp, web]) {
+  test(`a correction of a later ${source.kind} memory still withholds vector-close text`, migrationDbTest, async t => {
+    const f = await writeFixture(t);
+    await f.forget();
+    const saved = await f.service.save(scope, unrelatedSentence, source);
+    assert.equal(saved.status, "saved");
+    const { id, revision } = saved.item;
+    assert.equal((await f.service.correct(scope, id, revision, nearSentence, web)).status, "suppressed");
+    const row = await f.uow.run(owner, { readOnly: true }, tx => f.memoryStore.get(tx, scope, id));
+    assert.equal(row.text, unrelatedSentence);
+    assert.equal(row.revision, revision);
+  });
+}
+
+test("an explicit save at the suppression timestamp has no vector exemption", migrationDbTest, async t => {
+  const f = await writeFixture(t);
+  await f.forget("forget", new Date(cutoffMs).toISOString());
+  f.setClock(cutoffMs);
+  const receipt = { client: "fixture", sessionId: "source", messageId: "message", role: "user", occurredAtMs: cutoffMs + 1 };
+  assert.equal((await f.service.save(scope, nearSentence, web, "fact", { receipt })).status, "suppressed");
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
 });

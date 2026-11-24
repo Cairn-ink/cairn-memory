@@ -67,6 +67,8 @@ export interface FactMatchIncoming {
   })[];
   session?: SessionRef;
   occurredAtMs?: number | null;
+  /** Server-assigned physical creation time, supplied only for a new explicit save. */
+  explicitSaveCreatedAtUs?: bigint;
   /** Memory incarnation being edited, if this is an explicit edit. */
   sourceMemory?: { id: string; createdAtMs: number } | null;
 }
