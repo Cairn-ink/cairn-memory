@@ -153,6 +153,47 @@ test("capture admission scrubs the matching message and keeps the comparable mis
   assert.deepEqual(admitted?.args[1].map(({ content }) => content), ["", "  API_KEY=[REDACTED]   goes in the blue folder.  "]);
 });
 
+test("capture admission and save honour retained facts with a transaction-selected key", async () => {
+  const admission = await fixture();
+  admission.provide([admission.retained]);
+  const signingKey = await crypto.subtle.importKey("raw", randomBytes(32), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const published = { id: randomBytes(8).toString("hex"), signingKey };
+  const currentOnly = "Count the yellow binders before lunch.";
+  const [currentDigest] = await allDigests(currentOnly, published);
+  admission.seedFact({ ...admission.storedFact, actionId: "current-forget", text: { digests: [currentDigest] } });
+  admission.storage.keys.userKey = async () => { throw new Error("admission must select the key in the write transaction"); };
+  let admissionSelections = 0;
+  admission.storage.keys.userKeyForWrite = async tx => {
+    assert.equal(tx.owner, scope.owner);
+    assert.equal(tx.options.pauseLock, true);
+    admissionSelections++;
+    return published;
+  };
+  const miss = "A blue envelope";
+  assert.deepEqual(await admittedContent(admission, forgotten, currentOnly, miss), ["", "", miss]);
+  assert.equal(admissionSelections, 1);
+  assertSignerCalls(admission, miss);
+
+  const save = await fixture();
+  save.provide([save.retained]);
+  let selected = published;
+  let saveSelections = 0;
+  save.storage.keys.userKeyForWrite = async tx => {
+    assert.equal(tx.owner, scope.owner);
+    assert.equal(tx.options.pauseLock, true);
+    saveSelections++;
+    return selected;
+  };
+  await assert.rejects(() => operations.save(save, miss), { code: "fingerprint_key_mismatch" });
+  assert.deepEqual(save.committed(scope.owner).rows.map(row => row.id), [previous.id]);
+  selected = save.current;
+  assert.equal(await operations.save(save, forgotten), "suppressed");
+  save.signerCalls.length = 0;
+  assert.equal(await operations.save(save, miss), "saved");
+  assert.equal(saveSelections, 3);
+  assertSignerCalls(save, miss);
+});
+
 test("memory import resolves retained signers once across batches", async () => {
   const f = await fixture();
   f.provide([f.retained]);
