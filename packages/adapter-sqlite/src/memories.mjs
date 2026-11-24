@@ -1,5 +1,5 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
-import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
+import { attachReceipts, clearReceipts, decodeEntry, insertMemory, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import {
@@ -132,21 +132,6 @@ export function readWritePolicy(db, scope, input, source, mode, hashSession, edi
     matches, hiddenIds: [...hidden].sort(compareUtf8), blockedPositions,
     blockedSession: policy.blocksSession(source.client, source.sessionId),
   };
-}
-
-/** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof encodeContent>} content
- * @param {readonly Receipt[]} receipts @param {number} nowMs @param {number} [createdAtMs]
- */
-export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts, nowMs, createdAtMs = nowMs) {
-  const time = writeTime(nowMs);
-  if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
-  const inserted = db.prepare(`INSERT INTO cairn_memories
-    (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
-    VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
-    .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
-  if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-  const { receiptIds } = attachReceipts(db, scope, inserted.id, receipts, nowMs);
-  return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
