@@ -384,7 +384,7 @@ const notApplicable = {
   "pending historical edit case has no assertions": ["K-MEM-5h"],
   "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "capture.finish": [
-    "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
+    "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5", "K-CLM-6",
     "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
     "K-KD-3", "K-KD-5",
   ],

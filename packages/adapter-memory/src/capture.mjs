@@ -162,14 +162,15 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const progress = { inserted: new Map(), writeTimes: new Map() };
           /** @type {FinishResult["memories"]} */
           const written = [];
+          /** @type {number[]} */
+          const suppressedItems = [];
           let duplicateCount = 0;
-          let suppressedCount = 0;
 
           for (const [position, { row, receipts }] of batch.entries()) {
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {
               case "suppressed":
-                suppressedCount++;
+                suppressedItems.push(position);
                 break;
               case "saved": {
                 const { id, revision, updatedAtUs } = await finishWrites.insert(tx, scope, { ...row, source }, receipts, nowMs);
@@ -193,8 +194,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           }
 
           if (written.length > 0) run.writingFinishes++;
-          const stored = { indexRevision: indexRevisionAfterRun(run), memories: written, suppressedCount, duplicateCount,
-            counters: policy.counters };
+          const stored = { indexRevision: indexRevisionAfterRun(run), memories: written,
+            suppressedCount: suppressedItems.length, ...(suppressedItems.length > 0 && { suppressedItems }),
+            duplicateCount, counters: policy.counters };
           const result = copyResult(stored, true);
           state.claims.set(identity, { key: claim.key, messages: claim.messages, status: "finished", result: stored });
           state.activeTokens.delete(token);

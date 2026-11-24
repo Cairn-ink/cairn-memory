@@ -1,11 +1,12 @@
 import { toCoreError } from "@cairn-ink/core";
+import { captureCases } from "./capture-cases.mjs";
+import { captureFinishCases } from "./capture-finish-cases.mjs";
 import { memoryCases } from "./memory-cases.mjs";
 import { retrievalCases } from "./retrieval-cases.mjs";
 import { bounded, check, DEFAULT_TIMEOUT_MS, isFixtureEmbeddingExhaustion, referenceVector } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
-export { captureCases as CAPTURE_CASES } from "./capture-cases.mjs";
 export { CAPTURE_CONTAINMENT_CASES } from "./capture-containment-cases.mjs";
 export { CAPTURE_LATE_FORGET_CASES } from "./capture-late-forget-cases.mjs";
 export { ADMISSION_CASES } from "./admission-cases.mjs";
@@ -30,6 +31,9 @@ export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.m
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
+
+/** @type {readonly import("./index.d.mts").ConformanceCase[]} */
+export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CASES = [...unitOfWorkCases, ...memoryCases, ...retrievalCases];
