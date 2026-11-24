@@ -8,6 +8,13 @@ const prefixMigration = { id: "001", concurrent: false, sql: "CREATE TABLE lock_
 const migrationSql = "INSERT INTO lock_guard_target VALUES (1)";
 const readLedger = "SELECT id, applied_at::text FROM core_schema_migrations ORDER BY id";
 const shadowMigrationKey = "public.hashtextextended('core_schema_migrations', 0)";
+// applyMigrations destroys its session after a failure without waiting for PostgreSQL to end it,
+// so that session's migration lock can briefly outlive the call. This waits on the same key until
+// the server has dropped it.
+const awaitMigrationLock = `BEGIN;
+  SET LOCAL lock_timeout = '5s';
+  SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('core_schema_migrations', 0));
+  COMMIT`;
 
 async function installLockKeyShadows(pool) {
   await pool.query(`
@@ -82,6 +89,8 @@ test("adoption rejects advisory lock calls before sending them even if the hook 
     assert.equal(probeError.code, "invalid_input");
     migrationError(failure, "invalid_input", migration.id);
     assert.deepEqual((await pool.query(readLedger)).rows, []);
+    // Otherwise the next probe's run can fail with storage_busy before its hook runs.
+    await pool.query(awaitMigrationLock);
   }
 });
 
