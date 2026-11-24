@@ -425,6 +425,9 @@ export interface ContextReadTokenCounter {
   count(text: string): number;
 }
 
+/** Pure synchronous formatter for the exact block the host delivers. */
+export type ContextReadBlockFormatter = (value: ContextAssemblyValue) => string;
+
 /** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */
 export interface ReadTokenIdentity {
   storeId: string;
