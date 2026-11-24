@@ -34,7 +34,8 @@ export function legacyReceiptHasRawAncestry(db, key) {
   const session = "session_key IN ($session, $hashed)";
   const possible = db.prepare(`
     SELECT 1 FROM raw_receipt_lineage WHERE receipt_id = $id
-    UNION ALL SELECT 1 FROM raw_receipt_origins WHERE receipt_id = $id AND kind = 'derived'
+    UNION ALL SELECT 1 WHERE NOT EXISTS (
+      SELECT 1 FROM raw_receipt_origins WHERE receipt_id = $id AND kind = 'independent')
     UNION ALL SELECT 1 FROM episode_memory_links l JOIN json_each(l.receipt_ids) r
       WHERE l.memory_id = $memory AND r.value = $id
     UNION ALL SELECT 1 FROM raw_conversations WHERE ${scope} AND client = $client AND ${session}
