@@ -5,7 +5,7 @@ import { allowsRawSession } from "./raw-lineage.mjs";
 import { eraseRawSessions, purgeRawMessages } from "./raw-purge.mjs";
 import { copySession, rawWriter, readRawRow } from "./raw-rows.mjs";
 import { invalidInput, scopeKey } from "./storage-values.mjs";
-import { advanceSuppressionEpoch, readFacts } from "./suppressions.mjs";
+import { advanceSuppressionEpoch, readFacts, readLegacyDenials } from "./suppressions.mjs";
 
 /** @import { CaptureMessage, RawCapture, RawStore } from "@cairn-ink/core/ports" */
 /** @import { IndexRevisions } from "./capture.mjs" */
@@ -70,10 +70,11 @@ export function createRawStore(port, hashSession, lineage, index) {
         const facts = readFacts(db, scope);
         const policy = rawFactPolicy(scope, key, facts, hashSession);
         if (!batch.length || !allowsRawSession(db, scope, client, policy.sessionKeyHash, facts)) return { archived: 0 };
+        const legacy = readLegacyDenials(db, scope);
         const insert = rawWriter(db, scope, key);
         let archived = 0;
         for (const item of batch) {
-          if (policy.refusesSource(item, false)) continue;
+          if (policy.refusesSource(item, false) || importTextBlocked([], item.content, legacy)) continue;
           if (insert(item)) archived++;
           else if (readRawRow(db, scope, key, item.id)?.message.content !== item.content) rawKeyConflict++;
         }
@@ -98,9 +99,10 @@ export function createRawStore(port, hashSession, lineage, index) {
             lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
           return { ...counts, withheld: batch.length };
         }
+        const legacy = readLegacyDenials(db, selection);
         const insert = rawWriter(db, selection, session);
         for (const [position, item] of batch.entries()) {
-          if (withheld.has(position) || policy.refusesSource(item, true) || importTextBlocked(facts, item.content)) {
+          if (withheld.has(position) || policy.refusesSource(item, true) || importTextBlocked(facts, item.content, legacy)) {
             counts.withheld++;
           } else if (insert(item)) {
             counts.archived++;
