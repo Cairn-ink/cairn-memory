@@ -4,11 +4,14 @@ import { createContextLexical } from "./context-lexical.mjs";
 import { createContextRawRead, reconcileRawInventory } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
+import { handleWriteRejections } from "./errors.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
 import { anchorsVisible, createInspectStore, receiptProjector } from "./inspect.mjs";
+import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memories.mjs";
 import { migratedCaptureControls } from "./migrate/capture-controls.mjs";
 import { createMigratedRawPolicy } from "./migrate/raw-privacy.mjs";
+import { createPlacementVisibility, createTitleScrubber } from "./placement-visibility.mjs";
 import { createPauseStore } from "./pause.mjs";
 import { createProceduralTagStore } from "./procedural-tags.mjs";
 import { createRawStore } from "./raw.mjs";
@@ -18,10 +21,12 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
+import { createTopicStore } from "./topics.mjs";
 
 /** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
 /** @typedef {{ now?: () => number, monotonicMs?: () => number,
- * capabilities?: { contextRead?: boolean, contextRawRead?: boolean } } & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
+ * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean,
+ * supersession?: boolean, conflictEdges?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
 
 /** Opens the storage ports for a single installation database.
  * @param {string} filename @param {Options} [options]
@@ -38,9 +43,11 @@ export async function openSqliteAdapter(filename, options) {
 
 /** @param {Awaited<ReturnType<typeof openStorage>>} storage @param {Options} [options] */
 export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal },
-  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested } = {}) {
+  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, ...topicOptions } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
+    placement: requested?.placement ?? false, supersession: requested?.supersession ?? false,
+    conflictEdges: requested?.conflictEdges ?? false,
     embeddingRequiredOnInsert: false, receiptAttachAdvancesRevision: true, proceduralTags: true });
   if (flags.contextRawRead && !flags.contextRead) throw new CoreError("capability_unavailable");
   const hashSessionKey = sessionHasher(sessionHashKey, legacyRawHashing);
@@ -49,10 +56,17 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const captureControls = controls || localAuthority ? migratedCaptureControls(controls, localAuthority) : undefined;
   const index = createIndexRevisions(uow, port);
   const lineage = createRawLineage(sessionHashKey, hashSessionKey);
-  const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls);
+  const visibility = createPlacementVisibility(hashSessionKey, migratedRaw);
+  const scrubTitles = createTitleScrubber(visibility);
+  const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now, topicOptions),
+    ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
+  const relations = createRelationStores(port, index, visibility);
+  const supersession = flags.supersession ? handleWriteRejections(relations.supersession, ["record", "markHistorical"]) : undefined;
+  const conflicts = flags.conflictEdges ? handleWriteRejections(relations.conflicts, ["insert", "invalidate"]) : undefined;
+  const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles);
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
   const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
-  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety);
+  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, flags);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
   const rawContext = flags.contextRawRead
@@ -64,7 +78,10 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     capabilities: flags,
     uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw, captureControls, preserveArrivalRefusal),
-    memories: createMemoryStore(port, hashSessionKey, index),
+    memories: createMemoryStore(port, hashSessionKey, index, scrubTitles),
+    ...(placement && { placement }),
+    ...(supersession && { supersession }),
+    ...(conflicts && { conflicts }),
     proceduralTags,
     inspect,
     ...(contextRead && { contextRead }),
@@ -81,7 +98,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
     counters,
-    suppressions: createSuppressionStore(port, hashSessionKey, index.markDirty, migratedRaw, captureControls),
+    suppressions: createSuppressionStore(port, hashSessionKey, index.markDirty, migratedRaw, captureControls, scrubTitles),
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },
     hashSessionKey,

@@ -48,8 +48,9 @@ function withheldPositions(options, length) {
 /** @param {Port} port @param {SessionHasher} hashSession @param {Lineage} lineage @param {IndexRevisions} index
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {MigratedCaptureControls} [controls]
+ * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  */
-export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls) {
+export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls, scrubTitles) {
   let rawKeyConflict = 0;
 
   /** @type {RawStore & RawCapture} */
@@ -152,14 +153,17 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     fenceSession(tx, scope, input) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        if (addFence(db, selection, copySession(input))) index.advanceRaw(db, tx);
+        if (addFence(db, selection, copySession(input))) {
+          scrubTitles?.(db, selection);
+          index.advanceRaw(db, tx);
+        }
       });
     },
 
     eraseSessions(tx, scope, closure) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, eraseRawSessions(db, selection, eraseAddresses(db, selection, copyBatch(closure).map(copySession))));
+        return changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, copyBatch(closure).map(copySession))));
       });
     },
 
@@ -169,7 +173,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const session = copySession(input);
         // Keep late turns with previously unseen message IDs from restoring the session.
         const fenced = addFence(db, selection, session);
-        const { rawDeleted } = changed(db, tx, eraseRawSessions(db, selection, eraseAddresses(db, selection, [session])), fenced);
+        const { rawDeleted } = changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, [session])), fenced);
         return { rawDeleted };
       });
     },
@@ -177,7 +181,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     purgeWithheld(tx, scope, supplied) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession));
+        return changed(db, tx, selection, purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession));
       });
     },
   };
@@ -211,11 +215,15 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
   }
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Tx} tx
+   * @param {import("@cairn-ink/core/ports").Scope} selection
    * @param {{rawDeleted: number, ledgerBlanked: number}} counts
    * @param {boolean} [fenced]
    */
-  function changed(db, tx, counts, fenced = false) {
-    if (fenced || counts.rawDeleted || counts.ledgerBlanked) index.advanceRaw(db, tx);
+  function changed(db, tx, selection, counts, fenced = false) {
+    if (fenced || counts.rawDeleted || counts.ledgerBlanked) {
+      scrubTitles?.(db, selection);
+      index.advanceRaw(db, tx);
+    }
     return counts;
   }
 

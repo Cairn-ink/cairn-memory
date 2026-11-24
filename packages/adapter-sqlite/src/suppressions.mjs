@@ -297,9 +297,11 @@ export function scopedSuppression(db, scope, hashSession) {
 
 /** @param {Port} port @param {SessionHasher} hashSession
  * @param {(db: Connection, tx: Tx) => void} [markDirty]
- * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls] @returns {SuppressionStore}
+ * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls]
+ * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
+ * @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls) {
+export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls, scrubTitles) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -323,6 +325,7 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
           (owner_id, namespace_key, slot, fact_id, incarnation, epoch, created_at_ms, action_id, body)
           VALUES (?, ?, ?, lower(hex(randomblob(16))), ?, ?, ?, ?, ?) RETURNING fact_id`)
           .get(...keys, incarnation, epoch.toString(), createdAtMs, JSON.stringify(actionId), factBody(fact));
+        scrubTitles?.(db, { owner, namespace });
         markDirty?.(db, tx);
         return { factId: String(inserted?.fact_id), epoch, createdAtMs, created: true };
       });
