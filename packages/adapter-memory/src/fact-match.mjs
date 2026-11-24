@@ -31,8 +31,8 @@ function digestsFor({ textHash, legacyHash }) {
 /** @param {Pick<DuplicateQuery, "textHash" | "legacyHash" | "digests">} candidate */
 function withDigestAliases(candidate) {
   const aliases = digestsFor(candidate);
-  const supplied = candidate.digests?.filter(({ alg, value }) =>
-    !aliases.some((alias) => alias.alg === alg && alias.value === value)) ?? [];
+  const supplied = candidate.digests?.filter(({ alg, keyId, value }) =>
+    keyId !== null || !aliases.some((alias) => alias.alg === alg && alias.value === value)) ?? [];
   return [...aliases, ...supplied];
 }
 

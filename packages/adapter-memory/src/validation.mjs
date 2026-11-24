@@ -127,9 +127,12 @@ function copyDigests(digests) {
       if (!digest || typeof digest !== "object" || Array.isArray(digest)) invalid();
       /** @param {keyof typeof digest} key */
       const field = (key) => Object.getOwnPropertyDescriptor(digest, key)?.value;
+      const label = Object.getOwnPropertyDescriptor(digest, "label");
+      if (label && !Object.hasOwn(label, "value")) invalid();
       return {
         alg: field("alg"), value: field("value"), pipeline: field("pipeline"),
         redactionVersion: field("redactionVersion"), keyId: field("keyId"),
+        ...(label && { label: label.value }),
       };
     });
     validateSuppressionFact({

@@ -1,7 +1,8 @@
 import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
-  legacyExactMac, PRIVACY_REDACTION_VERSIONS, redactCore, withholdsAnyPassage } from "@cairn-ink/core";
-import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+  legacyExactMac, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
+import { fingerprintMemoryPassages, retainedDigestBuilder } from "../../core/src/privacy/fingerprint.mjs";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
+import { prepareMessageContent } from "../../core/src/service/capture.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
 import { invalidateRationaleSources } from "./rationale.mjs";
@@ -226,15 +227,18 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     const legacyKeyUnavailable = facts.some(requiresLegacyMacDomain);
     /** @type {ReturnType<FingerprintKeyProvider["userKey"]> | undefined} */
     let key;
+    /** @type {Promise<ReturnType<typeof retainedDigestBuilder>> | undefined} */
+    let retained;
     return async (/** @type {string} */ content) => {
-      if (legacyKeyUnavailable) return true;
       if (!facts.length) return false;
       try {
-        // Use capture admission's preparation and active owner key.
-        const prepared = redactCore(cleanContent(content).normalize("NFKC"));
-        if (!prepared) return false;
+        const prepared = prepareMessageContent(cleanContent(content));
+        const retainedFor = await (retained ??=
+          Promise.resolve(keys.retainedDigesters?.(scope.owner)).then(retainedDigestBuilder));
+        if (!retainedFor && (legacyKeyUnavailable || !prepared)) return legacyKeyUnavailable;
         const activeKey = await (key ??= keys.userKey(scope.owner));
-        return withholdsAnyPassage(await fingerprintMemoryPassages(content, prepared, activeKey), facts);
+        const evidence = await fingerprintMemoryPassages(content, prepared, activeKey, undefined, retainedFor);
+        return withholdsAnyPassage(evidence, facts);
       } catch {
         return true;
       }

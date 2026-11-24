@@ -9,7 +9,9 @@ import { readEmbedding, snapshotArray } from "./validation.mjs";
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} UnitOfWork */
 /** @typedef {(owner: string) => Promise<import("@cairn-ink/core").FingerprintKey[]>} RingKeys */
-/** @import { TextDigest } from "@cairn-ink/core" */
+/** @import { FingerprintKey, TextDigest } from "@cairn-ink/core" */
+/** @import { RetainedDigester } from "@cairn-ink/core/ports" */
+/** @import { RetainedDigestFixture } from "@cairn-ink/conformance/factory" */
 
 // This reference adapter can supply a public key fixture for tests. The fixture is unsuitable for production.
 export const TEST_FINGERPRINT_SECRET = "test-secret-a";
@@ -23,9 +25,37 @@ const encoder = new TextEncoder();
 
 /** @param {TextDigest[]} digests @param {TextDigest} keyed */
 export function addKeyedDigest(digests, keyed) {
-  if (!digests.some(({ alg, keyId, value }) => alg === keyed.alg && keyId === keyed.keyId && value === keyed.value)) {
+  const domain = digestDomain(keyed);
+  if (!digests.some((digest) => digest.value === keyed.value && digestDomain(digest) === domain)) {
     digests.push(keyed);
   }
+}
+
+/** @param {Pick<TextDigest, "alg" | "keyId" | "label" | "pipeline">} digest */
+export function digestDomain({ alg, keyId, label, pipeline }) {
+  return JSON.stringify([alg, keyId, label ?? pipeline]);
+}
+
+/** @param {Iterable<import("@cairn-ink/core").StoredFact>} facts */
+export function liveKeyedDomains(facts) {
+  /** @type {Map<string, TextDigest>} */
+  const domains = new Map();
+  for (const { fact } of facts) {
+    if (fact.kind !== "text" || !fact.text.digests.every(({ keyId }) => keyId !== null)) continue;
+    for (const digest of fact.text.digests) domains.set(digestDomain(digest), digest);
+  }
+  return domains;
+}
+
+/** @param {FingerprintKey} key @param {string} label @returns {RetainedDigester} */
+function localDigester({ id, signingKey }, label) {
+  return {
+    alg: "hmac", keyId: id, label,
+    async mac(text) {
+      const bytes = await crypto.subtle.sign("HMAC", signingKey, encoder.encode(text));
+      return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    },
+  };
 }
 
 /** @param {SuppressionFact} fact */
@@ -53,7 +83,8 @@ function factSlot(fact) {
     case "identity":
       return JSON.stringify([fact.kind, namespace, fact.memoryId, fact.throughRevision ?? null]);
     case "text": {
-      const digests = fact.text.digests.map(({ alg, value }) => [alg, value])
+      const digests = fact.text.digests.map((digest) =>
+        [digest.label === undefined ? digest.alg : digestDomain(digest), digest.value])
         .sort(([a, x], [b, y]) => compareUtf8(a, b) || compareUtf8(x, y));
       return JSON.stringify([fact.kind, namespace, fact.mode, digests, fact.sourceMemory?.id ?? null]);
     }
@@ -141,7 +172,8 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
     await runSeed(owner, async (tx) => {
       if (ringKeys && copy.kind === "text" && copy.text.digests.some(({ alg }) => alg === "hmac")) {
         const keys = await ringKeys(owner);
-        if (copy.text.digests.some(({ alg, keyId }) => alg === "hmac" && !keys.some(({ id }) => id === keyId))) {
+        if (copy.text.digests.some(({ alg, keyId, label }) =>
+          alg === "hmac" && label === undefined && !keys.some(({ id }) => id === keyId))) {
           throw new CoreError("invalid_input");
         }
       }
@@ -178,20 +210,24 @@ export function createPauseStore(port) {
 
 /** @param {boolean} enabled @param {Options["fingerprint"]} config
  * @param {UnitOfWork["rotateRowDigests"]} rotateRowDigests
+ * @param {UnitOfWork["keyedDomains"]} keyedDomains
  */
-export function createFingerprintProvider(enabled, config, rotateRowDigests) {
+export function createFingerprintProvider(enabled, config, rotateRowDigests, keyedDomains) {
   if (!enabled && config != null) throw new CoreError("capability_unavailable");
   const labels = config == null ? TEST_FINGERPRINT_LABELS : validateFingerprintLabels(config.labels);
   let secret = enabled ? (config == null ? TEST_FINGERPRINT_SECRET : config.secret) : null;
   if (enabled && (typeof secret !== "string" || secret.length === 0)) throw new CoreError("invalid_input");
   const ring = new Set(secret === null ? [] : [secret]);
+  /** @type {Map<string, RetainedDigester>} */
+  const fixtures = new Map();
   /** @type {Promise<void> | undefined} */
   let rotation;
 
   /** @type {RingKeys} */
   const ringKeys = async (owner) => {
-    // Snapshot the ring before any key derivation yields.
-    const derived = await Promise.all([...ring].map((seed) => userFingerprintKey(seed, owner, labels)));
+    // Snapshot the ring and place the current key first before any key derivation yields.
+    const seeds = secret === null ? [] : [secret, ...[...ring].filter((seed) => seed !== secret)];
+    const derived = await Promise.all(seeds.map((seed) => userFingerprintKey(seed, owner, labels)));
     return derived.filter((key) => key !== null);
   };
 
@@ -200,7 +236,46 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
     async userKey(owner) {
       return userFingerprintKey(secret, owner, labels);
     },
+    async retainedDigesters(owner) {
+      const domains = keyedDomains(owner);
+      if (domains.size === 0) return [];
+      const fixture = fixtures.get(owner);
+      const [current, ...retained] = await ringKeys(owner);
+      if (!current) return [];
+      /** @type {RetainedDigester[]} */
+      const signers = [];
+      for (const digest of domains.values()) {
+        const { alg, keyId } = digest;
+        const label = digest.label ?? digest.pipeline;
+        if (alg !== "hmac" || (keyId === current.id && label === "core")) continue;
+        if (fixture && fixture.keyId === keyId && fixture.label === label) {
+          signers.push(fixture);
+          continue;
+        }
+        // The ring's native exact MAC uses the core domain. Foreign domains need their own signer.
+        const key = label === "core" && retained.find(({ id }) => id === keyId);
+        if (key) signers.push(localDigester(key, label));
+      }
+      return signers;
+    },
   };
+
+  /** @param {string} owner @param {RetainedDigestFixture | null} fixture */
+  async function setRetainedDigestFixture(owner, fixture) {
+    if (!enabled) throw new CoreError("capability_unavailable");
+    if (typeof owner !== "string" || !owner) throw new CoreError("invalid_input");
+    if (fixture === null) {
+      fixtures.delete(owner);
+      return;
+    }
+    const { keyId, label, secret } = fixture;
+    if (typeof keyId !== "string" || !keyId || keyId.length > 64 ||
+        typeof label !== "string" || !label || label.length > 512 ||
+        typeof secret !== "string" || !secret) throw new CoreError("invalid_input");
+    const signingKey = await crypto.subtle.importKey("raw", encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    fixtures.set(owner, Object.freeze(localDigester({ id: keyId, signingKey }, label)));
+  }
 
   /** @param {string} next */
   async function setFingerprintSecret(next) {
@@ -229,5 +304,5 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
     }
   }
 
-  return { keys, ringKeys, labels, setFingerprintSecret };
+  return { keys, ringKeys, labels, setFingerprintSecret, setRetainedDigestFixture };
 }

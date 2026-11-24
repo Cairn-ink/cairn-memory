@@ -312,6 +312,7 @@ const notApplicable = {
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
+  "no retained fingerprint signing or memory digest storage": ["K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   "capture.finish": [
