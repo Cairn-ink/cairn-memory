@@ -75,6 +75,12 @@ function fixture({ cards = [record], memoryStates = new Map(), excluded = [], be
         assert.deepEqual(actualScope, scope);
         return records.get(id) ?? null;
       },
+      async visibilityInputs(_tx, requestedScope, refs) {
+        return refs.map(({ id }) => {
+          const card = records.get(id);
+          return card ? { card, requestedScope, memoryStates, textFacts: [] } : null;
+        });
+      },
     },
     fence: {
       async assertVisible(tx, selection, refs) {

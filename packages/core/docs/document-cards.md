@@ -6,6 +6,11 @@ Host presets choose the defaults. Core leaves all three switches off unless a
 host opts in. A switch applies only when the adapter advertises its storage
 capability and supplies the store.
 
+Card embedding, amendment detection and verification, and topic classification
+require a live visible verdict from the store's optional `visibilityInputs`
+method. With no method or no visible verdict, Core skips provider work for
+the card. Capture can still write lexical cards.
+
 | `MemoryServiceConfig` switch | Capture behavior | Model requirement |
 | --- | --- | --- |
 | `documentCards.enabled` | Routes screened messages at successful finish, including finishes with no extraction or no extracted items. | Card routing uses no model key. A configured embedder supplies search vectors. Without it, cards are lexical-only. |
