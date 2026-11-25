@@ -2807,3 +2807,7 @@ do not establish capture-cost or complete-pipeline qualification. Larger profile
 also encounter hint, vector-residency and owner-quota limits. Performance
 approval remains open; complete hybrid availability within bounds is separate
 from latency and answer-quality qualification.
+
+## Deleting a conversation that also exists in another project
+
+Deleting a local conversation removes it, and refuses later turns to it, only in the project where you delete it. If the same messages were also saved into another project's copy of that conversation, the copy is not deleted, and capture can save those messages there again. Delete the copy in that project as well to remove them everywhere. Content deleted in every project where it was saved does not come back.
