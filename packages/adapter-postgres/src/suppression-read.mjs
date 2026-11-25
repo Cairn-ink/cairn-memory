@@ -227,13 +227,14 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
     const scoped = readScope(tx, scope, allowNonNullNamespace);
     const [receipt] = copyReceipts([input]);
     const excerpt = inputText(input.excerpt);
-    // Supplemental capture writes can check the verified outbox in the same run, even with Raw disabled.
-    const messages = admitted === undefined ? finishedReceiptMessages(tx, scoped, receipt, excerpt) : copyMessages([admitted]);
-    if (messages.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
+    const supplied = admitted === undefined ? undefined : copyMessages([admitted]);
+    if (supplied?.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
       return true;
     }
     return runOperation(tx, async (query) => {
       try {
+        // The transaction-local outbox can supply proof only while Raw would accept it.
+        const messages = supplied ?? await finishedReceiptMessages(query, tx, scoped, receipt, excerpt);
         await assertReceiptSource(query, scoped, receipt, captureProofs, hashSessionKey, messages);
         return false;
       } catch (error) {

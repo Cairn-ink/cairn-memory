@@ -1,5 +1,4 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
-import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { copyFinishItems, finishMemories, readIndexRevision, trackFinish } from "./capture-finish.mjs";
 import {
   clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
@@ -8,7 +7,7 @@ import {
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources, hasRawFence } from "./capture-source.mjs";
 import { copyReceipts, guardOwner, inputText, namespaceKey } from "./memory-input.mjs";
-import { decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
+import { canonicalReceiptId, decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
 import { createPostgresMemoryStore } from "./memory-store.mjs";
 import { conversationSessions } from "./raw-session.mjs";
 import { assertReceiptSource } from "./receipt-source.mjs";
@@ -172,7 +171,7 @@ export function createPostgresCapturePorts(options) {
           JSON.stringify([client, sessionId, messageId, role, occurredAtMs]);
         const retained = new Set((decodeReceipts(rows).get(id) ?? []).map(address));
         return Promise.all(incoming.map(receipt => retained.has(address(receipt))
-          ? sha256Hex(JSON.stringify([tx.owner, namespace, id, receipt.client, receipt.sessionId, receipt.messageId])) : null));
+          ? canonicalReceiptId(tx.owner, namespace, id, receipt) : null));
       });
     },
 
@@ -294,7 +293,7 @@ export function createPostgresCapturePorts(options) {
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
         trackFinish(tx, { scope, client: completed.client, sessionId: source.sessionId,
-          eventId: completed.event_id, messages: current ?? [], result });
+          eventId: completed.event_id, messages: current ?? [], result, signer: captureProofs, hashSessionKey });
         return result;
       });
     },

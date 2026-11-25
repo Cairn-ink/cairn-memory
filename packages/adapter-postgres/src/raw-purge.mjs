@@ -3,8 +3,9 @@ import {
   normalizeForHash, PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1,
 } from "../../core/src/index.mjs";
 import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
-import { hostedTime, jsonbSource } from "./capture-input.mjs";
+import { decodeRequest, hostedTime, jsonbSource } from "./capture-input.mjs";
 import { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
+import { conversationSessions } from "./raw-session.mjs";
 
 /** @import { Scope } from "../../core/src/ports/common.d.ts" */
 /** @import { PassageFingerprint } from "../../core/src/ports/privacy.d.ts" */
@@ -13,7 +14,8 @@ import { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
 /** @import { RawOptions } from "./raw-options.d.mts" */
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{client: string, sessionId: string}} Session */
-/** @typedef {{content: string, occurred_at?: string, normalized_empty?: true,
+/** @typedef {Session & {messageId?: string}} SourceAddress */
+/** @typedef {{id: string, content: string, occurred_at?: string, normalized_empty?: true,
  *   legacy_fingerprint?: {text_hmac: string, key_id: string, shingles: string[]}, document_ill_formed?: true}} LedgerMessage */
 
 const HOSTED_TIME = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
@@ -65,6 +67,29 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
   return facts.some((fact) => passages.some((passage) => factHidesRow(fact, { type: "raw", scope, sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: content.length, ...passage }) === true));
 }
 
+/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
+export async function dropSourceQuantities(query, scope, addresses) {
+  if (!addresses.length) return false;
+  const sessions = new Map();
+  const targets = [];
+  for (const { client, sessionId, messageId } of addresses) {
+    const key = JSON.stringify([client, sessionId]);
+    if (!sessions.has(key)) sessions.set(key, await conversationSessions(query, scope, { client, sessionId }));
+    for (const address of sessions.get(key)) {
+      targets.push({ client: address.client, session_id: address.sessionId, message_id: messageId });
+    }
+  }
+  const { rows: [result] } = await query(`WITH removed AS (
+    DELETE FROM core_quantity_ledger l
+    USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text, message_id text)
+    WHERE l.user_id = $1 AND l.core_namespace IS NULL
+      AND (l.source_client, l.source_session_id) = (target.client, target.session_id)
+      AND (target.message_id IS NULL OR l.source_message_id = target.message_id)
+    RETURNING 1
+  ) SELECT EXISTS (SELECT 1 FROM removed) AS changed`, [scope.owner, JSON.stringify(targets)]);
+  return result.changed;
+}
+
 /** @param {Query} query @param {Scope} scope @param {readonly StoredFact<TextFact>[]} facts
  * @param {RawOptions["fingerprintKeys"]} fingerprintKeys */
 export async function purgeRawText(query, scope, facts, fingerprintKeys) {
@@ -84,9 +109,11 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys) {
     for (const row of rows) if (await matches(row)) ids.push(row.id);
     if (ids.length) {
       const { rows: deleted } = await query(`DELETE FROM raw_messages
-        WHERE user_id = $1 AND id = ANY($2::text[]) RETURNING 1`,
+        WHERE user_id = $1 AND id = ANY($2::text[])
+        RETURNING client, session_id AS "sessionId", message_id AS "messageId"`,
       [scope.owner, ids]);
       rawDeleted += deleted.length;
+      await dropSourceQuantities(query, scope, deleted);
     }
     after = rows.at(-1).id;
   }
@@ -104,7 +131,7 @@ export async function scrubLedger(query, scope, sessions, matches) {
   /** @type {string | null} */
   let afterEvent = null;
   for (;;) {
-    const { rows } = await query(`SELECT client, event_id, raw_request FROM capture_events e
+    const { rows } = await query(`SELECT client, session_id, event_id, raw_request, core_outbox_metadata FROM capture_events e
       WHERE e.user_id = $1 AND e.core_namespace IS NULL
         AND ($2::text IS NULL OR (e.client, e.event_id) > ($2, $3))
         AND ($5::boolean OR EXISTS (
@@ -114,18 +141,22 @@ export async function scrubLedger(query, scope, sessions, matches) {
       ORDER BY e.client, e.event_id LIMIT 16 FOR UPDATE`,
     [scope.owner, afterClient, afterEvent, targets, matches !== undefined]);
     if (!rows.length) return { ledgerBlanked, ledgerChanged };
-    for (const { client, event_id, raw_request } of rows) {
+    for (const { client, session_id, event_id, raw_request, core_outbox_metadata } of rows) {
       const legacy = typeof raw_request === "string";
-      const request = legacy ? JSON.parse(raw_request) : raw_request;
+      const request = /** @type {{messages: LedgerMessage[]}} */ (decodeRequest(raw_request));
+      const metadata = matches ? decodeRequest(core_outbox_metadata) : null;
+      const removed = [];
       let changed = false;
-      for (const message of request.messages) {
+      for (const [index, message] of request.messages.entries()) {
         if (!matches || await matches(message)) {
           if (message.content !== "") {
+            const messageId = metadata?.[index]?.id ?? message.id;
+            if (matches && typeof messageId === "string") removed.push({ client, sessionId: session_id, messageId });
             message.content = "";
             ledgerBlanked++;
             changed = true;
           }
-          for (const field of ["normalized_empty", "legacy_fingerprint", "document_ill_formed"]) {
+          for (const field of /** @type {const} */ (["normalized_empty", "legacy_fingerprint", "document_ill_formed"])) {
             if (Object.hasOwn(message, field)) {
               delete message[field];
               changed = true;
@@ -144,6 +175,7 @@ export async function scrubLedger(query, scope, sessions, matches) {
         [scope.owner, client, event_id, patch]);
         ledgerChanged = true;
       }
+      await dropSourceQuantities(query, scope, removed);
     }
     ({ client: afterClient, event_id: afterEvent } = rows.at(-1));
   }

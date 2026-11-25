@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS core_quantity_ledger (
   core_namespace text,
   memory_id text NOT NULL,
   receipt_id text NOT NULL,
+  source_client text,
+  source_session_id text,
+  source_message_id text,
   ledger_key text COLLATE "C" NOT NULL,
   text_hash text NOT NULL,
   date_ms bigint NOT NULL,
@@ -27,3 +30,6 @@ CREATE INDEX IF NOT EXISTS core_quantity_ledger_receipt_idx
   ON core_quantity_ledger (user_id, receipt_id);
 CREATE INDEX IF NOT EXISTS core_quantity_ledger_date_idx
   ON core_quantity_ledger (user_id, date_ms);
+CREATE INDEX IF NOT EXISTS core_quantity_ledger_source_idx
+  ON core_quantity_ledger (user_id, source_client, source_session_id, source_message_id)
+  WHERE core_namespace IS NULL AND source_client IS NOT NULL;

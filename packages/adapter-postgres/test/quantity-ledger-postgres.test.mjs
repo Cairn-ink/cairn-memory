@@ -4,9 +4,10 @@ import test from "node:test";
 import { capabilities, CoreError } from "@cairn-ink/core";
 import { ledgerRowKey } from "@cairn-ink/core/ledger";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { coreDigest, factIncarnationBody } from "../../core/src/index.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresPauseStore, createPostgresQuantityLedgerStore, createPostgresSupersessionStore,
+  createPostgresPauseStore, createPostgresQuantityLedgerStore, createPostgresRawPorts, createPostgresSupersessionStore,
   createPostgresSuppressionStore, createPostgresUnitOfWork,
 } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
@@ -43,30 +44,96 @@ async function setup(t, options) {
   return { ...database, uow, ledger, memories, run, insert };
 }
 
-function serviceFor({ uow, memories }, quantityLedger, diagnostics) {
+function serviceFor({ uow, memories }, quantityLedger, diagnostics, { rawOptions, extract } = {}) {
   const content = "Tea cost 6.25 USD.";
   const { kind, measure, category, value, unit, group, period, comparator } = amount();
+  const options = rawOptions ?? { lineageSecret: randomUUID() };
   return createMemoryService({
     storage: {
       name: "postgres", uow, memories, ...createPostgresMemoryReads(),
-      capture: createPostgresCapturePorts({ lineageSecret: randomUUID() }),
-      pause: createPostgresPauseStore(), suppressions: createPostgresSuppressionStore(),
+      capture: createPostgresCapturePorts({ ...options, nearDuplicate: false }),
+      pause: createPostgresPauseStore(), suppressions: createPostgresSuppressionStore(options),
       keys: { async userKey() { return null; } },
-      capabilities: capabilities({ embeddingRequiredOnInsert: true, quantityLedger: !!quantityLedger }),
+      capabilities: capabilities({ embeddingRequiredOnInsert: true, quantityLedger: !!quantityLedger,
+        rawArchive: !!rawOptions, sessionLineage: !!rawOptions }),
       ...(quantityLedger && { quantityLedger }),
+      ...(rawOptions && createPostgresRawPorts(rawOptions)),
     },
     config: { quantityLedger: { enabled: !!quantityLedger } }, diagnostics,
-    model: { model: "fixture", contextWindow: 32_768, countTokens: () => 1, async call() {
+    model: { model: "fixture", contextWindow: 32_768, countTokens: () => 1, call: extract ?? (async () => {
       return {
         items: [{ content, kind: "fact", confidence: 1, sourceIndices: [0] }],
         quantities: [{ item: 0, kind, measure, category, value, unit, group, period, comparator }],
       };
-    } },
+    }) },
     embedder: { model: "fixture", dimensions: vector.length, async embed(texts) { return texts.map(() => vector); } },
     gate: { async assertOpen() {} }, tokens: { countTokens: () => 1 },
     clock: { nowMs: Date.now, monotonicMs: () => performance.now(), sha256Hex, hmacHex: assert.fail },
   });
 }
+
+async function capturePair(t) {
+  const fixture = await setup(t);
+  const { ledger, memories, run, pool } = fixture;
+  const rawOptions = { lineageSecret: randomUUID() };
+  const { raw } = createPostgresRawPorts(rawOptions);
+  const event = { client: "mcp", sessionId: randomUUID(), eventId: randomUUID() };
+  const messages = ["Tea cost 6.25 USD.", "A bus ticket cost 3 USD."].map((content, index) =>
+    ({ id: randomUUID(), content, role: "user", occurredAtMs: 10 + index }));
+  const service = serviceFor(fixture, ledger, undefined, { rawOptions, async extract() {
+    return {
+      items: messages.map(({ content }, index) => ({ content, kind: "fact", confidence: 1, sourceIndices: [index] })),
+      quantities: [
+        { ...amount(), item: 0 },
+        { ...amount(), item: 1, measure: "fare", category: "bus", group: "transport", value: 3 },
+      ].map(({ memoryId, receiptId, textHash, date, ordinal, ...quantity }) => quantity),
+    };
+  } });
+  assert.equal((await service.enqueueCapture(scope, { ...event, messages })).status, "accepted");
+  const captured = await service.runCapture(scope, event);
+  assert.equal(captured.status, "done");
+  assert.equal(captured.result.memories.length, 2);
+  const ids = captured.result.memories.map(({ id }) => id);
+  const readLedger = () => run(async tx => ({
+    byMemory: await Promise.all(ids.map(id => ledger.listForMemory(tx, scope, id))),
+    rows: await ledger.list(tx, scope, range),
+    terms: await ledger.terms(tx, scope),
+  }));
+  const before = await readLedger();
+  assert.deepEqual(before.byMemory.map(rows => rows.length), [1, 1]);
+  assert.deepEqual(before.terms, ["bus", "fare", "food", "spend", "tea", "transport"]);
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM raw_messages")).rows[0].count, 2);
+  return { raw, service, event, messages, ids, before, readLedger, pool,
+    write: (work) => run(work, { pauseLock: true }),
+    revision: () => run(tx => memories.indexRevision(tx)) };
+}
+
+test("deleting a conversation removes quantities from both captured memories", migrationDbTest, async t => {
+  const { raw, event, readLedger, write, revision } = await capturePair(t);
+  const before = await revision();
+  assert.deepEqual(await write(tx => raw.deleteConversation(tx, scope, event)), { rawDeleted: 2 });
+  assert.deepEqual(await readLedger(), { byMemory: [[], []], rows: [], terms: [] });
+  assert.equal(await revision(), before + 1);
+});
+
+test("forgetting a memory erases quantities from its shared source session", migrationDbTest, async t => {
+  const { service, ids, readLedger, pool } = await capturePair(t);
+  assert.equal((await service.forget(scope, ids[0], memorySource)).status, "forgotten");
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM raw_messages")).rows[0].count, 0);
+  assert.deepEqual(await readLedger(), { byMemory: [[], []], rows: [], terms: [] });
+});
+
+test("purging one source message removes only its quantities", migrationDbTest, async t => {
+  const { raw, messages, before, readLedger, write, revision } = await capturePair(t);
+  const fact = { ...scope, actionId: randomUUID(), origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [await coreDigest(messages[0].content)] } };
+  await write(tx => createPostgresSuppressionStore().writeFact(tx, fact, sha256Hex(factIncarnationBody(fact))));
+  const index = await revision();
+  assert.deepEqual(await write(tx => raw.purgeWithheld(tx, scope, [{ fact }])), { rawDeleted: 1, ledgerBlanked: 1 });
+  const survivor = before.byMemory[1];
+  assert.deepEqual(await readLedger(), { byMemory: [[], survivor], rows: survivor, terms: ["bus", "fare", "transport"] });
+  assert.equal(await revision(), index + 1);
+});
 
 test("Postgres quantity ledger isolates both owners and namespaces in reads, deletes and terms", migrationDbTest, async t => {
   const { ledger, run, insert } = await setup(t);

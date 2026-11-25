@@ -1,4 +1,5 @@
 import { allDigests, CoreError } from "../../core/src/index.mjs";
+import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { readSourceKind } from "./memory-metadata.mjs";
 
 /** @import { MemoryRow, Receipt } from "../../core/src/ports/index.d.ts" */
@@ -124,6 +125,12 @@ export async function advanceIndex(query, owner, run, { perCall = false } = {}) 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
 function activeReceiptsSql(ids) {
   return `FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY(${ids}) AND forgotten_at IS NULL`;
+}
+
+/** @param {string} owner @param {string | null} namespace @param {string} memoryId
+ * @param {Pick<Receipt, "client" | "sessionId" | "messageId">} receipt */
+export function canonicalReceiptId(owner, namespace, memoryId, { client, sessionId, messageId }) {
+  return sha256Hex(JSON.stringify([owner, namespace, memoryId, client, sessionId, messageId]));
 }
 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
