@@ -77,13 +77,12 @@ test('the first of a 31-day month contributes to the calendar totals and sources
   assert.doesNotMatch(off.body, /calendar month so far|Transport spending|\$18\.00/u);
   assert.deepEqual(on.sources, ['budget', 'first', 'last']);
   assert.match(on.body, /Calendar month so far: 2026-07-01 to 2026-07-31\. Spend: total \$12\.00 in 1 record, average \$0\.40 per day\. Spend, calendar month so far: total \$30\.00 in 2 records, average \$0\.97 per day\./u);
-  assert.match(on.body, /Transport spending: total \$0\.00 in 0 records, average \$0\.00 per day\. Transport spending, calendar month so far: total \$18\.00 in 1 record, average \$0\.58 per day\./u);
-  assert.match(on.body, /Bus: total \$0\.00 in 0 records, average \$0\.00 per day\. Bus, calendar month so far: total \$18\.00 in 1 record, average \$0\.58 per day\./u);
+  assert.doesNotMatch(on.body, /Transport spending|Bus/u);
   assert.equal(on.body.slice(on.body.indexOf('Weekly subtotals:')), off.body.slice(off.body.indexOf('Weekly subtotals:')));
   assert.match(on.body, /Goals: food budget goal at most \$1\.00 per day: actual \$0\.40 per day, goal met, under by \$0\.60\.$/u);
 
   assert.equal(digest([first], [], window), null);
-  assert.deepEqual(digest([first], [], window, true).sources, ['first']);
+  assert.equal(digest([first], [], window, true), null);
 });
 
 test('calendar step averages use the latest cumulative record on each recorded day', () => {

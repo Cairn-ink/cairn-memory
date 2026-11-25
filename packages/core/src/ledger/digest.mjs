@@ -123,49 +123,47 @@ export function digest(rows, goals, window, calendarReading = false) {
   const distinct = [...asOf.filter(row => row.measure !== 'steps'),
     ...latest(asOf.filter(row => row.measure === 'steps'), row => JSON.stringify([row.unit, dayStart(row.date)]))];
   const used = distinct.filter(row => ledgerRowInRange(row, window));
-  const calendar = calendarReading ? window.calendar : undefined;
-  const calendarRows = calendar ? distinct.filter(row => ledgerRowInRange(row, calendar)) : [];
-  const selected = calendar ? [...used, ...calendarRows.filter(row => !ledgerRowInRange(row, window))] : used;
   const targets = latest(goals.filter(row => row.kind === 'goal' && row.date < window.toMs),
     row => JSON.stringify([row.measure, row.unit, row.group, row.category, row.period, row.comparator]));
-  if (!selected.length && !targets.length) return null;
+  if (!used.length && !targets.length) return null;
+
+  const calendar = calendarReading ? window.calendar : undefined;
+  const measureKey = (/** @type {QuantityLedgerRow} */ row) => JSON.stringify([row.measure, row.unit]);
+  const calendarGroups = calendar ? groupBy(distinct.filter(row => ledgerRowInRange(row, calendar)), measureKey) : undefined;
+  const sources = new Set([...used, ...targets].map(row => row.memoryId));
 
   const parts = [`Computed ledger for ${dayLabel(window.fromMs)} to ${dayLabel(window.toMs - 1)} (${window.label}), from the dated records you mentioned.`];
   if (calendar) {
     parts.push(`${title(calendar.label)}: ${dayLabel(calendar.fromMs)} to ${dayLabel(calendar.toMs - 1)}.`);
   }
-  for (const groupRows of groupBy(selected, row => JSON.stringify([row.measure, row.unit])).values()) {
-    const { measure, unit } = groupRows[0];
+  for (const [key, entries] of groupBy(used, measureKey)) {
+    const { measure, unit } = entries[0];
     const stepDays = measure === 'steps';
-    const inRolling = (/** @type {QuantityLedgerRow[]} */ records) => calendar
-      ? records.filter(row => ledgerRowInRange(row, window)) : records;
-    const entries = inRolling(groupRows);
-    /** @param {string} label @param {QuantityLedgerRow[]} rollingRows @param {QuantityLedgerRow[]} records */
-    function appendSummary(label, rollingRows, records) {
-      parts.push(summary(label, rollingRows, unit, stepDays ? Math.max(1, rollingRows.length) : daysIn(window)));
+    const calendarRows = calendarGroups?.get(key) ?? [];
+    /** @param {string} label @param {QuantityLedgerRow[]} rollingRows @param {QuantityLedgerRow[]} comparisonRows */
+    function appendSummary(label, rollingRows, comparisonRows) {
+      parts.push(summary(label, rollingRows, unit, stepDays ? rollingRows.length : daysIn(window)));
       if (calendar) {
-        const matching = records.filter(row => ledgerRowInRange(row, calendar));
-        parts.push(summary(`${label}, ${calendar.label}`, matching, unit, stepDays ? Math.max(1, matching.length) : daysIn(calendar)));
+        parts.push(summary(`${label}, ${calendar.label}`, comparisonRows, unit,
+          stepDays ? Math.max(1, comparisonRows.length) : daysIn(calendar)));
       }
     }
-    appendSummary(title(measure), entries, groupRows);
+    appendSummary(title(measure), entries, calendarRows);
+    for (const row of calendarRows) sources.add(row.memoryId);
     if (measure === 'spend') {
-      for (const [group, purchases] of groupBy(groupRows, row => row.group)) {
-        appendSummary(`${title(group)} spending`, inRolling(purchases), purchases);
+      for (const [group, purchases] of groupBy(entries, row => row.group)) {
+        appendSummary(`${title(group)} spending`, purchases, calendarRows.filter(row => row.group === group));
       }
     }
-    const categories = [...groupBy(groupRows.filter(row => row.category), row => row.category)]
-      .map(([category, records]) => ({ category, records, rollingRows: inRolling(records) }));
-    for (const { category, rollingRows, records } of categories.sort((a, b) => total(b.rollingRows) - total(a.rollingRows))) {
-      appendSummary(title(category), rollingRows, records);
+    const categories = [...groupBy(entries.filter(row => row.category), row => row.category)];
+    for (const [category, records] of categories.sort(([, a], [, b]) => total(b) - total(a))) {
+      appendSummary(title(category), records, calendarRows.filter(row => row.category === category));
     }
-    if (entries.length) {
-      appendSubtotals(parts, entries, unit, window, weekStart, 'Weekly');
-      appendSubtotals(parts, entries, unit, window, monthStart, 'Monthly');
-    }
+    appendSubtotals(parts, entries, unit, window, weekStart, 'Weekly');
+    appendSubtotals(parts, entries, unit, window, monthStart, 'Monthly');
   }
   const comparisons = targets.map(goal => compareGoal(goal, distinct, window));
   if (comparisons.length) parts.push('Goals: ' + comparisons.map(result => result.text).join(' '));
-  const sources = new Set([...selected, ...targets, ...comparisons.flatMap(result => result.rows)].map(row => row.memoryId));
+  for (const { rows } of comparisons) for (const row of rows) sources.add(row.memoryId);
   return { body: parts.join(' '), sources: [...sources].sort(compareUtf8) };
 }

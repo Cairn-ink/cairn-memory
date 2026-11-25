@@ -13,7 +13,7 @@ import { entry } from "./entry.mjs";
 /** @import { CallOptions, ClockAndHash, ContextAssemblyDiagnostics,
   ContextReadError, ContextReadSet, MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
 /** @import { PackOptions, Projection } from "./context-read-pack.mjs" */
-/** @import { LedgerCheck } from "./context-read-assembly-evidence.mjs" */
+/** @import { LedgerCheck, LedgerReading } from "./context-read-assembly-evidence.mjs" */
 /** @import { KeylessMemoryServiceDeps } from "./index.d.mts" */
 /** @typedef {KeylessMemoryServiceDeps["storage"] & Partial<Pick<ReadContractStorage, "quantityLedger" | "memories">>} KeylessStorage */
 
@@ -106,8 +106,10 @@ async function beforeLedgerDeadline(now, deadline, signal, attempt) {
 export function readContextMethod({ storage, clock, find, fetch, counter, format, calendarReading = false }) {
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
-   * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger */
-  async function assemble(readSet, { candidate, budget, policy, representation, raw, lexicalOnly }, options, deadline, includeLedger) {
+   * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
+   * @param {{ witness: string, asOfMs: number }} [expectedRolling] */
+  async function assemble(readSet, input, options, deadline, includeLedger, expectedRolling) {
+    const { candidate, budget, policy, representation, raw, lexicalOnly } = input;
     /** @type {Awaited<ReturnType<typeof find>>} */
     let found;
     try {
@@ -126,7 +128,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
       candidate.types.includes("memory") && hasLedgerCue(candidate.query)
-      ? { query: candidate.query, asOfMs: clock.nowMs(), calendarReading } : undefined;
+      ? { query: candidate.query, asOfMs: expectedRolling?.asOfMs ?? clock.nowMs(), calendarReading } : undefined;
     const evidence = await fetch(readSet, candidate, found.generations, items.map(item => item.ref), ledgerRequest);
     const prepared = evidence.rows.flatMap((row, i) => row ? [prepareItem(row, readSet, items[i].rank, candidate.intent)] : []);
     let rawCoverage = rawRead.coverage;
@@ -199,18 +201,37 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     });
     if (!ledgerRequest) return ordinary;
     const ordinaryHasRaw = rawPacking;
+    /** @type {string | undefined} */
+    let refreshRolling;
     const enriched = await beforeLedgerDeadline(now, deadline, options.signal, async active => {
-      const ledger = await evidence.prepareLedger(active).catch(() => null);
+      const ledger = await evidence.prepareLedger(active, expectedRolling === undefined).catch(() => null);
       active();
-      if (!ledger) return;
-      packing.ledger = ledger.value;
-      const packed = packEvidence();
-      active();
-      if (!packed.value.ledgerDigest || (ordinaryHasRaw && !rawPacking)) return;
-      const snapshot = await deliver(packed, { witness: ledger.witness, active }).catch(() => undefined);
-      if (typeof snapshot === "string" || snapshot === null) return response(packed, snapshot);
+      if (!ledger || (expectedRolling && ledger.rolling.witness !== expectedRolling.witness)) return;
+      const { rolling, calendar: comparison } = ledger;
+      /** @param {LedgerReading} reading @param {boolean} calendar */
+      async function tryReading(reading, calendar) {
+        active();
+        rawCoverage = ordinary.diagnostics.coverage.raw;
+        rawPacking = ordinaryHasRaw;
+        packing.ledger = reading.value;
+        const packed = packEvidence();
+        active();
+        if (!packed.value.ledgerDigest || (ordinaryHasRaw && !rawPacking)) return;
+        const snapshot = await deliver(packed, { witness: reading.witness, calendar, active }).catch(error => {
+          if (comparison && staleSnapshot(error)) refreshRolling = rolling.witness;
+        });
+        if (typeof snapshot === "string" || snapshot === null) return response(packed, snapshot);
+      }
+      const combined = comparison ? await tryReading(comparison, true) : undefined;
+      if (refreshRolling !== undefined) return;
+      return combined ?? await tryReading(rolling, false);
     });
     if (options.signal?.aborted) throw new CoreError("snapshot_stale");
+    // Suppression can also advance the namespace generation. Refresh the
+    // ordinary snapshot once and require the original rolling witness.
+    if (refreshRolling !== undefined && now() < deadline) {
+      return assemble(readSet, input, options, deadline, true, { witness: refreshRolling, asOfMs: ledgerRequest.asOfMs });
+    }
     return enriched ?? ordinary;
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {ReadContextInput} */ request,
