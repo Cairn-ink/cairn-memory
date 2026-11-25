@@ -1,10 +1,19 @@
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { legacyEngineIdPattern } from './local-engine-generation.mjs';
 
 export const cutoverSteps = ['staged', 'quiesced', 'backup-proved', 'migrated', 'verified'];
 export const cutoverId = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(value);
 export const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
-export const targetFor = (source, id) => join(dirname(source), '.cairn-cutover-' + id + '.sqlite');
+const prefix = '.cairn-cutover-';
+const storeTag = source => createHash('sha256').update(source).digest('hex');
+export const legacyTargetFor = (source, id) => join(dirname(source), prefix + id + '.sqlite');
+export const targetFor = (source, id) => join(dirname(source), prefix + storeTag(source) + '-' + id + '.sqlite');
+export function cutoverAttemptForName(source, name) {
+  const match = /^\.cairn-cutover-(?:([a-f0-9]{64})-)?([a-f0-9-]{36})\.sqlite(?:\.stale)?(?:-wal|-shm|-journal)?$/u.exec(name);
+  if (match?.[0] !== name || !cutoverId(match[2]) || (match[1] && match[1] !== storeTag(source))) return undefined;
+  return match[2];
+}
 export const checkpointOf = migration => migration.resumeFrom ?? migration.state;
 export const atLeast = (migration, step) => cutoverSteps.indexOf(checkpointOf(migration)) >= cutoverSteps.indexOf(step);
 
@@ -34,9 +43,13 @@ function validResult(result, validIdentifier) {
 export function validCutover(descriptor, iso, validIdentifier) {
   const { migration, state, database, clients } = descriptor;
   const cutover = migration.cutover;
-  if (!exact(cutover, 'id attemptId sourcePath targetPath previousUpdatedAt source backup result aborting') ||
+  const reclaiming = Object.hasOwn(cutover, 'reclaiming');
+  if (!exact(cutover, 'id attemptId sourcePath targetPath previousUpdatedAt source backup result aborting' +
+      (reclaiming ? ' reclaiming' : '')) ||
+      (reclaiming && (cutover.reclaiming !== true || migration.state !== 'paused-recovery' || !atLeast(migration, 'quiesced'))) ||
       !cutoverId(cutover.id) || !cutoverId(cutover.attemptId) || cutover.sourcePath !== database.path ||
-      cutover.targetPath !== targetFor(database.path, cutover.attemptId) || !iso(cutover.previousUpdatedAt) ||
+      ![targetFor(database.path, cutover.attemptId), legacyTargetFor(database.path, cutover.attemptId)].includes(cutover.targetPath) ||
+      !iso(cutover.previousUpdatedAt) ||
       typeof cutover.aborting !== 'boolean' || state !== 'installed' ||
       !cutoverSteps.includes(checkpointOf(migration)) ||
       Object.values(clients).some(receipt => receipt && !legacyEngineIdPattern.test(receipt.vector?.engineId))) return false;

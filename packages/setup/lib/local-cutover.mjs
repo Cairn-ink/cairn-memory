@@ -7,14 +7,13 @@ import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { withCutoverCapture } from './local-cutover-capture.mjs';
 import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, removeCutoverMaintenance,
-  retireCutoverTarget, withLocalLock, writeDescriptor } from './local-descriptor.mjs';
+import { backupFor, maintenanceFor, reclaimAttempt, reclaimPastAttempts } from './local-cutover-reclaim.mjs';
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, withLocalLock,
+  writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
 import { runLocalDaemon } from './local-mode.mjs';
 
 const quiescence = Object.freeze({ admissionsClosed: true, writersStopped: true, readersDrained: true, oldHandlesClosed: true });
-const maintenanceFor = (root, id) => join(root, '.cutover-' + id);
-const backupFor = (maintenance, attempt) => join(maintenance, 'backup-' + attempt);
 
 function sourceIdentity(path) {
   const file = entry(path);
@@ -42,9 +41,17 @@ async function recoverCutoverLock(root) {
   const path = join(root, '.setup.lock');
   if (!entry(path)) return;
   const descriptor = await readDescriptor(root, { allowV2: true });
-  if (!descriptor?.migration?.cutover) return;
-  const owner = await boundedJSON(path, 1024, { privateFile: true });
+  const journaled = descriptor?.migration?.cutover;
+  let owner;
+  try { owner = await boundedJSON(path, 1024, { privateFile: true }); }
+  catch (error) {
+    if (journaled) throw error;
+    return;
+  }
   if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || owner.child !== null) return;
+  // A completed descriptor restore can precede cleanup and lock release.
+  // Continue to recognize pre-existing cutover locks while their v2 journal exists.
+  if (owner.cutover !== true && !journaled) return;
   const live = processStart(owner.pid);
   if (!live || live.zombie) await privateRemove(path);
 }
@@ -54,12 +61,6 @@ async function writeMarker(directory, cutover) {
   const expected = JSON.stringify({ id: cutover.id, sourcePath: cutover.sourcePath, maintenance: true }) + '\n';
   if (!entry(path)) await privateWrite(path, expected, { exclusive: true });
   if (await privateRead(path) !== expected) throw refuse('cutover_maintenance_changed');
-}
-
-async function retireTarget(cutover) {
-  if (!await retireCutoverTarget(cutover.targetPath)) return false;
-  await syncDirectory(dirname(cutover.targetPath));
-  return true;
 }
 
 function attestResult(result, inventory) {
@@ -158,11 +159,9 @@ async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigra
   } catch (error) {
     Object.assign(cutover, lastSaved.cutover);
     if (error.code === 'legacy_backup_stale' || error.code === 'cutover_target_changed') {
-      await retireTarget(cutover);
-      cutover.attemptId = randomUUID();
-      cutover.targetPath = targetFor(path, cutover.attemptId);
-      cutover.backup = cutover.result = null;
-      await recovery('quiesced');
+      cutover.reclaiming = true;
+      await recovery(checkpointOf(lastSaved));
+      await finishRollback(root, descriptor, maintenance, onCheckpoint);
     } else {
       await recovery(checkpointOf(lastSaved));
     }
@@ -170,28 +169,43 @@ async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigra
   }
 }
 
-async function abort(root, descriptor, maintenance) {
+async function finishRollback(root, descriptor, maintenance, onCheckpoint) {
+  const { migration } = descriptor, { cutover } = migration;
+  await reclaimAttempt(maintenance, cutover, state => onCheckpoint(state, structuredClone(cutover)));
+  cutover.attemptId = randomUUID();
+  cutover.targetPath = targetFor(cutover.sourcePath, cutover.attemptId);
+  cutover.backup = cutover.result = null;
+  delete cutover.reclaiming;
+  migration.state = 'paused-recovery';
+  migration.resumeFrom = 'quiesced';
+  await writeDescriptor(root, descriptor);
+}
+
+async function abort(root, descriptor, maintenance, onCheckpoint) {
   const { migration } = descriptor, { cutover } = migration;
   cutover.aborting = true;
   await writeDescriptor(root, descriptor);
-  if (await ownedDirectory(maintenance, { missing: true })) {
-    const hadTarget = await retireTarget(cutover);
-    await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
-      if (hadTarget) {
-        await privateWrite(join(maintenance, 'stale.json'), JSON.stringify({ attemptId: cutover.attemptId }) + '\n');
-        await privateRemove(join(maintenance, 'maintenance.json'));
-        await syncDirectory(maintenance);
-      } else {
-        await removeCutoverMaintenance(root, cutover.id);
-        await syncDirectory(root);
-      }
-    });
-  }
-  delete descriptor.migration;
-  descriptor.version = 'cairn-local-installation-v1';
-  descriptor.updatedAt = cutover.previousUpdatedAt;
-  await writeDescriptor(root, descriptor, { preserveUpdatedAt: true });
+  await ensureMaintenance(root, maintenance);
+  // Keep the source-bound marker until the restored v1 and all unlinks are durable.
+  await writeMarker(maintenance, cutover);
+  await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
+    delete descriptor.migration;
+    descriptor.version = 'cairn-local-installation-v1';
+    descriptor.updatedAt = cutover.previousUpdatedAt;
+    await writeDescriptor(root, descriptor, { preserveUpdatedAt: true });
+  });
+  const checkpoint = state => onCheckpoint(state, structuredClone(cutover));
+  await checkpoint('abort-restored');
+  await reclaimPastAttempts(root, cutover.sourcePath, null, checkpoint);
   return { state: 'aborted' };
+}
+
+async function ensureMaintenance(root, maintenance) {
+  if (!entry(maintenance)) {
+    await privateDirectory(maintenance);
+    await syncDirectory(root);
+  }
+  await ownedDirectory(maintenance);
 }
 
 // Explicit checkout-only entry point. Leave non-Linux and existing stdio
@@ -208,12 +222,17 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', env 
       if (descriptor?.state !== 'installed') throw refuse('cutover_installation_required');
       let migration = descriptor.migration;
       if (descriptor.version === 'cairn-local-installation-v2' && !migration?.cutover) throw refuse('cutover_journal_required');
-      if (action === 'abort' && !migration) return { state: 'aborted' };
       if (migration?.cutover.aborting || action === 'abort') {
-        return abort(root, descriptor, maintenanceFor(root, migration.cutover.id));
+        if (migration) return abort(root, descriptor, maintenanceFor(root, migration.cutover.id), onCheckpoint);
+        await reclaimPastAttempts(root, descriptor.database.path, null, onCheckpoint);
+        return { state: 'aborted' };
       }
       const { engine, database } = descriptor;
       const executable = executableFor(root, engine.id), path = database.path;
+      if (migration?.cutover.reclaiming) {
+        await finishRollback(root, descriptor, maintenanceFor(root, migration.cutover.id), onCheckpoint);
+      }
+      await reclaimPastAttempts(root, path, migration?.cutover, onCheckpoint);
       if (!entry(executable) || !entry(path) || await canonicalPath(executable) !== executable || await canonicalPath(path) !== path ||
           basename(path).startsWith('.cairn-cutover-')) throw refuse('cutover_unsafe_path');
       const targetEngineId = manifest?.engineId;
@@ -230,12 +249,8 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', env 
         await onCheckpoint('staged', structuredClone(cutover));
       }
       const maintenance = maintenanceFor(root, migration.cutover.id);
-      if (!entry(maintenance)) {
-        await privateDirectory(maintenance);
-        await syncDirectory(root);
-      }
-      await ownedDirectory(maintenance);
+      await ensureMaintenance(root, maintenance);
       return prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint);
-    });
+    }, { cutover: true });
   });
 }
