@@ -45,7 +45,8 @@ export interface MemoryServiceDeps {
   readonly documentCardSessionKey?: (session: DocumentCardSession) => string | null;
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
-  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
+  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit.
+   * It emits extract/core_validation/ungrounded_extraction_quantity once per ungrounded ledger record. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 

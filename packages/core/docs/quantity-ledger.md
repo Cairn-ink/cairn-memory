@@ -9,9 +9,9 @@ no quantities.
 
 ## Capture and storage
 
-All store calls take a live transaction and a scope. The service calls
-`writeLedgerQuantities` in the finish transaction with the admitted memory ID,
-its current core `textHash`, and the cited canonical receipts. Every cited
+All store calls take a live transaction and a scope. The service writes ledger
+rows in the finish transaction with the admitted memory ID, its current core
+`textHash`, and the cited canonical receipts. Every cited
 source must pass finish checks. Attribution uses retained user receipt IDs
 from hydration or the inspect store in that transaction. `listForMemory`,
 reconciliation and `put` run under the owner write lock and commit with the
@@ -29,6 +29,16 @@ still pass. An exception reading or validating the list drops the whole list
 with one count and preserves the items. Goals require a period and a comparator.
 Records use `none` for both.
 
+Before reconciliation, capture keeps a record only if a number in one of the
+item's cited user messages matches its magnitude after rounding both to two decimal
+places. It drops model-computed totals unless the resulting value also appears
+as a number in a cited user message. Every such drop emits one content-free
+`extract/core_validation/ungrounded_extraction_quantity` diagnostic. The
+recognizer allows up to 360,000 UTF-16 code units, covering up to 18-fold NFKC
+expansion of capture's 20,000-unit message limit. It returns no readings for a
+longer input or a combining-mark run exceeding 20,000 units after accounting
+for decomposition. Both checks precede the recognizer's own normalization.
+
 Only rows with the memory's current `textHash` count toward coverage. For each
 identity (measure, category, value, unit, period and comparator), if any cited
 user receipt has no current row for this memory, count current rows on the cited
@@ -39,8 +49,9 @@ the number of extracted quantities above that count.
 Use the first candidate tier with any matches. First use cited user receipts
 containing the normalized value and a measure, category or fixed alias. Next use
 cited user receipts containing the value. The last tier is the earliest cited
-user receipt. Within a tier, prefer receipts with no current row, then order by
-validated time and message ID. Extra quantities use the last candidate. Ordinals
+user receipt for goals and direct calls to the ledger helpers. Within a tier,
+prefer receipts with no current row, then order by validated time and message ID.
+Extra quantities use the last candidate. Ordinals
 continue after the highest saved ordinal for the receipt and identity, including
 any retained old-hash rows that still occupy storage keys. Undated receipts sort
 after dated receipts and use the capture time when selected. Known limits include

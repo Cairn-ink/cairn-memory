@@ -60,8 +60,9 @@ export function validateQuantities(value: unknown, itemCount: number): QuantityV
 /** Attribute a batch without a store snapshot. Use reconciliation for capture writes. */
 export function attributeLedgerQuantities(memoryId: string, quantities: readonly ExtractedQuantity[],
   receipts: readonly LedgerReceipt[], captureTimeMs: number): LedgerRowAttribution[];
-/** Return only additional rows for a memory in the supplied capture. */
-export function reconcileLedgerQuantities(capture: LedgerReconciliation): QuantityLedgerRow[];
+/** Return only additional rows. Capture supplies normalized record values keyed by cited message ID. */
+export function reconcileLedgerQuantities(capture: LedgerReconciliation,
+  recordValues?: ReadonlyMap<string, ReadonlySet<number>>): QuantityLedgerRow[];
 /** Run inside the same live unit of work as the memory and receipt writes. */
 export function writeLedgerQuantities(tx: Tx, scope: Scope, store: QuantityLedgerStore, capture: LedgerCapture):
   Promise<{ inserted: number }>;
