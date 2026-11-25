@@ -144,7 +144,10 @@ test("an excerpt with an unavailable containment key is withheld", async () => {
 });
 
 for (const removal of ["conversation deletion", "text purge"]) {
-  test(`re-archiving identical Raw after ${removal} requires a new review`, async () => {
+  const title = removal === "conversation deletion"
+    ? "conversation deletion prevents replay and re-review from restoring a rationale edge"
+    : `re-archiving identical Raw after ${removal} requires a new review`;
+  test(title, async () => {
     const f = fixture();
     const root = await f.capture("root", "Keep the current layout.");
     const premise = await f.capture("premise", "The cabinet fits the current layout.");
@@ -166,10 +169,19 @@ for (const removal of ["conversation deletion", "text purge"]) {
       // Reading the edge port in the deletion transaction distinguishes deletion from hiding.
       return rationale.incident(tx, scope, root.ref.memoryId, { limit: 11 });
     });
-    assert.equal((await f.write(tx => raw.archive(tx, premise.key, [premise.message]))).archived, 1);
+    const archived = await f.write(tx => raw.archive(tx, premise.key, [premise.message]));
+    assert.equal(archived.archived, removal === "conversation deletion" ? 0 : 1);
     const replayed = await f.context(root.ref);
     assert.deepEqual({ refs: replayed.refs, storedEdgesAfterRemoval: incident.length },
       { refs: [], storedEdgesAfterRemoval: 0 });
+    if (removal === "conversation deletion") {
+      const review = await f.review(refs, [edge]);
+      assert.deepEqual({ status: review.status, error: review.error?.code },
+        { status: "failed", error: "revision_conflict" });
+      assert.deepEqual((await f.context(root.ref)).refs, []);
+      assert.deepEqual(await f.read(tx => rationale.incident(tx, scope, root.ref.memoryId, { limit: 11 })), []);
+      return;
+    }
     assert.equal((await f.review(refs, [edge])).inserted, 1);
     assert.deepEqual(await f.context(root.ref), before);
   });

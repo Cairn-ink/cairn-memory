@@ -10,7 +10,7 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("./unit-of-work.mjs").State} State */
-/** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "lineageFenced">} RawLineage */
+/** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "hasRawFence" | "lineageFenced">} RawLineage */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
  * messageIds: readonly string[], occurredAtMs: ReadonlyArray<number | null>,
  * proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
@@ -321,6 +321,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
               if (await messageDeleted(deletedMessages, claim.key, claim.messageIds[position])) throw new CoreError("suppressed");
             }
           }
+          // Core can finish a deleted outbox with no sources after withdrawing every slot.
+          if (selected.size === 0 && claim.messages?.length && claim.messages.every(({ content }) => content === "") &&
+              lineage?.hasRawFence(state, scope, claim.key)) return;
           if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
           let byClaim = selections.get(tx);
           if (!byClaim) selections.set(tx, byClaim = new Map());
