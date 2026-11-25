@@ -355,6 +355,7 @@ as absent or skipping retirement.
 | Inference becomes shared truth | No shared scope in automatic capture | A private inference can still be wrong; origin, confidence, and receipt remain visible |
 | Service outage disrupts work | Bounded timeouts and fail-open hooks | Capture may be delayed until a later hook retry |
 | Telemetry reveals content | Strict content-free schema; disable switch | Service sees IP-level network metadata inherent to an HTTP request |
+| Deleted conversation text is saved again | Deleting a local conversation fences it; text deleted from every copy is never captured again | Local releases through 0.6.12: if the same conversation is also kept as a project copy, that copy is separate. A later session that continues the conversation can capture its messages again into the project copy. Delete the project copy too |
 
 ### Optional OpenAI classification transport
 
