@@ -52,11 +52,17 @@ async function countMissingDigests(query, owner, required) {
 function requiredDomains(facts, currentKeyId) {
   const required = new Set();
   for (const { fact } of facts) {
-    if (fact.kind !== "text" || fact.text.digests.some(d => d.keyId === null)) continue;
-    for (const digest of fact.text.digests) {
-      if (currentKeyId !== undefined && digest.keyId !== currentKeyId) throw new CoreError("fingerprint_key_mismatch");
-      required.add(encodeDomain(digest));
+    if (fact.kind !== "text") continue;
+    const { digests, shingles, keyId } = fact.text;
+    if (currentKeyId !== undefined && (
+      digests.some(digest => digest.keyId !== null && digest.keyId !== currentKeyId) ||
+      (shingles != null && keyId != null && keyId !== currentKeyId)
+    )) {
+      throw new CoreError("fingerprint_key_mismatch");
     }
+    // K1 requires stored MACs only when the fact has no keyless digest.
+    if (digests.some(digest => digest.keyId === null)) continue;
+    for (const digest of digests) required.add(encodeDomain(digest));
   }
   return required;
 }
@@ -87,29 +93,32 @@ export async function readFingerprintKeyId(query, owner) {
 
 /**
  * Check staging and change the owner pointer in the same write transaction.
- * K2 refuses publication when a live HMAC-only fact needs a non-current key.
+ * K2 refuses rotation when a live or pending fact needs a non-current key.
  * @param {Tx} tx @param {string} nextKeyId
  */
 export async function publishFingerprintKey(tx, nextKeyId) {
   requireLiveRun(tx, true);
   return runOperation(tx, async query => {
+    // The owner-lock statement may have waited for a legacy writer to commit.
+    const { rows: [settings] } = await query("SELECT current_setting('transaction_isolation') AS isolation");
+    if (settings?.isolation !== "read committed") throw new CoreError("storage_error");
     const currentKeyId = await readFingerprintKeyId(query, tx.owner);
-    if (currentKeyId === nextKeyId) return;
+    const rotating = currentKeyId !== nextKeyId;
     let facts;
     try {
-      // Pending legacy facts only add evidence to the key-retirement guard.
-      // This internal read never exposes those rows to user reads.
+      // Include pending legacy evidence in the coverage and retirement checks.
       facts = await readVisibilityFacts(query, tx.owner,
-        { textOnly: true, allowPendingLegacy: true, limit: maxRotationFacts + 1 });
+        { textOnly: true, allowPendingLegacy: true, limit: rotating ? maxRotationFacts + 1 : undefined });
     } catch {
       throw new CoreError("fingerprint_key_mismatch");
     }
-    if (facts.length > maxRotationFacts) throw new CoreError("fingerprint_key_mismatch");
-    const required = requiredDomains(facts, currentKeyId);
+    if (rotating && facts.length > maxRotationFacts) throw new CoreError("fingerprint_key_mismatch");
+    const required = requiredDomains(facts, rotating ? currentKeyId : undefined);
     required.add(coreDomain(nextKeyId));
     if ((await countMissingDigests(query, tx.owner, required)).missingPairs !== 0) {
       throw new CoreError("fingerprint_key_mismatch");
     }
+    if (!rotating) return;
     await query(`INSERT INTO core_owner_state (user_id, fingerprint_key_id) VALUES ($1, $2)
       ON CONFLICT (user_id) DO UPDATE SET fingerprint_key_id = EXCLUDED.fingerprint_key_id`, [tx.owner, nextKeyId]);
   });
