@@ -217,7 +217,6 @@ test("filing transitions match legacy title invalidation and topic revisions on 
 
 test("direct Raw fencing honours the caller session and its migrated spelling in the same scope", async t => {
   const input = await prepare(t, 29);
-  const excerpt = "Quartz synthetic archived turn for a direct fence";
   const legacy = engine({ path: input.path, ...options, rawConversations: rawOptions(), model: {
     ...options.model,
     extract: () => ({ items: [{ content: "Synthetic independent conclusion", kind: "fact", confidence: 0.8, sourceIndices: [0] }] }),
@@ -225,6 +224,9 @@ test("direct Raw fencing honours the caller session and its migrated spelling in
   const rows = [];
   try {
     for (const namespace of [project, personal]) {
+      const excerpt = namespace === project
+        ? "Quartz synthetic archived turn for a direct fence"
+        : "Basalt independent archived turn in a different scope";
       const request = rawRequest(splitRaw(excerpt, { id: "message", occurredAt: new Date(instant).toISOString() })[0],
         { namespace, ...rawSource, eventId: namespace.scope });
       const memory = ok(ok(await legacy.captureRaw(request)).interpretation).admission.memories[0];
