@@ -1,19 +1,33 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "../../core/src/index.mjs";
+import { receiptExcerpt } from "../../core/src/privacy/text.mjs";
 import { copyArray } from "./capture-input.mjs";
 import { copyContent, copyReceipts, writeTime } from "./memory-input.mjs";
 
-/** @import { FinishItem, FinishResult } from "../../core/src/ports/capture.d.ts" */
-/** @import { InsertRow, MemoryStore, Scope, SourceRef, Tx } from "../../core/src/ports/index.d.ts" */
+/** @import { CaptureMessage, FinishItem, FinishResult } from "../../core/src/ports/capture.d.ts" */
+/** @import { InsertRow, MemoryStore, Receipt, Scope, SourceRef, Tx } from "../../core/src/ports/index.d.ts" */
 /** @import { Query } from "./memory-rows.mjs" */
 
-/** @type {WeakMap<Tx, {client: string, eventId: string, result: FinishResult}[]>} */
+/** @typedef {{scope: Scope, client: string, sessionId: string, eventId: string,
+ *   messages: readonly CaptureMessage[], result: FinishResult}} FinishedCapture */
+
+/** @type {WeakMap<Tx, FinishedCapture[]>} */
 const finishedInRun = new WeakMap();
 
-/** @param {Tx} tx @param {string} client @param {string} eventId @param {FinishResult} result */
-export function trackFinish(tx, client, eventId, result) {
+/** @param {Tx} tx @param {FinishedCapture} finish */
+export function trackFinish(tx, finish) {
   const finishes = finishedInRun.get(tx) ?? [];
-  finishes.push({ client, eventId, result });
+  finishes.push(finish);
   finishedInRun.set(tx, finishes);
+}
+
+/** @param {Tx} tx @param {Scope} scope @param {Receipt} receipt @param {string} excerpt */
+export function finishedReceiptMessages(tx, scope, receipt, excerpt) {
+  return (finishedInRun.get(tx) ?? []).flatMap(finish =>
+    finish.scope.owner === scope.owner && finish.scope.namespace === scope.namespace &&
+      finish.client === receipt.client && finish.sessionId === receipt.sessionId
+      ? finish.messages.filter(message => message.id === receipt.messageId && message.role === receipt.role &&
+        message.occurredAtMs === receipt.occurredAtMs && message.content !== "" && receiptExcerpt(message.content) === excerpt)
+      : []);
 }
 
 /** @param {Tx} tx @param {Query} query */

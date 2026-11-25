@@ -112,13 +112,13 @@ export async function selectMemory(query, owner, namespace, id) {
   return row ? readEntry(row, owner) : null;
 }
 
-/** @param {Query} query @param {string} owner @param {Run} run */
-export async function advanceIndex(query, owner, run) {
-  if (run.indexStart !== undefined) return;
+/** @param {Query} query @param {string} owner @param {Run} run @param {{perCall?: boolean}} [options] */
+export async function advanceIndex(query, owner, run, { perCall = false } = {}) {
+  if (run.indexStart !== undefined && !perCall) return;
   const { rows: [row] } = await query(`INSERT INTO core_owner_state (user_id, index_revision) VALUES ($1, 1)
     ON CONFLICT (user_id) DO UPDATE SET index_revision = core_owner_state.index_revision + 1
     RETURNING index_revision::text`, [owner]);
-  run.indexStart = BigInt(row.index_revision) - 1n;
+  run.indexStart ??= BigInt(row.index_revision) - 1n;
 }
 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
