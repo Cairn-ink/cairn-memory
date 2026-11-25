@@ -154,7 +154,7 @@ export function planMigration(source) {
     const excerpt = receiptExcerpt(row.excerpt);
     const address = { client, sessionId, messageId, role: row.role };
     const body = { ...address, occurredAtMs: null, legacy: { id, excerpt, createdAt: row.created_at, canonicalRead: true,
-      spans: source.archive.spans.get(id) },
+      root: "legacy-attested", spans: source.archive.spans.get(id) },
       ...(excerpt !== row.excerpt && { receiptKey: receiptIdentityKey({ ...address, excerpt }) }) };
     receiptRows.push([...keys, row.memory_id, ++state.ordinal, sourceKey, row.receipt_key, JSON.stringify(body)]);
   }
@@ -188,6 +188,10 @@ export function planMigration(source) {
     evidence: encodeEvidence({ history: [], namespaceEpochs, episodeControls, consent, rawControls, scopedCaptureControls: true, withheldReceipts,
       ...(source.placement.topics.length || source.placement.conflicts.length || source.placement.completed.length ||
         history.length ? { placementConversion: true } : {}),
+      receiptAttestation: {
+        root: "legacy-attested",
+        hidden: source.hiddenReceiptIds.map(address => sha256(encodeEvidence(address))).sort(),
+      },
       legacyRawHashing: source.rawPrivacy !== null, localRawPrivacy: source.localRawPrivacy, rawDeletionActions: source.rawPrivacy?.actions ?? [],
       rawDeletionEffects: source.rawPrivacy?.effects ?? [], archived: source.archive.counts, ledger, dropped: source.dropped }),
     pausedOwners: pause.filter(([, paused]) => paused === 1).map(([owner]) => String(owner)).sort(),

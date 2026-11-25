@@ -179,20 +179,14 @@ for (const layout of [18, 29, 48, 53]) {
       assert.equal(bytes.includes(hidden), false, hidden);
     }
     assert.equal(bytes.includes("Synthetic opening hours"), true);
-    // Raw-capable legacy layouts register plain captures without proving that
-    // their receipts are independent of Raw. The serving adapter withholds them.
-    const unknownAncestry = new Set(layout >= 29 ? [ids.failed.id, ids.classified.id] : []);
-    const receiptCount = memory => unknownAncestry.has(memory.id) ? 0 : memory.receiptCount;
-    const projected = ({ memory, placements, receipts, ...reference }) => ({
-      ...reference, memory: { ...memory, receiptCount: receiptCount(memory) },
-      placements: placements.map(({ mocId }) => ({ id: mocId })),
-      receipts: unknownAncestry.has(memory.id) ? [] : receipts,
+    const projected = ({ placements, ...reference }) => ({
+      ...reference, placements: placements.map(({ mocId }) => ({ id: mocId })),
     });
     editFixture(input.destination, db => {
       assert.equal(db.prepare("SELECT count(*) AS n FROM cairn_topic_sources WHERE memory_id = ?").get(ids.lost.id).n, 0);
       assert.deepEqual(sort(db.prepare("SELECT memory_id AS id, revision FROM cairn_topic_outcomes").all().map(row => ({ ...row }))),
         sort([...expected.values()].filter(({ memory }) => memory.filing.status === "filed" ||
-          (memory.id === ids.classified.id && !unknownAncestry.has(memory.id)))
+          memory.id === ids.classified.id)
           .map(({ memory }) => ({ id: memory.id, revision: memory.revision }))));
       assert.deepEqual(db.prepare(`SELECT topic_id AS moc_id, memory_id AS memoryId, revision AS memoryRevision
         FROM cairn_topic_sources ORDER BY topic_id, memory_id`).all(), sourceTitles);
@@ -208,7 +202,7 @@ for (const layout of [18, 29, 48, 53]) {
       const { mode, memories, ...paging } = await query(scope, {});
       assert.equal(mode, "list");
       assert.deepEqual({ ...paging, memories: memories.map(wireMemory) }, {
-        ...listing, memories: listing.memories.map(memory => ({ ...memory, receiptCount: receiptCount(memory) })),
+        ...listing,
       });
       await assert.rejects(query(scope, { memoryId: ids.lost.id }), { code: "memory_not_found" });
       await assert.rejects(query(coreScope(personal), { memoryId: ids.retained.id }), { code: "memory_not_found" });
@@ -246,7 +240,7 @@ for (const layout of [18, 29, 48, 53]) {
         const pending = await adapter.placement.pending(tx, scope, { limit: 5 });
         const byMemory = refs => [...refs].sort((a, b) => a.memoryId.localeCompare(b.memoryId));
         assert.deepEqual(byMemory(pending), byMemory(unfiled.filter(ref =>
-          ref.memoryId !== ids.classified.id && !unknownAncestry.has(ref.memoryId))));
+          ref.memoryId !== ids.classified.id)));
         assert.ok(pending.some(ref => ref.memoryId === ids.pending.id));
         for (const [id, reference] of expected) {
           assert.deepEqual(await adapter.placement.forMemory(tx, scope, id), reference.placements.map(({ mocId }) => mocId));
@@ -271,6 +265,30 @@ for (const layout of [18, 29, 48, 53]) {
       }
     } finally {
       await defaults.close();
+    }
+    if (layout >= 29) {
+      const storage = await openSqliteAdapter(input.destination, options);
+      try {
+        const read = service(storage).inspect;
+        for (const capture of [ids.failed, ids.classified]) {
+          assert.equal((await read(scope, { memoryId: capture.id })).receipts.length, 1);
+        }
+        await storage.uow.run(scope.owner, { pauseLock: true }, tx =>
+          storage.raw.fenceSession(tx, scope, { client: "synthetic", sessionId: "synthetic-classification" }));
+        for (const capture of [ids.failed, ids.classified]) {
+          const item = await read(scope, { memoryId: capture.id });
+          assert.equal(item.memory.receiptCount, 0);
+          assert.deepEqual(item.receipts, []);
+          assert.deepEqual(item.placements, []);
+        }
+        await storage.uow.run(scope.owner, { readOnly: true }, async tx => {
+          const pending = await storage.placement.pending(tx, scope, { limit: 5 });
+          assert.ok(pending.every(ref => ref.memoryId !== ids.failed.id && ref.memoryId !== ids.classified.id));
+          assert.deepEqual(await storage.placement.forMemory(tx, scope, ids.classified.id), []);
+        });
+      } finally {
+        await storage.close();
+      }
     }
     t.diagnostic(`${installedRoot ? "installed engine" : "legacy engine"} layout ${layout}, ${expected.size} inspect items, `
       + `${catalog.items.filter(item => item.type === "moc").length} topics, ${layout >= 29 ? 5 : 3} hidden byte witnesses`);

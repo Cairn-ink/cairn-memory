@@ -8,6 +8,8 @@ import { buildCoreLocalCandidate } from '../build-core-local.mjs';
 import { deriveRuntimeGraph } from '../core-local/import-graph.mjs';
 import { compareWire, diagnosticsKey, golden, installCandidate, scopeArgs, snapshotKey, withStdio } from './fixtures/local-host-wire-replay.mjs';
 
+import { compareFiledWire, seedFreshFiled } from './fixtures/installed-local-0.6.11-filed-wire.mjs';
+
 const host = 'packaging/core-local/host.mjs';
 const cli = 'packaging/core-local/cli.mjs';
 const copyInputs = ['packaging/core-local', 'packages/core/package.json', 'packages/core/src', 'packages/adapter-sqlite/src'];
@@ -110,4 +112,17 @@ test('the real runtime graph refuses startup composition and unapproved adapter 
     assert.throws(() => deriveRuntimeGraph(path), expected);
     writeFileSync(filename, source);
   }
+});
+
+test('fresh installed core-local matches filed inspect and relation wire', async t => {
+  const { path } = createTestWorkspace(t);
+  const output = join(path, 'out');
+  const built = buildCoreLocalCandidate(output);
+  const installed = installCandidate(join(path, 'install'), join(output, built.archive.filename), built.package.name);
+  const database = join(path, 'filed.sqlite');
+  const ids = await seedFreshFiled(database);
+  const comparison = await compareFiledWire(installed.bin, database, path, ids);
+  t.diagnostic(comparison.matched + ' of ' + comparison.total + ' fresh filed exchanges matched');
+  assert.equal(comparison.total, 4);
+  assert.deepEqual(comparison.differences, []);
 });

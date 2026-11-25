@@ -88,11 +88,11 @@ export function convertPlacement(db, source, sessionKey) {
     hasSource.add(moc_id);
     tables.cairn_topic_sources.push([...scopeKey(scope), moc_id, memory_id, memory_revision]);
   }
-  for (const topic of topics) {
-    const { id, title, level } = topic;
+  for (const [index, topic] of topics.entries()) {
+    const { id, title, level, revision } = topic;
     tables.cairn_topics.push([...scopeKey(fromNamespace(topic)), legacyIdentifier(id), level === 1n ? "L1" : "L2",
       hasSource.has(id) && !hiddenTitles.has(id) ? title : null,
-      sha256(titleKey(title)), JSON.stringify(parents.get(id) ?? [])]);
+      sha256(titleKey(title)), revision, index + 1, JSON.stringify(parents.get(id) ?? [])]);
   }
 
   /** @type {Map<string, SQLInputValue[]>} */

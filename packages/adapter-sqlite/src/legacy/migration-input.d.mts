@@ -33,6 +33,7 @@ export interface LegacyInput {
   target: string;
   checkSource(): void;
   withheldReceipts: number;
+  hiddenReceiptIds: Array<[{ownerId: string; scope: string; projectId: string | null}, string]>;
   inspect: {
     cursorSecret: string;
     receiptPositions: Map<string, number>;

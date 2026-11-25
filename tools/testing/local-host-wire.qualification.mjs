@@ -15,6 +15,8 @@ import { sha256 } from '../../packaging/core-local/engine-id.mjs';
 import { compareWire, golden, installCandidate, isolatedEnv, scopeArgs, withStdio }
   from '../../packaging/test/fixtures/local-host-wire-replay.mjs';
 
+import { compareFiledWire, seedLegacyFiled } from '../../packaging/test/fixtures/installed-local-0.6.11-filed-wire.mjs';
+
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 const tagPath = 'installer-v0.6.11:packages/setup/runtime/engine/';
 const archiveName = 'cairn-memory-local-preview-0.0.0-preview.1.tgz';
@@ -133,6 +135,47 @@ try {
   } finally {
     encoding.free();
   }
+
+  const filedSource = join(scratch, 'filed-source.sqlite');
+  await stoppedLegacy(filedSource, async (request, notify) => {
+    await request('initialize', golden.exchanges.initialize.params);
+    notify('notifications/initialized');
+  });
+  const filedIds = await seedLegacyFiled(legacy.root, filedSource);
+  const filedDb = new DatabaseSync(filedSource);
+  let filedStoreId;
+  try {
+    assert.equal(filedDb.prepare('PRAGMA user_version').get().user_version, golden.sourceLayout);
+    assert.equal(filedDb.prepare('SELECT count(*) AS n FROM memories').get().n, 4);
+    filedStoreId = filedDb.prepare('SELECT store_id FROM store_metadata').get().store_id;
+    assert.equal(filedDb.prepare('PRAGMA journal_mode = DELETE').get().journal_mode, 'delete');
+  } finally {
+    filedDb.close();
+  }
+  const filedReplay = join(scratch, 'filed-baseline.sqlite');
+  copyFileSync(filedSource, filedReplay);
+  const filedTarget = join(scratch, 'filed-migrated.sqlite');
+  const filedInput = { path: filedSource, expectedStoreId: filedStoreId, quiescence,
+    destination: filedTarget, backupDirectory: join(scratch, 'filed-backup') };
+  await createLegacyBackup(filedInput);
+  assert.equal((await migrateLegacyStore(filedInput)).sourceLayout, golden.sourceLayout);
+  let installedFiled;
+  try {
+    installedFiled = await compareFiledWire(legacy.bin, filedReplay, scratch, filedIds);
+  } finally {
+    const stop = spawnSync(process.execPath, [legacy.bin, 'daemon', 'stop', '--db', filedReplay],
+      { cwd: scratch, env: isolatedEnv(scratch), encoding: 'utf8', timeout: 15_000 });
+    assert.ifError(stop.error);
+    assert.equal(stop.status, 0, stop.stderr);
+    console.log('Installed filed daemon stop exit 0');
+  }
+  const migratedFiled = await compareFiledWire(candidate.bin, filedTarget, scratch, filedIds);
+  for (const [name, result] of [['Installed filed baseline', installedFiled], ['Migrated filed candidate', migratedFiled]]) {
+    console.log(name + ' matched ' + result.matched + ' of ' + result.total);
+    for (const entry of result.differences) console.error(name + '\t' + entry);
+    assert.equal(result.total, 4);
+  }
+  if (installedFiled.differences.length || migratedFiled.differences.length) process.exitCode = 1;
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

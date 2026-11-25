@@ -24,7 +24,7 @@ import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
 import { createTopicStore } from "./topics.mjs";
 
 /** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
-/** @typedef {{ now?: () => number, monotonicMs?: () => number,
+/** @typedef {{ now?: () => number, monotonicMs?: () => number, legacyInspectPlacements?: boolean,
  * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean,
  * supersession?: boolean, conflictEdges?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
 
@@ -43,7 +43,7 @@ export async function openSqliteAdapter(filename, options) {
 
 /** @param {Awaited<ReturnType<typeof openStorage>>} storage @param {Options} [options] */
 export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal },
-  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, ...topicOptions } = {}) {
+  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, legacyInspectPlacements, ...topicOptions } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
     placement: requested?.placement ?? false, supersession: requested?.supersession ?? false,
@@ -68,9 +68,9 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
   // Keep migrated evidence readable by inspect even for hosts that have not
   // enabled the optional placement and relation mutation ports.
-  const inspectFlags = controls?.evidence.placementConversion === true
+  const inspectFlags = legacyInspectPlacements || controls?.evidence.placementConversion === true
     ? { placement: true, supersession: true, conflictEdges: true } : flags;
-  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, inspectFlags);
+  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, inspectFlags, legacyInspectPlacements);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
   const rawContext = flags.contextRawRead

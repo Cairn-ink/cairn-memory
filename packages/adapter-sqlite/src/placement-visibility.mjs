@@ -35,13 +35,14 @@ export function createPlacementVisibility(hashSession, receiptReadSafety, migrat
         const { client, sessionId } = row.source;
         const fenced = client !== null && sessionId !== null && hasRawFence(db, scope, hashSession(scope, client, sessionId));
         const withheld = fenced || receipts.all(...keys, id).some(({ body, legacy_receipt_key, excerpt }) => {
-          const { client, sessionId, messageId, role, occurredAtMs, receiptKey, legacyRawAncestryEmpty } =
+          const stored =
             /** @type {StoredReceipt} */ (decodeJson(body));
+          const { client, sessionId, messageId, role, occurredAtMs, receiptKey } = stored;
           const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
           const receipt = { client, sessionId, messageId, role, occurredAtMs, excerpt: typeof excerpt === "string" ? excerpt : undefined };
           const position = { id: messageId, occurredAtMs };
           return migratedRaw?.blocks(db, scope, receipt, [position]) || migratedRaw?.blocksSpan(db, scope, receipt, messageId) ||
-            !receiptReadSafety(db, scope, policy, receipt, receiptKey ?? legacyKey, legacyKey, legacyRawAncestryEmpty);
+            !receiptReadSafety(db, scope, policy, receipt, receiptKey ?? legacyKey, legacyKey, stored, id);
         });
         if (withheld) row = undefined;
       }
@@ -69,7 +70,7 @@ export function createTitleScrubber(visibility) {
       const row = visible(String(memory_id));
       if (!row || row.historical || row.revision !== revision) retired.add(String(topic_id));
     }
-    const update = db.prepare(`UPDATE cairn_topics SET title = NULL WHERE ${exactScope} AND id = ?`);
+    const update = db.prepare(`UPDATE cairn_topics SET title = NULL, revision = revision + 1 WHERE ${exactScope} AND id = ?`);
     for (const id of retired) update.run(...keys, id);
   };
 }

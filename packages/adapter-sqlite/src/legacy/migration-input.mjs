@@ -62,13 +62,17 @@ export function readMigrationInput(input) {
     const receipts = rows(db, "SELECT rowid AS inspect_position, * FROM receipts ORDER BY memory_id, created_at, id");
     let withheldReceipts = 0;
     const withheldPlacement = new Set();
+    const hiddenReceiptIds = [];
     const rawAncestryEmpty = new Map();
+    // Evaluate the legacy inspect decision inside the final attested snapshot.
+    // Hidden receipts leave only the withheld count and dependent-memory deny set.
     const visibleReceipts = receipts.filter(({ inspect_position: _position, ...receipt }) => {
       const memory = byId.get(receipt.memory_id);
       const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
       const allowed = memory.deleted !== 1n && receiptReadSafety(db, { namespace, receipt, memo }).allowed;
       if (!allowed) {
         withheldReceipts++;
+        hiddenReceiptIds.push([namespace, receipt.id]);
         withheldPlacement.add(receipt.memory_id);
       } else if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
       return allowed;
@@ -87,9 +91,9 @@ export function readMigrationInput(input) {
     const result = {
       storeId: inventory.storeId, physical: inventory.physical, logicalDigest: proof.logicalDigest,
       target: target.path, checkSource: file.check, withheldReceipts,
-      memories, receipts: visibleReceipts,
+      memories, receipts: visibleReceipts, hiddenReceiptIds,
       placement: {
-        topics: rows(db, "SELECT * FROM mocs ORDER BY id"),
+        topics: rows(db, "SELECT * FROM mocs ORDER BY canonical_title, id"),
         edges: rows(db, "SELECT * FROM moc_edges ORDER BY parent_id, child_id"),
         sources: rows(db, "SELECT * FROM moc_title_sources ORDER BY moc_id, memory_id"),
         members: rows(db, "SELECT * FROM moc_memory_refs ORDER BY moc_id, memory_id"),
