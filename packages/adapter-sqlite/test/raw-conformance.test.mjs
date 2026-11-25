@@ -5,11 +5,9 @@ import { rawWriter } from "../src/raw-rows.mjs";
 import { fixture, seedFact, testAccess } from "./storage-fixtures.mjs";
 
 const rawCapabilities = new Set(["rawArchive", "spanLineage"]);
-// Capture routing requires a DocumentCardStore.
-const excluded = new Set(["K-LEG-PASS-7-router"]);
 const rawCases = Object.values(kit).filter(Array.isArray).flat()
-  .filter(({ id, needs, followUp }) => !excluded.has(id) && (needs.some(flag => rawCapabilities.has(flag)) ||
-    followUp?.needs.some(flag => rawCapabilities.has(flag))));
+  .filter(({ needs, followUp }) => needs.some(flag => rawCapabilities.has(flag)) ||
+    followUp?.needs.some(flag => rawCapabilities.has(flag)));
 const windowCases = kit.RETRIEVAL_WINDOW_CASES.filter(({ requests }) => requests?.rawArchive);
 
 function factory(contextScope) {
