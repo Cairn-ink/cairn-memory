@@ -95,6 +95,41 @@ test("K-CAP-DEL cases reject flushing the deleted batch to Raw on the next succe
   }, "Deleted conversation must leave no Raw rows", ", after control capture");
 });
 
+test("K-CAP-DEL cases reject a delayed flush that a repeated delete would clear", async () => {
+  await rejectsCaptureDelete(options => {
+    const adapter = createMemoryAdapter(options);
+    const { capture, raw } = adapter;
+    const { admit } = capture;
+    const { archive, deleteConversation } = raw;
+    let admitted;
+    let pending;
+    capture.admit = async (tx, key, messages) => {
+      const result = await admit(tx, key, messages);
+      if (result.status === "admitted") admitted = { key, messages };
+      return result;
+    };
+    raw.deleteConversation = async (tx, scope, session) => {
+      // A repeated delete of the same conversation drops the queued batch, so only an archive in between restores it.
+      if (pending?.key.scope.owner === scope.owner && pending.key.sessionId === session.sessionId) pending = undefined;
+      else if (admitted?.key.scope.owner === scope.owner && admitted.key.sessionId === session.sessionId) {
+        pending = admitted;
+        admitted = undefined;
+      }
+      return deleteConversation(tx, scope, session);
+    };
+    raw.archive = async (tx, key, messages) => {
+      const result = await archive(tx, key, messages);
+      if (result.archived > 0 && pending?.key.scope.owner === key.scope.owner && pending.key.sessionId !== key.sessionId) {
+        const { archived } = await archive(tx, pending.key, pending.messages);
+        assert.equal(archived, pending.messages.length);
+        pending = undefined;
+      }
+      return result;
+    };
+    return adapter;
+  }, "Deleted conversation must leave no Raw rows", ", after control capture");
+});
+
 test("K-CAP-DEL cases reject a delete that blanks and fences Raw rows", async () => {
   await rejectsCaptureDelete(options => {
     const adapter = createMemoryAdapter(options);
@@ -113,7 +148,7 @@ test("K-CAP-DEL cases reject a delete that blanks and fences Raw rows", async ()
       return result;
     };
     return adapter;
-  }, "Deleted conversation must leave no physically stored Raw rows");
+  }, "Deleted conversation must leave no physically stored Raw rows", ", after control capture");
 });
 
 test("K-CAP-DEL cases reject a delete that lowercases the ledger text", async () => {

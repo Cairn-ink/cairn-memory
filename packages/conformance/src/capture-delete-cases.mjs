@@ -157,8 +157,8 @@ async function captureDelete(ctx, timing) {
 
     check(rawAfterDelete !== undefined, `The deletion must commit at the requested timing (${label})`);
     equal(rawAfterDelete, [], `Conversation deletion must remove its Raw rows (${label})`);
-    /** @param {string} checkpoint */
-    const checkTarget = async checkpoint => {
+    /** @param {string} checkpoint @param {boolean} physical */
+    const checkTarget = async (checkpoint, physical) => {
       equal(await listRaw(target.session), [], `Deleted conversation must leave no Raw rows (${checkpoint})`);
       const snapshot = await readDump(ctx.harness);
       const dump = JSON.stringify(snapshot).toLowerCase();
@@ -174,16 +174,20 @@ async function captureDelete(ctx, timing) {
       const admission = await uow.run(owner, { readOnly: true }, tx => load.call(capture, tx, { scope, ...target.selection }));
       check(admission === null || admission.messages.every(({ content }) => content === ""),
         `Deleted capture must leave no message text in the ledger (${checkpoint})`);
-      equal((await remove(target.session)).rawDeleted, 0,
-        `Deleted conversation must leave no physically stored Raw rows (${checkpoint})`);
+      // A second delete clears whatever it finds, so it runs only after the control capture,
+      // where it cannot mask a write-back that the control's archive would trigger.
+      if (physical) {
+        equal((await remove(target.session)).rawDeleted, 0,
+          `Deleted conversation must leave no physically stored Raw rows (${checkpoint})`);
+      }
     };
-    await checkTarget(label);
+    await checkTarget(label, false);
     equal(await memoryTexts(), before, `Deleted conversation must leave no memory (${label})`);
 
     equal((await service.enqueueCapture(scope, { ...survivor.selection, messages: survivor.messages })).status,
       "accepted", `The control capture must be admitted (${label})`);
     await service.runCapture(scope, survivor.selection);
-    await checkTarget(`${label}, after control capture`);
+    await checkTarget(`${label}, after control capture`, true);
     equal(await memoryTexts(), [...before, controlOutput].sort(), `The control capture must store its memory (${label})`);
     equal((await listRaw(survivor.session)).map(({ messageId, content }) => [messageId, content]),
       [[survivor.messages[0].id, controlInput]], `The control capture must store its Raw row (${label})`);
