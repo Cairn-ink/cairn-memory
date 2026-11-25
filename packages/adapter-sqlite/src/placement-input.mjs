@@ -1,4 +1,4 @@
-import { CoreError, memoryGuards, placementProposal } from "@cairn-ink/core";
+import { CoreError, decodeCursor, encodeCursor, memoryGuards, placementProposal } from "@cairn-ink/core";
 import { invalidInput } from "./storage-values.mjs";
 
 /** @import { Scope, TopicStore } from "@cairn-ink/core/ports" */
@@ -61,16 +61,9 @@ export function topicPage(rows, { cursor, limit }, { owner, namespace }, method,
   validateLimit(limit);
   let offset = 0;
   if (cursor !== null) {
-    let payload;
-    try {
-      if (typeof cursor !== "string" || !/^[A-Za-z0-9_-]+$/u.test(cursor)) throw new Error();
-      const decoded = Buffer.from(cursor, "base64url");
-      if (decoded.toString("base64url") !== cursor) throw new Error();
-      payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded));
-      if (!Array.isArray(payload) || Buffer.from(JSON.stringify(payload)).toString("base64url") !== cursor) throw new Error();
-    } catch {
-      throw new CoreError("invalid_cursor");
-    }
+    if (typeof cursor !== "string") throw new CoreError("invalid_cursor");
+    const payload = decodeCursor(cursor);
+    if (!Array.isArray(payload) || encodeCursor(payload) !== cursor) throw new CoreError("invalid_cursor");
     const [kind, tokenOwner, tokenNamespace, tokenFilter, version, start] = payload;
     if (payload.length !== 6 || kind !== method || tokenOwner !== owner || tokenNamespace !== namespace ||
         !Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(start) || start < 1) {
@@ -82,6 +75,6 @@ export function topicPage(rows, { cursor, limit }, { owner, namespace }, method,
   const items = rows.slice(offset, offset + limit);
   const next = offset + items.length;
   const nextCursor = next < rows.length
-    ? Buffer.from(JSON.stringify([method, owner, namespace, filter, revision, next])).toString("base64url") : null;
+    ? encodeCursor([method, owner, namespace, filter, revision, next]) : null;
   return { items, nextCursor };
 }

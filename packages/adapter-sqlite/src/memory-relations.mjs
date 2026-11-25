@@ -124,7 +124,7 @@ export function createRelationStores(port, index, visibility) {
         const { changes } = db.prepare("INSERT INTO cairn_conflicts VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
           .run(...scopeKey(scope), a.id, a.revision, b.id, b.revision, source, nowMs);
         if (changes) index.markDirty(db, tx);
-        return { inserted: Boolean(changes) };
+        return { inserted: !!changes };
       });
     },
     async list(tx, callerScope, id) {
