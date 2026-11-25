@@ -10,6 +10,8 @@ import {
   createPostgresPauseStore, createPostgresQuantityLedgerStore, createPostgresRawPorts, createPostgresSupersessionStore,
   createPostgresSuppressionStore, createPostgresUnitOfWork,
 } from "../src/index.mjs";
+import { namespaceKey } from "../src/memory-input.mjs";
+import { canonicalReceiptId } from "../src/memory-rows.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const scope = { owner: "owner", namespace: null };
@@ -133,6 +135,59 @@ test("purging one source message removes only its quantities", migrationDbTest, 
   const survivor = before.byMemory[1];
   assert.deepEqual(await readLedger(), { byMemory: [[], survivor], rows: survivor, terms: ["bus", "fare", "transport"] });
   assert.equal(await revision(), index + 1);
+});
+
+test("text purge drops quantities across clients for an ambiguous MCP save session", migrationDbTest, async t => {
+  const { pool, ledger, memories, run } = await setup(t);
+  const { raw } = createPostgresRawPorts({ lineageSecret: randomUUID() });
+  const client = "reported-client";
+  const sessionId = `mcp-save:${randomUUID()}`;
+  const rawId = randomUUID();
+  const messageId = randomUUID();
+  const outboxId = randomUUID();
+  const content = "Tea cost 6.25 USD.";
+  const named = { ...scope, namespace: "project" };
+  const memory = (text, kind) => ({
+    text, textHash: hash(text), kind: "fact", origin: "explicit", confidence: 1,
+    source: { kind, client, sessionId }, embedding: { model: "fixture", vector },
+  });
+  await run(tx => memories.insert(tx, scope, memory("Plugin memory", "plugin"), [], 1), {});
+  async function seed(target, text, sources) {
+    return run(async tx => {
+      const receipts = sources.map(([client, sessionId, messageId]) =>
+        ({ client, sessionId, messageId, role: "user", occurredAtMs: 10 }));
+      const { id } = await memories.insert(tx, target, memory(text, "mcp"), receipts, 1);
+      const namespace = namespaceKey(target.namespace, true);
+      const rows = await Promise.all(receipts.map(async receipt => amount({
+        memoryId: id, textHash: hash(text), receiptId: await canonicalReceiptId(target.owner, namespace, id, receipt),
+      })));
+      assert.deepEqual(await ledger.put(tx, target, rows), { inserted: rows.length });
+      return rows;
+    }, {}, target);
+  }
+  const own = await seed(scope, "MCP save memory", [
+    [client, sessionId, messageId], ["mcp", sessionId, messageId], ["another-client", sessionId, messageId],
+    [client, sessionId, outboxId], ["mcp", sessionId, outboxId],
+    [client, sessionId, randomUUID()], [client, randomUUID(), messageId],
+  ]);
+  const foreign = await seed(other, "Other owner memory", [[client, sessionId, messageId]]);
+  const namespaced = await seed(named, "Named namespace memory", [[client, sessionId, messageId]]);
+  await pool.query(`INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content)
+    VALUES ($1, $2, $3, $4, $5, 'user', $6)`, [rawId, scope.owner, client, sessionId, messageId, content]);
+  const request = { messages: [{ id: outboxId, role: "user", content }] };
+  await pool.query(`INSERT INTO capture_events (user_id, client, event_id, session_id, received_at, raw_request)
+    VALUES ($1, $2, $3, $4, now(), $5::jsonb)`, [scope.owner, client, randomUUID(), sessionId, JSON.stringify(request)]);
+
+  const fact = { ...scope, actionId: randomUUID(), origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [await coreDigest(content)] } };
+  const write = work => run(work, { pauseLock: true });
+  await write(tx => createPostgresSuppressionStore().writeFact(tx, fact, sha256Hex(factIncarnationBody(fact))));
+  assert.deepEqual(await write(tx => raw.purgeWithheld(tx, scope, [{ fact }])), { rawDeleted: 1, ledgerBlanked: 1 });
+  assert.equal((await pool.query("SELECT id FROM raw_messages WHERE id = $1", [rawId])).rows.length, 0);
+  const list = target => run(tx => ledger.list(tx, target, range), readOnly, target);
+  assert.deepEqual(new Set(await list(scope)), new Set(own.slice(-2)));
+  assert.deepEqual(await list(other), foreign);
+  assert.deepEqual(await list(named), namespaced);
 });
 
 test("text purge commits with NUL-bearing outbox IDs and drops matching quantities", migrationDbTest, async t => {

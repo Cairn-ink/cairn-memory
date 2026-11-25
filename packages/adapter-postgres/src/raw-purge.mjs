@@ -1,5 +1,5 @@
 import {
-  allDigests, coreDigest, coreFingerprintLabels, factHidesRow, fingerprintLegacyCapture,
+  allDigests, coreDigest, coreFingerprintLabels, CoreError, factHidesRow, fingerprintLegacyCapture,
   normalizeForHash, PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1,
 } from "../../core/src/index.mjs";
 import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
@@ -70,12 +70,24 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
 /** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
 export async function dropSourceQuantities(query, scope, addresses) {
   if (!addresses.length) return false;
+  /** @type {Map<string, {client: string | null, sessionId: string}[]>} */
   const sessions = new Map();
   const targets = [];
   for (const { client, sessionId, messageId } of addresses) {
     const key = JSON.stringify([client, sessionId]);
-    if (!sessions.has(key)) sessions.set(key, await conversationSessions(query, scope, { client, sessionId }));
-    for (const address of sessions.get(key)) {
+    let resolved = sessions.get(key);
+    if (!resolved) {
+      try {
+        resolved = await conversationSessions(query, scope, { client, sessionId });
+      } catch (error) {
+        if (!(error instanceof CoreError) || error.code !== "raw_lineage_unavailable" ||
+            !sessionId.startsWith("mcp-save:")) throw error;
+        // Ambiguous MCP save provenance requires dropping quantities across clients.
+        resolved = [{ client: null, sessionId }];
+      }
+      sessions.set(key, resolved);
+    }
+    for (const address of resolved) {
       targets.push({ client: address.client, session_id: address.sessionId, message_id: messageId });
     }
   }
@@ -83,7 +95,8 @@ export async function dropSourceQuantities(query, scope, addresses) {
     DELETE FROM core_quantity_ledger l
     USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text, message_id text)
     WHERE l.user_id = $1 AND l.core_namespace IS NULL
-      AND (l.source_client, l.source_session_id) = (target.client, target.session_id)
+      AND l.source_session_id = target.session_id
+      AND (target.client IS NULL OR l.source_client = target.client)
       AND (target.message_id IS NULL OR l.source_message_id = target.message_id)
     RETURNING 1
   ) SELECT EXISTS (SELECT 1 FROM removed) AS changed`, [scope.owner, JSON.stringify(targets)]);

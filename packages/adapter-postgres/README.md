@@ -283,6 +283,8 @@ checks and forget operations.
 Historical rows remain available for direct reads and export after the other
 visibility checks pass.
 
+Apply migration 0025 before deploying this adapter version, even with
+`quantityLedger` off, because Raw delete paths also clear the quantity ledger table.
 After applying the quantity ledger migration, expose the result of
 `createPostgresQuantityLedgerStore` as `quantityLedger` and enable the
 `quantityLedger` capability. Pass `allowNonNullNamespace: true` when the host
