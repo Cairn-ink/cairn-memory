@@ -8,7 +8,7 @@ import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./c
 import { itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
 import { readTokenSigner } from "./context-read-tokens.mjs";
 
-/** @import { ContextEvidenceRow, ContextLedgerDigestItem, ContextMemoryRef, ContextRawTurn, ContextReadRef,
+/** @import { ContextEvidenceRow, ContextLedgerDigest, ContextMemoryRef, ContextRawTurn, ContextReadRef,
   ContextReadSelection, ContextReadSet, ContextReadStore, DocumentCardAmendment, MemoryStore, QuantityLedgerRow,
   QuantityLedgerStore, ReadContractStorage, StoredDocumentCardRecord, Tx, VisibilityFence } from "../ports/index.d.ts" */
 /** @import { LedgerMemoryState, LedgerReadState } from "../ledger/index.mjs" */
@@ -17,14 +17,16 @@ import { readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @typedef {Pick<DocumentCardAmendment, "date" | "sentence" | "quote">} ReadAmendment */
 /** @typedef {{ query: string, asOfMs: number }} LedgerRequest */
+/** @typedef {{ witness: string, active: () => void }} LedgerCheck */
 
 const MIN_EVENT_MS = -8_640_000_000_000_000;
 export const staleLedger = new Error("stale quantity ledger");
 
 /** @param {ContextReadStore} store @param {Pick<MemoryStore, "readRevision">} memories @param {QuantityLedgerStore} ledger
  * @param {VisibilityFence} fence @param {Tx} tx @param {Signer} signer @param {ContextReadSet} readSet
- * @param {LedgerRequest} request @returns {Promise<{ item: ContextLedgerDigestItem, witness: string } | null>} */
-async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs }) {
+ * @param {LedgerRequest} request @param {() => void} active
+ * @returns {Promise<{ value: ContextLedgerDigest, witness: string } | null>} */
+async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs }, active) {
   try {
     /** @type {ReturnType<typeof parseWindow> | undefined} */
     let window;
@@ -35,27 +37,37 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
     /** @type {Map<string, ContextEvidenceRow & { type: "memory" }>} */
     const sourceRows = new Map();
     for (const namespace of readSet.namespaces) {
+      active();
       const scope = { owner: readSet.owner, namespace };
-      if (!readIntent(query, await ledger.terms(tx, scope))) continue;
+      const terms = await ledger.terms(tx, scope);
+      active();
+      if (!readIntent(query, terms)) continue;
       const range = window ??= parseWindow(query, asOfMs);
       const start = Math.min(range.fromMs, weekStart(range.toMs - 1), yearStart(range.toMs - 1));
       const earlier = { fromMs: MIN_EVENT_MS, toMs: range.fromMs };
-      const rows = [...(await ledger.list(tx, scope, { fromMs: range.fromMs, toMs: range.toMs }))
-        .filter(row => ledgerRowInRange(row, range)),
-        ...(await ledger.list(tx, scope, earlier)).filter(row =>
-          ledgerRowInRange(row, earlier) && (row.kind === "goal" || row.date >= start))];
+      active();
+      const inWindow = await ledger.list(tx, scope, { fromMs: range.fromMs, toMs: range.toMs });
+      active();
+      const beforeWindow = await ledger.list(tx, scope, earlier);
+      active();
+      const rows = [...inWindow.filter(row => ledgerRowInRange(row, range)),
+        ...beforeWindow.filter(row => ledgerRowInRange(row, earlier) && (row.kind === "goal" || row.date >= start))];
       /** @type {ContextMemoryRef[]} */
       const refs = [];
       const memoryTextHashes = new Map();
       for (const id of new Set(rows.map(row => row.memoryId))) {
+        active();
         const current = await memories.readRevision(tx, scope, id);
         if (!current) continue;
         refs.push({ type: "memory", scope, id, revision: current.revision });
         memoryTextHashes.set(id, current.textHash);
       }
       if (!refs.length) continue;
+      active();
       const evidence = structuredClone(await store.evidence(tx, readSet, refs, "current"));
+      active();
       const visible = await fence.assertVisible(tx, { owner: readSet.owner, namespaces: [namespace] }, refs.map(itemRef));
+      active();
       const visibleIds = new Set(visible.flatMap(ref =>
         ref.type === "memory" && ref.namespace === namespace ? [ref.id] : []));
       /** @type {Map<string, LedgerMemoryState>} */
@@ -74,30 +86,39 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
       }
       /** @type {LedgerReadState} */
       const state = { memoryStates, retainedReceipts, memoryTextHashes };
-      const ordered = rows.map(row => ({ row, key: JSON.stringify([ns, ledgerRowKey(row), row.group, row.date, row.textHash]) }))
+      const deliverable = rows.filter(row => ledgerRowDeliverable(row, state));
+      // Earlier records support calendar goals but cannot trigger a digest on their own.
+      if (!readIntent(query, deliverable.flatMap(row => row.kind === "goal" || ledgerRowInRange(row, range)
+        ? [row.measure, row.group, row.category] : []))) continue;
+      const ordered = deliverable.map(row => ({ row, key: JSON.stringify([ns, ledgerRowKey(row), row.group, row.date, row.textHash]) }))
         .sort((a, b) => compareUtf8(a.key, b.key));
       for (const { row, key } of ordered) {
-        if (!ledgerRowDeliverable(row, state)) continue;
+        active();
         checked.push({ ...row, memoryId: scopedId(row.memoryId) });
         rowKeys.push(key);
       }
     }
+    active();
     if (!window) return null;
     const result = digest(checked.filter(row => row.kind === "record"), checked.filter(row => row.kind === "goal"), window);
     if (!result) return null;
     const sources = [];
     const fences = [];
     for (const id of result.sources) {
+      active();
       const row = sourceRows.get(id);
       if (!row) return null;
-      const mac = await evidenceFence(signer, await qualifyEvidence(row, signer), row, false);
+      const evidence = await qualifyEvidence(row, signer);
+      active();
+      const mac = await evidenceFence(signer, evidence, row, false);
       const { scope, id: memoryId, revision } = row.ref;
       sources.push({ index: sources.length, role: /** @type {const} */ ("user"),
         memory: { ns: namespaceSlot(readSet, scope), type: /** @type {const} */ ("memory"), id: memoryId, rev: revision, f: mac.slice(0, 8) } });
       fences.push(mac);
     }
-    const item = /** @type {const} */ ({ ref: sources[0].memory, rank: 1, kind: "quantity-ledger", body: result.body, sources });
-    return { item, witness: JSON.stringify([item, rowKeys, fences]) };
+    active();
+    const value = { body: result.body, sources };
+    return { value, witness: JSON.stringify([value, rowKeys, fences]) };
   } catch {
     // Ledger evidence is optional when any read or visibility check fails.
     return null;
@@ -129,8 +150,9 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
   return async (readSet, { intent, types }, observed, refs, ledgerRequest) => {
     if (!store) throw new CoreError("capability_unavailable");
     const readStore = store;
-    const ledgerFor = (/** @type {Tx} */ tx, /** @type {Signer} */ signer) => ledgerRequest && quantityLedger && memories
-      ? readLedgerDigest(readStore, memories, quantityLedger, fence, tx, signer, readSet, ledgerRequest) : null;
+    /** @param {Tx} tx @param {Signer} signer @param {() => void} active */
+    const ledgerFor = (tx, signer, active) => ledgerRequest && quantityLedger && memories
+      ? readLedgerDigest(readStore, memories, quantityLedger, fence, tx, signer, readSet, ledgerRequest, active) : null;
     const cards = types.includes("card");
     const expected = canonicalGenerations(observed, cards);
     /** @param {Tx} tx */
@@ -180,8 +202,7 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       const fenceRefs = cardsEnabled ? refs.filter(ref => ref.type !== "card") : refs;
       const visible = fenceRefs.length ? await fence.assertVisible(tx, selection, fenceRefs.map(itemRef),
         intent === "history" ? "read" : undefined) : [];
-      const ledger = ledgerRequest ? await ledgerFor(tx, signer) : null;
-      return { scope, ledger, rows: rows.map((row, i) => row?.documentCard || visible.some(({ id, type, namespace }) =>
+      return { scope, rows: rows.map((row, i) => row?.documentCard || visible.some(({ id, type, namespace }) =>
         id === refs[i].id && type === refs[i].type && namespace === refs[i].scope.namespace) ? row : null) };
     });
     /** @param {readonly AssemblyEvidence[]} selected */
@@ -192,16 +213,29 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
     });
     return {
       rows: prepared.rows,
-      ledger: prepared.ledger?.item,
       payload,
+      /** @param {() => void} active */
+      prepareLedger(active) {
+        return uow.run(readSet.owner, { readOnly: true }, async tx => {
+          active();
+          await checkState(tx);
+          active();
+          const signer = readTokenSigner(await readStore.identity(tx));
+          active();
+          if (await signer.bind("snapshot-scope", readSetBinding(readSet)) !== prepared.scope) return null;
+          return ledgerFor(tx, signer, active);
+        });
+      },
       /** @param {readonly AssemblyEvidence[]} selected @param {readonly ContextRawTurn[]} rawTurns
-       * @param {AbortSignal} [signal] @param {boolean} [ledgerIncluded]
+       * @param {AbortSignal} [signal] @param {LedgerCheck} [ledgerCheck]
        * @returns {Promise<string | null | undefined | typeof staleLedger>} Undefined indicates a stale Raw witness. */
-      async deliver(selected, rawTurns, signal, ledgerIncluded) {
+      async deliver(selected, rawTurns, signal, ledgerCheck) {
         // Legacy context-read-facade.mjs:918–937. All final predicates share
         // this snapshot, after the host formatter and counter have finished.
         return uow.run(readSet.owner, { readOnly: true }, async tx => {
+          ledgerCheck?.active();
           await checkState(tx);
+          ledgerCheck?.active();
           const signer = readTokenSigner(await store.identity(tx));
           if (await signer.bind("snapshot-scope", readSetBinding(readSet)) !== prepared.scope) {
             throw new CoreError("snapshot_stale");
@@ -225,9 +259,10 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
               return undefined;
             }
           }
-          if (ledgerIncluded && (await ledgerFor(tx, signer))?.witness !== prepared.ledger?.witness) {
+          if (ledgerCheck && (await ledgerFor(tx, signer, ledgerCheck.active))?.witness !== ledgerCheck.witness) {
             return staleLedger;
           }
+          ledgerCheck?.active();
           const snapshot = selected.length ? await signer.encode("snapshot", payload(selected)) : null;
           if (signal?.aborted) throw new CoreError("snapshot_stale");
           return snapshot;

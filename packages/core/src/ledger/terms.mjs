@@ -10,6 +10,9 @@ const aliases = [
 
 const cues = /\b(?:total|how much|how many|spent|spend(?:ing)?|budget|goal|average|most|least|over|under|met)\b|花|元|步|預算|目標|總共|多少|平均|最多|超過/iu;
 
+/** @param {string} query */
+export const hasLedgerCue = query => cues.test(query.normalize('NFKC'));
+
 /** @param {string} text */
 const words = text => text.normalize('NFKC').toLowerCase().match(/[a-z]+/g) ?? [];
 

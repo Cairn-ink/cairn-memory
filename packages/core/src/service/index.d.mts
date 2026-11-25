@@ -7,7 +7,7 @@ import type {
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDigestItem, ContextMemoryEvidence,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDigest, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
   FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,

@@ -1,5 +1,6 @@
 import { revision, validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
+import { hasLedgerCue } from "../ledger/terms.mjs";
 import { staleLedger } from "./context-read-assembly-evidence.mjs";
 import { legacyRef, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
 import { contextReadSet, CONTEXT_HORIZON, findCandidatesInput } from "./context-read-input.mjs";
@@ -12,6 +13,7 @@ import { entry } from "./entry.mjs";
 /** @import { CallOptions, ClockAndHash, ContextAssemblyDiagnostics, ContextRawTurn,
   ContextReadError, ContextReadSet, MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
 /** @import { PackOptions, Projection } from "./context-read-pack.mjs" */
+/** @import { LedgerCheck } from "./context-read-assembly-evidence.mjs" */
 /** @import { KeylessMemoryServiceDeps } from "./index.d.mts" */
 /** @typedef {KeylessMemoryServiceDeps["storage"] & Partial<Pick<ReadContractStorage, "quantityLedger" | "memories">>} KeylessStorage */
 
@@ -63,6 +65,38 @@ function readInput(value) {
   };
 }
 
+/** @template T @param {() => number} now @param {number} deadline
+ * @param {AbortSignal | undefined} signal @param {(active: () => void) => Promise<T>} attempt */
+async function beforeLedgerDeadline(now, deadline, signal, attempt) {
+  const remaining = deadline - now();
+  if (remaining <= 0 || signal?.aborted) return;
+  const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(remaining)));
+  const stop = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  let closed = false;
+  let abort = () => {};
+  // The timer races the transaction from outside. In-flight store calls can
+  // settle on their own Tx, and active() prevents starting any further work.
+  /** @type {Promise<undefined>} */
+  const expired = new Promise(resolve => {
+    abort = () => resolve(undefined);
+    if (stop.aborted) abort();
+    else stop.addEventListener("abort", abort, { once: true });
+  });
+  const active = () => {
+    if (closed || stop.aborted || now() >= deadline) throw staleLedger;
+  };
+  try {
+    const result = await Promise.race([attempt(active), expired]);
+    active();
+    return result;
+  } catch (error) {
+    if (error !== staleLedger && !stop.aborted && now() < deadline) throw error;
+  } finally {
+    closed = true;
+    stop.removeEventListener("abort", abort);
+  }
+}
+
 /** @param {{ storage: KeylessStorage | ReadContractStorage, clock: ClockAndHash,
  * find: ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"],
  * fetch: ReturnType<typeof import("./context-read-assembly-evidence.mjs").fetchForAssembly>,
@@ -90,7 +124,8 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     const rawRead = await readRawChannel(raw ? storage.contextRead?.raw : undefined,
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
-      candidate.types.includes("memory") ? { query: candidate.query, asOfMs: clock.nowMs() } : undefined;
+      candidate.types.includes("memory") && hasLedgerCue(candidate.query)
+      ? { query: candidate.query, asOfMs: clock.nowMs() } : undefined;
     const evidence = await fetch(readSet, candidate, found.generations, items.map(item => item.ref), ledgerRequest);
     const prepared = evidence.rows.flatMap((row, i) => row ? [prepareItem(row, readSet, items[i].rank, candidate.intent)] : []);
     let rawCoverage = rawRead.coverage;
@@ -109,7 +144,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       stops: details.stops, trace: details.trace, coverage: { raw: rawCoverage }, candidates,
     });
     /** @type {PackOptions} */
-    const packing = { budget, policy, representation, now, deadline, ledger: evidence.ledger,
+    const packing = { budget, policy, representation, now, deadline,
       format, count: text => counter.count(text),
       fitsBytes(assembly, text, details, selected) {
         // Bound the mutable diagnostic scalars, including the final clock
@@ -126,52 +161,65 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
           Math.max(bytes(JSON.stringify(assembly)), bytes(text) - blockOverhead) + (snapshotSize ? snapshotSize + 2 : 4);
         return snapshotSize <= SNAPSHOT_LIMIT && full <= MAX_BYTES;
       } };
-    /** @param {Projection} pack @param {readonly ContextRawTurn[]} turns */
-    async function deliver(pack, turns) {
-      const included = evidence.ledger !== undefined && pack.value.items[0] === evidence.ledger;
+    /** @param {Projection} pack @param {readonly ContextRawTurn[]} turns @param {LedgerCheck} [ledgerCheck] */
+    async function deliver(pack, turns, ledgerCheck) {
       const selected = pack.selected.map(item => item.evidence);
-      if (!included) return evidence.deliver(selected, turns, options.signal);
+      if (!pack.value.ledgerDigest) return evidence.deliver(selected, turns, options.signal);
       try {
-        const result = await evidence.deliver(selected, turns, options.signal, true);
+        const result = await evidence.deliver(selected, turns, options.signal, ledgerCheck);
         if (result !== staleLedger) return result;
-      } catch (error) {
-        if (staleSnapshot(error)) throw refreshAssembly;
-        throw error;
+      } catch {
+        // Retry delivery of the ordinary pack if final ledger validation fails.
       }
-      if (options.signal?.aborted) throw new CoreError("snapshot_stale");
       throw staleLedger;
     }
-    async function packAndDeliver() {
+    function packEvidence() {
       let packed = rawPacking ? packRawContext(prepared, rawRead, readSet, candidate.query, packing, meter(packing)) : null;
-      let snapshot;
-      if (packed) {
-        packed.diagnostics.stops.deadline ||= now() >= deadline;
-        snapshot = await deliver(packed, rawRead.turns);
-      }
-      if (!packed || snapshot === undefined) {
-        if (rawPacking) {
-          rawCoverage = "partial";
-          rawPacking = false;
-        }
+      if (!packed) {
+        if (rawPacking) rawCoverage = "partial";
+        rawPacking = false;
         packed = packContext(prepared, packing, meter(packing));
-        packed.diagnostics.stops.deadline ||= now() >= deadline;
-        snapshot = await deliver(packed, []);
       }
+      packed.diagnostics.stops.deadline ||= now() >= deadline;
+      return packed;
+    }
+    /** @param {ReturnType<typeof packEvidence>} packed @param {LedgerCheck} [ledgerCheck] */
+    async function packAndDeliver(packed, ledgerCheck) {
+      let snapshot = await deliver(packed, rawPacking ? rawRead.turns : [], ledgerCheck);
+      if (snapshot === undefined) {
+        ledgerCheck?.active();
+        rawCoverage = "partial";
+        rawPacking = false;
+        packed = packEvidence();
+        snapshot = await deliver(packed, [], ledgerCheck);
+      }
+      ledgerCheck?.active();
       return { assembly: packed.value, diagnostics: diagnostics(packed.diagnostics, packed.used), snapshot: typeof snapshot === "string" ? snapshot : null };
     }
+    const ordinary = packEvidence();
+    if (!ledgerRequest) return packAndDeliver(ordinary);
+    const ordinaryRaw = { coverage: rawCoverage, packing: rawPacking };
+    const enriched = await beforeLedgerDeadline(now, deadline, options.signal, async active => {
+      const ledger = await evidence.prepareLedger(active).catch(() => null);
+      active();
+      if (!ledger) return;
+      packing.ledger = ledger.value;
+      const packed = packEvidence();
+      active();
+      if (ordinaryRaw.packing && !rawPacking) return;
+      return packAndDeliver(packed, { witness: ledger.witness, active });
+    }).catch(error => {
+      if (!staleSnapshot(error)) throw error;
+    });
+    if (enriched) return enriched;
+    packing.ledger = undefined;
+    rawCoverage = ordinaryRaw.coverage;
+    rawPacking = ordinaryRaw.packing;
     try {
-      return await packAndDeliver();
+      return await packAndDeliver(ordinary);
     } catch (error) {
-      if (error !== staleLedger) throw error;
-      packing.ledger = undefined;
-      rawCoverage = rawRead.coverage;
-      rawPacking = rawRead.turns.length > 0;
-      try {
-        return await packAndDeliver();
-      } catch (replacementError) {
-        if (staleSnapshot(replacementError)) throw refreshAssembly;
-        throw replacementError;
-      }
+      if (staleSnapshot(error)) throw refreshAssembly;
+      throw error;
     }
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {ReadContextInput} */ request,

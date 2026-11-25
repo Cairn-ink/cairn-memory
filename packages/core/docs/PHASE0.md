@@ -1185,23 +1185,25 @@ stored revision, and replacement requires an exact qualified ref match.
 
 Default `readContext` checks ledger intent when the adapter enables
 `quantityLedger`, supplies the store and the request selects `memory`.
-Match `readIntent` against the terms of each authorized namespace in the read
-snapshot. Use the service wall clock and `parseWindow` to select records from
-matching namespaces, including earlier records needed for calendar goals and
-goals dated before the window ends.
+Check the query for a ledger cue before any ledger lookup. In each authorized
+namespace, use the store's terms as a prefilter. Use the service wall clock and
+`parseWindow` to select records, including earlier records needed for calendar
+goals and goals dated before the window ends.
 
 Within the same snapshot, admit each row only if Context Read evidence and the
 visibility fence confirm a current memory, the canonical user receipt is
 retained and readable, and the current core text hash matches the row's hash.
-Repeat the checks for a packed digest in the final assembly snapshot. If the
-check fails or the evidence changed, discard the whole digest and assemble
-again with the available context evidence.
+Match intent again against the measure, group and category of deliverable
+in-window records and eligible goals before including that namespace. Repeat
+these checks in the final assembly snapshot. Pack ordinary evidence before
+starting the optional ledger work. If the read deadline expires, a check
+fails or the evidence changes, omit the digest and validate ordinary evidence
+for delivery. Ledger work leaves the ordinary pack's deadline diagnostics intact.
 
-The digest is one item, first at rank 1, with the existing candidate ranks
-preserved. It consumes one item slot and is counted with the full block in the
-host formatter. If the complete body and sources do not fit the budget, omit
-the digest. The wire item is `{ ref, rank: 1, kind: "quantity-ledger", body,
-sources: [{ index, role: "user", memory }] }`. Each `memory` is a distinct
-qualified compact ref contributing to the digest, and `ref` repeats its first
-source ref. Snapshot tokens continue to cover the selected ordinary Memory
-and Card evidence.
+The optional assembly field `ledgerDigest` carries
+`{ body, sources: [{ index, role: "user", memory }] }`. The host formatter
+renders it before the ranked items and counts its full text in the block.
+It consumes one item slot. Include the complete body and all sources only
+when they fit the budget. Each `memory` is a distinct qualified compact ref
+for attribution. The `items` array retains ordinary refs and ranks, and
+snapshot tokens cover the selected ordinary Memory and Card evidence.

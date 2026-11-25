@@ -1,6 +1,6 @@
 import type {
-  ContextAssemblyItem, ContextAssemblyRawExcerpt, ContextAssemblySource, ContextCompactRef,
-  ContextLedgerDigestItem, MemoryService, ReadContextResult,
+  ContextAssemblyItem, ContextAssemblyRawExcerpt, ContextAssemblySource, ContextAssemblyValue, ContextCompactRef,
+  ContextLedgerDigest, MemoryService, ReadContextResult,
 } from "@cairn-ink/core/ports";
 import { createMemoryService, type KeylessMemoryServiceDeps } from "@cairn-ink/core/service";
 
@@ -15,8 +15,22 @@ export function legacyItems(result: ReadContextResult): readonly LegacyItem[] {
   return result.assembly.items;
 }
 
-export function asAssemblyItem(item: LegacyItem | ContextLedgerDigestItem): ContextAssemblyItem {
+export function asAssemblyItem(item: LegacyItem): ContextAssemblyItem {
   return item;
+}
+
+export function oldAssembly(framing: string, items: readonly LegacyItem[]): ContextAssemblyValue {
+  return { framing, items };
+}
+
+export function digestOf(result: ReadContextResult): ContextLedgerDigest | undefined {
+  return result.assembly.ledgerDigest;
+}
+
+export function useAttribution(digest: ContextLedgerDigest): readonly ContextCompactRef[] {
+  // @ts-expect-error A digest cannot be handled as an assembly item.
+  handleExistingItem(digest);
+  return digest.sources.map(source => source.memory);
 }
 
 export function handleExistingItem({ ref }: ContextAssemblyItem): string {

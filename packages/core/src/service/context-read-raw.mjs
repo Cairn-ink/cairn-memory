@@ -271,7 +271,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       const rendered = surviving.slice().sort((a, b) =>
         (representation === "representation-v2-dated" ? compareDates(a.date, b.date) : 0) || a.rank - b.rank);
       const wire = rendered.map(unit => unit.wire);
-      return { value: { framing: FRAMING, items: ledger ? [ledger, ...wire] : wire }, selected,
+      return { value: { framing: FRAMING, ...(ledger && { ledgerDigest: ledger }), items: wire }, selected,
         details: selected.map(({ evidence, metadata }) => ({ ref: evidence.item.ref, metadata })) };
     }
     /** @param {Projection} projection @param {number} size @returns {PackDiagnostics} */
@@ -289,8 +289,9 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     // including their provenance, and update diversity only on acceptance.
     ledger = fitLedgerDigest(options.ledger, empty, p => diagnostics(p, 0), metering);
     let accepted = ledger ? project([]) : empty;
+    const availableItems = budget.maxItems - Number(!!ledger);
     while (remaining.length) {
-      const full = accepted.value.items.length >= budget.maxItems;
+      const full = accepted.value.items.length >= availableItems;
       if (full && (!rankWhole || !remaining.some(unit => unit.members[0]?.evidence.documentCard))) break;
       active();
       const score = (/** @type {Unit} */ unit) => unit.bm25 + unit.prior - (unit.cardHit ? 0 : 0.15 * unit.cost / 250)
@@ -311,7 +312,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       if (!unit.cardHit && unit.members.some(card => card.engine && accepted.selected.some(memory =>
         memory.rank < card.rank && citesMemory(card, memory)))) continue;
       const trial = project([...selected, unit]);
-      if (trial.value.items.length > budget.maxItems) { stops.items = true; continue; }
+      if (trial.value.items.length > availableItems) { stops.items = true; continue; }
       if (trial.value.items.length === accepted.value.items.length &&
           trial.selected.length === accepted.selected.length && !unit.members.some(canReplaceCitedMemory)) continue;
       const value = check(trial, p => diagnostics(p, selected.length + 1));

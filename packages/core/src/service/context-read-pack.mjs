@@ -4,13 +4,13 @@ import { CoreError } from "../errors.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
 
 /** @import { ContextAssemblyDiagnostics, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDigestItem } from "../ports/index.d.ts" */
+  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDigest } from "../ports/index.d.ts" */
 /** @import { PreparedItem, Source } from "./context-read-projection.mjs" */
 /** @typedef {Pick<ContextAssemblyDiagnostics, "items" | "omitted" | "dedup" | "stops" | "trace">} PackDiagnostics */
 /** @typedef {{ maxTokens: number, maxItems: number }} Budget */
 /** @typedef {{ value: ContextAssemblyValue, details: PackDiagnostics["items"], selected: PreparedItem[], amendmentSourceCount?: number }} Projection */
 /** @typedef {{ budget: Budget, policy: ContextAssemblyPolicy, representation: ContextAssemblyRepresentation,
- * now: () => number, deadline: number, ledger?: ContextLedgerDigestItem,
+ * now: () => number, deadline: number, ledger?: ContextLedgerDigest,
  * format: (value: ContextAssemblyValue) => string, count: (text: string) => number,
  * fitsBytes: (value: ContextAssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
 /** @typedef {{ tokens: number, sources: { source: Source, tokens: number }[],
@@ -90,11 +90,11 @@ export function meter({ budget, now, deadline, format, count, fitsBytes }) {
   return { stops, expired, tokens, trace, check };
 }
 
-/** @param {ContextLedgerDigestItem | undefined} ledger @param {Projection} empty
+/** @param {ContextLedgerDigest | undefined} ledger @param {Projection} empty
  * @param {(projection: Projection) => PackDiagnostics} diagnostics @param {ReturnType<typeof meter>} metering */
 export function fitLedgerDigest(ledger, empty, diagnostics, { check, expired, stops }) {
   if (!ledger) return;
-  const trial = { ...empty, value: { ...empty.value, items: [ledger] } };
+  const trial = { ...empty, value: { framing: empty.value.framing, ledgerDigest: ledger, items: empty.value.items } };
   const measured = check(trial, diagnostics);
   if (!measured || expired()) return;
   if (measured.fits) return ledger;
@@ -114,7 +114,7 @@ export function packContext(items, options, metering) {
   /** @type {Map<PreparedItem, Choice>} */
   let chosen = new Map();
   let oversized = 0;
-  /** @type {ContextLedgerDigestItem | undefined} */
+  /** @type {ContextLedgerDigest | undefined} */
   let ledger;
   const totalSources = prepared.reduce((total, item) => total + item.sources.length, 0);
 
@@ -154,14 +154,14 @@ export function packContext(items, options, metering) {
           sourceDetails.push({ index, kind: "sameAs", ...previous });
           return { ...fields, sameAs: previous };
         }
-        concrete.set(key, { item: itemIndex + Number(!!ledger), source: sourceIndex });
+        concrete.set(key, { item: itemIndex, source: sourceIndex });
         sourceDetails.push({ index, kind: "concrete", tokens });
         return { ...fields, role, excerpt };
       });
       details.push({ ref: item.evidence.item.ref, metadata: item.metadata, body: { tokens }, sources: sourceDetails });
       return wireItem(item, representation, sources, item.sourcesComplete && included.length === eligibleSources.length, body);
     });
-    return { value: { framing: FRAMING, items: ledger ? [ledger, ...wire] : wire }, details, selected,
+    return { value: { framing: FRAMING, ...(ledger && { ledgerDigest: ledger }), items: wire }, details, selected,
       amendmentSourceCount: selected.reduce((n, item) => n + (selection.get(item)?.amendmentSources?.length ?? 0), 0) };
   }
 
