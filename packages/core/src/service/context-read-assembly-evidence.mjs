@@ -1,5 +1,6 @@
 import { CoreError } from "../errors.mjs";
-import { digest, ledgerRowDeliverable, ledgerRowInRange, ledgerRowKey, parseWindow, readIntent } from "../ledger/index.mjs";
+import { planDigest, renderDigest } from "../ledger/digest.mjs";
+import { ledgerRowDeliverable, ledgerRowInRange, ledgerRowKey, parseWindow, readIntent } from "../ledger/index.mjs";
 import { weekStart, yearStart } from "../ledger/window.mjs";
 import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
 import { compareUtf8 } from "../utf8.mjs";
@@ -8,50 +9,56 @@ import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./c
 import { itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
 import { readTokenSigner } from "./context-read-tokens.mjs";
 
-/** @import { ContextEvidenceRow, ContextLedgerDigest, ContextMemoryRef, ContextRawTurn, ContextReadRef,
+/** @import { ContextEvidenceRow, ContextLedgerDigest, ContextLedgerErrorStage, ContextMemoryRef, ContextRawTurn, ContextReadRef,
   ContextReadSelection, ContextReadSet, ContextReadStore, DocumentCardAmendment, MemoryStore, QuantityLedgerRow,
   QuantityLedgerStore, ReadContractStorage, StoredDocumentCardRecord, Tx, VisibilityFence } from "../ports/index.d.ts" */
-/** @import { LedgerDigest, LedgerMemoryState, LedgerReadState } from "../ledger/index.mjs" */
+/** @import { LedgerMemoryState, LedgerReadState } from "../ledger/index.mjs" */
+/** @import { LedgerLine, LedgerPlan } from "../ledger/digest.mjs" */
 /** @typedef {Awaited<ReturnType<ContextReadStore["snapshotState"]>>} Generations */
 /** @typedef {ReturnType<typeof readTokenSigner>} Signer */
 
 /** @typedef {Pick<DocumentCardAmendment, "date" | "sentence" | "quote">} ReadAmendment */
 /** @typedef {{ query: string, asOfMs: number, calendarReading: boolean }} LedgerRequest */
-/** @typedef {{ value: ContextLedgerDigest, witness: string }} LedgerReading */
-/** @typedef {{ witness: string, calendar: boolean, active: () => void }} LedgerCheck */
+/** @typedef {{ keys: readonly string[], trimmed: boolean }} LedgerSelection */
+/** @typedef {{ value: ContextLedgerDigest, witness: () => string }} LedgerProjection */
+/** @typedef {{ lines: LedgerLine[], project: (lines: readonly LedgerLine[], trimmed: boolean) => LedgerProjection }} LedgerReading */
+/** @typedef {{ active: () => void, onError: (stage: ContextLedgerErrorStage) => void }} LedgerAttempt */
+/** @typedef {LedgerAttempt & { witness: string, calendar: boolean, selection: LedgerSelection }} LedgerCheck */
 
 const MIN_EVENT_MS = -8_640_000_000_000_000;
 export const staleLedger = new Error("stale quantity ledger");
 
 /** @param {ContextReadStore} store @param {Pick<MemoryStore, "readRevision">} memories @param {QuantityLedgerStore} ledger
  * @param {VisibilityFence} fence @param {Tx} tx @param {Signer} signer @param {ContextReadSet} readSet
- * @param {LedgerRequest} request @param {() => void} active @param {boolean} includeCalendar
- * @returns {Promise<{ rolling: LedgerReading, calendar: LedgerReading | null } | null>} */
-async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, active, includeCalendar) {
+ * @param {LedgerRequest} request @param {LedgerAttempt} attempt @param {boolean} includeCalendar
+ * @param {LedgerCheck} [check] */
+async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, { active, onError }, includeCalendar, check) {
+  /** @type {ContextLedgerErrorStage} */
+  let stage = "scan";
   try {
     const range = parseWindow(query, asOfMs);
-    const calendar = calendarReading ? range.calendar : undefined;
     const start = Math.min(range.fromMs, weekStart(range.toMs - 1), yearStart(range.toMs - 1));
     const earlier = { fromMs: MIN_EVENT_MS, toMs: range.fromMs };
     /** @type {QuantityLedgerRow[]} */
     const checked = [];
-    /** @type {{ key: string, id: string, calendarOnly: boolean }[]} */
-    const witnessRows = [];
     /** @type {Map<string, ContextEvidenceRow & { type: "memory" }>} */
     const sourceRows = new Map();
     for (const namespace of readSet.namespaces) {
       active();
       const scope = { owner: readSet.owner, namespace };
+      stage = "terms";
       const terms = await ledger.terms(tx, scope);
       active();
       if (!readIntent(query, terms)) continue;
       active();
+      stage = "scan";
       const inWindow = await ledger.list(tx, scope, { fromMs: range.fromMs, toMs: range.toMs });
       active();
       const beforeWindow = await ledger.list(tx, scope, earlier);
       active();
       const rows = [...inWindow.filter(row => ledgerRowInRange(row, range)),
         ...beforeWindow.filter(row => ledgerRowInRange(row, earlier) && (row.kind === "goal" || row.date >= start))];
+      stage = "evidence";
       /** @type {ContextMemoryRef[]} */
       const refs = [];
       const memoryTextHashes = new Map();
@@ -92,12 +99,9 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
         ? [row.measure, row.group, row.category] : []))) continue;
       const ordered = deliverable.map(row => ({ row, key: JSON.stringify([ns, ledgerRowKey(row), row.group, row.date, row.textHash]) }))
         .sort((a, b) => compareUtf8(a.key, b.key));
-      for (const { row, key } of ordered) {
+      for (const { row } of ordered) {
         active();
-        const id = scopedId(row.memoryId);
-        checked.push({ ...row, memoryId: id });
-        witnessRows.push({ key, id, calendarOnly: !!calendar && row.kind === "record" &&
-          ledgerRowInRange(row, calendar) && !ledgerRowInRange(row, range) });
+        checked.push({ ...row, memoryId: scopedId(row.memoryId) });
       }
     }
     active();
@@ -105,41 +109,51 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
     const goals = checked.filter(row => row.kind === "goal");
     /** @type {Map<string, { memory: ContextLedgerDigest["sources"][number]["memory"], mac: string }>} */
     const qualified = new Map();
-    /** @param {LedgerDigest | null} result @returns {Promise<LedgerReading | null>} */
-    async function seal(result) {
-      if (!result) return null;
-      const sources = [];
-      const fences = [];
-      for (const id of result.sources) {
+    /** @param {LedgerPlan | null} plan @param {LedgerSelection} [selection] @returns {Promise<LedgerReading | null>} */
+    async function seal(plan, selection) {
+      if (!plan) return null;
+      const keys = selection && new Set(selection.keys);
+      const lines = keys ? plan.lines.filter(line => keys.has(line.key)) : plan.lines;
+      if (keys && keys.size !== lines.length) return null;
+      const sourceIds = new Set(lines.flatMap(line => line.rows.map(row => row.memoryId)));
+      for (const id of sourceIds) {
         active();
-        let source = qualified.get(id);
-        if (!source) {
+        if (!qualified.has(id)) {
           const row = sourceRows.get(id);
-          if (!row) return null;
+          if (!row) throw new Error("missing ledger source evidence");
           const evidence = await qualifyEvidence(row, signer);
           active();
           const mac = await evidenceFence(signer, evidence, row, false);
           const { scope, id: memoryId, revision } = row.ref;
-          source = { mac, memory: { ns: namespaceSlot(readSet, scope), type: "memory", id: memoryId, rev: revision, f: mac.slice(0, 8) } };
-          qualified.set(id, source);
+          qualified.set(id, { mac, memory: { ns: namespaceSlot(readSet, scope), type: "memory",
+            id: memoryId, rev: revision, f: mac.slice(0, 8) } });
         }
-        sources.push({ index: sources.length, role: /** @type {const} */ ("user"), memory: source.memory });
-        fences.push(source.mac);
       }
       active();
-      const value = { body: result.body, sources };
-      // In an opt-in read, an earlier calendar record participates in each
-      // witness whose digest cites it, including when it contributed to a goal.
-      const sourceIds = new Set(result.sources);
-      const rowKeys = witnessRows.filter(row => !row.calendarOnly || sourceIds.has(row.id)).map(row => row.key);
-      return { value, witness: JSON.stringify([value, rowKeys, fences]) };
+      const sealedPlan = plan;
+      return { lines, project(selected, trimmed) {
+        const { body, sources, rows } = renderDigest(sealedPlan, selected, trimmed);
+        const evidence = sources.map(id => /** @type {NonNullable<ReturnType<typeof qualified.get>>} */ (qualified.get(id)));
+        const value = { body, sources: evidence.map(({ memory }, index) => ({ index, role: /** @type {const} */ ("user"), memory })) };
+        return { value, witness: () => {
+          const rowKeys = rows.map(row => JSON.stringify([ledgerRowKey(row), row.group, row.date, row.textHash])).sort(compareUtf8);
+          return JSON.stringify([value, rowKeys, evidence.map(source => source.mac)]);
+        } };
+      } };
     }
-    const rolling = await seal(digest(records, goals, range));
+    stage = "seal";
+    if (check) {
+      const rolling = await seal(planDigest(records, goals, range, check.calendar, query), check.selection);
+      return rolling && { rolling, calendar: null };
+    }
+    const rolling = await seal(planDigest(records, goals, range, false, query));
     if (!rolling) return null;
-    const comparison = calendar && includeCalendar ? await seal(digest(records, goals, range, true)).catch(() => null) : null;
+    const comparison = calendarReading && range.calendar && includeCalendar
+      ? await seal(planDigest(records, goals, range, true, query)).catch(() => { active(); onError(stage); return null; }) : null;
     return { rolling, calendar: comparison };
   } catch {
-    // Ledger evidence is optional when any read or visibility check fails.
+    active();
+    onError(stage);
     return null;
   }
 }
@@ -169,9 +183,10 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
   return async (readSet, { intent, types }, observed, refs, ledgerRequest) => {
     if (!store) throw new CoreError("capability_unavailable");
     const readStore = store;
-    /** @param {Tx} tx @param {Signer} signer @param {() => void} active @param {boolean} [includeCalendar] */
-    const ledgerFor = (tx, signer, active, includeCalendar = true) => ledgerRequest && quantityLedger && memories
-      ? readLedgerDigest(readStore, memories, quantityLedger, fence, tx, signer, readSet, ledgerRequest, active, includeCalendar) : null;
+    /** @param {Tx} tx @param {Signer} signer @param {LedgerAttempt} attempt
+     * @param {boolean} includeCalendar @param {LedgerCheck} [check] */
+    const ledgerFor = (tx, signer, attempt, includeCalendar, check) => ledgerRequest && quantityLedger && memories
+      ? readLedgerDigest(readStore, memories, quantityLedger, fence, tx, signer, readSet, ledgerRequest, attempt, includeCalendar, check) : null;
     const cards = types.includes("card");
     const expected = canonicalGenerations(observed, cards);
     /** @param {Tx} tx */
@@ -233,8 +248,9 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
     return {
       rows: prepared.rows,
       payload,
-      /** @param {() => void} active @param {boolean} [includeCalendar] */
-      prepareLedger(active, includeCalendar = true) {
+      /** @param {LedgerAttempt} attempt @param {boolean} includeCalendar */
+      prepareLedger(attempt, includeCalendar) {
+        const { active } = attempt;
         return uow.run(readSet.owner, { readOnly: true }, async tx => {
           active();
           await checkState(tx);
@@ -242,7 +258,7 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
           const signer = readTokenSigner(await readStore.identity(tx));
           active();
           if (await signer.bind("snapshot-scope", readSetBinding(readSet)) !== prepared.scope) return null;
-          return ledgerFor(tx, signer, active, includeCalendar);
+          return ledgerFor(tx, signer, attempt, includeCalendar);
         });
       },
       /** @param {readonly AssemblyEvidence[]} selected @param {readonly ContextRawTurn[]} rawTurns
@@ -279,9 +295,9 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
             }
           }
           if (ledgerCheck) {
-            const current = await ledgerFor(tx, signer, ledgerCheck.active, ledgerCheck.calendar);
-            const reading = ledgerCheck.calendar ? current?.calendar : current?.rolling;
-            if (reading?.witness !== ledgerCheck.witness) return staleLedger;
+            const current = await ledgerFor(tx, signer, ledgerCheck, false, ledgerCheck);
+            const reading = current?.rolling;
+            if (reading?.project(reading.lines, ledgerCheck.selection.trimmed).witness() !== ledgerCheck.witness) return staleLedger;
           }
           ledgerCheck?.active();
           const snapshot = selected.length ? await signer.encode("snapshot", payload(selected)) : null;

@@ -4,7 +4,9 @@ import { CoreError } from "../errors.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
 
 /** @import { ContextAssemblyDiagnostics, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDigest } from "../ports/index.d.ts" */
+  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDiagnostics, ContextLedgerDigest } from "../ports/index.d.ts" */
+/** @import { LedgerReading } from "./context-read-assembly-evidence.mjs" */
+/** @import { LedgerLine } from "../ledger/digest.mjs" */
 /** @import { PreparedItem, Source } from "./context-read-projection.mjs" */
 /** @typedef {Pick<ContextAssemblyDiagnostics, "items" | "omitted" | "dedup" | "stops" | "trace">} PackDiagnostics */
 /** @typedef {{ maxTokens: number, maxItems: number }} Budget */
@@ -15,6 +17,10 @@ import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, so
  * fitsBytes: (value: ContextAssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
 /** @typedef {{ tokens: number, sources: { source: Source, tokens: number }[],
  * body?: string, amendmentSources?: Source[] }} Choice */
+
+const LEDGER_OTHER_SHARE = 0.30;
+const LEDGER_ANSWER_CEILING = 0.60;
+const ledgerDropOrder = { subtotal: 0, category: 1, group: 2, measure: 2, goal: 3 };
 
 /** @template T
  * @param {PreparedItem} item @param {number} bareTokens @param {Budget} budget
@@ -87,18 +93,76 @@ export function meter({ budget, now, deadline, format, count, fitsBytes }) {
     const bytes = fitsBytes(projection.value, text, diagnostics(projection), projection.selected, used);
     return { used, fits: used <= budget.maxTokens && bytes };
   }
-  return { stops, expired, tokens, trace, check };
+  return { stops, expired, tokens, block, trace, check };
 }
 
-/** @param {ContextLedgerDigest | undefined} ledger @param {Projection} empty
- * @param {(projection: Projection) => PackDiagnostics} diagnostics @param {ReturnType<typeof meter>} metering */
-export function fitLedgerDigest(ledger, empty, diagnostics, { check, expired, stops }) {
-  if (!ledger) return;
-  const trial = { ...empty, value: { framing: empty.value.framing, ledgerDigest: ledger, items: empty.value.items } };
-  const measured = check(trial, diagnostics);
-  if (!measured || expired()) return;
-  if (measured.fits) return ledger;
-  stops.budget = true;
+/**
+ * @template T
+ * @param {LedgerReading} reading @param {number} maxTokens @param {ReturnType<typeof meter>} metering
+ * @param {() => void} active @param {ContextLedgerDiagnostics} diagnostics
+ * @param {(digest: ContextLedgerDigest) => T | undefined} tryPack
+ */
+export function fitLedgerDigest(reading, maxTokens, { block, tokens }, active, diagnostics, tryPack) {
+  const framing = FRAMING;
+  const emptyCost = tokens(block({ framing, items: [] }));
+  /** @param {ContextLedgerDigest} ledgerDigest */
+  function cost(ledgerDigest) {
+    active();
+    return Math.max(0, tokens(block({ framing, ledgerDigest, items: [] })) - emptyCost);
+  }
+  const answerLimit = maxTokens * LEDGER_ANSWER_CEILING;
+  const otherLimit = maxTokens * LEDGER_OTHER_SHARE;
+  /** @type {LedgerLine[]} */
+  const eligibleAnswers = [];
+  /** @type {Set<LedgerLine>} */
+  const answers = new Set();
+  const answering = reading.lines.filter(line => line.answering);
+  // Prefer the question's rolling answer if separately useful lines cannot fit together.
+  answering.sort((a, b) => Number(!!a.calendar) - Number(!!b.calendar));
+  for (const line of answering) {
+    if (cost(reading.project([line], false).value) > answerLimit) {
+      diagnostics.digest_line_too_large = (diagnostics.digest_line_too_large ?? 0) + 1;
+      continue;
+    }
+    eligibleAnswers.push(line);
+    answers.add(line);
+    if (answers.size > 1 && cost(reading.project(reading.lines.filter(item => answers.has(item)), false).value) > answerLimit) {
+      answers.delete(line);
+    }
+  }
+
+  const optional = reading.lines.filter(line => !line.answering).sort((a, b) =>
+    ledgerDropOrder[a.kind] - ledgerDropOrder[b.kind] || (a.total ?? 0) - (b.total ?? 0));
+  const selected = new Set([...answers, ...optional]);
+  /** @param {LedgerLine[]} lines @param {boolean} includesOptional */
+  function trial(lines, includesOptional) {
+    const dropped = reading.lines.length - lines.length;
+    const projection = reading.project(lines, dropped > 0);
+    if (includesOptional && cost(projection.value) > otherLimit) return;
+    if (dropped) diagnostics.ledger_digest_trimmed = dropped;
+    const packed = tryPack(projection.value);
+    active();
+    if (packed) return { packed, witness: projection.witness(), selection: { keys: lines.map(line => line.key), trimmed: dropped > 0 } };
+  }
+  if (optional.length && answers.size && cost(reading.project(reading.lines.filter(line => answers.has(line)), false).value) > otherLimit) {
+    for (const line of optional) selected.delete(line);
+  }
+  for (let next = 0; selected.size; next++) {
+    const lines = reading.lines.filter(line => selected.has(line));
+    const fitted = trial(lines, lines.length > answers.size);
+    if (fitted) return fitted;
+    const drop = optional[next];
+    if (!drop || lines.length === answers.size) break;
+    selected.delete(drop);
+  }
+  // A whole answer may still fit beside normal context when the answers together cannot.
+  for (const line of eligibleAnswers) {
+    if (answers.size === 1 && answers.has(line)) continue;
+    const fitted = trial([line], false);
+    if (fitted) return fitted;
+  }
+  diagnostics.ledger_digest_trimmed = reading.lines.length;
+  diagnostics.ledger_digest_omitted = 1;
 }
 
 /** @param {readonly PreparedItem[]} items @param {PackOptions} options
@@ -114,8 +178,7 @@ export function packContext(items, options, metering) {
   /** @type {Map<PreparedItem, Choice>} */
   let chosen = new Map();
   let oversized = 0;
-  /** @type {ContextLedgerDigest | undefined} */
-  let ledger;
+  const { ledger } = options;
   const totalSources = prepared.reduce((total, item) => total + item.sources.length, 0);
 
   /** @param {ReadonlyMap<PreparedItem, Choice>} selection @returns {Projection} */
@@ -176,8 +239,6 @@ export function packContext(items, options, metering) {
 
   let accepted = project(chosen);
   if (!check(accepted, diagnostics, { required: true })?.fits) throw new CoreError("context_item_too_large");
-  ledger = fitLedgerDigest(options.ledger, accepted, diagnostics, metering);
-  if (ledger) accepted = project(chosen);
   const availableItems = budget.maxItems - Number(!!ledger);
   if (!availableItems) stops.items = true;
 

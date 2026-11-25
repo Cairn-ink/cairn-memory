@@ -86,10 +86,10 @@ test("the Raw budget uses the adapter clock after the process passes the initial
   const f = fixture({ monotonicMs: () => performance.now() });
   await f.capture("Food: bread cost 3 USD.", [amount("bread", 3)]);
   while (performance.now() < 400) await delay(400 - performance.now());
-  const result = await f.read(f.reader(), { raw: true, deadlineMs: 750, budget: { maxItems: 1 } });
+  const result = await f.read(f.reader(), { raw: true, deadlineMs: 750, budget: { maxItems: 2 } });
   assert.equal(result.diagnostics.coverage.raw, "included");
   assert.ok(result.assembly.ledgerDigest);
-  assert.deepEqual(result.assembly.items, []);
+  assert.equal(result.assembly.items.length, 1);
 });
 
 function forgetSession(f, memory) {

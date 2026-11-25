@@ -6,7 +6,7 @@ import { amount, fixture, project, readSet, scope } from "./fixtures/context-rea
 
 const firstDay = Date.UTC(2026, 6, 1);
 const lastDay = Date.UTC(2026, 6, 31);
-const month = { query: "How much did I spend this month?", types: ["memory"], intent: "current", raw: false, budget: { maxItems: 1 } };
+const month = { query: "How much did I spend this month?", types: ["memory"], intent: "current", raw: false, budget: { maxItems: 2 } };
 const sourceIds = digest => digest.sources.map(({ memory }) => memory.id).sort();
 const monthlyGoal = (category, value) => ({ ...amount(category, value), kind: "goal", period: "month", comparator: "at_most" });
 const rollingBody = body => body.replace(/(?:Calendar month so far: [^.]+|[A-Z][a-z ]*, calendar month so far: .*? per day)\. /gu, "");
@@ -158,12 +158,13 @@ test("review probe: off-path delivery agrees with explicit day counts when unuse
       outcomes.push({ window, delivered: !!assembly.ledgerDigest });
     }
   }
-  assert.deepEqual(outcomes, ["this week", "last 7 days", "this month", "last 30 days"].map(window => ({ window, delivered: false })));
+  assert.deepEqual(outcomes, ["this week", "last 7 days", "this month", "last 30 days"].map(window => ({ window, delivered: true })));
 });
 
 test("confirm probe: rolling aliases admit coffee and transit and deliver like explicit days", async () => {
   const f = ledgerFixture();
-  const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
+  // Keep the earlier ledger row out of the ranked pack so this tests the ledger witness.
+  const earlier = await f.capture("Morning espresso cost 18 USD.", amount("coffee", 18), firstDay);
   const coffee = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
   const transit = await f.capture("Transit cost 12 USD.", amount("bus", 12, "transport"), lastDay, project);
   const namespaces = [scope.namespace, project.namespace];
@@ -193,7 +194,7 @@ test("confirm probe: rolling aliases admit coffee and transit and deliver like e
     }, alias);
     assert.deepEqual(aliasReader.scans, explicitReader.scans, alias);
 
-    for (const query of [alias, explicit]) {
+    for (const [query, before] of [[alias, rolling], [explicit, trailing]]) {
       let hides = 0;
       const { assembly } = await f.reader({ calendarReading: false, afterFormatting() {
         hides++;
@@ -201,7 +202,7 @@ test("confirm probe: rolling aliases admit coffee and transit and deliver like e
       } }).read(query, namespaces);
       f.show(earlier.id);
       assert.equal(hides, 1, query);
-      assert.equal(assembly.ledgerDigest, undefined, query);
+      assert.deepEqual(assembly.ledgerDigest, before, query);
     }
   }
 });
@@ -252,7 +253,7 @@ test("review probe: July 1 is a rolling goal source only when the monthly goal m
       assert.ok(assembly.ledgerDigest.body.includes(matching ? "actual $30.00 per month" : "no records in this window"));
       assert.deepEqual(sourceIds(assembly.ledgerDigest), [budget.id, last.id, ...(matching || calendarReading ? [first.id] : [])].sort());
       const { assembly: delivered } = await f.reader({ calendarReading, afterFormatting: () => f.hide(first.id) }).read();
-      if (!matching && calendarReading) {
+      if (!matching) {
         const clean = await f.reader().read();
         assert.deepEqual(delivered.ledgerDigest, clean.assembly.ledgerDigest);
         assert.deepEqual(sourceIds(delivered.ledgerDigest), [budget.id, last.id].sort());
