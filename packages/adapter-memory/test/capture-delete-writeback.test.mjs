@@ -216,17 +216,16 @@ test("resending a deleted conversation keeps different text at the same message 
   assert.deepEqual(await rawVisibility(f, control, batch), { messageIds: [controlMessage.id], withheld: [false] });
 });
 
-test("explicitly importing ledger-only deleted messages makes their Raw and receipts readable", async () => {
+test("explicitly importing ledger-only deleted messages is refused and their receipts stay withheld", async () => {
   const f = fixture({ contextRead: true, contextRawRead: true });
   const service = captureService(f.storage);
   assert.deepEqual(await service.enqueueCapture(scope, { ...target, messages }), { status: "accepted" });
   assert.deepEqual(await f.remove(), { rawDeleted: 0 });
   const { client, sessionId } = target;
   assert.deepEqual(await service.importRawMessages(scope, [{ client, sessionId, messages }]),
-    { imported: 2, duplicate: 0, suppressed: 0, invalid: 0 });
-  const messageIds = messages.map(({ id }) => id).sort();
-  assert.deepEqual((await f.page()).items.map(({ messageId }) => messageId).sort(), messageIds);
-  assert.deepEqual(await rawVisibility(f, target, messages), { messageIds, withheld: [false, false] });
+    { imported: 0, duplicate: 0, suppressed: 2, invalid: 0 });
+  assert.deepEqual((await f.page()).items, []);
+  assert.deepEqual(await rawVisibility(f, target, messages), { messageIds: [], withheld: [true, true] });
 });
 
 for (const prearchived of [false, true]) {
