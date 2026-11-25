@@ -390,8 +390,15 @@ export type ContextAssemblyItem = {
   evidence?: readonly (ContextAssemblyRawExcerpt & ({ body: string } | { sameAsBody: true }))[];
 } | (ContextAssemblyRawExcerpt & { layer: "Raw"; body: string });
 
+export type ContextLedgerDigest = {
+  body: string;
+  sources: readonly { index: number; role: "user"; memory: ContextCompactRef & { type: "memory" } }[];
+};
+
 export interface ContextAssemblyValue {
   framing: string;
+  /** Computed evidence rendered before the ranked items. Source refs are attribution. */
+  ledgerDigest?: ContextLedgerDigest;
   items: readonly ContextAssemblyItem[];
 }
 
@@ -439,6 +446,7 @@ export interface ContextReadTokenCounter {
 }
 
 /** Pure synchronous formatter for the exact block the host delivers. */
+/** Render an included ledger digest before the ranked items. */
 export type ContextReadBlockFormatter = (value: ContextAssemblyValue) => string;
 
 /** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */

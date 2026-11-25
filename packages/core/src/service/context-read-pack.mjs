@@ -4,13 +4,13 @@ import { CoreError } from "../errors.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
 
 /** @import { ContextAssemblyDiagnostics, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblySource, ContextAssemblyValue } from "../ports/index.d.ts" */
+  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDigest } from "../ports/index.d.ts" */
 /** @import { PreparedItem, Source } from "./context-read-projection.mjs" */
 /** @typedef {Pick<ContextAssemblyDiagnostics, "items" | "omitted" | "dedup" | "stops" | "trace">} PackDiagnostics */
 /** @typedef {{ maxTokens: number, maxItems: number }} Budget */
 /** @typedef {{ value: ContextAssemblyValue, details: PackDiagnostics["items"], selected: PreparedItem[], amendmentSourceCount?: number }} Projection */
 /** @typedef {{ budget: Budget, policy: ContextAssemblyPolicy, representation: ContextAssemblyRepresentation,
- * now: () => number, deadline: number,
+ * now: () => number, deadline: number, ledger?: ContextLedgerDigest,
  * format: (value: ContextAssemblyValue) => string, count: (text: string) => number,
  * fitsBytes: (value: ContextAssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
 /** @typedef {{ tokens: number, sources: { source: Source, tokens: number }[],
@@ -90,6 +90,17 @@ export function meter({ budget, now, deadline, format, count, fitsBytes }) {
   return { stops, expired, tokens, trace, check };
 }
 
+/** @param {ContextLedgerDigest | undefined} ledger @param {Projection} empty
+ * @param {(projection: Projection) => PackDiagnostics} diagnostics @param {ReturnType<typeof meter>} metering */
+export function fitLedgerDigest(ledger, empty, diagnostics, { check, expired, stops }) {
+  if (!ledger) return;
+  const trial = { ...empty, value: { framing: empty.value.framing, ledgerDigest: ledger, items: empty.value.items } };
+  const measured = check(trial, diagnostics);
+  if (!measured || expired()) return;
+  if (measured.fits) return ledger;
+  stops.budget = true;
+}
+
 /** @param {readonly PreparedItem[]} items @param {PackOptions} options
  * @param {ReturnType<typeof meter>} metering */
 export function packContext(items, options, metering) {
@@ -103,6 +114,8 @@ export function packContext(items, options, metering) {
   /** @type {Map<PreparedItem, Choice>} */
   let chosen = new Map();
   let oversized = 0;
+  /** @type {ContextLedgerDigest | undefined} */
+  let ledger;
   const totalSources = prepared.reduce((total, item) => total + item.sources.length, 0);
 
   /** @param {ReadonlyMap<PreparedItem, Choice>} selection @returns {Projection} */
@@ -148,7 +161,7 @@ export function packContext(items, options, metering) {
       details.push({ ref: item.evidence.item.ref, metadata: item.metadata, body: { tokens }, sources: sourceDetails });
       return wireItem(item, representation, sources, item.sourcesComplete && included.length === eligibleSources.length, body);
     });
-    return { value: { framing: FRAMING, items: wire }, details, selected,
+    return { value: { framing: FRAMING, ...(ledger && { ledgerDigest: ledger }), items: wire }, details, selected,
       amendmentSourceCount: selected.reduce((n, item) => n + (selection.get(item)?.amendmentSources?.length ?? 0), 0) };
   }
 
@@ -163,6 +176,10 @@ export function packContext(items, options, metering) {
 
   let accepted = project(chosen);
   if (!check(accepted, diagnostics, { required: true })?.fits) throw new CoreError("context_item_too_large");
+  ledger = fitLedgerDigest(options.ledger, accepted, diagnostics, metering);
+  if (ledger) accepted = project(chosen);
+  const availableItems = budget.maxItems - Number(!!ledger);
+  if (!availableItems) stops.items = true;
 
   /** @param {PreparedItem} item @param {Source} [source] */
   function visit(item, source) {
@@ -171,7 +188,7 @@ export function packContext(items, options, metering) {
       memory.rank < item.rank && citesMemory(item, memory))) return;
     if (!source && item.compact.type === "memory" && [...chosen.keys()].some(card => citesMemory(card, item))) return;
     const mayReplace = canReplaceCitedMemory(item);
-    if (!source && chosen.size >= budget.maxItems && !mayReplace) { stops.items = true; return; }
+    if (!source && chosen.size >= availableItems && !mayReplace) { stops.items = true; return; }
     const current = chosen.get(item);
     if (source && !current) return;
     const unitTokens = tokens(source ? source.excerpt : item.body);
@@ -182,7 +199,7 @@ export function packContext(items, options, metering) {
     trial.set(item, choice);
     if (!source && mayReplace) {
       for (const memory of trial.keys()) if (citesMemory(item, memory)) trial.delete(memory);
-      if (trial.size > budget.maxItems) { stops.items = true; return; }
+      if (trial.size > availableItems) { stops.items = true; return; }
     }
     const projection = project(trial);
     const result = check(projection, diagnostics);
@@ -200,7 +217,7 @@ export function packContext(items, options, metering) {
         }) : null;
       chosen = amended?.revised ?? trial;
       accepted = amended?.amendedProjection ?? projection;
-      if (chosen.size >= budget.maxItems) stops.items = true;
+      if (chosen.size >= availableItems) stops.items = true;
       return;
     }
 

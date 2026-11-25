@@ -1206,3 +1206,30 @@ with Raw enabled or disabled, a selected card occupies one item slot and
 replaces a cited memory at the card's own rank if the resulting pack fits.
 The citation uses the binding's stored revision, and replacement requires an
 exact qualified ref match.
+
+## Addendum 23 — Quantity ledger in Context Read (2026-11-25)
+
+Default `readContext` checks ledger intent when the adapter enables
+`quantityLedger`, supplies the store and the request selects `memory`.
+Check the query for a ledger cue before any ledger lookup. In each authorized
+namespace, use the store's terms as a prefilter. Use the service wall clock and
+`parseWindow` to select records, including earlier records needed for calendar
+goals and goals dated before the window ends.
+
+Within the same snapshot, admit each row only if Context Read evidence and the
+visibility fence confirm a current memory, the canonical user receipt is
+retained and readable, and the current core text hash matches the row's hash.
+Match intent again against the measure, group and category of deliverable
+in-window records and eligible goals before including that namespace. Repeat
+these checks in the final assembly snapshot. Pack ordinary evidence before
+starting the optional ledger work. If the read deadline expires, a check
+fails or the evidence changes, omit the digest and validate ordinary evidence
+for delivery. Ledger work leaves the ordinary pack's deadline diagnostics intact.
+
+The optional assembly field `ledgerDigest` carries
+`{ body, sources: [{ index, role: "user", memory }] }`. The host formatter
+renders it before the ranked items and counts its full text in the block.
+It consumes one item slot. Include the complete body and all sources only
+when they fit the budget. Each `memory` is a distinct qualified compact ref
+for attribution. The `items` array retains ordinary refs and ranks, and
+snapshot tokens cover the selected ordinary Memory and Card evidence.
