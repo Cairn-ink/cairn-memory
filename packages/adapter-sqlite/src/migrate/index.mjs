@@ -163,6 +163,7 @@ function verify(db, source, plan, record, schema) {
       db.prepare("PRAGMA integrity_check(1)").get()?.integrity_check !== "ok" ||
       db.prepare("PRAGMA foreign_key_check").get()) return refuse("legacy_integrity_mismatch");
   const expected = new Map(phases(plan, source).flat());
+  expected.set("cairn_raw_anchors", [...plan.anchors, ...source.archive.fencedAnchors]);
   expected.set("cairn_store", [[1, source.storeId, record.sessionKey]]);
   const digests = [];
   for (const { type, name } of schema) {
@@ -253,6 +254,12 @@ export async function migrateLegacyStore(input) {
       const record = checkRecord(migrationRecord(db), source, plan);
       if (record.migrationId !== migrationId || record.checkpoint < 2) return refuse("legacy_incomplete");
       if (record.checkpoint === 3) return [String(record.attestation), false];
+      // Include the opaque anchors when resuming a target whose copy phases
+      // were already committed. Verification covers them in this transaction.
+      if (source.archive.fencedAnchors.length) {
+        const insert = db.prepare("INSERT INTO cairn_raw_anchors VALUES (?, ?, ?, ?, ?, ?, ?)");
+        for (const tuple of source.archive.fencedAnchors) insert.run(...tuple);
+      }
       const proof = verify(db, source, plan, record, schema);
       installInspectSchema(db, source.inspect);
       installContextReadSchema(db);

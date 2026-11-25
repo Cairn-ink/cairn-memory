@@ -322,7 +322,7 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         const current = outboxSources(row, key, lineage);
         const { blockedSession, blocks } = sourcePolicy(db, key, hashSession);
         if (blockedSession || migratedRaw?.blocksEvent(db, key) || migratedRaw?.blocks(db, key.scope, key, batch) ||
-            lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch))) return [];
+            lineage.fenced(db, key.scope, key, lineage.proofs(tx.owner, key.client, batch), batch)) return [];
         return Array.from(batch.keys()).filter(position => {
           const message = batch[position];
           const slot = current?.messages[position];
@@ -364,7 +364,7 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
               hasRawFence(db, key.scope, hashSession(key.scope, key.client, key.sessionId))) return;
         }
         const proofs = current?.proofs ?? decodeJson(row.source_proofs);
-        if (lineage.fenced(db, key.scope, key, proofs)) throw new CoreError("lineage_fenced");
+        if (lineage.fenced(db, key.scope, key, proofs, sources)) throw new CoreError("lineage_fenced");
       });
     },
   };

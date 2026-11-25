@@ -2,7 +2,9 @@ import { createHmac } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createRawSearchAuthority } from "../../../../core/raw-search-authority.mjs";
 import { rawSessionKeys } from "../../../../core/raw-source-roots.mjs";
+import { createRawLineage } from "../raw-lineage.mjs";
 import { scopeKey } from "../storage-values.mjs";
+import { sessionHasher } from "../suppressions.mjs";
 import { LegacyRefusal } from "./refusal.mjs";
 
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -64,12 +66,43 @@ function partText(key, row, part) {
   return text;
 }
 
+function assemble(key, row, parts, indexes) {
+  let end = 0;
+  const content = parts.map((part, index) => {
+    if (!part.saved || part.part_index !== indexes[index] || part.start !== end) refuse();
+    end = part.end;
+    return partText(key, row, part);
+  }).join("");
+  if (end !== row.total_units || Buffer.byteLength(content) !== row.total_bytes) refuse();
+  return content;
+}
+
+function readFencedAnchors(db, key) {
+  const lineage = createRawLineage(key, sessionHasher(key, true));
+  const messages = db.prepare(`SELECT c.owner_id, c.scope, c.project_id, c.client, c.session_key, m.*
+    FROM raw_conversations c JOIN raw_session_fences f USING (owner_id, scope, project_id, client, session_key)
+    JOIN raw_messages m ON m.conversation_id=c.id`);
+  const parts = db.prepare("SELECT * FROM raw_parts WHERE conversation_id=? AND message_id=? ORDER BY part_index");
+  const anchors = [];
+  for (const row of messages.iterate()) {
+    const sessionId = row.session_key.replace(/^s1:([0-9a-f]{64})$/, "legacy-raw:$1");
+    // Without a complete local payload, a fenced row can attest only its ID.
+    const saved = row.assembly_state === "complete" ? parts.all(row.conversation_id, row.message_id) : [];
+    const content = saved.length && saved.every(part => part.saved && part.format === "local-plain-v1")
+      ? assemble(key, row, saved, saved.map((_, index) => index)) : "";
+    anchors.push(...lineage.anchorRows(scopeOf(row), { client: row.client, sessionId },
+      [{ id: row.message_id, content }]));
+  }
+  return anchors;
+}
+
 export function readLegacyArchive(db, file, privacy, receipts) {
   const rows = [], anchors = [], retained = new Set(), spans = new Map(), maps = [], reservations = [];
   const counts = { rawConversations: 0, rawMessages: 0, rawParts: 0, rawSourceMaps: 0, rawReceiptLineage: 0, rawReceiptOrigins: 0 };
-  if (!privacy) return { rows, anchors, spans, maps, reservations, counts };
+  if (!privacy) return { rows, anchors, spans, maps, reservations, counts, fencedAnchors: [] };
   const selections = visibleParts(db, file);
   const { key } = privacy;
+  const fencedAnchors = readFencedAnchors(db, key);
   const reserved = db.prepare(`SELECT c.id, c.owner_id, c.scope, c.project_id, c.client, c.session_key, m.message_id
     FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id WHERE m.assembly_state <> 'pending'`);
   for (const row of reserved.iterate()) {
@@ -78,7 +111,7 @@ export function readLegacyArchive(db, file, privacy, receipts) {
     const hash = (/^s1:[0-9a-f]{64}$/.test(row.session_key) ? aliases[0] : aliases[1]).slice(3);
     reservations.push([...scopeKey(scopeOf(row)), JSON.stringify(row.client), "reservation", hash, JSON.stringify(row.message_id)]);
   }
-  if (!selections.size) return { rows, anchors, spans, maps, reservations, counts };
+  if (!selections.size) return { rows, anchors, spans, maps, reservations, counts, fencedAnchors };
   const find = db.prepare(`SELECT c.*, m.* FROM raw_conversations c
     JOIN raw_messages m ON m.conversation_id = c.id WHERE c.id = ? AND m.message_id = ?`);
   const parts = db.prepare("SELECT * FROM raw_parts WHERE conversation_id=? AND message_id=? ORDER BY part_index");
@@ -112,13 +145,7 @@ export function readLegacyArchive(db, file, privacy, receipts) {
     const group = JSON.stringify([...scopeKey(scope), row.client, sessionId]);
     if (conversations.has(group) && conversations.get(group) !== conversation) refuse();
     conversations.set(group, conversation);
-    let end = 0;
-    const content = partsOfMessage.map((part, index) => {
-      if (!part.saved || part.part_index !== indexes[index] || part.start !== end) refuse();
-      end = part.end;
-      return partText(key, row, part);
-    }).join("");
-    if (end !== row.total_units || Buffer.byteLength(content) !== row.total_bytes) refuse();
+    const content = assemble(key, row, partsOfMessage, indexes);
     const occurredAtMs = row.occurred_at === null ? null : Date.parse(row.occurred_at);
     if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) refuse();
     rows.push([...scopeKey(scope), JSON.stringify(row.client), JSON.stringify(sessionId),
@@ -145,5 +172,5 @@ export function readLegacyArchive(db, file, privacy, receipts) {
   counts.rawConversations = retained.size;
   counts.rawMessages = rows.length;
   counts.rawReceiptOrigins = origins.size;
-  return { rows, anchors, spans, maps, reservations, counts };
+  return { rows, anchors, spans, maps, reservations, counts, fencedAnchors };
 }

@@ -100,6 +100,25 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
 
   return {
     storageSession, blocksSession, blocksUuid,
+    /** @param {Connection} db @param {Scope} scope @param {string} client
+     * @param {readonly Pick<CaptureMessage, "id">[]} messages */
+    blocksLegacyFork(db, scope, client, messages) {
+      if (!localPrivacy || client !== "claude-code" || !messages.length) return false;
+      const [owner, namespace] = scopeKey(scope);
+      const clientKey = JSON.stringify(client);
+      // Legacy deletion preserves a keyed ID but erases the message and its
+      // payload evidence. Treat the surviving UUID fence as scrubbed lineage.
+      const ancestors = db.prepare(`SELECT DISTINCT namespace_key FROM cairn_migrated_raw_privacy
+        WHERE owner_id=? AND namespace_key<>? AND client_key=? AND kind='uuid' AND body='null'`);
+      const matches = db.prepare(`SELECT 1 FROM cairn_migrated_raw_privacy
+        WHERE owner_id=? AND namespace_key=? AND client_key=? AND kind='uuid' AND selector=? AND body='null'`);
+      for (const { namespace_key } of ancestors.iterate(owner, namespace, clientKey)) {
+        const ancestor = { owner, namespace: decodeJson(namespace_key) };
+        if (messages.some(({ id }) => matches.get(owner, namespace_key, clientKey,
+          legacyRawHash(key, ancestor, "local-raw-forgotten-uuid-v1", client, id)))) return true;
+      }
+      return false;
+    },
     /** @param {Connection} db @param {Scope} scope @param {Session} session @param {string} id */
     blocksSpan(db, scope, { client, sessionId }, id) {
       return Boolean(db.prepare(`SELECT 1 FROM cairn_migrated_raw_privacy
@@ -130,7 +149,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
       const sessionKeys = rawSessionKey(scope, session);
       if (localPrivacy && client === "claude-code") {
         const insert = db.prepare(`INSERT OR IGNORE INTO cairn_migrated_raw_privacy
-          VALUES (?, ?, ?, 'uuid', ?, 'null')`);
+          VALUES (?, ?, ?, 'uuid', ?, '"arrival"')`);
         const archived = db.prepare(`SELECT message_key FROM cairn_raw_messages WHERE ${rawSessionWhere}`)
           .all(...rawSessionKey(scope, storageSession(db, scope, session)));
         const queued = db.prepare(`SELECT messages FROM cairn_capture_claims

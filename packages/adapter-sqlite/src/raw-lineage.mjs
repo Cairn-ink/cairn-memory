@@ -10,6 +10,7 @@ import { readFacts } from "./suppressions.mjs";
 /** @import { RawRow, Session } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
+/** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {[messageTag: string, proof: string]} Proof */
 
 /** @param {Connection} db @param {Scope} scope @param {string} sessionHash */
@@ -33,8 +34,8 @@ export function blocksRawSession(scope, client, sessionHash, facts) {
   return facts.some(stored => stored.fact.kind === "session" && factHidesRow(stored, candidate) !== false);
 }
 
-/** @param {string} storeKey @param {SessionHasher} hashSession */
-export function createRawLineage(storeKey, hashSession) {
+/** @param {string} storeKey @param {SessionHasher} hashSession @param {MigratedRawPolicy} [migratedRaw] */
+export function createRawLineage(storeKey, hashSession, migratedRaw) {
   const secret = Buffer.from(storeKey, "hex");
   const tag = (/** @type {string[]} */ parts) => createHmac("sha256", secret).update(JSON.stringify(parts)).digest("hex");
 
@@ -85,15 +86,16 @@ export function createRawLineage(storeKey, hashSession) {
       for (const row of anchorRows(scope, session, messages)) insert.run(...row);
     },
 
-    /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Proof[]} candidates */
-    fenced(db, scope, { client, sessionId }, candidates) {
+    /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Proof[]} candidates
+     * @param {readonly Pick<CaptureMessage, "id">[]} messages */
+    fenced(db, scope, { client, sessionId }, candidates, messages) {
       if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return true;
       const { owner } = scope;
       const sessionTag = tag(["raw-lineage-session", owner, client, sessionId]);
       for (const root of matchingAnchors(db, owner, client, candidates, sessionTag)) {
         if (!allowsRawSession(db, root.scope, client, root.sessionHash)) return true;
       }
-      return false;
+      return migratedRaw?.blocksLegacyFork(db, scope, client, messages) ?? false;
     },
 
     /** @param {Connection} db @param {Scope} scope @param {Session & {messageId: string}} receipt
