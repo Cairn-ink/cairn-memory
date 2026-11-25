@@ -50,10 +50,13 @@ function readQuantity(value, itemCount) {
     if (typeof text !== 'string' || /[\uD800-\uDFFF]/u.test(text)) return null;
   }
   const validKind = copy.kind === 'record'
-    ? copy.period === 'none' && copy.comparator === 'none'
+    ? copy.comparator === 'none' && (copy.period === 'none' ||
+      (typeof copy.period === 'string' && goalPeriods.includes(copy.period)))
     : typeof copy.period === 'string' && goalPeriods.includes(copy.period) &&
       typeof copy.comparator === 'string' && goalComparators.includes(copy.comparator);
-  return validKind ? /** @type {ExtractedQuantity} */ (/** @type {unknown} */ (copy)) : null;
+  if (!validKind) return null;
+  if (copy.kind === 'record') copy.period = 'none';
+  return /** @type {ExtractedQuantity} */ (/** @type {unknown} */ (copy));
 }
 
 /** @param {unknown} value @param {number} itemCount @returns {QuantityValidation} */

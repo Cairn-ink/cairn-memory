@@ -27,7 +27,8 @@ Capture validates each quantity independently. Each invalid entry adds one
 content-free `invalid_extraction_quantity` count. Valid siblings and items
 still pass. An exception reading or validating the list drops the whole list
 with one count and preserves the items. Goals require a period and a comparator.
-Records use `none` for both.
+A record returned with a valid period is stored as a dated record with the
+period cleared to `none`. A record with a comparator other than `none` is dropped.
 
 Before reconciliation, capture keeps a record only if a number in one of the
 item's cited user messages matches its magnitude after rounding both to two decimal

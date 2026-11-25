@@ -86,7 +86,6 @@ const invalid = {
   'invalid measure': { ...record, measure: false },
   'invalid unit': { ...record, unit: [] },
   'invalid category': { ...record, category: '\uD800' },
-  'record with period': { ...record, period: 'day' },
   'record with comparator': { ...record, comparator: 'at_most' },
   'goal without period': { ...goal, period: 'none' },
   'goal without comparator': { ...goal, comparator: 'none' },
@@ -128,3 +127,25 @@ test('holes and accessor entries count separately without reading accessor value
     items: [item], quantities: [], dropped: { invalid_extraction_quantity: 3 },
   });
 });
+
+for (const period of ['day', 'week', 'month', 'year']) {
+  test(`clears the ${period} period on a record without mutating model output`, () => {
+    const raw = { items: [item], quantities: [record, { ...record, period }, goal] };
+    const before = structuredClone(raw);
+    const checked = validatePlainExtraction(raw, policy, enabled);
+    assert.deepEqual(checked, {
+      items: [item], quantities: [record, record, goal], dropped: { invalid_extraction_quantity: 0 },
+    });
+    assert.notEqual(checked.quantities[1], raw.quantities[1]);
+    assert.deepEqual(raw, before);
+  });
+}
+
+for (const bad of [{ ...record, period: 'day', comparator: 'at_most' }, { ...record, period: 'shift' }]) {
+  test(`drops a record with period ${bad.period} and comparator ${bad.comparator} when invalid`, () => {
+    const raw = { items: [item], quantities: [record, bad, goal] };
+    assert.deepEqual(validatePlainExtraction(raw, policy, enabled), {
+      items: [item], quantities: [record, goal], dropped: { invalid_extraction_quantity: 1 },
+    });
+  });
+}
