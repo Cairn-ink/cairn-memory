@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { factIncarnationBody } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { INITIALIZE_STORE, STORAGE_SCHEMA } from "../src/schema/layout.mjs";
 import { readReceipts } from "../src/memory-rows.mjs";
@@ -21,7 +22,10 @@ const write = (adapter, key, work) => adapter.uow.run(key.scope.owner, { pauseLo
 const claim = (adapter, key, messages = batch, leaseMs = 100) =>
   write(adapter, key, tx => adapter.capture.claim(tx, key, messages, { leaseMs }));
 const admit = (adapter, key, messages = batch) => write(adapter, key, tx => adapter.capture.admit(tx, key, messages));
-const finish = (adapter, key, token, items) => write(adapter, key, tx => adapter.capture.finish(tx, token, items));
+const finish = (adapter, key, token, items) => write(adapter, key, async tx => {
+  if (items.length > 0) await adapter.capture.assertEligible(tx, key, [0]);
+  return adapter.capture.finish(tx, token, items);
+});
 const status = (adapter, { scope, eventId, client }) =>
   adapter.uow.run(scope.owner, { readOnly: true }, tx => adapter.capture.status(tx, scope, eventId, client));
 
@@ -70,7 +74,7 @@ test("namespaces share one capture identity and retain the original work scope",
   assert.deepEqual(await claim(adapter, first), { status: "processing" });
   assert.deepEqual(await status(adapter, first), { status: "pending" });
   assert.deepEqual(await status(adapter, second), { status: "unknown" });
-  const result = await finish(adapter, second, replacement.token, [item("Original namespace memory")]);
+  const result = await finish(adapter, first, replacement.token, [item("Original namespace memory")]);
   assert.deepEqual(await status(adapter, first), { status: "done" });
   assert.deepEqual(await status(adapter, second), { status: "unknown" });
   const exportPage = selection => adapter.uow.run(scope.owner, { readOnly: true }, tx =>
@@ -220,6 +224,7 @@ test("all finishes in one write report the committed owner revision on replay", 
   const [first, replay, second] = await write(adapter, emptyKey, async tx => {
     const first = Object.freeze(await adapter.capture.finish(tx, empty, []));
     const replay = await adapter.capture.claim(tx, emptyKey, batch, { leaseMs: 100 });
+    await adapter.capture.assertEligible(tx, writtenKey, [0]);
     const second = await adapter.capture.finish(tx, written, [item("New memory")]);
     const { content: text, receipts, ...row } = item("Separate store write");
     await adapter.memories.insert(tx, scope, { ...row, text, origin: "explicit",
@@ -256,9 +261,14 @@ test("finish suppresses hidden duplicates, erased text and a newly blocked sessi
   assert.deepEqual(result.memories, []);
   const late = key("late-session-fact");
   const sessionClaim = await claim(adapter, late);
-  await seedFact(adapter, { ...scope, actionId: "block-session", origin: "forget", kind: "session",
-    session: { client: late.client, sessionKeyHash: adapter.hashSessionKey(scope, late.client, late.sessionId) } });
-  const denied = await finish(adapter, late, sessionClaim.token, [item("This session is blocked")]);
+  const fact = { ...scope, actionId: "block-session", origin: "forget", kind: "session",
+    session: { client: late.client, sessionKeyHash: adapter.hashSessionKey(scope, late.client, late.sessionId) } };
+  const incarnation = sha256(factIncarnationBody(fact));
+  const denied = await write(adapter, late, async tx => {
+    await adapter.capture.assertEligible(tx, late, [0]);
+    await adapter.suppressions.writeFact(tx, fact, incarnation);
+    return adapter.capture.finish(tx, sessionClaim.token, [item("This session is blocked")]);
+  });
   assert.equal(denied.suppressedCount, 1);
   assert.deepEqual(denied.memories, []);
   const visible = await adapter.uow.run(scope.owner, { readOnly: true }, tx =>

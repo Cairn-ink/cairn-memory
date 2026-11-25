@@ -36,6 +36,7 @@ test("a captured memory can be forgotten after deleting its archived conversatio
   const id = await write(adapter, async tx => {
     await raw.archive(tx, captureKey, [message]);
     const { token } = await capture.claim(tx, captureKey, [message], { leaseMs: 100 });
+    await capture.assertEligible(tx, captureKey, [0]);
     const result = await capture.finish(tx, token, [output]);
     return result.memories[0].id;
   });
@@ -74,7 +75,8 @@ test("span resolution checks surviving evidence even when another receipt points
   const wrongRole = { ...receipt, role: "assistant" };
   const [partial, mismatched] = await write(adapter, async tx => {
     await raw.archive(tx, captureKey, [message]);
-    const { token } = await capture.claim(tx, captureKey, [message], { leaseMs: 100 });
+    const { token } = await capture.claim(tx, captureKey, [message, { ...message, id: missing.messageId }], { leaseMs: 100 });
+    await capture.assertEligible(tx, captureKey, [0, 1]);
     const result = await capture.finish(tx, token, [
       item("Valid surviving receipt", [missing, receipt]), item("Conflicting surviving receipt", [missing, wrongRole]),
     ]);
@@ -94,12 +96,16 @@ test("a denied capture item never reaches storage and the allowed items still fi
   const denied = "A violet weathervane with three brass stars";
   const allowed = "A second, allowed memory";
   const allowedReceipt = { ...receipt, messageId: "allowed" };
-  const { token } = await write(adapter, tx => capture.claim(tx, captureKey, [message], { leaseMs: 100 }));
+  const batch = [message, { ...message, id: allowedReceipt.messageId }];
+  const { token } = await write(adapter, tx => capture.claim(tx, captureKey, batch, { leaseMs: 100 }));
   await seedDenial(fixture);
 
-  const result = await write(adapter, tx => capture.finish(tx, token, [
-    item(denied, [receipt]), item(allowed, [allowedReceipt]), item(allowed, [receipt]),
-  ]));
+  const result = await write(adapter, async tx => {
+    await capture.assertEligible(tx, captureKey, [0, 1]);
+    return capture.finish(tx, token, [
+      item(denied, [receipt]), item(allowed, [allowedReceipt]), item(allowed, [receipt]),
+    ]);
+  });
   const state = await testAccess(fixture, scope, {}, db => {
     const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
     return {

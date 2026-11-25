@@ -93,7 +93,8 @@ export async function readFingerprintKeyId(query, owner) {
 
 /**
  * Check staging and change the owner pointer in the same write transaction.
- * K2 refuses rotation when a live or pending fact needs a non-current key.
+ * When changing the pointer, check live and pending keyed facts against the
+ * current key, or against the incoming key on first publication.
  * @param {Tx} tx @param {string} nextKeyId
  */
 export async function publishFingerprintKey(tx, nextKeyId) {
@@ -113,7 +114,7 @@ export async function publishFingerprintKey(tx, nextKeyId) {
       throw new CoreError("fingerprint_key_mismatch");
     }
     if (rotating && facts.length > maxRotationFacts) throw new CoreError("fingerprint_key_mismatch");
-    const required = requiredDomains(facts, rotating ? currentKeyId : undefined);
+    const required = requiredDomains(facts, rotating ? (currentKeyId ?? nextKeyId) : undefined);
     required.add(coreDomain(nextKeyId));
     if ((await countMissingDigests(query, tx.owner, required)).missingPairs !== 0) {
       throw new CoreError("fingerprint_key_mismatch");
