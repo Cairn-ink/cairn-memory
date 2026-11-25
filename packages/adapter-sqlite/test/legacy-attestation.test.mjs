@@ -10,7 +10,7 @@ import { rationaleModel } from "../../../core/testing/rationale-model.mjs";
 import { openSqliteAdapter, SQLITE_PHYSICAL_VERSION } from "../src/index.mjs";
 import { migrateLegacyStore } from "../src/migrate/index.mjs";
 import { editFixture, fixture, scratch } from "./legacy/fixtures.mjs";
-import { coreScope, createLegacyBackup, ok, prepareInput, project, service } from "./migration-fixtures.mjs";
+import { coreScope, createLegacyBackup, ok, prepareInput, project, service, sha256 } from "./migration-fixtures.mjs";
 
 const scope = coreScope(project);
 const installed = process.env.CAIRN_TEST_LEGACY_ENGINE;
@@ -111,4 +111,39 @@ test("version 7 fails read-only preflight with bytes unchanged", async t => {
   await assert.rejects(openSqliteAdapter(path).then(storage => storage.close()), { code: "storage_error" });
   assert.deepEqual(readFileSync(path), previous);
   assert.equal(SQLITE_PHYSICAL_VERSION, 8);
+});
+
+test("forget advances a live topic once when it withdraws both the title and a member", async t => {
+  const path = join(scratch(t), "live.sqlite");
+  const storage = await openSqliteAdapter(path, {
+    legacyInspectPlacements: true, capabilities: { placement: true },
+  });
+  const source = { kind: "mcp", client: null, sessionId: null };
+  const title = "Synthetic maintenance notes";
+  const write = operation => storage.uow.run(scope.owner, { pauseLock: true }, operation);
+  const insert = text => write(tx => storage.memories.insert(tx, scope, {
+    text, textHash: "sha256:" + sha256(text.toLowerCase()), kind: "fact",
+    confidence: 1, origin: "explicit", source, embedding: null,
+  }, [], 1));
+  const place = (memory, assignment) => write(async tx => {
+    const { indexRevision } = await storage.placement.catalog(tx, scope, { cursor: null, limit: 10 });
+    return storage.placement.applyPlacement(tx, scope, {
+      indexRevision, memoryRevisions: [{ memoryId: memory.id, revision: memory.revision }],
+    }, { items: [{ memoryId: memory.id, ...assignment }] });
+  });
+  try {
+    const contributor = await insert("Synthetic title contributor");
+    const member = await insert("Independent synthetic member");
+    const { createdTopics: [{ id }] } = await place(contributor, {
+      parentIds: [], newL1: { title, parentL2Ids: [] },
+    });
+    await place(member, { parentIds: [id] });
+    const inspect = () => service(storage).inspect(scope, { memoryId: member.id });
+    assert.deepEqual((await inspect()).placements, [{ id, mocRevision: 2, title }]);
+    assert.equal((await service(storage).forget(scope, contributor.id, source)).status, "forgotten");
+    assert.deepEqual((await inspect()).placements, [{ id, mocRevision: 3, title: null }]);
+  } finally {
+    await storage.close();
+  }
+  assert.equal(readFileSync(path).includes(title), false);
 });

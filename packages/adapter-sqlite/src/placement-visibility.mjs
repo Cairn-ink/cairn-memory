@@ -70,7 +70,9 @@ export function createTitleScrubber(visibility) {
       const row = visible(String(memory_id));
       if (!row || row.historical || row.revision !== revision) retired.add(String(topic_id));
     }
-    const update = db.prepare(`UPDATE cairn_topics SET title = NULL, revision = revision + 1 WHERE ${exactScope} AND id = ?`);
+    // Visibility can change before the same transaction invalidates the
+    // Memory. The membership/source invalidation owns the revision advance.
+    const update = db.prepare(`UPDATE cairn_topics SET title = NULL WHERE ${exactScope} AND id = ?`);
     for (const id of retired) update.run(...keys, id);
   };
 }
