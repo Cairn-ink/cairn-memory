@@ -201,7 +201,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
       VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(scope), hashSession(scope, client, sessionId));
     if (added.changes) advanceSuppressionEpoch(db, scope.owner);
-    return Boolean(added.changes);
+    return !!added.changes;
   }
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope

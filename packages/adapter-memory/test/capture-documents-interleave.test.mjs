@@ -356,7 +356,7 @@ for (const [label, point, deletion] of [
       const verifyDispatch = deletion ? "dispatch-3" : "dispatch-4";
       assert.deepEqual(f.trace, ["dispatch-1", "extract",
         ...(deletion ? ["dispatch-2", "detect"] : ["dispatch-2", "embed-memory", "dispatch-3", "detect"]),
-        ...(racing && point === verifyDispatch ? [verifyDispatch, "committed", "verify"] : [verifyDispatch, "verify"]),
+        ...(racing && point === verifyDispatch ? [verifyDispatch, "committed"] : [verifyDispatch, "verify"]),
         ...(racing && point === "verify" ? ["committed"] : [])]);
       const stored = (await f.storedCards()).flatMap(({ amendments }) => amendments ?? []);
       assert.deepEqual(stored.map(([, amendment]) => amendment?.sourceMessage.messageId), racing ? [] : [correction.id]);

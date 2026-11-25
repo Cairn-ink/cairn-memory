@@ -7,10 +7,17 @@ import { buildCoreLocalCandidate } from '../../../packaging/build-core-local.mjs
 import { engineIdForCoreLocal, sha256 } from '../../../packaging/core-local/engine-id.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { executableFor } from '../lib/local-descriptor.mjs';
-import { checkCoreLocalConfig, engineBaseId, nextRepairId } from '../lib/local-engine.mjs';
+import { checkCoreLocalConfig, coreLocalInitializeResult, engineBaseId, nextRepairId } from '../lib/local-engine.mjs';
 
 const verificationFailed = { key: 'local_engine_verification_failed', code: 1 };
 const binPath = 'packaging/core-local/cli.mjs';
+
+test('the pinned initialize result matches the installed wire golden byte for byte', async () => {
+  const fixture = new URL('../../../packaging/test/fixtures/installed-local-0.6.11-wire.json', import.meta.url);
+  const { exchanges } = JSON.parse(await readFile(fixture, 'utf8'));
+  assert.deepEqual(Buffer.from(JSON.stringify(coreLocalInitializeResult)),
+    Buffer.from(JSON.stringify(exchanges.initialize.response.result)));
+});
 
 test('check-config verifies a built candidate and refuses wrong identities, reports and bytes', async t => {
   const { path: root } = createTestWorkspace(t);
