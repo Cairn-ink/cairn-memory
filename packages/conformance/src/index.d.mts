@@ -65,5 +65,6 @@ export declare const TOPICS_FOR_CARDS_CASES: readonly ConformanceCase[];
 export declare const DELIVERY_VISIBILITY_CASES: readonly ConformanceCase[];
 export declare const RECEIPT_WITHHELD_CASES: readonly ConformanceCase[];
 export declare const DURABLE_DELETE_CASES: readonly ConformanceCase[];
+export declare const COMMITTED_INDEX_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

@@ -12,6 +12,7 @@ import { readVisibilityFacts } from "./memory-visibility.mjs";
 import { createImportTextFilter, copyWithheldPositions, rawSpanFilter } from "./raw-import.mjs";
 import { LATE_PROVEN_CLOSURE, MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
 import { purgeRawText, scrubLedger } from "./raw-purge.mjs";
+import { conversationSessions, rawSession } from "./raw-session.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { Scope } from "../../core/src/ports/common.d.ts" */
@@ -99,16 +100,6 @@ async function record(query, run, scope, { client, sessionId }, proofs) {
   if (closure.session_ids) {
     await erase(query, run, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })));
   }
-}
-
-/** @param {Query} query @param {Scope} scope @param {Session} ref */
-async function rawSession(query, scope, ref) {
-  if (ref.client === "mcp" || !ref.sessionId.startsWith("mcp-save:")) return ref;
-  const { rows } = await query(`SELECT DISTINCT source_kind = 'mcp' AS explicit_save FROM memories
-    WHERE user_id = $1 AND core_namespace IS NULL AND source_client = $2 AND source_session_id = $3`,
-  [scope.owner, ref.client, ref.sessionId]);
-  if (rows.length > 1) throw new CoreError("raw_lineage_unavailable");
-  return rows[0]?.explicit_save ? { ...ref, client: "mcp" } : ref;
 }
 
 /** @param {Scope} scope */
@@ -205,7 +196,8 @@ export function createPostgresRawPorts(options) {
           const withheld = hostedTimes.filter((time) => time === undefined).length;
           const result = { archived: 0, ...(withheld > 0 && { withheld }) };
           if (!times.length) return result;
-          let positions = await filterSources(query, capture, times, await captureProofs(capture, batch), "raw", captureProofs, hashSessionKey);
+          let positions = await filterSources(query, capture, times, await captureProofs(capture, batch),
+            "raw", captureProofs, hashSessionKey, false, batch);
           if (!positions.length) return result;
           const { scope, client, sessionId, eventId } = capture;
           const { rows: [outbox] } = await query(LOCK_ARCHIVE_OUTBOX, [scope.owner, client, sessionId, eventId]);
@@ -242,7 +234,7 @@ export function createPostgresRawPorts(options) {
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
           const proofs = await captureProofs(source, batch);
           if (proofs === null) return counts;
-          const positions = await filterSources(query, source, times, proofs, "import", captureProofs, hashSessionKey);
+          const positions = await filterSources(query, source, times, proofs, "import", captureProofs, hashSessionKey, false, batch);
           if (!positions.length) return counts;
 
           const params = [source.scope.owner, source.client, source.sessionId];
@@ -320,10 +312,15 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
         return async (query, run) => {
-          const claimsTerminated = await terminateDirectClaims(query, target.owner, ref);
-          const rawDeleted = await changeSessions(query, target, [ref], DELETE);
-          const { ledgerChanged } = await scrubLedger(query, target, [ref]);
-          if (claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
+          const sessions = await conversationSessions(query, target, ref);
+          const fenced = await changeSessions(query, target, sessions, FENCE);
+          let claimsTerminated = false;
+          for (const session of sessions) {
+            if (await terminateDirectClaims(query, target.owner, session)) claimsTerminated = true;
+          }
+          const rawDeleted = await changeSessions(query, target, sessions, DELETE);
+          const { ledgerChanged } = await scrubLedger(query, target, sessions);
+          if (fenced || claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });
