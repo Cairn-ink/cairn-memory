@@ -30,6 +30,11 @@ function sessionSlot(namespace, { client, sessionId }) {
   return JSON.stringify([namespace, client, sessionId]);
 }
 
+/** @param {State} state @param {Scope} scope @param {Session} session */
+function hasRawFence(state, scope, session) {
+  return state.rawFences.has(sessionSlot(scope.namespace, session));
+}
+
 /** @param {Scope} scope @param {Session} session @param {string} id */
 function rawId({ owner, namespace }, { client, sessionId }, id) {
   return JSON.stringify([owner, namespace, client, sessionId, id]);
@@ -134,6 +139,13 @@ function advanceRevision(run) {
   run.stateWritten = true;
 }
 
+/** @param {State} state @param {string} slot */
+function addFence({ rawFences }, slot) {
+  if (rawFences.has(slot)) return false;
+  rawFences.add(slot);
+  return true;
+}
+
 /** @param {RawSegment} segment @returns {RawSegment} */
 function publicSegment(segment) {
   return { ...segment, ref: { ...segment.ref } };
@@ -215,7 +227,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
 
   /** @param {State} state @param {Scope} scope @param {Session} session @param {StoredFact[]} facts */
   function allowsArchive(state, scope, session, facts) {
-    if (state.rawFences.has(sessionSlot(scope.namespace, session))) return false;
+    if (hasRawFence(state, scope, session)) return false;
     const row = { type: /** @type {const} */ ("raw"), scope, source: session,
       sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: 0 };
     return !facts.some((stored) => stored.fact.kind === "session" && factHidesRow(stored, row, policy) !== false);
@@ -234,7 +246,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
    * @param {readonly CaptureProof[] | null | undefined} proofs
    */
   function lineageFenced(state, scope, session, proofs) {
-    if (proofs == null || state.rawFences.has(sessionSlot(scope.namespace, session))) return true;
+    if (proofs == null || hasRawFence(state, scope, session)) return true;
     const sessions = state.rawAnchors.get(session.client);
     if (!sessions) return false;
     for (const anchor of sessions.values()) {
@@ -388,13 +400,17 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
-  function deleteSessions(tx, scope, prepare) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [fence] */
+  function deleteSessions(tx, scope, prepare, fence = false) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
       return async (getState, _markDirty, run) => {
         const state = getState();
+        let fenced = false;
+        if (fence) {
+          for (const slot of slots) if (addFence(state, slot)) fenced = true;
+        }
         const { deletedMessages } = state;
         const before = deletedMessages.size;
         const deleted = [];
@@ -419,8 +435,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         const ledgerBlanked = await blankCaptureMessages(state, namespace, key => slots.has(sessionSlot(namespace, key)));
-        if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
-        if (deleted.length) advanceRevision(run);
+        if (fenced || deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
+        if (fenced || deleted.length) advanceRevision(run);
         if (ledgerBlanked || deletedMessages.size !== before) run.stateWritten = true;
         return { rawDeleted: deleted.length, ledgerBlanked };
       };
@@ -607,16 +623,15 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         const slot = sessionSlot(writeNamespace(scope), copySession(session));
         return (getState, _markDirty, run) => {
           const state = getState();
-          const { rawFences } = state;
-          if (rawFences.has(slot)) return;
-          rawFences.add(slot);
+          if (!addFence(state, slot)) return;
           advanceRawInspectEpoch(state);
           advanceRevision(run);
         };
       });
     },
     async deleteConversation(tx, scope, session) {
-      const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)]);
+      // Refuse later turns even when their message IDs have never been seen.
+      const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)], true);
       return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
@@ -675,7 +690,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceLineageVisible,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, hasRawFence, lineageFenced, sourceLineageVisible,
     receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

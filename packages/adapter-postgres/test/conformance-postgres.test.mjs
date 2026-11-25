@@ -463,6 +463,7 @@ const notApplicable = {
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
   "suppressions.receiptWithheld not implemented yet": ["K-RCPT-W1"],
+  "durable conversation deletion not implemented yet": ["K-RAW-DEL-1"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;
