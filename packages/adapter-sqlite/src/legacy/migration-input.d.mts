@@ -58,6 +58,7 @@ export interface LegacyInput {
     key: string;
     fences: string[][];
     rules: string[][];
+    exactOnlyUuidRules: string[][];
     actions: unknown[];
     effects: unknown[];
   } | null;

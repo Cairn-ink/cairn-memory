@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createRawSearchAuthority } from "../../../../core/raw-search-authority.mjs";
 import { rawSessionKeys } from "../../../../core/raw-source-roots.mjs";
+import { legacyRawHash } from "../migrate/raw-privacy.mjs";
 import { createRawLineage } from "../raw-lineage.mjs";
 import { scopeKey } from "../storage-values.mjs";
 import { sessionHasher } from "../suppressions.mjs";
@@ -77,23 +78,32 @@ function assemble(key, row, parts, indexes) {
   return content;
 }
 
-function readFencedAnchors(db, key) {
+export function readFencedAnchors(db, key, localPrivacy) {
   const lineage = createRawLineage(key, sessionHasher(key, true));
   const messages = db.prepare(`SELECT c.owner_id, c.scope, c.project_id, c.client, c.session_key, m.*
     FROM raw_conversations c JOIN raw_session_fences f USING (owner_id, scope, project_id, client, session_key)
     JOIN raw_messages m ON m.conversation_id=c.id`);
   const parts = db.prepare("SELECT * FROM raw_parts WHERE conversation_id=? AND message_id=? ORDER BY part_index");
   const anchors = [];
+  const uuidRules = new Map();
   for (const row of messages.iterate()) {
+    const scope = scopeOf(row);
     const sessionId = row.session_key.replace(/^s1:([0-9a-f]{64})$/, "legacy-raw:$1");
     // Without a complete local payload, a fenced row can attest only its ID.
     const saved = row.assembly_state === "complete" ? parts.all(row.conversation_id, row.message_id) : [];
     const content = saved.length && saved.every(part => part.saved && part.format === "local-plain-v1")
       ? assemble(key, row, saved, saved.map((_, index) => index)) : "";
-    anchors.push(...lineage.anchorRows(scopeOf(row), { client: row.client, sessionId },
+    anchors.push(...lineage.anchorRows(scope, { client: row.client, sessionId },
       [{ id: row.message_id, content }]));
+    if (localPrivacy && row.client === "claude-code") {
+      const hash = legacyRawHash(key, scope, "local-raw-forgotten-uuid-v1", row.client, row.message_id);
+      const tuple = [...scopeKey(scope), JSON.stringify(row.client), "uuid", hash, "null"];
+      const id = JSON.stringify(tuple);
+      const scrubbed = content === "" || uuidRules.get(id)?.scrubbed === true;
+      uuidRules.set(id, { tuple, scrubbed });
+    }
   }
-  return anchors;
+  return { anchors, uuidRules };
 }
 
 export function readLegacyArchive(db, file, privacy, receipts) {
@@ -101,8 +111,7 @@ export function readLegacyArchive(db, file, privacy, receipts) {
   const counts = { rawConversations: 0, rawMessages: 0, rawParts: 0, rawSourceMaps: 0, rawReceiptLineage: 0, rawReceiptOrigins: 0 };
   if (!privacy) return { rows, anchors, spans, maps, reservations, counts, fencedAnchors: [] };
   const selections = visibleParts(db, file);
-  const { key } = privacy;
-  const fencedAnchors = readFencedAnchors(db, key);
+  const { key, fencedAnchors } = privacy;
   const reserved = db.prepare(`SELECT c.id, c.owner_id, c.scope, c.project_id, c.client, c.session_key, m.message_id
     FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id WHERE m.assembly_state <> 'pending'`);
   for (const row of reserved.iterate()) {

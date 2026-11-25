@@ -23,7 +23,15 @@ const schemaQuery = "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER B
 const migrationSchema = STORAGE_SCHEMA + MIGRATION_SCHEMA + INITIALIZE_STORE;
 
 /** @param {Plan} plan @param {LegacyInput} source */
-function phases(plan, source) {
+function rawPrivacyRows(plan, source, copying = false) {
+  const { rawPrivacy, archive } = source;
+  const exactOnly = new Set(copying ? [] : rawPrivacy?.exactOnlyUuidRules);
+  const rules = rawPrivacy?.rules.filter(tuple => !exactOnly.has(tuple)) ?? [];
+  return [...rules, ...archive.reservations, ...plan.closed];
+}
+
+/** @param {Plan} plan @param {LegacyInput} source */
+function phases(plan, source, copying = false) {
   return [
     [
       ["cairn_memories", plan.memoryRows],
@@ -37,7 +45,7 @@ function phases(plan, source) {
       ["cairn_migrated_safety", plan.safety.rows],
       ["cairn_pause", plan.pause],
       ["cairn_raw_fences", source.rawPrivacy?.fences ?? []],
-      ["cairn_migrated_raw_privacy", [...(source.rawPrivacy?.rules ?? []), ...source.archive.reservations, ...plan.closed]],
+      ["cairn_migrated_raw_privacy", rawPrivacyRows(plan, source, copying)],
       ["cairn_raw_messages", source.archive.rows],
       ["cairn_raw_anchors", plan.anchors],
       ["cairn_migrated_raw_maps", source.archive.maps],
@@ -120,11 +128,21 @@ function reportCutoverEvidence(source, plan, target) {
     db.exec("PRAGMA query_only = ON; PRAGMA trusted_schema = OFF; BEGIN");
     const record = checkRecord(migrationRecord(db), source, plan);
     if (record.checkpoint !== 3) refuse("legacy_incomplete");
+    let uuidFences = 0;
     for (const [table, tuples] of phases(plan, source)[1]) {
       if (!["cairn_raw_fences", "cairn_migrated_raw_privacy", "cairn_pause"].includes(table)) continue;
       const query = db.prepare(`SELECT * FROM "${table}"`);
       query.setReadBigInts(true);
-      if (tableDigest(query.all().map(row => Object.values(row))) !== tableDigest(tuples)) refuse("legacy_integrity_mismatch");
+      const actual = query.all();
+      const digest = tableDigest(actual.map(row => Object.values(row)));
+      if (digest !== tableDigest(tuples)) {
+        // Earlier attestations included the full privacy copy. Verify that
+        // exact population when reporting evidence for a completed replay.
+        if (table !== "cairn_migrated_raw_privacy" || digest !== tableDigest(rawPrivacyRows(plan, source, true))) {
+          refuse("legacy_integrity_mismatch");
+        }
+      }
+      if (table === "cairn_migrated_raw_privacy") uuidFences = actual.filter(row => row.kind === "uuid").length;
     }
     const raw = source.rawPrivacy;
     const rules = raw?.rules ?? [];
@@ -132,7 +150,7 @@ function reportCutoverEvidence(source, plan, target) {
       rawDeletionEvidence: {
         sessionFences: raw?.fences.length ?? 0,
         hideWindows: rules.filter(row => row[3] === "window").length,
-        uuidFences: rules.filter(row => row[3] === "uuid").length,
+        uuidFences,
         excludedSpans: rules.filter(row => row[3] === "span").length,
         rawDeletionActions: raw?.actions.length ?? 0,
         rawDeletionEffects: raw?.effects.length ?? 0,
@@ -218,7 +236,8 @@ export async function migrateLegacyStore(input) {
     migrationId: observed.migrationId, storeId: source.storeId, sourceLayout: source.physical,
     memories: plan.memoryRows.length, receipts: plan.receiptRows.length, denials: plan.markers.length,
     withheldReceipts: plan.withheldReceipts, pausedOwners: plan.pausedOwners,
-    rawFences: source.rawPrivacy?.fences.length ?? 0, rawPrivacyFacts: source.rawPrivacy?.rules.length ?? 0,
+    rawFences: source.rawPrivacy?.fences.length ?? 0,
+    rawPrivacyFacts: source.rawPrivacy ? source.rawPrivacy.rules.length - source.rawPrivacy.exactOnlyUuidRules.length : 0,
     archived: source.archive.counts, ledger: plan.ledger, safetyFacts: source.safety?.facts.length ?? 0,
     identityReservations: source.safety?.reservations.length ?? 0, dropped: source.dropped,
   };
@@ -232,7 +251,7 @@ export async function migrateLegacyStore(input) {
   let attestation;
   try {
     if (observed.checkpoint === 0) input.onCheckpoint?.("initialized", migrationId);
-    const steps = phases(plan, source);
+    const steps = phases(plan, source, true);
     for (const [index, name] of /** @type {const} */ ([[0, "memories"], [1, "privacy"]])) {
       source.checkSource();
       const advanced = await migrationWrite(connection, db => {
@@ -259,6 +278,15 @@ export async function migrateLegacyStore(input) {
       if (source.archive.fencedAnchors.length) {
         const insert = db.prepare("INSERT INTO cairn_raw_anchors VALUES (?, ?, ?, ?, ?, ?, ?)");
         for (const tuple of source.archive.fencedAnchors) insert.run(...tuple);
+      }
+      // Rewrite the copy phase's redundant UUID evidence only when the exact
+      // anchors and final attestation can commit with the removal.
+      if (source.rawPrivacy?.exactOnlyUuidRules.length) {
+        const remove = db.prepare(`DELETE FROM cairn_migrated_raw_privacy
+          WHERE owner_id=? AND namespace_key=? AND client_key=? AND kind=? AND selector=? AND body=?`);
+        for (const rule of source.rawPrivacy.exactOnlyUuidRules) {
+          if (remove.run(...rule).changes !== 1) return refuse("legacy_integrity_mismatch");
+        }
       }
       const proof = verify(db, source, plan, record, schema);
       installInspectSchema(db, source.inspect);
