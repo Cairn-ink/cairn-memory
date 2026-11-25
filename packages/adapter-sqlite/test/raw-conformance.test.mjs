@@ -5,11 +5,9 @@ import { rawWriter } from "../src/raw-rows.mjs";
 import { fixture, seedFact, testAccess } from "./storage-fixtures.mjs";
 
 const rawCapabilities = new Set(["rawArchive", "spanLineage"]);
-// finish binding to the asserted selection not implemented yet
-const excluded = new Set(["K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4"]);
 const rawCases = Object.values(kit).filter(Array.isArray).flat()
-  .filter(({ id, needs, followUp }) => !excluded.has(id) && (needs.some(flag => rawCapabilities.has(flag)) ||
-    followUp?.needs.some(flag => rawCapabilities.has(flag))));
+  .filter(({ needs, followUp }) => needs.some(flag => rawCapabilities.has(flag)) ||
+    followUp?.needs.some(flag => rawCapabilities.has(flag)));
 const windowCases = kit.RETRIEVAL_WINDOW_CASES.filter(({ requests }) => requests?.rawArchive);
 
 function factory(contextScope) {
