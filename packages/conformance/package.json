@@ -10,6 +10,10 @@
     "./inspect": { "types": "./src/inspect-cases.d.mts", "default": "./src/inspect-cases.mjs" },
     "./context-read": { "default": "./src/context-read-cases.mjs" },
     "./context-assembly": { "default": "./src/context-assembly-cases.mjs" },
+    "./context-read-document-cards": {
+      "types": "./src/context-read-document-card-cases.d.mts",
+      "default": "./src/context-read-document-card-cases.mjs"
+    },
     "./document-card-visibility-input": {
       "types": "./src/document-card-visibility-input-cases.d.mts",
       "default": "./src/document-card-visibility-input-cases.mjs"

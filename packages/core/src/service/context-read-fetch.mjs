@@ -1,7 +1,7 @@
 import { validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
 import { entry } from "./entry.mjs";
-import { assertContextVisible, legacyEvidence, qualifyEvidence, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
+import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, legacyEvidence, qualifyEvidence, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
 import { contextReadSet, CONTEXT_HORIZON, fetchEvidenceInput, intentOf, readSetBinding, namespaceSlot,
   qualifiedRefs } from "./context-read-input.mjs";
 import { isReadMac, readTokenSigner } from "./context-read-tokens.mjs";
@@ -74,9 +74,10 @@ export function evidenceFence(signer, item, row, lineageEnabled) {
   return signer.bind("snapshot-item", value);
 }
 
-/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "capabilities" | "uow" | "fence">} storage
+/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "capabilities" | "uow" | "fence" | "documentCards">} storage
  * @returns {NonNullable<MemoryService["fetchEvidence"]>} */
-export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fence }) {
+export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fence, documentCards }) {
+  const cardsEnabled = hasContextCardLoader(documentCards);
   return entry(async (/** @type {ContextReadSet} */ value, /** @type {FetchEvidenceInput} */ args,
     /** @type {CallOptions} */ options = {}) => {
     const readSet = contextReadSet(value);
@@ -98,11 +99,20 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
       if (previous && JSON.stringify(previous.generations) !== JSON.stringify(generations)) throw new CoreError("snapshot_stale");
 
       const rows = structuredClone(await store.evidence(tx, readSet, refs, intent));
-      const failures = refs.map((ref, i) => checkRow(ref, rows[i]));
+      const failures = await Promise.all(refs.map(async (ref, i) => {
+        const row = rows[i];
+        const legacy = !cardsEnabled && row &&
+          legacyContextCard(row, generations[namespaceSlot(readSet, ref.scope)].lineage !== undefined);
+        if (row?.type === "card" && !legacy && !await contextCardVerdict(documentCards, tx, ref, row.item)) {
+          return "evidence_unavailable";
+        }
+        return checkRow(ref, row);
+      }));
       const unavailable = previous ? "snapshot_stale" : "evidence_unavailable";
+      const fenceRefs = cardsEnabled ? refs.filter(ref => ref.type !== "card") : refs;
       if (failures.includes("evidence_unavailable")) throw new CoreError(unavailable);
       if (failures.includes("revision_conflict")) {
-        await assertContextVisible(fence, tx, readSet, refs, intent, unavailable);
+        await assertContextVisible(fence, tx, readSet, fenceRefs, intent, unavailable);
         throw new CoreError(previous ? "snapshot_stale" : "revision_conflict");
       }
 
@@ -112,7 +122,7 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
         generations[namespaceSlot(readSet, item.ref.scope)].lineage !== undefined)));
       if (fences.some((full, i) => (previous && previous.fences[i] !== full) ||
           (input.fences?.[i] != null && input.fences[i] !== full.slice(0, 8)))) {
-        await assertContextVisible(fence, tx, readSet, refs, intent, unavailable);
+        await assertContextVisible(fence, tx, readSet, fenceRefs, intent, unavailable);
         throw new CoreError("snapshot_stale");
       }
       const snapshot = await signer.encode("snapshot", {
@@ -120,7 +130,7 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
       });
       const tooLarge = responseBytes({ items: items.map(legacyEvidence), snapshot }) > input.responseByteLimit;
       if (options.signal?.aborted) throw new CoreError(unavailable);
-      await assertContextVisible(fence, tx, readSet, refs, intent, unavailable);
+      await assertContextVisible(fence, tx, readSet, fenceRefs, intent, unavailable);
       if (tooLarge) throw new CoreError("context_item_too_large");
       return { items, snapshot };
     });
