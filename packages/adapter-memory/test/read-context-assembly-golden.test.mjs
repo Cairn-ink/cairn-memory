@@ -239,11 +239,14 @@ test("exact admitted Raw lineage coalesces the turn and preserves only Memory re
   const claim = await write(tx => storage.capture.claim(tx, key, [message], { leaseMs: 10_000 }));
   assert.equal(claim.status, "claimed");
   await write(tx => storage.capture.beginDispatch(tx, claim.token));
-  const finished = await write(tx => storage.capture.finish(tx, claim.token, [{
-    content: original, kind: "fact", confidence: 1, embedding: null,
-    textHash: "sha256:" + createHash("sha256").update(original.toLowerCase()).digest("hex"),
-    receipts: [{ client: key.client, sessionId: key.sessionId, messageId: message.id, role: "user", occurredAtMs: at }],
-  }]));
+  const finished = await write(async tx => {
+    await storage.capture.assertEligible(tx, key, [0]);
+    return storage.capture.finish(tx, claim.token, [{
+      content: original, kind: "fact", confidence: 1, embedding: null,
+      textHash: "sha256:" + createHash("sha256").update(original.toLowerCase()).digest("hex"),
+      receipts: [{ client: key.client, sessionId: key.sessionId, messageId: message.id, role: "user", occurredAtMs: at }],
+    }]);
+  });
   const id = finished.memories[0].id;
   const service = createMemoryService({ profile: "keyless-local", storage, clock: assemblyClock(),
     contextReadCounter: { count: fixtureCount }, contextReadFormat: formatAssembly });

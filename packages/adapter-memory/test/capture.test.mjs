@@ -35,8 +35,8 @@ function read({ uow }, fn) {
   return uow.run(owner, { readOnly: true }, fn);
 }
 
-function claim(adapter, eventId, lease = options) {
-  return write(adapter, (tx) => adapter.capture.claim(tx, key(eventId), [], lease));
+function claim(adapter, eventId, lease = options, messages = []) {
+  return write(adapter, (tx) => adapter.capture.claim(tx, key(eventId), messages, lease));
 }
 
 function stateToken(adapter) {
@@ -176,11 +176,15 @@ test("finish reports each in-batch position and replay is isolated from both res
   });
   const { capture, harness, memories } = adapter;
   const event = "repeat";
-  const { token } = await claim(adapter, event);
   const first = item();
   const receipt = { client: "test-client", sessionId: "test-session", messageId: "message", role: "user", occurredAtMs: null };
+  const messages = [{ id: receipt.messageId, role: receipt.role, occurredAtMs: receipt.occurredAtMs, content: "Test source" }];
+  const { token } = await claim(adapter, event, options, messages);
   const batch = [first, { ...first, kind: "context", confidence: 0.8, receipts: [receipt] }, first];
-  const result = await write(adapter, (tx) => capture.finish(tx, token, batch));
+  const result = await write(adapter, async (tx) => {
+    await capture.assertEligible(tx, key(event), [0]);
+    return capture.finish(tx, token, batch);
+  });
   assert.deepEqual(result, {
     indexRevision: 1, memories: [
       { id: "test-memory-1", revision: 1, outcome: "inserted" },
@@ -194,14 +198,14 @@ test("finish reports each in-batch position and replay is isolated from both res
   const expected = structuredClone(result);
   result.memories[0].id = "caller-change";
   result.counters.nearSkippedUnembedded = 99;
-  const replay = await claim(adapter, event);
+  const replay = await claim(adapter, event, options, messages);
   assert.deepEqual(replay, { status: "rawReplay", result: expected });
   replay.result.memories.pop();
   replay.result.indexRevision = 99;
   const later = await claim(adapter, "another");
   const laterResult = await write(adapter, (tx) => capture.finish(tx, later.token, [item("b")]));
   assert.deepEqual(laterResult.counters, { nearSkippedUnembedded: 1 });
-  assert.deepEqual(await claim(adapter, event), { status: "rawReplay", result: expected });
+  assert.deepEqual(await claim(adapter, event, options, messages), { status: "rawReplay", result: expected });
 });
 
 test("finish uses full suppression and the inferred duplicate merge rules", async () => {

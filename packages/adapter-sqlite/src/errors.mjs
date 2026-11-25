@@ -32,3 +32,20 @@ export function toSqliteError(error) {
     return new CoreError("internal_error");
   }
 }
+
+/** Observe a dropped write promise while preserving its rejection for callers.
+ * @template {PropertyKey} K
+ * @template {Record<K, (...args: any[]) => Promise<unknown>>} P
+ * @param {P} ports @param {readonly K[]} names
+ */
+export function handleWriteRejections(ports, names) {
+  for (const name of names) {
+    const write = ports[name];
+    ports[name] = /** @type {P[K]} */ ((/** @type {any[]} */ ...args) => {
+      const pending = write.apply(ports, args);
+      void pending.catch(() => {});
+      return pending;
+    });
+  }
+  return ports;
+}
