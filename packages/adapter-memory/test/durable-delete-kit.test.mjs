@@ -56,6 +56,30 @@ test("K-RAW-DEL-1 rejects a fence applied only to archive", async () => {
     /^Error: Raw import must refuse a new message in the deleted conversation \(got \{"archived":1,"existing":0,"withheld":0\}\)$/);
 });
 
+test("K-RAW-DEL-1 rejects a time cutoff at the deletion instead of a durable refusal", async () => {
+  const factory = mutant(raw => {
+    const { archive, importArchive } = raw;
+    assert.ok(importArchive);
+    /** @type {Map<string, number>} */
+    const cutoffs = new Map();
+    const slot = ({ client, sessionId }) => JSON.stringify([client, sessionId]);
+    /** @param {{client: string, sessionId: string}} session @param {readonly {occurredAtMs: number | null}[]} messages */
+    const beforeCutoff = (session, messages) => cutoffs.has(slot(session)) &&
+      messages.every(({ occurredAtMs }) => occurredAtMs !== null && occurredAtMs <= (cutoffs.get(slot(session)) ?? 0));
+    raw.deleteConversation = async (tx, scope, session) => {
+      const { rawDeleted } = await raw.eraseSessions(tx, scope, [session]);
+      cutoffs.set(slot(session), Date.now());
+      return { rawDeleted };
+    };
+    raw.archive = async (tx, key, messages) => beforeCutoff(key, messages)
+      ? { archived: 0 } : archive(tx, key, messages);
+    raw.importArchive = async (tx, scope, session, messages, options) => beforeCutoff(session, messages)
+      ? { archived: 0, existing: 0, withheld: messages.length } : importArchive(tx, scope, session, messages, options);
+  });
+  await assert.rejects(runCase(factory, testCase),
+    /^Error: Raw archive must refuse a new message timestamped after the deletion$/);
+});
+
 test("K-RAW-DEL-1 rejects a fence applied to the entire client", async () => {
   const factory = mutant(raw => {
     const { archive, deleteConversation } = raw;

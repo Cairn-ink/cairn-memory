@@ -34,13 +34,19 @@ export const DURABLE_DELETE_CASES = [
       equal((await remove()).rawDeleted, 1, "Deleting the conversation must remove its archived message");
 
       const before = await readDump(harness);
-      const late = message("The latch was polished.", 3);
-      equal((await archive(deleted, late)).archived, 0, "Raw archive must refuse a new message in the deleted conversation");
+      // Probe both an old timestamp (re-sent history) and one well after the delete (a genuinely later turn),
+      // so a time cutoff at the delete cannot pass for durable refusal.
+      const afterDelete = Date.now() + 86_400_000;
+      const resent = message("The latch was polished.", 3);
+      const late = message("The latch was polished again.", afterDelete);
+      equal((await archive(deleted, resent)).archived, 0, "Raw archive must refuse a new message in the deleted conversation");
+      equal((await archive(deleted, late)).archived, 0,
+        "Raw archive must refuse a new message timestamped after the deletion");
       equal(await readDump(harness), before, "A refused archive must leave the dump unchanged");
 
       const importArchive = raw.importArchive?.bind(raw);
       if (importArchive) {
-        const counts = await write(tx => importArchive(tx, target, deleted, [message("The latch was replaced.", 4)]));
+        const counts = await write(tx => importArchive(tx, target, deleted, [message("The latch was replaced.", afterDelete + 1)]));
         equal(counts, { archived: 0, existing: 0, withheld: 1 },
           `Raw import must refuse a new message in the deleted conversation (got ${JSON.stringify(counts)})`);
         equal(await readDump(harness), before, "A refused import must leave the dump unchanged");
@@ -56,11 +62,12 @@ export const DURABLE_DELETE_CASES = [
 
       if (capture?.eligible) {
         equal(await uow.run(owner, { readOnly: true },
-          tx => capture.eligible(tx, key(deleted), [message("The latch was checked.", 5)])), [],
+          tx => capture.eligible(tx, key(deleted), [message("The latch was checked.", 5),
+            message("The latch was checked again.", afterDelete + 2)])), [],
           "A new capture in the deleted conversation must have no eligible positions");
       }
 
-      equal((await archive(control, message("The shelf was sanded.", 6))).archived, 1,
+      equal((await archive(control, message("The shelf was sanded.", afterDelete + 3))).archived, 1,
         "Raw archive must still accept a new message in another conversation for the same client");
       equal((await remove()).rawDeleted, 0, "Deleting the conversation again must remove zero messages");
     },
