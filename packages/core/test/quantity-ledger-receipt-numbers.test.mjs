@@ -127,9 +127,18 @@ test('over-limit receipts yield no readings, including at the beginning', () => 
   assert.deepEqual([...readReceiptNumbers('42' + ' '.repeat(15_999_999))], []);
 });
 
-test('fix2 regression: receipt length is checked in UTF-16 units before normalization', () => {
-  // Each decomposed pair normalizes to one code unit.
-  const atLimit = '1 ' + 'e\u0301'.repeat(9_999);
+test('fix3 regression: a capture-limit receipt stays readable at maximum NFKC expansion', () => {
+  // U+FDFA expands to 18 UTF-16 units under NFKC.
+  const receipt = '\uFDFA'.repeat(19_996) + ' $42';
+  const normalized = receipt.normalize('NFKC');
+  assert.equal(receipt.length, 20_000);
+  assert.equal(normalized.length, 359_932);
+  assert.deepEqual(readReceiptNumbers(receipt), new Set([42]));
+  assert.deepEqual(readReceiptNumbers(normalized), new Set([42]));
+});
+
+test('fix3 regression: the whole-input safety cap uses UTF-16 units before normalization', () => {
+  const atLimit = '1 ' + 'x'.repeat(359_996) + 'e\u0301';
   assert.deepEqual([...readReceiptNumbers(atLimit)], [1]);
   assert.deepEqual([...readReceiptNumbers(atLimit + ' ')], []);
 });

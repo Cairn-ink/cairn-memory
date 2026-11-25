@@ -34,7 +34,9 @@ const wordSeparators = new RegExp('[ \t]+|' + hyphen, 'u');
 
 const lowUnits = new Map([['千', 3], ['百', 2], ['十', 1]]);
 const cents = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, useGrouping: false });
-const maxReceiptLength = 20_000;
+// Capture admits 20,000 UTF-16 units. NFKC can expand each unit up to 18-fold.
+const maxReceiptLength = 20_000 * 18;
+const maxCombiningRunLength = 20_000;
 
 /** @param {number} value */
 export function roundReceiptNumber(value) {
@@ -188,7 +190,7 @@ export function readReceiptNumbers(content) {
   // voiced marks in each run and count marks that decompose into two as two.
   for (const [marks] of content.matchAll(/[\p{M}\uff9e\uff9f]+/gu)) {
     const extraMarks = marks.match(/[\u0344\u0f73\u0f75\u0f81]/gu)?.length ?? 0;
-    if (marks.length + extraMarks > maxReceiptLength) return values;
+    if (marks.length + extraMarks > maxCombiningRunLength) return values;
   }
   const text = content.normalize('NFKC').toLowerCase();
   figureStarts.lastIndex = 0;

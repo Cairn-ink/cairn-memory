@@ -123,3 +123,13 @@ test('capture keeps only scaled readings for standalone scale letters', async ()
     assert.deepEqual(diagnostics, rejected.map(() => ungrounded), text);
   }
 });
+
+test('fix3 regression: capture grounds both 19,999-unit receipts after normalization', async () => {
+  for (const ending of ['.', '…']) {
+    const text = '$42 ' + 'x '.repeat(9_997) + ending;
+    assert.equal(text.length, 19_999);
+    const { rows, diagnostics } = await capture([message('user', text)], [item([0])], [record(42)]);
+    assert.deepEqual(rows.map(({ value, receiptId }) => [value, receiptId]), [[42, 'canonical-user']], ending);
+    assert.deepEqual(diagnostics, [], ending);
+  }
+});
