@@ -320,10 +320,11 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
         return async (query, run) => {
+          const fenced = await changeSessions(query, target, [ref], FENCE);
           const claimsTerminated = await terminateDirectClaims(query, target.owner, ref);
           const rawDeleted = await changeSessions(query, target, [ref], DELETE);
           const { ledgerChanged } = await scrubLedger(query, target, [ref]);
-          if (claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
+          if (fenced || claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });

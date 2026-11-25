@@ -48,6 +48,14 @@ export function createCaptureProofs(secret) {
 /** @typedef {ReturnType<typeof createCaptureProofs>} Signer */
 
 /** @param {Connection["query"]} query @param {Source} source */
+export async function hasRawFence(query, { scope, client, sessionId }) {
+  if (scope.namespace !== null) return false;
+  const { rows } = await query(`SELECT 1 FROM capture_raw_fences
+    WHERE user_id = $1 AND client = $2 AND session_id = $3`, [scope.owner, client, sessionId]);
+  return rows.length > 0;
+}
+
+/** @param {Connection["query"]} query @param {Source} source */
 async function readAncestorFacts(query, { scope, client }) {
   const { rows } = await query(ANCESTOR_SESSION_FACTS, [scope.owner, client]);
   return /** @type {StoredFact[]} */ (rows.map(({ kind, body, action_id: actionId }) => {
@@ -97,11 +105,12 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
  * @param {Connection["query"]} query @param {Source} source @param {Proof[] | null} proofs
  * @param {{incoming: StoredFact[], ancestors?: StoredFact[]}} facts
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
- * @param {boolean} raw @param {boolean} [allowEdited]
+ * @param {boolean} raw @param {boolean} [allowEdited] @param {boolean} [allowExactFence]
  * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
  */
-async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey, raw, allowEdited = false) {
-  if (proofs === null) return "unknown";
+async function lineageVerdict(query, source, proofs, { incoming, ancestors }, signer, hashSessionKey,
+  raw, allowEdited = false, allowExactFence = false) {
+  if (proofs === null && !allowExactFence) return "unknown";
   const { scope, client, sessionId } = source;
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
   for (const stored of incoming) {
@@ -110,6 +119,8 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
     if (applies === true) return "suppressed";
     if (applies !== false) return "session-unknown";
   }
+  if (allowExactFence && await hasRawFence(query, source)) return "allowed";
+  if (proofs === null) return "unknown";
 
   // Ancestor matching needs Core session facts in their own namespaces. An
   // incoming-scope visibility read can omit a plain fact for the same session ID.
@@ -171,9 +182,9 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
 /**
  * @param {Connection["query"]} query @param {Source} source
  * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert" | "raw" | "import"} mode
- * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [allowExactFence]
  */
-export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey) {
+export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey, allowExactFence = false) {
   const { scope, client, sessionId } = source;
   const facts = await readVisibilityFacts(query, scope.owner, { source });
   const candidate = { scope, passages: [], session: { client, sessionId } };
@@ -185,7 +196,7 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
 
   // Import supplies fresh proofs. A comparable proof for edited content can rule out an ID match.
   const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey,
-    mode === "raw" || mode === "import", mode === "import");
+    mode === "raw" || mode === "import", mode === "import", allowExactFence);
   if (verdict === "allowed") return positions;
   if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
   return [];

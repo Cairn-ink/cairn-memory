@@ -5,7 +5,7 @@ import {
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
-import { createCaptureProofs, filterSources } from "./capture-source.mjs";
+import { createCaptureProofs, filterSources, hasRawFence } from "./capture-source.mjs";
 import { createPostgresMemoryStore } from "./memory-store.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
@@ -233,6 +233,7 @@ export function createPostgresCapturePorts(options) {
               throw new CoreError("suppressed");
             }
           }
+          if (batch.length && await hasRawFence(query, { scope, ...source })) throw new CoreError("lineage_fenced");
           const receiptSessions = new Map(batch.flatMap(({ receipts }) => receipts.map(({ client, sessionId }) =>
             [JSON.stringify([client, sessionId]), { scope, client, sessionId }])));
           for (const receiptSource of receiptSessions.values()) {
@@ -322,9 +323,11 @@ export function createPostgresCapturePorts(options) {
           if (position >= times.length) throw new CoreError("invalid_input");
           return times[position];
         });
-        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey);
-        if (row.core_admitted && selected.length) {
-          const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
+        const current = row.core_admitted ? decodeOutboxMessages(row.raw_request, row.core_outbox_metadata) : null;
+        // An admitted outbox can finish without sources once every message has been withdrawn.
+        const allowExactFence = selected.length === 0 && !!current?.length && current.every(({ content }) => content === "");
+        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey, allowExactFence);
+        if (current && selected.length) {
           const currentSources = selected.map((position) => current[position]);
           if (currentSources.some((message) => !message?.content)) throw new CoreError("suppressed");
           const currentProofs = await captureProofs(copy, currentSources);

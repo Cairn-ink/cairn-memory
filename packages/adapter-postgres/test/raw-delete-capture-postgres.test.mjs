@@ -218,7 +218,7 @@ test("a ledger-only conversation delete advances the index once and leaves unrel
   assert.equal(await db.revision(), revision + 1n);
 });
 
-test("conversation delete makes direct replay terminal and allows a new event", migrationDbTest, async (t) => {
+test("conversation delete makes direct replay terminal and fences a new event", migrationDbTest, async (t) => {
   const [message] = messages;
   const batch = [message];
   const db = await fixture(t, { archiveFirst: false, batch });
@@ -259,12 +259,10 @@ test("conversation delete makes direct replay terminal and allows a new event", 
   const fresh = await claim(newEvent);
   assert.equal(fresh.status, "claimed");
   assert.notEqual(fresh.token, first.token);
-  const { result, archived } = await finish(newEvent, fresh.token);
-  assert.deepEqual(result.memories.map(({ outcome }) => outcome), ["inserted"]);
-  assert.equal(archived, 1);
-  assert.deepEqual(await db.savedMemory(), [{ text: memoryText }]);
-  assert.deepEqual((await db.rawRows()).map(({ message_id, content }) => ({ message_id, content })),
-    [{ message_id: message.id, content: message.content }]);
+  await assert.rejects(finish(newEvent, fresh.token), { code: "lineage_fenced" });
+  assert.deepEqual(await write((tx) => raw.archive(tx, newEvent, batch)), { archived: 0 });
+  assert.deepEqual(await db.savedMemory(), []);
+  assert.deepEqual(await db.rawRows(), []);
 });
 
 test("a marker-only conversation delete advances the index once", migrationDbTest, async (t) => {
