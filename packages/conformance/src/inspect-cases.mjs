@@ -306,7 +306,7 @@ export const INSPECT_CASES = [
       const safe = { ...receipt("safe-turn", "Independent receipt"), sessionId: "safe-session" };
       /** @param {Receipt} sourceReceipt */
       async function archive({ client, sessionId, messageId, role, occurredAtMs, excerpt }) {
-        await adapter.uow.run(owner, { pauseLock: true }, tx => raw?.archive(tx,
+        return adapter.uow.run(owner, { pauseLock: true }, tx => raw?.archive(tx,
           { scope, client, sessionId, eventId: "archive-" + messageId, payloadDigest: "a".repeat(64) },
           [{ id: messageId, role, occurredAtMs, content: excerpt ?? "" }]) ?? Promise.resolve());
       }
@@ -374,7 +374,9 @@ export const INSPECT_CASES = [
       await adapter.uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, second));
       await rejects(() => inspect(scope, { memoryId: paged.id, receiptLimit: 1, receiptCursor: preDelete.nextReceiptCursor ?? "" }), "cursor_stale");
       equal((await detail(adapter, scope, paged.id)).receipts.map(r => r.messageId), [safe.messageId], "Deleted archive source is withheld");
-      await archive(second);
+      // A durable delete refuses the replay outright. A store that accepts it must still withhold the evidence.
+      const replay = await archive(second);
+      check(replay?.archived === 0 || replay?.archived === 1, "The replay archive must report its stored count");
       equal((await detail(adapter, scope, paged.id)).receipts.map(r => r.messageId), [safe.messageId], "A replay cannot restore deleted receipt evidence");
     },
   },

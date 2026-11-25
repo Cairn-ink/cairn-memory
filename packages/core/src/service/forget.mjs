@@ -2,13 +2,14 @@ import { detach, isWellFormedText } from "../capture/validate.mjs";
 import { SUPPRESSION_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
+import { documentCardVisible } from "../routing/visibility.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
-/** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
+/** @import {DocumentCardHideSelector, DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
 /** @import {RawSpanFact} from "../suppression-fact.mjs" */
 
 /** @typedef {MemoryService["forget"]} Forget */
@@ -100,6 +101,36 @@ async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
   return messages.values();
 }
 
+/** @param {DocumentCardSourceMessage} source */
+function sourceBinding({ client, sessionId, messageId }) {
+  return JSON.stringify([client, sessionId, messageId]);
+}
+
+/** @param {NonNullable<import("./index.d.mts").MemoryServiceDeps["storage"]["documentCards"]>} cards @param {Tx} tx @param {Scope} scope
+ * @param {Set<string>} deletedSources @param {{actionId: string, factIds: readonly string[]}} action
+ * @param {readonly DocumentCardHideSelector[]} [selectors] */
+async function purgeWithheldCards(cards, tx, scope, deletedSources, action, selectors) {
+  if (typeof cards.purgeById !== "function" || typeof cards.listForPurge !== "function") return;
+  const candidates = await cards.listForPurge(tx, scope, selectors, action);
+  for (const { cardId, input, amendments } of candidates) {
+    if (input) {
+      const { sourceMessage } = input.card;
+      const sourceWithheld = sourceMessage && deletedSources.has(sourceBinding(sourceMessage)) ? true : input.sourceWithheld;
+      const { reason } = await documentCardVisible({ ...input, sourceWithheld }, { definiteOnly: true });
+      if (reason === "text_withheld" || reason === "source_withheld" ||
+          reason === "source_memory_forgotten" || reason === "source_memory_not_visible") {
+        await cards.purgeById(tx, scope, cardId, reason);
+        continue;
+      }
+    }
+    for (const { amendmentId, sourceMessage, sourceWithheld } of amendments) {
+      if (sourceWithheld === true || deletedSources.has(sourceBinding(sourceMessage))) {
+        await cards.hideAmendment(tx, scope, cardId, amendmentId, "source_withheld", { purge: true });
+      }
+    }
+  }
+}
+
 /**
  * @param {import("./index.d.mts").MemoryServiceDeps} deps
  * @returns {Forget}
@@ -109,7 +140,7 @@ export function forgetMethod({ storage, clock }) {
     conflicts, rationale, documentCards, quantityLedger, forgetLog, proceduralTags } = storage;
 
   /** @type {(...args: [...Parameters<Forget>, options?: ForgetOptions]) =>
-   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict" }>} */
+   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict", indexRevision?: number }>} */
   const forget = entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
@@ -138,7 +169,10 @@ export function forgetMethod({ storage, clock }) {
           ? memories.committedIndexRevision(tx) : memories.indexRevision?.(tx));
         return { status: "not_found", ...(indexRevision === undefined ? {} : { indexRevision }) };
       }
-      if (expectedRevision !== undefined && row.revision !== expectedRevision) return { status: "conflict" };
+      if (expectedRevision !== undefined && row.revision !== expectedRevision) {
+        const indexRevision = await memories.indexRevision?.(tx);
+        return { status: "conflict", ...(indexRevision === undefined ? {} : { indexRevision }) };
+      }
       if (keyResult?.error) throw keyResult.error;
       const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {
@@ -151,6 +185,8 @@ export function forgetMethod({ storage, clock }) {
       const spans = resolveSpans ? await spanLineage?.resolveSpans(tx, scope, id) : [];
       if (!Array.isArray(spans)) throw new CoreError("raw_lineage_unavailable");
       const hideCards = enabled(capabilities, "dependents.invalidate", "documentCards");
+      const assessCardPurge = hideCards && typeof documentCards?.listForPurge === "function" &&
+        typeof documentCards.purgeById === "function";
       const messages = hideCards ? await cardSources(hydrate, tx, scope, row, spans, resolveSpans && spans.length === 0) : [];
 
       const fenceRaw = enabled(capabilities, "session.fence", "rawArchive");
@@ -175,6 +211,7 @@ export function forgetMethod({ storage, clock }) {
       // suppression.write
       const { fact, incarnation } = await predecessorFact(scope, row, key, clock, "forget");
       const { factId, epoch, createdAtMs, created } = await suppressions.writeFact(tx, fact, incarnation);
+      const factIds = new Set([factId]);
 
       // session.fence
       if (fenceRaw) {
@@ -183,6 +220,8 @@ export function forgetMethod({ storage, clock }) {
       }
 
       // raw.purge
+      /** @type {Set<string>} */
+      const deletedSources = new Set();
       if (enabled(capabilities, "raw.purge", "rawArchive")) {
         if (!raw) throw new CoreError("capability_unavailable");
         if (closure?.length) await raw.eraseSessions(tx, scope, closure);
@@ -193,7 +232,11 @@ export function forgetMethod({ storage, clock }) {
             candidate.incarnation === incarnation && candidate.fact.kind === "text" &&
             candidate.fact.owner === owner && (candidate.fact.namespace ?? null) === namespace);
           if (!stored) throw new CoreError("ineligible");
-          await raw.purgeWithheld(tx, scope, [stored]);
+          if (assessCardPurge) {
+            await raw.purgeWithheld(tx, scope, [stored], { onDelete: source => { deletedSources.add(sourceBinding(source)); } });
+          } else {
+            await raw.purgeWithheld(tx, scope, [stored]);
+          }
         }
       }
 
@@ -205,18 +248,32 @@ export function forgetMethod({ storage, clock }) {
           }
           const span = { ...resolved, actionId: fact.actionId, origin: /** @type {const} */ ("forget") };
           validateSuppressionFact(span);
-          await suppressions.writeFact(tx, span, await clock.sha256Hex(factIncarnationBody(span)));
+          const written = await suppressions.writeFact(tx, span, await clock.sha256Hex(factIncarnationBody(span)));
+          factIds.add(written.factId);
         }
       }
 
       // dependents.invalidate
       if (hideCards) {
         if (typeof documentCards?.hideWhere !== "function") throw new CoreError("capability_unavailable");
-        await documentCards.hideWhere(tx, scope, { sourceMemoryId: id }, "forget");
-        for (const sourceMessage of messages) {
-          await documentCards.hideWhere(tx, scope, { sourceMessage }, "forget");
+        /** @type {DocumentCardHideSelector[]} */
+        const selectors = [{ sourceMemoryId: id }];
+        for (const sourceMessage of messages) selectors.push({ sourceMessage });
+        for (const session of sessions.values()) selectors.push({ session });
+        const erasedSessions = new Set(closure?.map(({ sessionId }) => sessionId));
+        for (const selector of selectors) {
+          if (selector.session && erasedSessions.has(selector.session.sessionId)) {
+            await documentCards.hideWhere(tx, scope, selector, "forget", { purge: true });
+          } else if (assessCardPurge) {
+            await documentCards.hideWhere(tx, scope, selector, "forget", { retainText: true });
+          } else {
+            await documentCards.hideWhere(tx, scope, selector, "forget");
+          }
         }
-        for (const session of sessions.values()) await documentCards.hideWhere(tx, scope, { session }, "forget");
+        if (assessCardPurge) {
+          await purgeWithheldCards(documentCards, tx, scope, deletedSources, { actionId: fact.actionId, factIds: [...factIds] },
+            fact.kind === "text" ? undefined : selectors);
+        }
       }
       if (enabled(capabilities, "dependents.invalidate", "conflictEdges")) {
         if (!conflicts) throw new CoreError("capability_unavailable");

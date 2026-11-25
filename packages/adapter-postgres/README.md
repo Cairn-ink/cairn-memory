@@ -40,12 +40,28 @@ For a database whose schema the host already created with the same SQL, a
 transactional migration can supply an `async adopt(query)` callback. Use
 `await query(text, params)` for a single read-only `SELECT` or `WITH` statement
 with an optional trailing semicolon. Use `E'...'` for strings containing
-backslashes. The helper returns rows from the runner's connection inside the
+backslashes and a single plain character literal for a custom identifier
+`UESCAPE`. The helper returns rows from the runner's connection inside the
 migration transaction. Returning `true` records the migration ID without
-executing its SQL. Returning `false` runs the SQL. A prohibited probe, a probe
-that assigns a transaction ID or loses its savepoint, or a non-boolean result
-fails with `invalid_input`. A failed hook rolls back the migration and stops the
-run. Earlier committed entries remain recorded.
+executing its SQL. Returning `false` runs the SQL.
+
+The helper rejects calls to `pg_advisory_lock*`, `pg_advisory_unlock*`, and
+`pg_try_advisory*` functions. A session-level advisory lock acquired indirectly
+by a probe lasts until the run ends unless explicitly released. A prohibited
+probe, a probe that assigns a transaction ID or loses its savepoint, or a
+non-boolean result fails with `invalid_input`. The migration still fails with
+`invalid_input` if the hook catches an error from a prohibited probe or an error
+that invalidates the transaction or savepoint. A client-side serialization
+error before the probe is sent leaves the transaction and savepoint intact, so
+the hook can catch it and continue. A failed hook rolls back the migration and
+stops the run. Earlier committed entries remain recorded.
+
+After each successful adoption hook, the runner checks that its session still
+holds the migration lock before executing the migration SQL or recording its
+ID. If the lock is missing, the runner rolls back the migration and returns
+`storage_busy` with its `migrationId`. Host hook code runs only on the adoption
+path. Between hooks, losing the session would already fail the run, so the
+check after the most recent hook also covers the intervening migrations.
 
 The session defaults are a 5-second lock timeout and a 30-second statement
 timeout. A transactional migration's own `SET LOCAL` takes precedence. Pass
@@ -278,8 +294,8 @@ Run Raw mutations with `pauseLock: true`. Resolve a proven closure and pass it
 to `eraseSessions` inside that same transaction. Erasure fences the proven
 sessions, deletes their Raw rows, and blanks their ledger messages. An
 ID-only match withholds admission without joining the erase closure.
-`deleteConversation` deletes the conversation's Raw rows and preserves its
-ledger and any existing fence.
+`deleteConversation` deletes the conversation's Raw rows and blanks its ledger
+messages in the same transaction, with any existing fence still in force.
 
 Supply `fingerprintKeys(owner)` with the current and retained keys and their
 respective fingerprint pipelines to enable keyed Raw purge. Exact evidence

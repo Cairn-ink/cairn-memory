@@ -327,7 +327,8 @@ test("raw deletion, purge, fencing and anchors isolate other owners", migrationD
   assert.deepEqual(await write((tx) => raw.deleteConversation(tx, root.scope, root)), { rawDeleted: 1 });
   const text = await storeFact({ ...root.scope, kind: "text", mode: "exact", origin: "forget", actionId: randomUUID(),
     text: { digests: [await coreDigest(item.content)] } });
-  assert.deepEqual(await write((tx) => raw.purgeWithheld(tx, root.scope, [text])), { rawDeleted: 0, ledgerBlanked: 1 });
+  // The conversation delete now scrubs the ledger in its own transaction.
+  assert.deepEqual(await write((tx) => raw.purgeWithheld(tx, root.scope, [text])), { rawDeleted: 0, ledgerBlanked: 0 });
   assert.deepEqual((await pool.query("SELECT user_id, content FROM raw_messages WHERE user_id = ANY($1)", [[owner, other]])).rows, [{ user_id: other, content: item.content }]);
   assert.deepEqual((await read((tx) => capture.load(tx, foreign), other)).messages, [item]);
   assert.deepEqual((await read((tx) => capture.load(tx, root), owner)).messages, [{ ...item, content: "" }]);

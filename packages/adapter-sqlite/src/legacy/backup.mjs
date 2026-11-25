@@ -35,7 +35,7 @@ function publishedLocation(path) {
 
 // Byte hashing and fsync run in a process that has no SQLite connection.
 // The logical digest is the engine's separate schema/row inventory proof.
-function byteDigest(path, sync = false) {
+export function byteDigest(path, sync = false) {
   const script = `import { createHash } from 'node:crypto';
     import { createReadStream } from 'node:fs';
     import { open } from 'node:fs/promises';

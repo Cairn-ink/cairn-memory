@@ -50,6 +50,7 @@ jobs:
         working-directory: packages/conformance
       - run: node --test packaging/test/core-local-candidate.check.mjs packaging/test/core-local-inventory.check.mjs
         working-directory: .
+      - run: node --test ../../packaging/test/local-host-wire.check.mjs
   adapter-postgres-db:
     runs-on: ubuntu-latest
     strategy:

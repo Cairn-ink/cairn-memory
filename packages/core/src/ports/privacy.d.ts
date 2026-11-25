@@ -1,3 +1,4 @@
+import type { CaptureMessage } from "./capture.d.ts";
 import type { OwnerId, Receipt, Scope } from "./common.d.ts";
 import type { RawSpanFact, StoredFact, SuppressionFact, TextDigest } from "../suppression-fact.mjs";
 import type { Tx } from "./unit-of-work.d.ts";
@@ -47,8 +48,11 @@ export interface SuppressionStore {
    * Uncertain or unbounded → throws ineligible (fail closed).
    */
   snapshot(tx: Tx, scope: Scope, candidates: { client?: string; sessionId?: string; occurredAtMs?: ReadonlyArray<number | null>; passages?: readonly PassageFingerprint[] }): Promise<SuppressionSnapshot>;
-  /** Checks the explicit receipt against source withholding and tombstones in the write transaction. */
-  receiptWithheld?(tx: Tx, scope: Scope, receipt: Receipt & { excerpt: string }): Promise<boolean>;
+  /**
+   * Checks a receipt against source withholding and tombstones. Before a capture archives its
+   * admitted source, the optional message supplies the evidence to check when a Raw row is absent.
+   */
+  receiptWithheld?(tx: Tx, scope: Scope, receipt: Receipt & { excerpt: string }, admitted?: CaptureMessage): Promise<boolean>;
   /** Facts that target one item; "ineligible" when the store cannot decide. */
   factsFor(tx: Tx, scope: Scope, target: { memoryId: string }): Promise<StoredFact[] | "ineligible">;
   /** Current owner epoch, or null before the first fact. */
@@ -85,10 +89,14 @@ export interface SpanLineageStore {
 
 export interface RawStore {
   fenceSession(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<void>;
-  /** Deletes raw rows and blanks ledger text for a PROVEN closure only (type-level guard). */
+  /** Deletes Raw rows and blanks ledger text for a PROVEN closure only, tombstoning bound card and amendment payloads. */
   eraseSessions(tx: Tx, scope: Scope, closure: ProvenClosure): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
-  /** Deletes raw rows and blanks ledger messages withheld by the given text facts. */
-  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  /** Deletes withheld Raw rows, blanks withheld ledger messages, and tombstones bound card and amendment payloads. */
+  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>, options?: {
+    /** Report the source binding of each deleted Raw row inside the write. */
+    onDelete?: (source: import("./document-card.d.ts").DocumentCardSourceMessage) => void;
+  }): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  /** Hosts with document cards must tombstone cards and amendments bound to deleted messages in this transaction. */
   deleteConversation(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<{ rawDeleted: number }>;
 }
 

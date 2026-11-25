@@ -14,5 +14,6 @@ export function assertMigrationComplete(db) {
 
 /** @param {string} filename */
 export function assertServingFilename(filename) {
-  if (basename(filename) === BOOTSTRAP_FILENAME) throw new CoreError("storage_error");
+  const name = basename(filename);
+  if (name === BOOTSTRAP_FILENAME || name.startsWith(".cairn-cutover-")) throw new CoreError("storage_error");
 }

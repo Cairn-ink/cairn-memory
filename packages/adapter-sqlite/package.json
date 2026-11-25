@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "engines": { "node": ">=22.16.0" },
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./migrate": "./src/migrate/index.mjs"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs test/legacy/*.test.mjs",
