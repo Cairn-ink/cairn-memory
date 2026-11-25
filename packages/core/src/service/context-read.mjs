@@ -10,7 +10,7 @@ import { packRawContext, readRawChannel } from "./context-read-raw.mjs";
 import { CONTEXT_VERSION } from "./context-read-tokens.mjs";
 import { entry } from "./entry.mjs";
 
-/** @import { CallOptions, ClockAndHash, ContextAssemblyDiagnostics, ContextRawTurn,
+/** @import { CallOptions, ClockAndHash, ContextAssemblyDiagnostics,
   ContextReadError, ContextReadSet, MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
 /** @import { PackOptions, Projection } from "./context-read-pack.mjs" */
 /** @import { LedgerCheck } from "./context-read-assembly-evidence.mjs" */
@@ -161,17 +161,9 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
           Math.max(bytes(JSON.stringify(assembly)), bytes(text) - blockOverhead) + (snapshotSize ? snapshotSize + 2 : 4);
         return snapshotSize <= SNAPSHOT_LIMIT && full <= MAX_BYTES;
       } };
-    /** @param {Projection} pack @param {readonly ContextRawTurn[]} turns @param {LedgerCheck} [ledgerCheck] */
-    async function deliver(pack, turns, ledgerCheck) {
-      const selected = pack.selected.map(item => item.evidence);
-      if (!pack.value.ledgerDigest) return evidence.deliver(selected, turns, options.signal);
-      try {
-        const result = await evidence.deliver(selected, turns, options.signal, ledgerCheck);
-        if (result !== staleLedger) return result;
-      } catch {
-        // Retry delivery of the ordinary pack if final ledger validation fails.
-      }
-      throw staleLedger;
+    /** @param {Projection} pack @param {LedgerCheck} [ledgerCheck] */
+    function deliver(pack, ledgerCheck) {
+      return evidence.deliver(pack.selected.map(item => item.evidence), rawPacking ? rawRead.turns : [], options.signal, ledgerCheck);
     }
     function packEvidence() {
       let packed = rawPacking ? packRawContext(prepared, rawRead, readSet, candidate.query, packing, meter(packing)) : null;
@@ -183,22 +175,29 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       packed.diagnostics.stops.deadline ||= now() >= deadline;
       return packed;
     }
-    /** @param {ReturnType<typeof packEvidence>} packed @param {LedgerCheck} [ledgerCheck] */
-    async function packAndDeliver(packed, ledgerCheck) {
-      let snapshot = await deliver(packed, rawPacking ? rawRead.turns : [], ledgerCheck);
+    /** @param {ReturnType<typeof packEvidence>} packed @param {string | null} snapshot */
+    function response(packed, snapshot) {
+      return { assembly: packed.value, diagnostics: diagnostics(packed.diagnostics, packed.used), snapshot };
+    }
+    async function finishOrdinary() {
+      let packed = packEvidence();
+      let snapshot = await deliver(packed);
       if (snapshot === undefined) {
-        ledgerCheck?.active();
         rawCoverage = "partial";
         rawPacking = false;
         packed = packEvidence();
-        snapshot = await deliver(packed, [], ledgerCheck);
+        snapshot = await deliver(packed);
       }
-      ledgerCheck?.active();
-      return { assembly: packed.value, diagnostics: diagnostics(packed.diagnostics, packed.used), snapshot: typeof snapshot === "string" ? snapshot : null };
+      return response(packed, typeof snapshot === "string" ? snapshot : null);
     }
-    const ordinary = packEvidence();
-    if (!ledgerRequest) return packAndDeliver(ordinary);
-    const ordinaryRaw = { coverage: rawCoverage, packing: rawPacking };
+    // Complete all ordinary validation before optional ledger work can use the
+    // deadline or hold a serialized reader.
+    const ordinary = await finishOrdinary().catch(error => {
+      if (ledgerRequest && staleSnapshot(error)) throw refreshAssembly;
+      throw error;
+    });
+    if (!ledgerRequest) return ordinary;
+    const ordinaryHasRaw = rawPacking;
     const enriched = await beforeLedgerDeadline(now, deadline, options.signal, async active => {
       const ledger = await evidence.prepareLedger(active).catch(() => null);
       active();
@@ -206,21 +205,12 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       packing.ledger = ledger.value;
       const packed = packEvidence();
       active();
-      if (ordinaryRaw.packing && !rawPacking) return;
-      return packAndDeliver(packed, { witness: ledger.witness, active });
-    }).catch(error => {
-      if (!staleSnapshot(error)) throw error;
+      if (!packed.value.ledgerDigest || (ordinaryHasRaw && !rawPacking)) return;
+      const snapshot = await deliver(packed, { witness: ledger.witness, active }).catch(() => undefined);
+      if (typeof snapshot === "string" || snapshot === null) return response(packed, snapshot);
     });
-    if (enriched) return enriched;
-    packing.ledger = undefined;
-    rawCoverage = ordinaryRaw.coverage;
-    rawPacking = ordinaryRaw.packing;
-    try {
-      return await packAndDeliver(ordinary);
-    } catch (error) {
-      if (staleSnapshot(error)) throw refreshAssembly;
-      throw error;
-    }
+    if (options.signal?.aborted) throw new CoreError("snapshot_stale");
+    return enriched ?? ordinary;
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {ReadContextInput} */ request,
     /** @type {CallOptions} */ options) => {
