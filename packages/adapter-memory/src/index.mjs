@@ -13,7 +13,8 @@ import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
-import { createCardVisibility, createCardVisibilityInput, createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
+import { createCardAmendmentWithholding, createCardVisibility, createCardVisibilityInput,
+  createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
 import { copyCaptureMessages, copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
@@ -56,7 +57,7 @@ export function createMemoryAdapter(options = {}) {
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const rawSourceVisible = archive && createCardRawSourceCheck(archive, matchFacts, receiptReadSafety);
-  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, rawSourceVisible);
+  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, rawSourceVisible, archive?.sourceWithholding);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(
@@ -103,8 +104,9 @@ export function createMemoryAdapter(options = {}) {
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
-      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+      createDocumentCardStore(port, now, cardVisibilityInput,
+        createCardAmendmentWithholding(matchFacts, keys, archive?.sourceWithholding), flags.documentCardSearch),
+      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) }),
     ...(flags.documentCardSearch && { documentCardCandidates: createDocumentCardCandidates(port, cardVisible) }),
     nativeErrorMap,
     harness: {
