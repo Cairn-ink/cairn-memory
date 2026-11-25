@@ -1,5 +1,6 @@
 import { CoreError } from '../errors.mjs';
 import { compareUtf8 } from '../utf8.mjs';
+import { roundReceiptNumber } from './receipt-numbers.mjs';
 import { receiptMatchesTerms } from './terms.mjs';
 import { validTime } from './window.mjs';
 
@@ -47,11 +48,16 @@ function orderSources(receipts) {
 }
 
 /** @typedef {ReturnType<typeof orderSources>} Sources */
+/** @typedef {ReadonlyMap<string, ReadonlySet<number>>} RecordValues */
 
-/** @param {Sources} sources @param {Sources} fallback @param {ExtractedQuantity} quantity @param {boolean} standalone */
-function candidatesFor(sources, fallback, quantity, standalone) {
+/** @param {Sources} sources @param {Sources} fallback @param {ExtractedQuantity} quantity @param {boolean} standalone
+ * @param {RecordValues} [recordValues] */
+function candidatesFor(sources, fallback, quantity, standalone, recordValues) {
   const terms = [quantity.measure, quantity.category];
-  const values = sources.filter(source => source.sentences.some(sentence => sentence.values.has(quantity.value)));
+  const rounded = recordValues && quantity.kind === 'record' ? roundReceiptNumber(quantity.value) : undefined;
+  const values = sources.filter(source => rounded === undefined
+    ? source.sentences.some(sentence => sentence.values.has(quantity.value))
+    : recordValues?.get(source.receipt.messageId)?.has(rounded));
   const local = standalone ? values.filter(source => source.sentences.some(sentence =>
     sentence.values.has(quantity.value) && receiptMatchesTerms(sentence.text, terms))) : [];
   const matching = local.length ? local : values.filter(source => receiptMatchesTerms(source.receipt.content, terms));
@@ -70,9 +76,10 @@ function candidatesFor(sources, fallback, quantity, standalone) {
 /**
  * @param {Omit<LedgerReconciliation, 'textHash'> & { textHash?: string }} capture
  * @param {boolean} standalone
+ * @param {RecordValues} [recordValues]
  * @returns {LedgerRowAttribution[]}
  */
-function additionalAttributions({ memoryId, textHash, quantities, citedReceipts, captureTimeMs, existingRows }, standalone) {
+function additionalAttributions({ memoryId, textHash, quantities, citedReceipts, captureTimeMs, existingRows }, standalone, recordValues) {
   const sources = orderSources(citedReceipts);
   if (!sources.length) return [];
 
@@ -112,7 +119,7 @@ function additionalAttributions({ memoryId, textHash, quantities, citedReceipts,
 
     let assignment = assignments.get(key);
     if (!assignment) {
-      assignment = { candidates: candidatesFor(preferred, fallback, quantity, standalone), assigned: 0,
+      assignment = { candidates: candidatesFor(preferred, fallback, quantity, standalone, recordValues), assigned: 0,
         ordinals: nextOrdinals.get(key) ?? new Map() };
       assignments.set(key, assignment);
     }
@@ -138,11 +145,11 @@ export function attributeLedgerQuantities(memoryId, quantities, receipts, captur
   return additionalAttributions({ memoryId, quantities, citedReceipts: receipts, captureTimeMs, existingRows: [] }, true);
 }
 
-/** @param {LedgerReconciliation} capture */
-export function reconcileLedgerQuantities(capture) {
+/** @param {LedgerReconciliation} capture @param {RecordValues} [recordValues] */
+export function reconcileLedgerQuantities(capture, recordValues) {
   const { textHash } = capture;
   if (typeof textHash !== 'string' || !textHash) throw new CoreError('invalid_input');
-  return additionalAttributions(capture, false).map(row => ({ ...row, textHash }));
+  return additionalAttributions(capture, false, recordValues).map(row => ({ ...row, textHash }));
 }
 
 /** @param {Tx} tx @param {Scope} scope @param {QuantityLedgerStore} store @param {LedgerCapture} capture */

@@ -4,6 +4,7 @@ import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
 import { reconcileLedgerQuantities } from "../ledger/index.mjs";
 import { QUANTITY_TEXT_FIELDS } from "../ledger/quantities.mjs";
+import { readReceiptNumbers, roundReceiptNumber } from "../ledger/receipt-numbers.mjs";
 import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
 import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -214,10 +215,21 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const hydrated = refs.length ? await hydrate.hydrate(tx, readScope(scope), refs, "recall") : [];
       const byMemory = new Map(hydrated.filter(({ ref }) => ref.type === "memory" && ref.namespace === scope.namespace)
         .map(item => [item.ref.id, item]));
-      for (const { id, receipts, quantities } of eligible) {
-        if (!quantities) continue;
+      for (const { id, receipts, quantities: extracted } of eligible) {
+        if (!extracted) continue;
         const userReceipts = receipts.filter(({ role }) => role === "user");
-        if (!userReceipts.length) continue;
+        const recordValues = new Map(extracted.some(({ kind }) => kind === "record")
+          ? userReceipts.map(({ messageId }) => [messageId, readReceiptNumbers(byMessage.get(messageId)?.content ?? "")])
+          : []);
+        const receiptValues = [...recordValues.values()];
+        const quantities = extracted.filter(({ kind, value }) => {
+          if (kind === "goal") return true;
+          const rounded = roundReceiptNumber(value);
+          if (receiptValues.some(values => values.has(rounded))) return true;
+          emitDiagnostic(diagnostics, "extract", "core_validation", "ungrounded_extraction_quantity");
+          return false;
+        });
+        if (!quantities.length || !userReceipts.length) continue;
         const unresolved = () => {
           for (const _ of quantities) emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_receipt_unresolved");
         };
@@ -252,7 +264,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         const existingRows = await ledger.listForMemory(tx, scope, id);
         const rows = reconcileLedgerQuantities({
           memoryId: id, textHash: row.memory.textHash, captureTimeMs, quantities, citedReceipts, existingRows,
-        });
+        }, recordValues);
         if (!rows.length) continue;
         const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
         const permitted = [];
