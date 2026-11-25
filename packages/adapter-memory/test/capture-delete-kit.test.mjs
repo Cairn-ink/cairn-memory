@@ -23,8 +23,8 @@ test("K-CAP-DEL-1 rejects a delete that removes Raw rows and retains ledger text
   const adapter = new URL("../src/index.mjs?variant=retain-delete-ledger", import.meta.url);
   const raw = new URL("./raw.mjs?variant=retain-delete-ledger", adapter);
   const original = readFileSync(raw, "utf8");
-  const matcher = "(key) => slots.has(sessionSlot(namespace, key))";
-  assert.equal(original.split(matcher).length - 1, 1, "Expected one ledger blanking matcher for conversation deletion");
+  const matcher = /\(?key\)? => slots\.has\(sessionSlot\(namespace, key\)\)/gu;
+  assert.equal(original.match(matcher)?.length, 1, "Expected one ledger blanking matcher for conversation deletion");
   const source = original.replace(matcher, "() => false");
   const hooks = registerHooks({
     resolve(specifier, context, nextResolve) {
