@@ -86,7 +86,7 @@ function ledgerFixture() {
     });
     generation++;
   }
-  return { capture, reader, hide: id => hidden.add(id), forget };
+  return { capture, reader, hide: id => hidden.add(id), show: id => hidden.delete(id), forget };
 }
 
 async function monthFixture() {
@@ -159,13 +159,66 @@ test("review probe: off-path delivery agrees with explicit day counts when unuse
     }
   }
   assert.deepEqual(outcomes, ["this week", "last 7 days", "this month", "last 30 days"].map(window => ({ window, delivered: false })));
+});
 
+test("confirm probe: rolling aliases admit coffee and transit and deliver like explicit days", async () => {
   const f = ledgerFixture();
-  const days = await f.capture("Days cost 7 USD.", amount("days", 7), lastDay);
-  const alias = (await f.reader().read("How much this week?")).assembly.ledgerDigest;
-  const explicit = (await f.reader().read("How much last 7 days?")).assembly.ledgerDigest;
-  assert.deepEqual(alias, { ...explicit, body: explicit.body.replace("(last 7 days)", "(this week, read as the last 7 days)") });
-  assert.deepEqual(sourceIds(alias), [days.id]);
+  const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
+  const coffee = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
+  const transit = await f.capture("Transit cost 12 USD.", amount("bus", 12, "transport"), lastDay, project);
+  const namespaces = [scope.namespace, project.namespace];
+  const pairs = [
+    ["本週coffee和交通總共多少？", "last 7 days coffee和交通總共多少？", 7],
+    ["本週 coffee和交通總共多少？", "last 7 days coffee和交通總共多少？", 7],
+    ["這週coffee和交通總共多少？", "最近7天coffee和交通總共多少？", 7],
+    ["This week, coffee and transport total?", "Last 7 days, coffee and transport total?", 7],
+    ["這個月coffee和交通總共多少？", "最近30天coffee和交通總共多少？", 30],
+    ["How much coffee and transport this month?", "How much coffee and transport last 30 days?", 30],
+    ["How much coffee and transport this month? I mean this month.",
+      "How much coffee and transport last 30 days? I mean last 30 days.", 30],
+  ];
+  for (const [alias, explicit, days] of pairs) {
+    const aliasReader = f.reader({ calendarReading: false });
+    const explicitReader = f.reader({ calendarReading: false });
+    const rolling = (await aliasReader.read(alias, namespaces)).assembly.ledgerDigest;
+    const trailing = (await explicitReader.read(explicit, namespaces)).assembly.ledgerDigest;
+    for (const [query, digest] of [[alias, rolling], [explicit, trailing]]) {
+      assert.match(digest?.body ?? "", /Spend: total \$19\.00 in 2 records/u, query);
+      assert.deepEqual(sourceIds(digest), [coffee.id, transit.id].sort(), query);
+    }
+    const period = days === 7 ? "week" : "month";
+    assert.deepEqual(rolling, {
+      ...trailing,
+      body: trailing.body.replace(`(last ${days} days)`, `(this ${period}, read as the last ${days} days)`),
+    }, alias);
+    assert.deepEqual(aliasReader.scans, explicitReader.scans, alias);
+
+    for (const query of [alias, explicit]) {
+      let hides = 0;
+      const { assembly } = await f.reader({ calendarReading: false, afterFormatting() {
+        hides++;
+        f.hide(earlier.id);
+      } }).read(query, namespaces);
+      f.show(earlier.id);
+      assert.equal(hides, 1, query);
+      assert.equal(assembly.ledgerDigest, undefined, query);
+    }
+  }
+});
+
+test("confirm probe: rolling labels add no ledger terms to a repeated alias", async () => {
+  const f = ledgerFixture();
+  const coffee = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
+  const days = await f.capture("Days cost 12 USD.", amount("days", 12), lastDay, project);
+  const namespaces = [scope.namespace, project.namespace];
+  const { assembly } = await f.reader().read("How much coffee this month? I mean this month.", namespaces);
+  assert.match(assembly.ledgerDigest.body, /Spend: total \$7\.00 in 1 record/u);
+  assert.deepEqual(sourceIds(assembly.ledgerDigest), [coffee.id]);
+
+  const alias = (await f.reader().read("How much this week?", [project.namespace])).assembly.ledgerDigest;
+  const explicit = (await f.reader().read("How much last 7 days?", [project.namespace])).assembly.ledgerDigest;
+  assert.equal(alias, undefined);
+  assert.deepEqual(sourceIds(explicit), [days.id]);
 });
 
 test("review probe: calendar evidence cannot admit a second namespace or its monthly goal", async () => {

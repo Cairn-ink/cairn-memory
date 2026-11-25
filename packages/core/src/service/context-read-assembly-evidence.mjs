@@ -1,6 +1,6 @@
 import { CoreError } from "../errors.mjs";
 import { digest, ledgerRowDeliverable, ledgerRowInRange, ledgerRowKey, parseWindow, readIntent } from "../ledger/index.mjs";
-import { ledgerIntentQuery, weekStart, yearStart } from "../ledger/window.mjs";
+import { weekStart, yearStart } from "../ledger/window.mjs";
 import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
@@ -30,7 +30,6 @@ export const staleLedger = new Error("stale quantity ledger");
 async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, active, includeCalendar) {
   try {
     const range = parseWindow(query, asOfMs);
-    const intentQuery = ledgerIntentQuery(query, range);
     const calendar = calendarReading ? range.calendar : undefined;
     const start = Math.min(range.fromMs, weekStart(range.toMs - 1), yearStart(range.toMs - 1));
     const earlier = { fromMs: MIN_EVENT_MS, toMs: range.fromMs };
@@ -45,7 +44,7 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
       const scope = { owner: readSet.owner, namespace };
       const terms = await ledger.terms(tx, scope);
       active();
-      if (!readIntent(intentQuery, terms)) continue;
+      if (!readIntent(query, terms)) continue;
       active();
       const inWindow = await ledger.list(tx, scope, { fromMs: range.fromMs, toMs: range.toMs });
       active();
@@ -89,7 +88,7 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
       const state = { memoryStates, retainedReceipts, memoryTextHashes };
       const deliverable = rows.filter(row => ledgerRowDeliverable(row, state));
       // Earlier records support calendar goals but cannot trigger a digest on their own.
-      if (!readIntent(intentQuery, deliverable.flatMap(row => row.kind === "goal" || ledgerRowInRange(row, range)
+      if (!readIntent(query, deliverable.flatMap(row => row.kind === "goal" || ledgerRowInRange(row, range)
         ? [row.measure, row.group, row.category] : []))) continue;
       const ordered = deliverable.map(row => ({ row, key: JSON.stringify([ns, ledgerRowKey(row), row.group, row.date, row.textHash]) }))
         .sort((a, b) => compareUtf8(a.key, b.key));

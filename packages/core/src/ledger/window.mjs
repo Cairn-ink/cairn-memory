@@ -36,19 +36,6 @@ export function ledgerRowInRange(row, range) {
   return row.date >= range.fromMs && row.date < range.toMs;
 }
 
-const rollingWeek = /\bthis week\b|這週|本週/iu;
-const rollingMonth = /\bthis month\b|這個月/iu;
-const rollingWeekLabel = 'this week, read as the last 7 days';
-const rollingMonthLabel = 'this month, read as the last 30 days';
-
-/** Match ledger terms against the explicit-day phrasing used by each alias.
- * @param {string} query @param {ParsedLedgerWindow} window */
-export function ledgerIntentQuery(query, window) {
-  if (window.label === rollingWeekLabel) return query.normalize('NFKC').replace(rollingWeek, 'last 7 days');
-  if (window.label === rollingMonthLabel) return query.normalize('NFKC').replace(rollingMonth, 'last 30 days');
-  return query;
-}
-
 /** UTC calendar days with an exclusive end. Calendar weeks start on Monday.
  * @param {string} query @param {number} asOfMs @returns {ParsedLedgerWindow}
  */
@@ -73,16 +60,16 @@ export function parseWindow(query, asOfMs) {
     toMs = weekStart(today);
     fromMs = toMs - 7 * DAY_MS;
     label = 'last week';
-  } else if (rollingWeek.test(text)) {
-    label = rollingWeekLabel;
+  } else if (/\bthis week\b|這週|本週/iu.test(text)) {
+    label = 'this week, read as the last 7 days';
     calendar = { fromMs: weekStart(today), toMs, label: 'calendar week so far' };
   } else if (/\blast month\b|上個月/iu.test(text)) {
     toMs = monthStart(today);
     fromMs = monthStart(today, -1);
     label = 'last month';
-  } else if (rollingMonth.test(text)) {
+  } else if (/\bthis month\b|這個月/iu.test(text)) {
     fromMs = today - 29 * DAY_MS;
-    label = rollingMonthLabel;
+    label = 'this month, read as the last 30 days';
     calendar = { fromMs: monthStart(today), toMs, label: 'calendar month so far' };
   } else if (/\blast 3 months\b|最近\s*[三3]\s*個月/iu.test(text)) {
     fromMs = monthStart(today, -2);

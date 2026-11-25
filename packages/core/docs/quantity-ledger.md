@@ -80,6 +80,7 @@ follows each summary with its calendar total, count and daily average. Calendar
 weeks start on Monday and calendar months start on the first. A reading with no
 records for a summary shows a zero total, zero records and a zero average. The
 optional comparison extends the checked source range to cover both readings.
+If a stale calendar contribution shares a memory with a rolling source, the digest is withheld for that read.
 The digest and its sources use one item slot and count toward the formatted read.
 
 Supply checked rows to `digest` for totals, counts, daily averages and weekly
