@@ -1,16 +1,20 @@
 import {
-  allDigests, compareUtf8, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS,
+  allDigests, compareUtf8, CoreError, factBlocksIncoming, PRIVACY_REDACTION_VERSIONS,
   validateSuppressionFact,
 } from "../../core/src/index.mjs";
+import { prepareRowMatcher, prepareRowMatchFact } from "../../core/src/privacy/fact-match.mjs";
 import { factBody } from "../../core/src/suppression-fact.mjs";
 import { factSlot, matchesFactSlot } from "./facts.mjs";
 import { CREATED_AT_US, CREATED_MS, MATCH_COLUMNS, readReceipts, storageHash, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest } from "../../core/src/index.mjs" */
-/** @import { IncomingFactMatchPolicy } from "../../core/src/privacy/fact-match.d.mts" */
+/** @import { IncomingFactMatchPolicy, PreparedRowMatchFact } from "../../core/src/privacy/fact-match.mjs" */
 /** @import { CaptureKey, DuplicateQuery, Receipt, Scope, SourceRef } from "../../core/src/ports/index.d.ts" */
 /** @import { CandidateEntry, MemoryEntry, Query } from "./memory-rows.mjs" */
 /** @import { LegacySuppressionRow } from "./index.mjs" */
+
+/** @typedef {{ facts: StoredFact[], prepared: PreparedRowMatchFact[], evidence: Set<string> }} NamespaceFacts */
+/** @typedef {Map<string, Promise<Map<Scope["namespace"], NamespaceFacts>>>} VisibilityFactsCache */
 
 const SHA256 = /^(?:sha256:)?[0-9a-f]{64}$/u;
 
@@ -291,25 +295,45 @@ export async function rowFactCandidate({ memory, digests, sourceKind, createdAtU
 /** @param {StoredFact} stored @param {FactMatchRow} row @param {readonly Pick<Receipt, "client" | "sessionId">[]} receipts
  * @param {FactMatchPolicy} policy @param {Pick<CandidateEntry["memory"], "source" | "createdAtMs" | "updatedAtMs" | "textHash">} legacySource */
 export function matchesRowFact(stored, row, receipts, policy, legacySource) {
-  const { fact } = stored;
-  if (fact.kind === "text" && fact.legacyTextHash !== undefined) {
-    if (fact.owner !== row.scope.owner || (fact.namespace ?? null) !== row.scope.namespace) return false;
-    // The logical hash is a reversible projection of the hosted text_hash column.
-    const physicalHit = typeof legacySource.textHash === "string" && storageHash(legacySource.textHash) === fact.legacyTextHash;
-    if (physicalHit || fact.mode === "exact") return physicalHit;
-  }
-  if (fact.kind === "session") {
-    const { client, sessionId } = legacySource.source;
-    const sources = receipts.length || client == null || sessionId == null ? receipts : [{ client, sessionId }];
-    return sources.some(({ client, sessionId }) =>
-      factHidesRow(stored, { ...row, source: { client, sessionId } }, policy) !== false);
-  }
-  if (fact.kind !== "window") return factHidesRow(stored, row, policy) !== false;
-  // On receipt-backed memories, windows govern admission only.
-  if (receipts.length) return false;
-  const { source: { client, sessionId }, createdAtMs, updatedAtMs } = legacySource;
-  return [createdAtMs, updatedAtMs].some(occurredAtMs =>
-    factHidesRow(stored, { ...row, source: { client: client ?? "", sessionId, occurredAtMs } }, policy) !== false);
+  return createRowFactCheck(row, receipts, policy, legacySource)(stored);
+}
+
+/** @param {FactMatchRow} row @param {readonly Pick<Receipt, "client" | "sessionId">[]} receipts
+ * @param {FactMatchPolicy} policy @param {Pick<CandidateEntry["memory"], "source" | "createdAtMs" | "updatedAtMs" | "textHash">} legacySource */
+function createRowFactCheck(row, receipts, policy, legacySource) {
+  const matches = prepareRowMatcher(row, policy);
+  /** @type {ReturnType<typeof prepareRowMatcher>[]} */
+  const sessionMatches = [];
+  /** @type {ReturnType<typeof prepareRowMatcher>[]} */
+  const windowMatches = [];
+
+  /** @param {StoredFact} stored @param {PreparedRowMatchFact | StoredFact} matchFact */
+  return function matchesRowFact(stored, matchFact = stored) {
+    const { fact } = stored;
+    if (fact.kind === "text" && fact.legacyTextHash !== undefined) {
+      if (fact.owner !== row.scope.owner || (fact.namespace ?? null) !== row.scope.namespace) return false;
+      // The logical hash is a reversible projection of the hosted text_hash column.
+      const physicalHit = typeof legacySource.textHash === "string" && storageHash(legacySource.textHash) === fact.legacyTextHash;
+      if (physicalHit || fact.mode === "exact") return physicalHit;
+    }
+    if (fact.kind === "session") {
+      const { client, sessionId } = legacySource.source;
+      const sources = receipts.length || client == null || sessionId == null ? receipts : [{ client, sessionId }];
+      return sources.some(({ client, sessionId }, index) => {
+        const match = sessionMatches[index] ??= prepareRowMatcher({ ...row, source: { client, sessionId } }, policy);
+        return match(matchFact) !== false;
+      });
+    }
+    if (fact.kind !== "window") return matches(matchFact) !== false;
+    // On receipt-backed memories, windows govern admission only.
+    if (receipts.length) return false;
+    const { source: { client, sessionId }, createdAtMs, updatedAtMs } = legacySource;
+    return [createdAtMs, updatedAtMs].some((occurredAtMs, index) => {
+      const match = windowMatches[index] ??=
+        prepareRowMatcher({ ...row, source: { client: client ?? "", sessionId, occurredAtMs } }, policy);
+      return match(matchFact) !== false;
+    });
+  };
 }
 
 /** @param {StoredFact} stored @param {Scope} scope @param {NonNullable<FactMatchIncoming["session"]>} session
@@ -323,31 +347,51 @@ export function rowVisibilityPolicy(hashSessionKey) {
   return { vectorSuppression: true, rowShingles: false, hashSessionKey };
 }
 
-/** @param {Query} query @param {string} owner @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
-export async function readVisibility(query, owner, hashSessionKey) {
-  const { rows } = await query(visibilityFactsSql({ rowEvidence: true }), [owner]);
-  return createVisibility(rows, owner, ids => readReceipts(query, owner, ids), hashSessionKey);
+/** @param {Query} query @param {string} owner @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
+ * @param {VisibilityFactsCache} [cache] */
+export async function readVisibility(query, owner, hashSessionKey, cache) {
+  let facts = cache?.get(owner);
+  if (facts === undefined) {
+    facts = query(visibilityFactsSql({ rowEvidence: true }), [owner])
+      .then(({ rows }) => prepareVisibilityFacts(rows, owner));
+    cache?.set(owner, facts);
+  }
+  return visibilityForFacts(await facts, ids => readReceipts(query, owner, ids), hashSessionKey);
 }
 
 /** @template {Pick<Receipt, "client" | "sessionId">} R
  * @param {any[]} rows @param {string} owner @param {(ids: string[]) => Promise<Map<string, R[]>>} loadReceipts
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
 export function createVisibility(rows, owner, loadReceipts, hashSessionKey) {
+  return visibilityForFacts(prepareVisibilityFacts(rows, owner), loadReceipts, hashSessionKey);
+}
+
+/** @param {any[]} rows @param {string} owner */
+function prepareVisibilityFacts(rows, owner) {
   const facts = decodeVisibilityFacts(rows, owner);
-  const policy = rowVisibilityPolicy(hashSessionKey);
-  const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
-  const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
-  /** @type {Map<Scope["namespace"], { facts: StoredFact[], evidence: Set<string> }>} */
+  /** @type {Map<Scope["namespace"], NamespaceFacts>} */
   const byNamespace = new Map();
   for (const [index, stored] of facts.entries()) {
     const ns = stored.fact.namespace ?? null;
     let selected = byNamespace.get(ns);
-    if (!selected) byNamespace.set(ns, selected = { facts: [], evidence: new Set() });
+    if (!selected) byNamespace.set(ns, selected = { facts: [], prepared: [], evidence: new Set() });
     selected.facts.push(stored);
+    selected.prepared.push(prepareRowMatchFact(stored));
     for (const [key] of evidence) {
       if (rows[index][key]) selected.evidence.add(key);
     }
   }
+  return byNamespace;
+}
+
+/** @template {Pick<Receipt, "client" | "sessionId">} R
+ * @param {Map<Scope["namespace"], NamespaceFacts>} byNamespace
+ * @param {(ids: string[]) => Promise<Map<string, R[]>>} loadReceipts
+ * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
+function visibilityForFacts(byNamespace, loadReceipts, hashSessionKey) {
+  const policy = rowVisibilityPolicy(hashSessionKey);
+  const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
+  const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
 
   /** @param {readonly Scope["namespace"][]} namespaces */
   function selectedFacts(namespaces) {
@@ -369,10 +413,12 @@ export function createVisibility(rows, owner, loadReceipts, hashSessionKey) {
 
   /** @param {MemoryEntry | CandidateEntry} entry @param {readonly R[]} evidence */
   async function hides(entry, evidence) {
-    const facts = byNamespace.get(entry.memory.scope.namespace)?.facts;
-    if (!facts?.length) return false;
+    const selected = byNamespace.get(entry.memory.scope.namespace);
+    if (!selected) return false;
+    const { facts, prepared } = selected;
     const candidate = await rowFactCandidate(entry, facts);
-    return facts.some(stored => matchesRowFact(stored, candidate, evidence, policy, entry.memory));
+    const matches = createRowFactCheck(candidate, evidence, policy, entry.memory);
+    return facts.some((stored, index) => matches(stored, prepared[index]));
   }
 
   /** @template {MemoryEntry | CandidateEntry} T @param {readonly T[]} entries @param {boolean} [includeReceipts] */

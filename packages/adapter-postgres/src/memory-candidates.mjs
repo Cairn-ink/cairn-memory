@@ -27,8 +27,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
         if (!Number.isSafeInteger(depth) || depth < 1) invalid();
         if (!tokenizeT1(text).length) return { rows: [], matched: false };
         const namespaces = selection.keys.map(key => key === null ? null : JSON.parse(key));
-        return runOperation(tx, async (query) => {
-          const visibility = await readVisibility(query, selection.owner, hashSessionKey);
+        return runOperation(tx, async (query, run) => {
+          const visibility = await readVisibility(query, selection.owner, hashSessionKey, run.visibilityFacts);
           const columns = visibility.candidateColumns(namespaces);
           const result = [];
           const batchSize = Math.min(BATCH_SIZE, depth);
@@ -61,8 +61,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
         const matchesDimension = values.length === VECTOR_DIMENSION;
         const namespaces = selection.keys.map(key => key === null ? null : JSON.parse(key));
         const params = memoryScopeParams(selection, false);
-        return runOperation(tx, async (query) => {
-          const visibility = await readVisibility(query, selection.owner, hashSessionKey);
+        return runOperation(tx, async (query, run) => {
+          const visibility = await readVisibility(query, selection.owner, hashSessionKey, run.visibilityFacts);
           const facts = visibility.selectedFacts(namespaces);
           const { rows: [counts] } = await query(`SELECT count(*)::text AS eligible,
             count(*) FILTER (WHERE $7::boolean AND embedding_model = $8)::text AS embedded

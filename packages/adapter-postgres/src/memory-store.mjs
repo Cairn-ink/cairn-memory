@@ -196,8 +196,8 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       const { nearDistance, excludeId } = options;
       if (!Number.isFinite(nearDistance) || nearDistance < 0) invalid();
       const excluded = excludeId === undefined ? undefined : inputText(excludeId);
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, tx.owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, tx.owner, hashSessionKey, run.visibilityFacts);
         const { matches, visible } = await duplicateMatches(query, selection, ns, visibility, queries, nearDuplicate, nearDistance, excluded);
         return matches.map(group => group.filter(match => match.kind === "prior" || visible.has(match.id)));
       });
@@ -212,8 +212,8 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       const incoming = copySource(source);
       if (mode !== "hash" && mode !== "full") invalid();
       const excluded = editId === undefined ? undefined : inputText(editId);
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, tx.owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, tx.owner, hashSessionKey, run.visibilityFacts);
         const edit = excluded === undefined ? null : await selectMemory(query, tx.owner, ns, excluded);
         const sourceMemory = edit && { id: edit.memory.id, createdAtMs: edit.memory.createdAtMs };
         const blockedSession = visibility.blocksSession(selection, incoming);
