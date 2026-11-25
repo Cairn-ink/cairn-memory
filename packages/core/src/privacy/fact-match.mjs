@@ -132,7 +132,7 @@ function matchReader() {
       const passage = (value) => record(value, useShingles ? ["keyId"] : [], {
         ...(useShingles ? passageLists : fingerprintDigests), embedding: candidateEmbedding,
       });
-      return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs", "explicitSaveCreatedAtUs"], {
+      return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs"], {
         scope, passages: (value) => list(value, passage, true), session: source, sourceMemory: incarnation,
       })));
     },
@@ -332,12 +332,8 @@ function blocksIncoming(fact, incoming, policy) {
   if (policy?.mode !== "capture" && policy?.mode !== "explicitSave") return "ineligible";
   switch (fact.kind) {
     case "text": {
-      const explicit = policy.mode === "explicitSave" ? policy : undefined;
-      const cutoff = fact.explicitSaveExemptAfterUs;
-      const createdAtUs = incoming.explicitSaveCreatedAtUs;
-      const skipVector = explicit !== undefined && (cutoff === undefined ||
-        (incoming.sourceMemory == null && typeof createdAtUs === "bigint" && isAfterExplicitSaveCutoff(createdAtUs, cutoff)));
-      return matchPassages(incoming.passages, fact, policy, explicit, incoming.sourceMemory, skipVector);
+      const explicit = policy.mode === "explicitSave" && fact.explicitSaveExemptAfterUs === undefined ? policy : undefined;
+      return matchPassages(incoming.passages, fact, policy, explicit, incoming.sourceMemory, explicit !== undefined);
     }
     case "session":
       return sessionMatches(fact.session, incoming.session, policy);
@@ -370,7 +366,7 @@ export function factHidesRow(storedFact, row, policy = {}) {
 
 /**
  * `rowShingles` defaults to true. Set it to false to skip containment for full text facts.
- * Enabled vectors apply in capture mode and to explicit saves that do not meet a fact's cutoff.
+ * Legacy cutoff facts use full matching on incoming writes, including explicit saves.
  * @param {StoredFact} storedFact @param {FactMatchIncoming} incoming @param {IncomingFactMatchPolicy} policy @returns {FactMatchResult}
  */
 export function factBlocksIncoming(storedFact, incoming, policy) {

@@ -376,12 +376,11 @@ export function createVisibility(rows, owner, loadReceipts, hashSessionKey) {
   }
 
   /** @param {Scope} scope @param {DuplicateQuery} incoming @param {"hash" | "full"} mode
-   * @param {FactMatchIncoming["sourceMemory"]} sourceMemory @param {bigint} [explicitSaveCreatedAtUs] */
-  function blocks(scope, incoming, mode, sourceMemory, explicitSaveCreatedAtUs) {
+   * @param {FactMatchIncoming["sourceMemory"]} sourceMemory */
+  function blocks(scope, incoming, mode, sourceMemory) {
     const passages = [{ digests: digestAliases(incoming), embedding: incoming.embedding }];
     return byNamespace.get(scope.namespace)?.facts.some((stored) => stored.fact.kind === "text" &&
-      factBlocksIncoming(stored, { scope, passages, sourceMemory, explicitSaveCreatedAtUs },
-        mode === "hash" ? explicitSave : capture) !== false) ?? false;
+      factBlocksIncoming(stored, { scope, passages, sourceMemory }, mode === "hash" ? explicitSave : capture) !== false) ?? false;
   }
 
   /** @param {Scope} scope @param {Pick<SourceRef, "client" | "sessionId">} source */

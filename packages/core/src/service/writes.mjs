@@ -5,7 +5,6 @@ import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/i
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
-import { factBlocksIncoming } from "../privacy/fact-match.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { redactAmendmentText } from "../routing/redaction.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
@@ -18,9 +17,6 @@ import { pauseResult } from "./pause.mjs";
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
-const sentenceSegmenter = new Intl.Segmenter("und", { granularity: "sentence" });
-const MAX_LEGACY_SAVE_SEGMENTS = 200;
-const MAX_LEGACY_SAVE_RUN = 4;
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
 
 /** @param {number | undefined} indexRevision */
@@ -276,77 +272,23 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
   };
 }
 
-/** @param {string} raw @param {string} text */
-function legacySavePassageTexts(raw, text) {
-  // ICU can keep a lowercase sentence in the preceding segment. Keep both splits.
-  const punctuation = text.split(/(?<=[.!?。！？])(?=\s)/u, MAX_LEGACY_SAVE_SEGMENTS + 1);
-  if (punctuation.length > MAX_LEGACY_SAVE_SEGMENTS) return null;
-
-  const sentences = [];
-  for (const { segment } of sentenceSegmenter.segment(raw)) {
-    sentences.push(segment);
-    if (sentences.length > MAX_LEGACY_SAVE_SEGMENTS) return null;
-  }
-
-  const candidates = new Set();
-  for (const segments of [sentences, punctuation]) {
-    for (let start = 0; start < segments.length; start++) {
-      let run = "";
-      for (let end = start; end < segments.length && end < start + MAX_LEGACY_SAVE_RUN; end++) {
-        // Preserve the original separators so fingerprinting applies its usual whitespace normalization.
-        run += segments[end];
-        candidates.add(run.trim());
-      }
-    }
-  }
-  candidates.delete("");
-  candidates.delete(raw.trim());
-  candidates.delete(text);
-  return candidates;
-}
-
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
  * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
  * @param {TextFact["sourceMemory"]} [edit]
- * @param {{ raw: string, text: string, sha256Hex: (text: string) => Promise<string>,
- *   digesters?: readonly RetainedDigester[] }} [explicitSave]
  */
-async function withheld(suppressions, tx, scope, source, passages, key, edit, explicitSave) {
+async function withheld(suppressions, tx, scope, source, passages, key, edit) {
   const snapshot = await writeSnapshot(suppressions, tx, scope, source, { passages });
-  if (snapshot.blockedSession || snapshot.blockedMessages.length) return { blocked: true };
-  const stored = snapshot.passages.slice();
+  if (snapshot.blockedSession || snapshot.blockedMessages.length) return true;
+  const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
   if (passages.length > 1) {
     // The candidate snapshot may omit forget facts needed for multi-passage containment.
     const scoped = await suppressions.snapshot(tx, scope, {});
-    for (const entry of scoped.passages) {
-      if (entry.fact?.origin === "forget" || entry.fact?.explicitSaveExemptAfterUs !== undefined) stored.push(entry);
+    for (const { fact } of scoped.passages) {
+      if (fact?.origin === "forget") passagesInSnapshot.push(fact);
     }
   }
-  const facts = scopedPassageFacts(scope, stored.map(({ fact }) => fact));
-  if (facts === null) return { blocked: true };
-  if (explicitSave === undefined) {
-    return { blocked: blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined) };
-  }
-  if (blocksMemoryPassage(passages, facts.filter(fact => fact.explicitSaveExemptAfterUs === undefined), key)) {
-    return { blocked: true };
-  }
-  const legacy = stored.filter(({ fact }) => fact.explicitSaveExemptAfterUs !== undefined &&
-    fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-  if (!legacy.length) return { blocked: false };
-
-  const { raw, text, sha256Hex, digesters } = explicitSave;
-  const passageTexts = legacySavePassageTexts(raw, text);
-  let candidates = passages;
-  if (passageTexts !== null) {
-    const fingerprints = await Promise.all(Array.from(passageTexts, passage =>
-      fingerprintMemoryPassages(passage, prepareCoreText(passage), key, sha256Hex, digesters)));
-    candidates = passages.concat(fingerprints.flat());
-  }
-  const blocked = legacy.some(entry => factBlocksIncoming(entry, { scope, passages: candidates },
-    { mode: "explicitSave", key }) !== false);
-  // An over-cap save keeps full vector matching because passage evidence is incomplete.
-  return { blocked, mayExemptVector: passageTexts !== null &&
-    legacy.some(({ fact }) => fact.explicitSaveExemptAfterUs !== "infinity") };
+  const facts = scopedPassageFacts(scope, passagesInSnapshot);
+  return facts === null || blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
 }
 
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
@@ -465,28 +407,14 @@ export function writeMethods(deps) {
         if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
-        if (receipts.length && await withheldReceipt(tx, scope, receipts[0])) return suppressed();
-        const explicitSave = explicit ? { raw, text, sha256Hex, digesters } : undefined;
-        const { blocked, mayExemptVector } = await withheld(suppressions, tx, scope, source, passages, key, undefined, explicitSave);
-        if (blocked) return suppressed();
+        if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
+            await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
-        const near = capabilities.nearDuplicate === true && embedding !== null;
-        let decision = decide(policy, near);
-        let now;
-        if (mayExemptVector && decision.status === "suppressed" &&
-            decide({ ...policy, blockedPositions: [] }, near).status === "saved") {
-          // Only a would-be insert may retry admission with its physical creation time.
-          now = clock.nowMs();
-          const insertPolicy = await memories.readWritePolicy(tx, scope, [query], source, mode, undefined, {
-            explicitSaveCreatedAtUs: BigInt(now) * 1000n,
-          });
-          decision = decide(insertPolicy, near);
-          if (decision.status !== "saved") return suppressed();
-        }
+        const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
         if (decision.status === "suppressed") return suppressed();
         let id, written;
         if (decision.status === "saved") {
-          written = await memories.insert(tx, scope, row, receipts, now ?? clock.nowMs());
+          written = await memories.insert(tx, scope, row, receipts, clock.nowMs());
           id = written.id;
         } else {
           const duplicateId = decision.id;
@@ -576,7 +504,7 @@ export function writeMethods(deps) {
             throw new CoreError("fingerprint_key_mismatch");
           }
           if ((receipts?.length && await withheldReceipt(tx, scope, receipts[0])) ||
-              (await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })).blocked) {
+              await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
             return /** @type {const} */ ({ status: "suppressed" });
           }
           const policy = await memories.readWritePolicy(tx, scope, [query], source, "full", id);

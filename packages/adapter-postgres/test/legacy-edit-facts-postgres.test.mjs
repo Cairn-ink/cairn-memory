@@ -79,8 +79,7 @@ async function fixture(t) {
     const digest = await hostedV1Digest(text);
     const incoming = [{ textHash: `sha256:${digest.value}`, embedding: close, digests: [digest, ...digests] }];
     const policy = await runRead(tx => memoryStore.readWritePolicy(tx, scope, incoming,
-      { kind: "web", client: null, sessionId: null }, "hash", undefined,
-      { explicitSaveCreatedAtUs: BigInt(cutoffUs) + 100n }));
+      { kind: "web", client: null, sessionId: null }, "hash"));
     assert.deepEqual(policy.blockedPositions, [0], "the fact itself blocks an exact admission");
   }
 
@@ -250,9 +249,8 @@ for (const cutoff of ["-infinity", "infinity"]) {
     await f.visible(ids, wanted);
     await f.copyFacts();
     await f.visible(ids, wanted);
-    const status = cutoff === "-infinity" ? "saved" : "suppressed";
-    assert.equal((await f.service.save(scope, nearSentence, web)).status, status);
-    assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, status === "saved" ? 4 : 3);
+    assert.equal((await f.service.save(scope, nearSentence, web)).status, "suppressed");
+    assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 3);
   });
 }
 
@@ -323,7 +321,7 @@ async function writeFixture(t, { keyed = true } = {}) {
   };
 }
 
-test("a pre-forget memory stays hidden while a later vector-close explicit save is visible", migrationDbTest, async t => {
+test("a vector-close explicit save after a forget is blocked by core and visible if stored by legacy", migrationDbTest, async t => {
   const f = await writeFixture(t);
   f.setClock(cutoffMs);
   const before = await f.service.save(scope, nearSentence, web);
@@ -332,10 +330,11 @@ test("a pre-forget memory stays hidden while a later vector-close explicit save 
   assert.deepEqual(await f.fence(before.item.id), []);
 
   f.setClock(cutoffMs + 1);
-  const after = await f.service.save(scope, "The light fixture rests downstairs.", mcp);
-  assert.equal(after.status, "saved");
-  assert.equal(after.item.createdAtMs, cutoffMs + 1);
-  assert.deepEqual(await f.fence(after.item.id), [ref(after.item.id)]);
+  const text = "The light fixture rests downstairs.";
+  assert.equal((await f.service.save(scope, text, mcp)).status, "suppressed");
+  assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, [{ id: before.item.id }]);
+  await f.memory("legacy-save", text, { kind: "mcp" });
+  assert.deepEqual(await f.fence("legacy-save"), [ref("legacy-save")]);
 });
 
 test("later explicit saves still withhold an exact re-save and multi-sentence containment", migrationDbTest, async t => {
@@ -365,15 +364,15 @@ const exactPassageCases = [
   ["lowercase abbreviation in passage", abbreviation, `${prefix} ${abbreviation.toLowerCase()} ${suffix}`],
   ["unpunctuated final context", forgottenSentence, `${prefix} ${lowercaseSentence} ${suffix.slice(0, -1)}`],
   ["unpunctuated exact passage", unpunctuated, `${prefix} ${unpunctuated.toLowerCase()}`],
-  ["removed period", forgottenSentence, `${prefix} ${unpunctuated.toLowerCase()}`, "saved"],
+  ["removed period with a close vector", forgottenSentence, `${prefix} ${unpunctuated.toLowerCase()}`],
   ["newline-separated context", forgottenSentence, `A journal entry follows\n${lowercaseSentence}\nA new entry begins`],
   ["multiple spaces", forgottenSentence, `${prefix}   ${lowercaseSentence.replace("is ", "is   ")}   ${suffix}`],
   ["lowercase leading context", forgottenSentence, `${prefix.toLowerCase()} ${lowercaseSentence} ${suffix}`],
   ["four segments in passage", fourSegments, `${prefix} ${fourSegments.replace("Dr. ", "Dr.\t  ")} ${suffix}`],
 ];
 
-for (const [label, forgotten, text, status = "suppressed"] of exactPassageCases) {
-  test(`keyless legacy exact passage: ${label}`, migrationDbTest, async t => {
+for (const [label, forgotten, text] of exactPassageCases) {
+  test(`keyless legacy passage admission: ${label}`, migrationDbTest, async t => {
     const f = await writeFixture(t, { keyed: false });
     await f.legacyText("forget", forgotten);
     for (const phase of ["live", "copied"]) {
@@ -385,39 +384,44 @@ for (const [label, forgotten, text, status = "suppressed"] of exactPassageCases)
       for (const source of [web, mcp]) {
         const attempt = `${phase} ${source.kind}`;
         const result = await f.service.save(scope, text, source);
-        assert.equal(result.status, status, attempt);
+        assert.equal(result.status, "suppressed", attempt);
         const { rows } = await f.pool.query("SELECT id FROM memories");
-        if (status === "saved") {
-          assert.deepEqual(rows, [{ id: result.item.id }], attempt);
-          assert.deepEqual(await f.fence(result.item.id), [ref(result.item.id)], attempt);
-          // Each attempt must be a fresh insert candidate.
-          await f.pool.query("DELETE FROM memories WHERE id = $1", [result.item.id]);
-        } else {
-          assert.deepEqual(rows, [], attempt);
-        }
+        assert.deepEqual(rows, [], attempt);
       }
     }
   });
 }
 
-test("legacy exact passage cap preserves whole-text matching and keeps vector matching enabled", migrationDbTest, async t => {
+test("an explicit save ignores a forgotten passage inside a redacted block", migrationDbTest, async t => {
+  const f = await writeFixture(t, { keyed: false });
+  await f.legacyText("forget", fourSegments, { vector: far });
+  const text = `${prefix}\n-----BEGIN PRIVATE KEY-----\nA lamp. ${fourSegments} A candle.\n-----END PRIVATE KEY-----\n${suffix}`;
+  for (const phase of ["live", "copied"]) {
+    if (phase === "copied") await f.copyFacts();
+    const saved = await f.service.save(scope, text, web);
+    assert.equal(saved.status, "saved", phase);
+    assert.equal(saved.item.text, `${prefix} [REDACTED] ${suffix}`, phase);
+    assert.deepEqual(await f.fence(saved.item.id), [ref(saved.item.id)], phase);
+    await f.pool.query("DELETE FROM memories WHERE id = $1", [saved.item.id]);
+  }
+});
+
+test("legacy whole-text and vector matching also block inputs with more than 200 sentences", migrationDbTest, async t => {
   const f = await writeFixture(t, { keyed: false });
   const atCap = Array(200).fill("A lamp.").join(" ");
   const exactOverCap = `${prefix} ${atCap}`;
   const vectorOverCap = `${atCap} ${suffix}`;
   await f.legacyText("forget", exactOverCap, { id: "whole-text", vector: far });
-  assert.equal((await f.service.save(scope, exactOverCap, web)).status, "suppressed", "whole-text match above the cap");
+  assert.equal((await f.service.save(scope, exactOverCap, web)).status, "suppressed", "whole-text match at 201 sentences");
   assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, []);
 
   await f.forget();
-  const saved = await f.service.save(scope, atCap, web);
-  assert.equal(saved.status, "saved", "vector exemption at the cap");
-  assert.deepEqual(await f.fence(saved.item.id), [ref(saved.item.id)]);
-  assert.equal((await f.service.save(scope, vectorOverCap, web)).status, "suppressed", "vector match above the cap");
-  assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, [{ id: saved.item.id }]);
+  assert.equal((await f.service.save(scope, atCap, web)).status, "suppressed", "vector match at 200 sentences");
+  assert.equal((await f.service.save(scope, vectorOverCap, web)).status, "suppressed", "vector match at 201 sentences");
+  assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, []);
 });
 
-test("an explicit duplicate cannot use the insert exemption to attach a receipt or advance recency", migrationDbTest, async t => {
+test("a blocked explicit duplicate leaves receipts and recency alone", migrationDbTest, async t => {
   const f = await writeFixture(t);
   await f.memory("duplicate", nearSentence, { kind: "plugin", created: earlier, vector: far });
   await f.forget();

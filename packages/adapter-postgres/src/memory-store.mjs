@@ -214,15 +214,12 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       const incoming = copySource(source);
       if (mode !== "hash" && mode !== "full") invalid();
       const excluded = editId === undefined ? undefined : inputText(editId);
-      const explicitSaveCreatedAtUs = mode === "hash" && excluded === undefined &&
-        (incoming.kind === "mcp" || incoming.kind === "web") ? options?.explicitSaveCreatedAtUs : undefined;
       return runOperation(tx, async (query) => {
         const visibility = await readVisibility(query, tx.owner, hashSessionKey);
         const edit = excluded === undefined ? null : await selectMemory(query, tx.owner, ns, excluded);
         const sourceMemory = edit && { id: edit.memory.id, createdAtMs: edit.memory.createdAtMs };
         const blockedSession = visibility.blocksSession(selection, incoming);
-        const blockedPositions = queries.flatMap((item, i) =>
-          visibility.blocks(selection, item, mode, sourceMemory, explicitSaveCreatedAtUs) ? [i] : []);
+        const blockedPositions = queries.flatMap((item, i) => visibility.blocks(selection, item, mode, sourceMemory) ? [i] : []);
         const near = nearDuplicate && options?.nearDuplicate !== false;
         const { matches, visible } = await duplicateMatches(query, selection, ns, visibility, queries, near, NEAR_DUPLICATE_DISTANCE, excluded);
         const hiddenIds = [...new Set(matches.flatMap(group => group.flatMap(match =>

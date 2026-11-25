@@ -795,26 +795,23 @@ The MCP host uses these status mappings.
 | `suppressed` | `memory_suppressed` |
 | `invalid` | `invalid_input` |
 
-## Addendum 19 — Legacy explicit-save parity
+## Addendum 19 — Legacy explicit-save read parity
+
+On reads, a legacy edit fact matches by physical `text_hash` equality alone.
 
 A full text suppression fact with origin `forget`, `correct`, or `backfill`
 may persist `explicitSaveExemptAfterUs` as a canonical integer string of epoch
-microseconds or as `-infinity`. The matcher skips vector matching for physical
-`mcp` or `web` memories with a creation time strictly later than that cutoff.
+microseconds or as `-infinity`. On reads, the matcher skips vector matching for
+physical `mcp` or `web` rows with a server creation time strictly later than
+that cutoff.
 Any full text fact may use `infinity` to keep vector matching enabled at every
 timestamp. Exact digests and any containment checks enabled by the caller
-still apply. On writes, only an explicit save that inserts a new physical row
-can qualify, using the server clock in the save transaction. Duplicate touches
-use full matching for cutoff-bearing facts. When the field is absent, full text
-matching follows the caller's existing policy.
+still apply. When the field is absent, full text matching follows the caller's
+existing policy.
 
-For legacy cutoff-bearing facts, explicit saves check exact passages from both
-ICU sentence segmentation and a split of the normalized text at sentence
-punctuation followed by whitespace. Each split supplies individual segments and
-contiguous runs of two to four segments. Runs preserve their original separators
-and use the stored fingerprints' whitespace normalization. If either split has
-more than 200 segments, the save checks whole-text evidence and keeps vector
-matching enabled for legacy cutoff-bearing facts.
+On writes, legacy cutoff facts apply the full policy. Write-side parity with
+the hosted explicit-save exemption is deferred. Core can therefore block a
+new save that the read policy would show if the hosted writer had stored it.
 
 The Postgres batch copy merges rows that share a slot and have identical matching
 evidence at the latest cutoff. A slot with differing evidence yields no copied

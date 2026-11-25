@@ -81,12 +81,11 @@ export interface MemoryStore {
   /** Exact first, then near (capability nearDuplicate, distance from decisions). Visible rows only. */
   findDuplicates(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], options: { nearDistance: number; excludeId?: string }): Promise<MemoryMatch[][]>;
   /**
-   * Suppression runs BEFORE dedupe. mode "hash" selects explicit-save matching.
-   * explicitSaveCreatedAtUs is the server-assigned physical creation time for a new explicit save.
+   * Suppression runs BEFORE dedupe. mode "hash" lets an explicit save pass distance-only facts.
    * nearDuplicate:false lets the adapter skip near lookups while keeping the embedding for suppression.
    */
   readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full",
-    editId?: string, options?: { nearDuplicate?: boolean; explicitSaveCreatedAtUs?: bigint }): Promise<WritePolicy>;
+    editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
   /** When returned, receiptIds are the stored IDs of the attached receipts in input order. */
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{
     id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs;

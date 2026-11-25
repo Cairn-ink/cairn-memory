@@ -101,13 +101,14 @@ FROM suppressions WHERE user_id = $1
 The helper returns validated facts with the supplied owner and `actionId: "legacy"`.
 The copy supplies storage IDs and epochs. A read matches a legacy edit by
 physical `text_hash` equality alone. Full legacy facts also use digest and
-vector matching. For `forget`, `correct`, and `backfill`, physical `mcp` and
-`web` memories created strictly after the cutoff skip vector matching. A cutoff
-of `-infinity` exempts later timestamps, while `infinity` keeps vector matching
-enabled at every timestamp. Null-origin text suppressions use `infinity`.
-On writes, only a new physical row can qualify, using the server clock in the
-save transaction. Duplicate touches use the full legacy vector policy. Exact
-passage and applicable shingle containment checks also run.
+vector matching on reads. For `forget`, `correct`, and `backfill`, physical
+`mcp` and `web` rows with a server creation time strictly after the cutoff skip
+vector matching. A cutoff of `-infinity` exempts later timestamps, while
+`infinity` keeps vector matching enabled at every timestamp. Null-origin text
+suppressions use `infinity`.
+
+On writes, legacy cutoff facts apply the full policy. Write-side parity with
+the hosted explicit-save exemption is deferred.
 
 The slot helper and insert builder in `src/facts.mjs` snapshot the fact before
 running core validation and the adapter's storage checks. They derive all
