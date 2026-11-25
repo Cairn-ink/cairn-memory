@@ -30,10 +30,11 @@ with one count and preserves the items. Goals require a period and a comparator.
 Records use `none` for both.
 
 Before reconciliation, capture keeps a record only if a number in one of the
-item's cited user messages matches its value after rounding both to two decimal
+item's cited user messages matches its magnitude after rounding both to two decimal
 places. It drops model-computed totals unless the resulting value also appears
 as a number in a cited user message. Every such drop emits one content-free
-`extract/core_validation/ungrounded_extraction_quantity` diagnostic.
+`extract/core_validation/ungrounded_extraction_quantity` diagnostic. Receipts
+longer than 16 million UTF-16 code units yield no numeric readings.
 
 Only rows with the memory's current `textHash` count toward coverage. For each
 identity (measure, category, value, unit, period and comparator), if any cited

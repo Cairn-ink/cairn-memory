@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { digest } from '@cairn-ink/core/ledger';
 import { createMemoryService } from '@cairn-ink/core/service';
 import { hostedScope as scope, serviceFake } from './helpers/service-fake.mjs';
 
@@ -65,3 +66,31 @@ test('only cited user messages can ground a record', async () => {
   assert.deepEqual(rows.map(({ kind, value, receiptId }) => [kind, value, receiptId]), [['goal', 10, 'canonical-user']]);
   assert.deepEqual(diagnostics, [ungrounded]);
 });
+
+for (const [name, text, grounded, rejected] of [
+  ['range', '$3k-$5k', [3000, 5000, -5000], [5]],
+  ['refund', '-$20 refund', [-20, 20], [2]],
+  ['scale with adjacent units', '3kUSD and $4.2mUSD', [3000, 4_200_000], [3, 4.2]],
+  ['dotted date', '2026.11.25', [2026, 11, 25], [2026.11, 11.25]],
+  ['number-word hyphen', 'twenty‑five', [25], [20, 5]],
+  ['Chinese sections', '一萬零十二 and 一萬億', [10_012, 1_000_000_000_000], [12, 10_000]],
+  ['Chinese decimal', '三點五萬', [35_000], [3, 50_000]],
+  ['exact decimal tie', '1.000065k', [1000.07], [1000.06]],
+]) {
+  test(`review probe: capture keeps the cited ${name} and drops unsupported rows`, async () => {
+    const { rows, diagnostics, resolved } = await capture([
+      message('earliest', 'This receipt has no amount.'),
+      message('grounded', text, 'user', 100),
+    ], [item([0, 1])], [
+      ...grounded.map(value => record(value)),
+      ...rejected.map(value => record(value, { category: 'excluded probe' })),
+    ]);
+    assert.deepEqual(rows.map(({ value, receiptId, date }) => [value, receiptId, date]),
+      grounded.map(value => [value, 'canonical-grounded', 100]));
+    assert.deepEqual(resolved, [[['earliest', 'user'], ['grounded', 'user']]]);
+    assert.deepEqual(diagnostics, rejected.map(() => ungrounded));
+    const summary = digest(rows, [], { fromMs: 0, toMs: 200, label: 'capture' });
+    assert.match(summary.body, /Coffee: total/);
+    assert.doesNotMatch(summary.body, /excluded probe/i);
+  });
+}
