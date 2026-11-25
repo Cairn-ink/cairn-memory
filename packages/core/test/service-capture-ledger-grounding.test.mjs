@@ -70,7 +70,7 @@ test('only cited user messages can ground a record', async () => {
 for (const [name, text, grounded, rejected] of [
   ['range', '$3k-$5k', [3000, 5000, -5000], [5]],
   ['refund', '-$20 refund', [-20, 20], [2]],
-  ['scale with adjacent units', '3kUSD and $4.2mUSD', [3000, 4_200_000], [3, 4.2]],
+  ['scale with adjacent units', '3kUSD and $4.2mUSD', [3, 3000, 4.2, 4_200_000], [30, 420]],
   ['dotted date', '2026.11.25', [2026, 11, 25], [2026.11, 11.25]],
   ['number-word hyphen', 'twenty‑five', [25], [20, 5]],
   ['Chinese sections', '一萬零十二 and 一萬億', [10_012, 1_000_000_000_000], [12, 10_000]],
@@ -94,3 +94,32 @@ for (const [name, text, grounded, rejected] of [
     assert.doesNotMatch(summary.body, /excluded probe/i);
   });
 }
+
+for (const [text, readings, extras] of [
+  ['4.2km', [4.2, 4200], { measure: 'distance', unit: 'km', category: 'walk', group: 'fitness' }],
+  ['70kg', [70, 70_000], { measure: 'weight', unit: 'kg', category: 'body', group: 'health' }],
+  ['$20monthly', [20, 20_000_000]], ['$4.2mm', [4.2, 4_200_000]],
+  ['3kUSD', [3, 3000]], ['$4.2mUSD', [4.2, 4_200_000]],
+  ['3k元', [3, 3000], { unit: 'TWD' }], ['3k5', [3000, 5]],
+]) {
+  test(`fix2 regression: capture keeps both readings for ${text}`, async () => {
+    const { rows, diagnostics } = await capture([message('user', text)], [item([0], text)],
+      readings.map(value => record(value, extras)));
+    assert.deepEqual(rows.map(({ value, receiptId }) => [value, receiptId]),
+      readings.map(value => [value, 'canonical-user']));
+    assert.deepEqual(diagnostics, []);
+  });
+}
+
+test('capture keeps only scaled readings for standalone scale letters', async () => {
+  for (const [text, grounded, rejected] of [
+    ['3k', [3000], [3]], ['3K.', [3000], [3]], ['$4.2m ', [4_200_000], [4.2]],
+    ['3k-5k', [3000, 5000], [3, 5]],
+  ]) {
+    const { rows, diagnostics } = await capture([message('user', text)], [item([0], text)],
+      [...grounded, ...rejected].map(value => record(value)));
+    assert.deepEqual(rows.map(({ value, receiptId }) => [value, receiptId]),
+      grounded.map(value => [value, 'canonical-user']), text);
+    assert.deepEqual(diagnostics, rejected.map(() => ungrounded), text);
+  }
+});

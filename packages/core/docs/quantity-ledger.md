@@ -34,7 +34,9 @@ item's cited user messages matches its magnitude after rounding both to two deci
 places. It drops model-computed totals unless the resulting value also appears
 as a number in a cited user message. Every such drop emits one content-free
 `extract/core_validation/ungrounded_extraction_quantity` diagnostic. Receipts
-longer than 16 million UTF-16 code units yield no numeric readings.
+longer than 20,000 UTF-16 code units yield no numeric readings. The same limit
+applies to a run of combining marks after accounting for decomposition. Both
+limits are checked before Unicode normalization.
 
 Only rows with the memory's current `textHash` count toward coverage. For each
 identity (measure, category, value, unit, period and comparator), if any cited

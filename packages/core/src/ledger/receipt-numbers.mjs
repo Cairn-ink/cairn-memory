@@ -9,7 +9,7 @@ const figureStarts = new RegExp(String.raw`(?:${currencyPrefix}(?=${figureHead}|
 const integer = new RegExp(String.raw`[0-9]{1,3}(?:,[0-9]{3}(?![0-9]))+|[${digits}]+`, 'y');
 const fraction = new RegExp('[' + digits + ']+', 'y');
 const dottedPart = /\.[0-9]+/y;
-const scaleSuffix = /(?:[ \t]*(thousand|million|billion|bn)(?![a-z0-9_])|(k|m)(?![0-9]))/y;
+const scaleSuffix = /(?:[ \t]*(thousand|million|billion|bn)(?![a-z0-9_])|(k|m)(?=(\p{L})?))/uy;
 const scales = new Map([['k', 3], ['thousand', 3], ['million', 6], ['m', 6], ['billion', 9], ['bn', 9]]);
 
 const ones = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -34,7 +34,7 @@ const wordSeparators = new RegExp('[ \t]+|' + hyphen, 'u');
 
 const lowUnits = new Map([['千', 3], ['百', 2], ['十', 1]]);
 const cents = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, useGrouping: false });
-const maxReceiptLength = 16_000_000;
+const maxReceiptLength = 20_000;
 
 /** @param {number} value */
 export function roundReceiptNumber(value) {
@@ -184,6 +184,12 @@ export function readReceiptNumbers(content) {
   /** @type {Set<number>} */
   const values = new Set();
   if (content.length > maxReceiptLength) return values;
+  // Canonical reordering works on decomposed marks. Include the halfwidth
+  // voiced marks in each run and count marks that decompose into two as two.
+  for (const [marks] of content.matchAll(/[\p{M}\uff9e\uff9f]+/gu)) {
+    const extraMarks = marks.match(/[\u0344\u0f73\u0f75\u0f81]/gu)?.length ?? 0;
+    if (marks.length + extraMarks > maxReceiptLength) return values;
+  }
   const text = content.normalize('NFKC').toLowerCase();
   figureStarts.lastIndex = 0;
   let figure;
@@ -210,10 +216,12 @@ export function readReceiptNumbers(content) {
     }
     const { end, terms } = readHanAmount(text, start, coefficient);
     scaleSuffix.lastIndex = end;
-    const suffix = scaleSuffix.exec(text);
-    const scaleName = suffix?.[1] ?? suffix?.[2] ?? '';
-    const scale = scaleName === 'm' && !currency ? 0 : scales.get(scaleName) ?? 0;
-    if (scale) shiftSection(terms, 0, scale);
+    const [, wordScale, shortScale, followingLetter] = scaleSuffix.exec(text) ?? [];
+    const scale = shortScale === 'm' && !currency ? 0 : scales.get(wordScale ?? shortScale ?? '') ?? 0;
+    if (scale) {
+      if (followingLetter) addReading(values, sumTerms(terms));
+      shiftSection(terms, 0, scale);
+    }
     addReading(values, sumTerms(terms));
     figureStarts.lastIndex = scale ? scaleSuffix.lastIndex : end;
   }

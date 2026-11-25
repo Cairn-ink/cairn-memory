@@ -29,8 +29,6 @@ test('receipts and extracted values round to cents, including decimal ties', () 
 
 test('only a currency amount takes the attached m suffix', () => {
   for (const text of ['4.2m', '4.2 m', '$4.2 m']) assert.deepEqual([...readReceiptNumbers(text)], [4.2], text);
-  assert.deepEqual([...readReceiptNumbers('$4.2mm')], [4_200_000]);
-  assert.deepEqual([...readReceiptNumbers('$4.2km')], [4200]);
 });
 
 test('plain prose, unequal amounts and computed totals do not ground records', () => {
@@ -55,11 +53,29 @@ test('review probe: signs and range separators leave magnitudes', () => {
 });
 
 test('review probe: adjacent units preserve the scale of the whole amount', () => {
-  for (const [text, value] of [
-    ['3kUSD', 3000], ['3K元', 3000], ['6ksteps', 6000], ['$4.2mUSD', 4_200_000],
-    ['4.2mUSD', 4.2], ['$4.2m元', 4_200_000], ['USD -4.2mUSD', 4_200_000],
+  for (const [text, values] of [
+    ['3K元', [3, 3000]], ['3k𐐀', [3, 3000]], ['6ksteps', [6, 6000]], ['$4.2km', [4.2, 4200]],
+    ['4.2mUSD', [4.2]], ['$4.2m元', [4.2, 4_200_000]], ['USD -4.2mUSD', [4.2, 4_200_000]],
   ]) {
-    assert.deepEqual([...readReceiptNumbers(text)], [value], text);
+    assert.deepEqual(readReceiptNumbers(text), new Set(values), text);
+  }
+});
+
+for (const [text, values] of [
+  ['4.2km', [4.2, 4200]], ['70kg', [70, 70_000]], ['$20monthly', [20, 20_000_000]],
+  ['$4.2mm', [4.2, 4_200_000]], ['3kUSD', [3, 3000]], ['$4.2mUSD', [4.2, 4_200_000]],
+  ['3k元', [3, 3000]], ['3k5', [3000, 5]],
+]) {
+  test(`fix2 regression: receipt readings for ${text}`, () => {
+    assert.deepEqual(readReceiptNumbers(text), new Set(values));
+  });
+}
+
+test('standalone scale letters give only the scaled reading', () => {
+  for (const [text, values] of [
+    ['3k', [3000]], ['3K.', [3000]], ['$4.2m ', [4_200_000]], ['3k-5k', [3000, 5000]],
+  ]) {
+    assert.deepEqual(readReceiptNumbers(text), new Set(values), text);
   }
 });
 
@@ -102,10 +118,24 @@ test('review probe: scaling rounds decimal ties exactly as their literals', () =
   }
 });
 
-test('review probe: millions of dotted components stay readable', () => {
-  assert.deepEqual([...readReceiptNumbers('1.'.repeat(4_000_000))], [1]);
+test('review probe: dotted components stay readable up to the receipt limit', () => {
+  assert.deepEqual([...readReceiptNumbers('1.'.repeat(10_000))], [1]);
+  assert.deepEqual([...readReceiptNumbers('1.'.repeat(4_000_000))], []);
 });
 
 test('over-limit receipts yield no readings, including at the beginning', () => {
   assert.deepEqual([...readReceiptNumbers('42' + ' '.repeat(15_999_999))], []);
+});
+
+test('fix2 regression: receipt length is checked in UTF-16 units before normalization', () => {
+  // Each decomposed pair normalizes to one code unit.
+  const atLimit = '1 ' + 'e\u0301'.repeat(9_999);
+  assert.deepEqual([...readReceiptNumbers(atLimit)], [1]);
+  assert.deepEqual([...readReceiptNumbers(atLimit + ' ')], []);
+});
+
+test('fix2 regression: expanding combining marks count toward the normalization limit', () => {
+  const atLimit = '1' + '\u0344'.repeat(5000) + '\u0f73'.repeat(5000);
+  assert.deepEqual([...readReceiptNumbers(atLimit)], [1]);
+  assert.deepEqual([...readReceiptNumbers(atLimit + '\u0f73')], []);
 });
