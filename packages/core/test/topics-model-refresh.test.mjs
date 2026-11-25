@@ -4,7 +4,8 @@ import { placePending, placePendingCards } from '../src/index.mjs';
 
 const scope = { owner: 'owner', namespace: null };
 const memory = { id: 'memory', revision: 1, kind: 'fact', text: 'A private note.' };
-const card = { id: 'card', contentHash: 'hash', title: 'Private notes', body: 'A private draft.' };
+const card = { id: 'card', contentHash: 'hash', title: 'Private notes', body: 'A private draft.',
+  scope, origin: 'import', sourceMessage: null, sourceMemories: [] };
 
 for (const kind of ['memory', 'card']) {
   test(`a ${kind} hidden while the pre-send gate is pending never reaches the classifier`, async () => {
@@ -47,7 +48,13 @@ for (const kind of ['memory', 'card']) {
         async readRevision(tx) { return tx.hidden ? null : { revision: memory.revision }; },
       } })
       : await placePendingCards({ ...options,
-        documentCards: { async get() { return card; } },
+        documentCards: {
+          async get() { return card; },
+          async visibilityInputs(tx, requestedScope, refs) {
+            return refs.map(({ id }) => tx.hidden || id !== card.id ? null :
+              { card, requestedScope, memoryStates: new Map(), textFacts: [] });
+          },
+        },
         fence: { async assertVisible(tx, _scope, refs) { return tx.hidden ? [] : refs; } },
       });
     assert.equal(hidden, true);

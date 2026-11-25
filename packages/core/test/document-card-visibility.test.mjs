@@ -18,8 +18,8 @@ const card = {
   ...built, scope, sourceMessage, canonicalSessionKey, stale: [],
   sourceMemories: [{ id: "source", revision: 2 }],
 };
-const visible = (revision, content = "Current guidance", date = null) => ({ status: "visible", revision, content, date });
-const historical = { status: "historical", revision: 1 };
+const visible = (revision, content = "Current guidance", date = null) => ({ status: "visible", revision, correctedRevisions: [], content, date });
+const historical = { status: "historical", revision: 1, correctedRevisions: [] };
 const memoryStates = new Map([["source", visible(2)]]);
 const read = { card, requestedScope: { ...scope }, memoryStates, sourceWithheld: false };
 

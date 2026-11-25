@@ -6,6 +6,11 @@ Host presets choose the defaults. Core leaves all three switches off unless a
 host opts in. A switch applies only when the adapter advertises its storage
 capability and supplies the store.
 
+Card embedding, amendment detection and verification, and topic classification
+require a live visible verdict from the store's optional `visibilityInputs`
+method. With no method or no visible verdict, Core skips provider work for
+the card. Capture can still write lexical cards.
+
 | `MemoryServiceConfig` switch | Capture behavior | Model requirement |
 | --- | --- | --- |
 | `documentCards.enabled` | Routes screened messages at successful finish, including finishes with no extraction or no extracted items. | Card routing uses no model key. A configured embedder supplies search vectors. Without it, cards are lexical-only. |
@@ -79,7 +84,8 @@ in the same snapshot.
 | Linked memory state | Router and legacy cards | Import and manual cards |
 | --- | --- | --- |
 | Visible at the linked revision | Visible | Visible |
-| Corrected in place, visible at a different revision | Visible and stale | Hidden (`source_memory_not_visible`) |
+| Cited revision replaced by an in-place text edit | Hidden (`source_memory_corrected`) | Hidden (`source_memory_corrected`) |
+| Visible at a different revision after another kind of write | Visible and stale | Hidden (`source_memory_not_visible`) |
 | Historical, including after supersession | Visible and stale | Hidden (`source_memory_not_visible`) |
 | Forgotten | Hidden (`source_memory_forgotten`) | Hidden (`source_memory_forgotten`) |
 | Suppressed | Hidden (`source_memory_not_visible`) | Hidden (`source_memory_not_visible`) |
@@ -87,8 +93,17 @@ in the same snapshot.
 | Unknown | Hidden (`source_memory_not_visible`) | Hidden (`source_memory_not_visible`) |
 | Visible with an invalid revision | Hidden (`uncertain`) | Hidden (`uncertain`) |
 
-A malformed linked memory state also hides a router or legacy card with
-`uncertain`.
+For visible and historical memory states, supply `correctedRevisions` from the
+same snapshot. Include every revision before the newest in-place text edit,
+including earlier metadata and receipt revisions. Use an empty array when no
+replacement is known.
+An `edit` text fact or a legacy `correct` text fact tied to the cited memory
+can establish a replacement. Set `unresolvedCorrection` when a replacement
+fact cannot be ruled out for the citation, including legacy `correct` facts
+without a source memory. Missing or malformed correction evidence hides the
+card with `uncertain`. A correction withholds the cited body and retains its
+stored text. Re-linking and writes that leave the body text intact preserve the
+corrected citation. A new body can cite the current memory or omit the corrected source.
 
 For a source-less card, pass the stored `card.title` and `card.body` to
 `documentCardVisible`. Use `null` if the stored title is absent. Supply
@@ -139,7 +154,8 @@ forget transaction, Core keeps the existing source hides and asks the store
 for read inputs using only the current forget action's facts. The
 `definiteOnly` option to `documentCardVisible` classifies an ordinary
 hidden verdict. Core calls `purgeById(tx, scope, cardId, reason)` when the
-withhold is definite. Indeterminate evidence leaves the payload intact.
+withhold is definite. Correction-only and indeterminate evidence leave the
+payload intact.
 
 With `purge: true`, the store erases title, body, and sentence payloads and
 retains the ID and hidden reason. Reads exclude the tombstone and `put` of

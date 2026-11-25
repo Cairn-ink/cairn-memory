@@ -6,6 +6,8 @@ import {
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources, hasRawFence } from "./capture-source.mjs";
+import { copyReceipts, guardOwner, inputText, namespaceKey } from "./memory-input.mjs";
+import { canonicalReceiptId, decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
 import { createPostgresMemoryStore } from "./memory-store.mjs";
 import { conversationSessions } from "./raw-session.mjs";
 import { assertReceiptSource } from "./receipt-source.mjs";
@@ -13,10 +15,11 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { CaptureClaim, CaptureFinish, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
 /** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
+/** @import { Receipt } from "../../core/src/ports/common.d.ts" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
 /** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
-/** @typedef {Required<CaptureClaim> & SourceFilter & CaptureFinish} CapturePorts */
+/** @typedef {Required<CaptureClaim> & SourceFilter & Required<CaptureFinish>} CapturePorts */
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{
  *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
@@ -154,6 +157,24 @@ export function createPostgresCapturePorts(options) {
   const memories = createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace, hashSessionKey });
 
   return {
+    async retainedReceiptIds(tx, scope, memoryId, receipts) {
+      guardOwner(tx, scope);
+      const namespace = namespaceKey(scope.namespace, allowNonNullNamespace);
+      const id = inputText(memoryId);
+      const incoming = copyReceipts(receipts);
+      return runOperation(tx, async query => {
+        const { rows } = await query(memoryReceiptsSql(`ARRAY(SELECT id FROM memories WHERE user_id = $1
+          AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3)`), [tx.owner, namespace, id]);
+        // The hosted receipt table has a composite key and does not store excerpts.
+        /** @param {Receipt} receipt */
+        const address = ({ client, sessionId, messageId, role, occurredAtMs }) =>
+          JSON.stringify([client, sessionId, messageId, role, occurredAtMs]);
+        const retained = new Set((decodeReceipts(rows).get(id) ?? []).map(address));
+        return Promise.all(incoming.map(receipt => retained.has(address(receipt))
+          ? canonicalReceiptId(tx.owner, namespace, id, receipt) : null));
+      });
+    },
+
     async claim(tx, key, messages, options) {
       return pauseLockedWrite(tx, () => {
         const copy = copyKey(tx, key);
@@ -216,7 +237,7 @@ export function createPostgresCapturePorts(options) {
     },
 
     async finish(tx, token, items) {
-      const { scope, source, batch, lease, nowMs } = await pauseLockedWrite(tx, () => {
+      const { scope, source, batch, lease, nowMs, current } = await pauseLockedWrite(tx, () => {
         const lease = readToken(token);
         const batch = copyFinishItems(items);
         return async (query) => {
@@ -262,7 +283,7 @@ export function createPostgresCapturePorts(options) {
             await assertReceiptSource(query, scope, receipt, captureProofs, hashSessionKey,
               fromLease ? current ?? [] : [], evidence);
           }
-          return { scope, source, batch, lease, nowMs };
+          return { scope, source, batch, lease, nowMs, current };
         };
       });
 
@@ -271,7 +292,8 @@ export function createPostgresCapturePorts(options) {
         result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
-        trackFinish(tx, completed.client, completed.event_id, result);
+        trackFinish(tx, { scope, client: completed.client, sessionId: source.sessionId,
+          eventId: completed.event_id, messages: current ?? [], result, signer: captureProofs, hashSessionKey });
         return result;
       });
     },

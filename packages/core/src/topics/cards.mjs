@@ -1,4 +1,5 @@
 import { CoreError, isCoreError } from '../errors.mjs';
+import { visibleDocumentCardRows } from '../routing/visibility.mjs';
 import { readClassificationCatalog } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
@@ -50,7 +51,16 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     if (!cards.length) return new Set();
     const refs = cards.map(({ id }) => /** @type {ItemRef} */ ({ type: 'card', id, namespace }));
     const visible = await fence.assertVisible(tx, { owner, namespaces: [namespace] }, refs);
-    return new Set(visible.filter((ref) => ref.type === 'card' && ref.namespace === namespace).map(({ id }) => id));
+    const shown = new Set(visible.filter((ref) => ref.type === 'card' && ref.namespace === namespace).map(({ id }) => id));
+    if (!documentCards.visibilityInputs || !shown.size) return new Set();
+    const candidates = refs.filter(({ id }) => shown.has(id));
+    const evidence = await documentCards.visibilityInputs(tx, scope, candidates, { requireRaw: false });
+    const inputs = new Map(candidates.map((ref, index) => [ref, evidence?.[index]]));
+    const { rows } = await visibleDocumentCardRows(candidates.map(ref => ({ ref })), ref => {
+      const input = inputs.get(ref);
+      return input ? { ...input, requestedScope: scope } : null;
+    });
+    return new Set(rows.map(({ ref }) => ref.id));
   }
 
   /** @param {readonly TopicCardGuard[]} guards @param {ErrorCode} code */

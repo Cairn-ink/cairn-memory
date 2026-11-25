@@ -90,7 +90,8 @@ keep the runner's target objects and comparisons independent of caller settings.
 Migrations 0005 and 0006 add owner state, suppression facts, and their digest
 rows. Each new fact advances its owner's `fact_epoch` by one. The owner's
 `index_revision` advances once per committed run that changes visible rows,
-receipts, raw data, lineage, or facts. This is the value returned as
+receipts, raw data, lineage, or facts. Changing quantity ledger calls each
+advance the revision within their run. This is the value returned as
 `FinishResult.indexRevision` and used to bind retrieval state tokens.
 `legacy_facts_ready` defaults to false for the later legacy copy. The backfill
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
@@ -281,6 +282,13 @@ checks and forget operations.
 `createPostgresSupersessionStore` records edges and marks historical rows.
 Historical rows remain available for direct reads and export after the other
 visibility checks pass.
+
+Apply migration 0025 before deploying this adapter version, even with
+`quantityLedger` off, because Raw delete paths also clear the quantity ledger table.
+After applying the quantity ledger migration, expose the result of
+`createPostgresQuantityLedgerStore` as `quantityLedger` and enable the
+`quantityLedger` capability. Pass `allowNonNullNamespace: true` when the host
+also enables named namespaces on the MemoryStore and capture ports.
 
 ## Raw writes and lineage
 

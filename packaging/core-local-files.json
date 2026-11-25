@@ -61,6 +61,7 @@
   "packages/core/src/ledger/digest.mjs",
   "packages/core/src/ledger/index.mjs",
   "packages/core/src/ledger/quantities.mjs",
+  "packages/core/src/ledger/receipt-numbers.mjs",
   "packages/core/src/ledger/terms.mjs",
   "packages/core/src/ledger/window.mjs",
   "packages/core/src/memory-policy/index.mjs",

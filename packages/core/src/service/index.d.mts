@@ -7,7 +7,8 @@ import type {
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDigest, ContextMemoryEvidence,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDiagnostics, ContextLedgerDigest,
+  ContextLedgerErrorStage, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
   FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
@@ -25,7 +26,11 @@ export interface MemoryServiceConfig {
   /** Opt in to capture-time cards and, separately, post-commit amendments. Requires documentCards storage. */
   readonly documentCards?: { readonly enabled: boolean; readonly amendments?: boolean };
   /** Opt in to quantity extraction and persistence. Requires quantityLedger storage and a model. */
-  readonly quantityLedger?: { readonly enabled: boolean };
+  readonly quantityLedger?: {
+    readonly enabled: boolean;
+    /** Include calendar comparisons for “this week” and “this month” when the ledger is enabled. */
+    readonly calendarReading?: boolean;
+  };
 }
 
 export interface MemoryServiceDeps {
@@ -41,7 +46,8 @@ export interface MemoryServiceDeps {
   readonly documentCardSessionKey?: (session: DocumentCardSession) => string | null;
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
-  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
+  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit.
+   * It emits extract/core_validation/ungrounded_extraction_quantity once per ungrounded ledger record. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 

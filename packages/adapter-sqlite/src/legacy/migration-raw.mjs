@@ -1,5 +1,6 @@
 import { legacyRawHash } from "../migrate/raw-privacy.mjs";
 import { scopeKey } from "../storage-values.mjs";
+import { readFencedAnchors } from "./migration-archive.mjs";
 import { LegacyRefusal } from "./refusal.mjs";
 
 function refuse() {
@@ -78,6 +79,8 @@ export function readRawPrivacy(db, inventory) {
     const fact = [...scopeKey(keys(row)), client === null ? "" : JSON.stringify(client), kind, selector, JSON.stringify(body)];
     rules.set(JSON.stringify(fact), fact);
   };
+  const { anchors: fencedAnchors, uuidRules } = readFencedAnchors(db, key, inventory.localRawPrivacy);
+  const exactOnlyUuidRules = [];
   if (inventory.localRawPrivacy) {
     for (const row of all("local_raw_uuid_fences")) rule(row, row.client, "uuid", row.uuid_hash, null);
     // A frozen pending hash job can be completed exactly from its retained
@@ -86,12 +89,12 @@ export function readRawPrivacy(db, inventory) {
     const root = row => JSON.stringify([...scopeKey(keys(row)), row.client, row.session_key]);
     const roots = new Set(sourceFences.filter(row => row.client === "claude-code").map(root));
     for (const row of all("local_raw_uuid_jobs")) if (!roots.has(root(row))) refuse();
-    const uuidMessages = db.prepare(`SELECT c.owner_id, c.scope, c.project_id, c.client, c.session_key, m.message_id
-      FROM raw_conversations c JOIN raw_messages m ON m.conversation_id = c.id
-      JOIN raw_session_fences f USING (owner_id, scope, project_id, client, session_key)
-      WHERE c.client = 'claude-code'`).all();
-    for (const row of uuidMessages) {
-      rule(row, row.client, "uuid", legacyRawHash(key, keys(row), "local-raw-forgotten-uuid-v1", row.client, row.message_id), null);
+    for (const [id, { tuple, scrubbed }] of uuidRules) {
+      // Stored UUIDs can also testify to erased or refused messages. A
+      // retained exact proof cannot displace that independent evidence.
+      if (rules.has(id)) continue;
+      if (!scrubbed) exactOnlyUuidRules.push(tuple);
+      rules.set(id, tuple);
     }
     for (const row of all("local_raw_hide_windows")) {
       integers(row.start_ms, row.end_ms);
@@ -155,5 +158,5 @@ export function readRawPrivacy(db, inventory) {
   for (const [group, deleted] of conversations) {
     if (deleted.size > (fenceCounts.get(group) ?? 0)) refuse();
   }
-  return { key, fences: [...fences.values()], rules: [...rules.values()], actions, effects };
+  return { key, fences: [...fences.values()], rules: [...rules.values()], exactOnlyUuidRules, fencedAnchors, actions, effects };
 }

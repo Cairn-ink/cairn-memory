@@ -66,6 +66,17 @@ function setup({ config = enabled, supported = true, rawArchive = false, model =
         return [...cards.values()];
       },
       async get(tx, _scope, id) { return cards.get(id) ?? null; },
+      async visibilityInputs(tx, requestedScope, refs, { newCard } = {}) {
+        return refs.map(({ id, type, namespace }) => {
+          if (type !== "card" || namespace !== requestedScope.namespace) return null;
+          const card = cards.get(id);
+          if (!card) return newCard?.card.id === id ? newCard : null;
+          const memoryStates = new Map(tx.rows.map(({ id, revision }) =>
+            [id, { status: "visible", revision, correctedRevisions: [] }]));
+          return { card: { ...card, canonicalSessionKey: card.sourceMessage.sessionId },
+            requestedScope, memoryStates, sourceWithheld: false };
+        });
+      },
       async amend(tx, _scope, id, amendment) {
         assert.ok(active.has(tx) && tx.options.pauseLock && !finishTx.has(tx));
         amendments.push(amendment);

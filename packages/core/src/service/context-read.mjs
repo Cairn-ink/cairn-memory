@@ -4,18 +4,21 @@ import { hasLedgerCue } from "../ledger/terms.mjs";
 import { staleLedger } from "./context-read-assembly-evidence.mjs";
 import { legacyRef, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
 import { contextReadSet, CONTEXT_HORIZON, findCandidatesInput } from "./context-read-input.mjs";
-import { meter, packContext } from "./context-read-pack.mjs";
+import { fitLedgerDigest, meter, packContext } from "./context-read-pack.mjs";
 import { prepareItem } from "./context-read-projection.mjs";
 import { packRawContext, readRawChannel } from "./context-read-raw.mjs";
 import { CONTEXT_VERSION } from "./context-read-tokens.mjs";
 import { entry } from "./entry.mjs";
 
 /** @import { CallOptions, ClockAndHash, ContextAssemblyDiagnostics,
-  ContextReadError, ContextReadSet, MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
+  ContextLedgerDiagnostics, ContextLedgerErrorStage, ContextReadError, ContextReadSet,
+  MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
 /** @import { PackOptions, Projection } from "./context-read-pack.mjs" */
-/** @import { LedgerCheck } from "./context-read-assembly-evidence.mjs" */
+/** @import { LedgerCheck, LedgerReading, LedgerSelection } from "./context-read-assembly-evidence.mjs" */
 /** @import { KeylessMemoryServiceDeps } from "./index.d.mts" */
 /** @typedef {KeylessMemoryServiceDeps["storage"] & Partial<Pick<ReadContractStorage, "quantityLedger" | "memories">>} KeylessStorage */
+/** @typedef {Awaited<ReturnType<ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"]>>} AssemblyCandidates */
+/** @typedef {{ witness: string, selection?: LedgerSelection }} RollingWitness */
 
 const MAX_BYTES = 65_536;
 const SNAPSHOT_LIMIT = 16_384;
@@ -100,23 +103,32 @@ async function beforeLedgerDeadline(now, deadline, signal, attempt) {
 /** @param {{ storage: KeylessStorage | ReadContractStorage, clock: ClockAndHash,
  * find: ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"],
  * fetch: ReturnType<typeof import("./context-read-assembly-evidence.mjs").fetchForAssembly>,
+ * calendarReading?: boolean,
  * counter?: KeylessMemoryServiceDeps["contextReadCounter"], format?: KeylessMemoryServiceDeps["contextReadFormat"] }} deps
  * @returns {NonNullable<MemoryService["readContext"]>} */
-export function readContextMethod({ storage, clock, find, fetch, counter, format }) {
+export function readContextMethod({ storage, clock, find, fetch, counter, format, calendarReading = false }) {
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
-   * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger */
-  async function assemble(readSet, { candidate, budget, policy, representation, raw, lexicalOnly }, options, deadline, includeLedger) {
-    /** @type {Awaited<ReturnType<typeof find>>} */
+   * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
+   * @param {RollingWitness & { asOfMs: number, candidates: AssemblyCandidates }} [expectedRolling] */
+  async function assemble(readSet, input, options, deadline, includeLedger, expectedRolling) {
+    const { candidate, budget, policy, representation, raw, lexicalOnly } = input;
+    /** @type {AssemblyCandidates} */
     let found;
     try {
       found = await find(readSet, candidate, { ...options, deadlineAtMs: deadline });
     } catch (error) {
-      // The public entry sanitizes errors. Preserve only the content-free
-      // diagnostic object that this service's find preflight produced.
-      const refused = /** @type {ContextReadError} */ (error);
-      if (refused.diagnostics) return { refused };
-      throw error;
+      if (expectedRolling && error instanceof CoreError && error.code === "evidence_unavailable") {
+        // The index can still name a newly hidden memory. Reuse the prior
+        // ranking and let fetch recheck its generation and fence each ref.
+        found = expectedRolling.candidates;
+      } else {
+        // The public entry sanitizes errors. Preserve only the content-free
+        // diagnostic object that this service's find preflight produced.
+        const refused = /** @type {ContextReadError} */ (error);
+        if (refused.diagnostics) return { refused };
+        throw error;
+      }
     }
     if (!counter || !format) throw new CoreError("token_count_unavailable");
     const { items, channels, coverage, trace } = found.result;
@@ -125,7 +137,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
       candidate.types.includes("memory") && hasLedgerCue(candidate.query)
-      ? { query: candidate.query, asOfMs: clock.nowMs() } : undefined;
+      ? { query: candidate.query, asOfMs: expectedRolling?.asOfMs ?? clock.nowMs(), calendarReading } : undefined;
     const evidence = await fetch(readSet, candidate, found.generations, items.map(item => item.ref), ledgerRequest);
     const prepared = evidence.rows.flatMap((row, i) => row ? [prepareItem(row, readSet, items[i].rank, candidate.intent)] : []);
     let rawCoverage = rawRead.coverage;
@@ -133,6 +145,8 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     const unavailable = items.length - prepared.length;
     const unitCount = prepared.length + prepared.reduce((n, item) => n + item.sources.length, 0);
     const amendmentTrials = prepared.reduce((n, item) => n + item.evidence.amendments.length, 0);
+    /** @type {ContextLedgerDiagnostics | undefined} */
+    let ledgerDetails;
     /** @param {unknown} error */
     const staleSnapshot = error => !options.signal?.aborted && error instanceof CoreError && error.code === "snapshot_stale";
 
@@ -142,6 +156,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       version: CONTEXT_VERSION, policy: { id: policy }, representation, counter: COUNTER, items: details.items,
       budget: { ...budget, used }, omitted: { ...details.omitted, unavailable }, dedup: details.dedup,
       stops: details.stops, trace: details.trace, coverage: { raw: rawCoverage }, candidates,
+      ...(ledgerDetails && Object.keys(ledgerDetails).length && { ledger: ledgerDetails }),
     });
     /** @type {PackOptions} */
     const packing = { budget, policy, representation, now, deadline,
@@ -153,7 +168,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
         bounded.omitted.oversized = unitCount;
         bounded.stops = { budget: false, items: false, deadline: false };
         bounded.trace = { timings: { assemblyMs: -0.0000010000000000000002 },
-          counterCalls: rawPacking ? Number.MAX_SAFE_INTEGER : 2 + Number(!!packing.ledger) + 3 * unitCount + 7 * amendmentTrials };
+          counterCalls: rawPacking || packing.ledger ? Number.MAX_SAFE_INTEGER : 2 + 3 * unitCount + 7 * amendmentTrials };
         const snapshotSize = selected.length
           ? Math.ceil(4 * bytes(JSON.stringify(evidence.payload(selected.map(item => item.evidence)))) / 3) + 44
           : 0;
@@ -188,29 +203,122 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
         packed = packEvidence();
         snapshot = await deliver(packed);
       }
-      return response(packed, typeof snapshot === "string" ? snapshot : null);
+      return { packed, snapshot: typeof snapshot === "string" ? snapshot : null };
     }
     // Complete all ordinary validation before optional ledger work can use the
     // deadline or hold a serialized reader.
-    const ordinary = await finishOrdinary().catch(error => {
-      if (ledgerRequest && staleSnapshot(error)) throw refreshAssembly;
+    const { packed: ordinaryPack, snapshot } = await finishOrdinary().catch(error => {
+      if (ledgerRequest && !expectedRolling && staleSnapshot(error)) throw refreshAssembly;
       throw error;
     });
+    const ordinary = response(ordinaryPack, snapshot);
     if (!ledgerRequest) return ordinary;
     const ordinaryHasRaw = rawPacking;
+    const ordinaryFence = {
+      selected: ordinaryPack.selected.map(item => item.evidence),
+      rawTurns: ordinaryHasRaw ? rawRead.turns : [],
+      current: true,
+    };
+    /** @param {ContextLedgerDiagnostics} counts
+     * @param {NonNullable<ContextLedgerDiagnostics["ledger_digest_error"]>} errors */
+    function fallback(counts, errors) {
+      if (!ordinaryFence.current) throw new CoreError("snapshot_stale");
+      return withDiagnostics(ordinary, counts, errors);
+    }
+    // The ordinary pack establishes whether this read can deliver a ranked item.
+    const rankedType = ordinary.assembly.items.some(item => item.ref.type === "memory") ? "memory" :
+      ordinary.assembly.items.some(item => item.ref.type === "card") ? "card" : undefined;
+    /** @type {RollingWitness | undefined} */
+    let refreshRolling;
+    let scannedLedger = false;
     const enriched = await beforeLedgerDeadline(now, deadline, options.signal, async active => {
-      const ledger = await evidence.prepareLedger(active).catch(() => null);
+      /** @type {NonNullable<ContextLedgerDiagnostics["ledger_digest_error"]>} */
+      const errors = {};
+      /** @param {ContextLedgerErrorStage} stage */
+      const onError = stage => { errors[stage] = (errors[stage] ?? 0) + 1; };
+      /** @type {ContextLedgerDiagnostics} */
+      let counts = {};
+      const attempt = { active, onError, onScan() { scannedLedger = true; }, ordinary: ordinaryFence };
+      const ledger = await evidence.prepareLedger(attempt, expectedRolling === undefined).catch(error => {
+        active();
+        if (!staleSnapshot(error)) onError("snapshot");
+        return null;
+      });
       active();
-      if (!ledger) return;
-      packing.ledger = ledger.value;
-      const packed = packEvidence();
-      active();
-      if (!packed.value.ledgerDigest || (ordinaryHasRaw && !rawPacking)) return;
-      const snapshot = await deliver(packed, { witness: ledger.witness, active }).catch(() => undefined);
-      if (typeof snapshot === "string" || snapshot === null) return response(packed, snapshot);
+      if (!ledger) {
+        if (expectedRolling) counts.ledger_digest_omitted = 1;
+        else if (scannedLedger && !Object.keys(errors).length) counts.ledger_digest_empty = 1;
+        return fallback(counts, errors);
+      }
+      const { rolling, calendar: comparison } = ledger;
+      /** @param {LedgerSelection} [selection] */
+      function rollingWitness(selection) {
+        if (!selection) return rolling.project(rolling.lines, false).witness();
+        const keys = new Set(selection.keys);
+        const lines = rolling.lines.filter(line => keys.has(line.key));
+        if (lines.length === keys.size) return rolling.project(lines, selection.trimmed).witness();
+      }
+      if (expectedRolling && rollingWitness(expectedRolling.selection) !== expectedRolling.witness) {
+        return fallback({ ledger_digest_omitted: 1 }, errors);
+      }
+      /** @param {LedgerReading} reading @param {boolean} calendar */
+      async function tryReading(reading, calendar) {
+        active();
+        counts = {};
+        let counterCalls = 0;
+        const count = packing.count;
+        const countLedger = (/** @type {string} */ text) => { counterCalls++; return count(text); };
+        const fitted = fitLedgerDigest(reading, budget.maxTokens, meter({ ...packing, count: countLedger }), active, counts, value => {
+          if (rankedType && budget.maxItems === 1) return;
+          rawCoverage = ordinary.diagnostics.coverage.raw;
+          rawPacking = ordinaryHasRaw;
+          packing.ledger = value;
+          packing.count = countLedger;
+          ledgerDetails = { ...counts, ...(Object.keys(errors).length && { ledger_digest_error: errors }) };
+          try {
+            const packed = packEvidence();
+            if (ordinaryHasRaw && !rawPacking) return;
+            if (rankedType && !packed.value.items.some(item => item.ref.type === rankedType)) return;
+            return packed;
+          } catch (error) {
+            if (!(error instanceof CoreError) || error.code !== "context_item_too_large") throw error;
+          } finally {
+            packing.ledger = undefined;
+            packing.count = count;
+            ledgerDetails = undefined;
+          }
+        });
+        if (!fitted) return;
+        const { packed, witness, selection } = fitted;
+        packed.diagnostics.trace.counterCalls = counterCalls;
+        const snapshot = await deliver(packed, { witness, selection, calendar, ...attempt }).catch(error => {
+          if (staleSnapshot(error)) {
+            if (expectedRolling) throw error;
+            refreshRolling = calendar
+              ? { witness: rolling.project(rolling.lines, false).witness() }
+              : { witness, selection };
+          } else {
+            active();
+            onError("snapshot");
+          }
+        });
+        active();
+        if (typeof snapshot === "string" || snapshot === null) return response(packed, snapshot);
+        counts.ledger_digest_omitted = 1;
+      }
+      const combined = comparison ? await tryReading(comparison, true) : undefined;
+      const result = combined ?? (refreshRolling === undefined ? await tryReading(rolling, false) : undefined);
+      if (refreshRolling !== undefined) return;
+      return result ? withDiagnostics(result, counts, errors) : fallback(counts, errors);
     });
     if (options.signal?.aborted) throw new CoreError("snapshot_stale");
-    return enriched ?? ordinary;
+    // A stale ranked item or generation can invalidate the pack independently
+    // of the ledger. Refresh ranked evidence once and require the rolling witness.
+    if (refreshRolling !== undefined && now() < deadline) {
+      return assemble(readSet, input, options, deadline, true,
+        { ...refreshRolling, asOfMs: ledgerRequest.asOfMs, candidates: found });
+    }
+    return enriched ?? fallback(scannedLedger ? { ledger_digest_omitted: 1 } : {}, {});
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {ReadContextInput} */ request,
     /** @type {CallOptions} */ options) => {
@@ -229,4 +337,14 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     if ("refused" in result) throw result.refused;
     return result;
   };
+}
+
+/**
+ * @param {import("../ports/host.d.ts").ReadContextResult} result @param {ContextLedgerDiagnostics} counts
+ * @param {NonNullable<ContextLedgerDiagnostics["ledger_digest_error"]>} errors
+ */
+function withDiagnostics(result, counts, errors) {
+  if (Object.keys(errors).length) counts.ledger_digest_error = errors;
+  if (!Object.keys(counts).length) return result;
+  return { ...result, diagnostics: { ...result.diagnostics, ledger: counts } };
 }

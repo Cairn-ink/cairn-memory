@@ -237,7 +237,9 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
         for (const ref of refs) {
           const { scope, id, type } = ref;
           if (type === "card") {
-            rows.push(loadCardInputs ? cardEvidence(state, scope, state.documentCards.get(scope.namespace)?.get(id), intent) : null);
+            const card = loadCardInputs && await documentCards?.get(tx, scope, id);
+            rows.push(card
+              ? cardEvidence(state, scope, state.documentCards.get(scope.namespace)?.get(id), intent) : null);
             continue;
           }
           const entry = state.rows.get(scope.namespace)?.get(id);

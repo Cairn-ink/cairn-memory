@@ -14,7 +14,7 @@ const amendment = { amendmentId: "change", date: "2025-05-01", sentence: "The tr
 function fixture({ loader = true, sourceProjection, forgetDuringEvidence = false } = {}) {
   let visibility = { card: { id: ref.id, scope, origin: item.origin, title: item.title, body: item.body,
     sourceMemories: [{ id: "link", revision: 1 }], sourceMessage: null }, requestedScope: scope,
-    memoryStates: new Map([["link", { status: "visible", revision: 1 }]]), textFacts: [] };
+    memoryStates: new Map([["link", { status: "visible", revision: 1, correctedRevisions: [] }]]), textFacts: [] };
   let current;
   let checks = 0;
   const storage = {

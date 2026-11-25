@@ -14,8 +14,8 @@ const card = {
   sourceMemories: [{ id: "first", revision: 2 }, { id: "second", revision: 1 }],
 };
 const memoryStates = new Map([
-  ["first", { status: "visible", revision: 2 }],
-  ["second", { status: "visible", revision: 1 }],
+  ["first", { status: "visible", revision: 2, correctedRevisions: [] }],
+  ["second", { status: "visible", revision: 1, correctedRevisions: [] }],
 ]);
 const read = { card, requestedScope: { ...scope }, memoryStates, textFacts: [] };
 const manualCard = { ...card, origin: "manual", sourceMemories: [] };
@@ -68,7 +68,7 @@ test("an absent stored title leaves the body subject to text withholding", async
 test("an import needs both current linked revisions and unwithheld text", async () => {
   const textFacts = [await exactFact(card.body)];
   assert.deepEqual(await documentCardVisible({ ...read, textFacts }), withheld);
-  const staleStates = new Map(memoryStates).set("second", { status: "visible", revision: 2 });
+  const staleStates = new Map(memoryStates).set("second", { status: "visible", revision: 2, correctedRevisions: [] });
   assert.deepEqual(await documentCardVisible({ ...read, memoryStates: staleStates }),
     { visible: false, reason: "source_memory_not_visible" });
 });
@@ -115,8 +115,8 @@ test("import and manual cards require each linked revision to be present, curren
   for (const [state, reason] of [
     [undefined, "source_memory_missing"],
     [{ status: "forgotten" }, "source_memory_forgotten"],
-    [{ status: "historical", revision: 1 }, "source_memory_not_visible"],
-    [{ status: "visible", revision: 2 }, "source_memory_not_visible"],
+    [{ status: "historical", revision: 1, correctedRevisions: [] }, "source_memory_not_visible"],
+    [{ status: "visible", revision: 2, correctedRevisions: [] }, "source_memory_not_visible"],
     [{ status: "suppressed" }, "source_memory_not_visible"],
     [{ status: "unknown" }, "source_memory_not_visible"],
     [{ status: "visible" }, "uncertain"],

@@ -1,4 +1,5 @@
 import { allDigests, CoreError } from "../../core/src/index.mjs";
+import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { readSourceKind } from "./memory-metadata.mjs";
 
 /** @import { MemoryRow, Receipt } from "../../core/src/ports/index.d.ts" */
@@ -112,18 +113,24 @@ export async function selectMemory(query, owner, namespace, id) {
   return row ? readEntry(row, owner) : null;
 }
 
-/** @param {Query} query @param {string} owner @param {Run} run */
-export async function advanceIndex(query, owner, run) {
-  if (run.indexStart !== undefined) return;
+/** @param {Query} query @param {string} owner @param {Run} run @param {{perCall?: boolean}} [options] */
+export async function advanceIndex(query, owner, run, { perCall = false } = {}) {
+  if (run.indexStart !== undefined && !perCall) return;
   const { rows: [row] } = await query(`INSERT INTO core_owner_state (user_id, index_revision) VALUES ($1, 1)
     ON CONFLICT (user_id) DO UPDATE SET index_revision = core_owner_state.index_revision + 1
     RETURNING index_revision::text`, [owner]);
-  run.indexStart = BigInt(row.index_revision) - 1n;
+  run.indexStart ??= BigInt(row.index_revision) - 1n;
 }
 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
 function activeReceiptsSql(ids) {
   return `FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY(${ids}) AND forgotten_at IS NULL`;
+}
+
+/** @param {string} owner @param {string | null} namespace @param {string} memoryId
+ * @param {Pick<Receipt, "client" | "sessionId" | "messageId">} receipt */
+export function canonicalReceiptId(owner, namespace, memoryId, { client, sessionId, messageId }) {
+  return sha256Hex(JSON.stringify([owner, namespace, memoryId, client, sessionId, messageId]));
 }
 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[]. */

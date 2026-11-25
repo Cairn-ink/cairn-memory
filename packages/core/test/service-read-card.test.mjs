@@ -44,7 +44,7 @@ test("card read projects the record and visible and historical source IDs in one
   const inputs = new Map([[card.id, {
     card: { ...card, canonicalSessionKey: sourceMessage.sessionId },
     requestedScope: scope, sourceWithheld: false,
-    memoryStates: new Map([["current", { status: "visible", revision: 1 }], ["old", { status: "historical", revision: 2 }]]),
+    memoryStates: new Map([["current", { status: "visible", revision: 1, correctedRevisions: [] }], ["old", { status: "historical", revision: 2, correctedRevisions: [] }]]),
   }]]);
   const { service, transactions, calls } = fixture(new Map([[card.id, card]]), inputs);
   const result = await service.readCard(scope, card.id);
