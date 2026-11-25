@@ -1,12 +1,44 @@
 import { CoreError } from "../errors.mjs";
+import { documentCardVisible } from "../routing/visibility.mjs";
 import { detach } from "../capture/validate.mjs";
 import { itemRef, legacyNamespace } from "./context-read-input.mjs";
 
-/** @import { CallOptions, Tx, VisibilityFence } from "../ports/index.d.ts" */
+/** @import { CallOptions, DocumentCardStore, StoredDocumentCardRecord, Tx, VisibilityFence } from "../ports/index.d.ts" */
 /** @import { ContextCardEvidence, ContextEvidenceRow, ContextMemoryEvidence, ContextReadIntent,
   ContextReadRef, ContextReadSet } from "../ports/host.d.ts" */
 /** @typedef {ReturnType<typeof import("./context-read-tokens.mjs").readTokenSigner>} Signer */
 /** @typedef {ContextMemoryEvidence | ContextCardEvidence} Evidence */
+
+/** @typedef {DocumentCardStore<StoredDocumentCardRecord>} CardStore */
+
+/** @param {CardStore | undefined} store */
+export const hasContextCardLoader = store => typeof store?.visibilityInputs === "function";
+
+/** @param {CardStore | undefined} store @param {Tx} tx @param {ContextReadRef} ref
+ * @param {ContextCardEvidence} [item] */
+export async function contextCardVerdict(store, tx, ref, item) {
+  if (ref.type !== "card") return null;
+  try {
+    if (!hasContextCardLoader(store) || !store?.visibilityInputs) return null;
+    const [input] = await store.visibilityInputs(tx, ref.scope, [itemRef(ref)]);
+    if (!input || input.card.id !== ref.id || input.card.scope.owner !== ref.scope.owner ||
+        input.card.scope.namespace !== ref.scope.namespace) return null;
+    const { origin, title, body } = input.card;
+    if (item && ((origin ?? "router") !== item.origin ||
+        (title !== undefined && (title ?? "") !== item.title) ||
+        (body !== undefined && body !== item.body))) return null;
+    const card = item ? { ...input.card, title: item.title, body: item.body } : input.card;
+    const verdict = await documentCardVisible({ ...input, requestedScope: ref.scope, card });
+    return verdict.visible ? verdict : null;
+  } catch {
+    return null;
+  }
+}
+
+/** @param {ContextEvidenceRow} row @param {boolean} [lineageEnabled] */
+export function legacyContextCard(row, lineageEnabled = false) {
+  return row.type === "card" && (row.item.origin === "engine" || (lineageEnabled && row.lineageStamp != null));
+}
 
 const encoder = new TextEncoder();
 

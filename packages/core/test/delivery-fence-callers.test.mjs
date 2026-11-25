@@ -19,6 +19,8 @@ const allowlist = {
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, id, 'challenges-premise', page)":
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
+  "service/context-read-assembly-evidence.mjs: documentCards.get(tx, ref.scope, ref.id)":
+    "Read only after contextCardVerdict (fresh visibilityInputs + documentCardVisible in the same Tx); the card's id and scope are rechecked, and each amendment is gated by documentCardAmendmentVisible on its own Raw source before delivery.",
 };
 
 function walk(node, visit, parent) {

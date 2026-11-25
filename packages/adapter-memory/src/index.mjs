@@ -1,6 +1,6 @@
 import { CoreError, assertAdapterCapabilities, capabilities, receiptExcerpt, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
-import { createCardRawSourceCheck, withContextRawRead } from "./context-raw-read.mjs";
+import { createCardRawSourceChecks, withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -13,7 +13,7 @@ import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
-import { createCardAmendmentWithholding, createCardVisibility, createCardVisibilityInput,
+import { createCardVisibility, createCardVisibilityInputs,
   createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
@@ -51,14 +51,18 @@ export function createMemoryAdapter(options = {}) {
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges, flags.documentCards) : undefined;
   const { receiptReadSafety, receiptWithheld } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
-  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const rawSourceVisible = archive && createCardRawSourceCheck(archive, matchFacts, receiptReadSafety);
-  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, rawSourceVisible, archive?.sourceWithholding);
+  const cardRawSources = archive && createCardRawSourceChecks(archive, matchFacts, receiptReadSafety);
+  const { cardVisibilityInput, amendmentWithheld } = createCardVisibilityInputs(matchFacts, keys, cardRawSources?.sourceVisible,
+    archive?.sourceWithholding);
   const cardVisible = createCardVisibility(cardVisibilityInput);
+  const documentCards = flags.documentCards ? handleWriteRejections(
+    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch),
+    ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
+  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive, documentCards) : undefined;
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(
     createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
@@ -94,7 +98,11 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
-    ...(contextRead && { contextRead: flags.contextRawRead && archive ? withContextRawRead(work, archive, contextRead) : contextRead }),
+    ...(contextRead && { contextRead: archive && (flags.contextRawRead || flags.documentCards)
+      ? withContextRawRead(work, archive, contextRead, {
+        raw: flags.contextRawRead, amendmentLineage: flags.documentCards ? cardRawSources?.lineageVisible : undefined,
+      })
+      : contextRead }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
@@ -103,10 +111,7 @@ export function createMemoryAdapter(options = {}) {
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),
-    ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now, cardVisibilityInput,
-        createCardAmendmentWithholding(matchFacts, keys, archive?.sourceWithholding), flags.documentCardSearch),
-      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) }),
+    ...(documentCards && { documentCards }),
     ...(flags.documentCardSearch && { documentCardCandidates: createDocumentCardCandidates(port, cardVisible) }),
     nativeErrorMap,
     harness: {
