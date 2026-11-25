@@ -70,12 +70,14 @@ export interface LegacyInput {
     key: string;
     fences: string[][];
     rules: string[][];
+    exactOnlyUuidRules: string[][];
     actions: unknown[];
     effects: unknown[];
   } | null;
   localRawPrivacy: boolean;
   archive: {
     rows: import("node:sqlite").SQLInputValue[][];
+    fencedAnchors: string[][];
     anchors: Array<{scope: import("@cairn-ink/core/ports").Scope; client: string; sessionId: string;
       message: import("@cairn-ink/core/ports").CaptureMessage}>;
     spans: Map<string, Array<{sessionId: string; start: number; end: number; precision: string}>>;

@@ -55,7 +55,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     createMigratedRawPolicy(sessionHashKey, hashSessionKey, controls?.evidence.localRawPrivacy === true) : undefined;
   const captureControls = controls || localAuthority ? migratedCaptureControls(controls, localAuthority) : undefined;
   const index = createIndexRevisions(uow, port);
-  const lineage = createRawLineage(sessionHashKey, hashSessionKey);
+  const lineage = createRawLineage(sessionHashKey, hashSessionKey, migratedRaw);
   const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
   const visibility = createPlacementVisibility(hashSessionKey, receiptReadSafety, migratedRaw);
   const scrubTitles = createTitleScrubber(visibility);
