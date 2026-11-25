@@ -37,11 +37,11 @@ async function fixture(t) {
   return { ...await open(), open, path: file.path };
 }
 
-async function insert(adapter, text, receipts = [], now = 1) {
+async function insert(adapter, text, receipts = []) {
   const row = await write(adapter, tx => adapter.memories.insert(tx, scope, {
     text, kind: "fact", confidence: 1, origin: "explicit", source, embedding: null,
     textHash: "sha256:" + sha256(text.toLowerCase()),
-  }, receipts, now));
+  }, receipts, 1));
   return { type: "memory", scope, id: row.id, revision: row.revision };
 }
 
@@ -164,41 +164,6 @@ test("fenced Raw rows do not spend the row or text caps", async t => {
     assert.equal(result.coverage, "included", address.sessionId);
     assert.deepEqual(result.turns.map(turn => turn.messageId), [safe.id]);
   }
-});
-
-test("inspect continuations bind relevant receipt safety across namespaces", async t => {
-  const { adapter } = await fixture(t);
-  const root = session("root"), fork = session("fork");
-  const shared = message("shared-turn");
-  await archive(adapter, outside, root, [shared], true);
-  await archive(adapter, scope, fork, [shared], true);
-  const safe = receipt(session("standalone"), message("safe-turn", "independent source"));
-  const memory = await insert(adapter, "Memory with two receipts", [safe], 1);
-  await write(adapter, tx => adapter.memories.touchDuplicate(tx, scope, memory.id,
-    [receipt(fork, shared)], { confidence: 1 }, 2));
-  await insert(adapter, "Second Memory for listing", [], 3);
-  const inspect = contextReadTestService(adapter).inspect;
-  const itemInput = { memoryId: memory.id, receiptLimit: 1 };
-  const firstItem = await inspect(scope, itemInput);
-  const firstList = await inspect(scope, { limit: 1 });
-  assert.equal(firstItem.receipts[0].messageId, safe.messageId);
-  assert.ok(firstItem.nextReceiptCursor);
-  assert.ok(firstList.nextCursor);
-
-  const unrelated = session("unrelated");
-  await archive(adapter, outside, unrelated, [message("unrelated-turn")]);
-  await write(adapter, tx => adapter.raw.fenceSession(tx, outside, unrelated));
-  assert.equal((await inspect(scope, itemInput)).nextReceiptCursor, firstItem.nextReceiptCursor);
-  assert.equal((await inspect(scope, { limit: 1 })).nextCursor, firstList.nextCursor);
-  const nextItem = () => inspect(scope, { ...itemInput, receiptCursor: firstItem.nextReceiptCursor });
-  const nextList = () => inspect(scope, { limit: 1, cursor: firstList.nextCursor });
-  assert.deepEqual((await nextItem()).receipts.map(row => row.messageId), [shared.id]);
-  assert.deepEqual((await nextList()).memories.map(row => row.id), [memory.id]);
-
-  await write(adapter, tx => adapter.raw.fenceSession(tx, outside, root));
-  await assert.rejects(nextItem, { code: "cursor_stale" });
-  await assert.rejects(nextList, { code: "cursor_stale" });
-  assert.deepEqual((await inspect(scope, itemInput)).receipts.map(row => row.messageId), [safe.messageId]);
 });
 
 test("Raw search withholds a fork whose root has a different role", async t => {

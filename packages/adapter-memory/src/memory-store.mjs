@@ -6,7 +6,7 @@ import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
 import { receiptAddressKey, receiptExcerptDenial, receiptIdentityKey } from "./receipt-read-safety.mjs";
-import { advanceInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
+import { advanceInspectEpoch, advanceRawInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -352,6 +352,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               const key = entry.receiptKeys?.get(receipt);
               if (key) state.receiptDenials.add(JSON.stringify([namespace, key]));
             }
+            if (entry.receipts.length && state.rawAnchors.size) advanceRawInspectEpoch(state);
             // An explicit save may have retained the full source text without a
             // receipt. Carry a digest of its normalized cutoff through erase.
             if (entry.row.text.length > 800) {

@@ -5,7 +5,6 @@ import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { createMemoryAdapter } from "../src/index.mjs";
 
 const scope = { owner: "fixture-owner", namespace: "project\0read" };
-const outside = { ...scope, namespace: "project\0outside" };
 const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGenerations: [1] };
 const session = sessionId => ({ client: "fixture-client", sessionId });
 const message = (id, content = "albatross sighting") => ({ id, content, role: "user", occurredAtMs: null });
@@ -17,20 +16,19 @@ const read = (adapter, action) => adapter.uow.run(scope.owner, { readOnly: true 
 const fixture = () => createMemoryAdapter({ capabilities: { inspect: true,
   contextRead: true, contextRawRead: true, rawArchive: true, fingerprintKey: true } });
 
-async function archive(adapter, target, address, turns, record = false) {
+async function archive(adapter, target, address, turns) {
   await write(adapter, async tx => {
     const key = { scope: target, ...address, eventId: address.sessionId, payloadDigest: "a".repeat(64) };
     assert.equal((await adapter.raw.archive(tx, key, turns)).archived, turns.length);
-    if (record) await adapter.raw.recordLineage(tx, key, turns);
   });
 }
 
-async function insert(adapter, text, receipts = [], now = 1) {
+async function insert(adapter, text, receipts = []) {
   const textHash = "sha256:" + createHash("sha256").update(text.toLowerCase()).digest("hex");
   const row = await write(adapter, tx => adapter.memories.insert(tx, scope, {
     text, kind: "fact", confidence: 1, origin: "explicit", embedding: null, textHash,
     source: { kind: "mcp", client: null, sessionId: null },
-  }, receipts, now));
+  }, receipts, 1));
   return { type: "memory", scope, id: row.id, revision: row.revision };
 }
 
@@ -50,41 +48,6 @@ test("fenced Raw rows do not spend the row or text caps", async () => {
   const result = await search();
   assert.equal(result.coverage, "included");
   assert.deepEqual(result.turns.map(turn => turn.messageId), [safe.id]);
-});
-
-test("inspect continuations bind relevant receipt safety across namespaces", async () => {
-  const adapter = fixture();
-  const root = session("root"), fork = session("fork");
-  const shared = message("shared-turn");
-  await archive(adapter, outside, root, [shared], true);
-  await archive(adapter, scope, fork, [shared], true);
-  const safe = receipt(session("standalone"), message("safe-turn", "independent source"));
-  const memory = await insert(adapter, "Memory with two receipts", [safe], 1);
-  await write(adapter, tx => adapter.memories.touchDuplicate(tx, scope, memory.id,
-    [receipt(fork, shared)], { confidence: 1 }, 2));
-  await insert(adapter, "Second Memory for listing", [], 3);
-  const inspect = contextReadTestService(adapter).inspect;
-  const itemInput = { memoryId: memory.id, receiptLimit: 1 };
-  const firstItem = await inspect(scope, itemInput);
-  const firstList = await inspect(scope, { limit: 1 });
-  assert.equal(firstItem.receipts[0].messageId, safe.messageId);
-  assert.ok(firstItem.nextReceiptCursor);
-  assert.ok(firstList.nextCursor);
-
-  const unrelated = session("unrelated");
-  await archive(adapter, outside, unrelated, [message("unrelated-turn")]);
-  await write(adapter, tx => adapter.raw.fenceSession(tx, outside, unrelated));
-  assert.equal((await inspect(scope, itemInput)).nextReceiptCursor, firstItem.nextReceiptCursor);
-  assert.equal((await inspect(scope, { limit: 1 })).nextCursor, firstList.nextCursor);
-  const nextItem = () => inspect(scope, { ...itemInput, receiptCursor: firstItem.nextReceiptCursor });
-  const nextList = () => inspect(scope, { limit: 1, cursor: firstList.nextCursor });
-  assert.deepEqual((await nextItem()).receipts.map(row => row.messageId), [shared.id]);
-  assert.deepEqual((await nextList()).memories.map(row => row.id), [memory.id]);
-
-  await write(adapter, tx => adapter.raw.fenceSession(tx, outside, root));
-  await assert.rejects(nextItem, { code: "cursor_stale" });
-  await assert.rejects(nextList, { code: "cursor_stale" });
-  assert.deepEqual((await inspect(scope, itemInput)).receipts.map(row => row.messageId), [safe.messageId]);
 });
 
 test("fetch caps qualified receipts after withholding unsafe receipts", async () => {

@@ -33,7 +33,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
- * inspectEpochs: Map<Namespace, number>, nextInspectReceiptPosition: number,
+ * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
  * receiptDenials: Set<string>, deletedMessages: Set<string>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
@@ -69,6 +69,12 @@ export function advanceInspectEpoch({ inspectEpochs }, namespace) {
   const next = (inspectEpochs.get(namespace) ?? 1) + 1;
   if (!Number.isSafeInteger(next)) throw new CoreError("internal_error");
   inspectEpochs.set(namespace, next);
+}
+
+/** @param {State} state */
+export function advanceRawInspectEpoch(state) {
+  // A Raw source can back receipts in forked sessions in other namespaces.
+  state.rawInspectEpoch++;
 }
 
 /** @param {TopicState | undefined} scoped @param {string} memoryId @param {{erase?: boolean}} [options] */
@@ -138,7 +144,7 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), documentCards: new Map(), cardGenerations: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
-    pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(),
+    pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
     nextInspectReceiptPosition: 1, receiptDenials: new Set(), deletedMessages: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
@@ -256,7 +262,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return readPort(tx, scope, (getState) => body(getState()), pauseLock);
   }
 
-  /** @param {Tx} tx @returns {Promise<{storeId: string, cursorKey: CryptoKey}>} */
+  /** @param {Tx} tx @returns {Promise<import("@cairn-ink/core/ports").ReadTokenIdentity>} */
   async function readTokenIdentity(tx) {
     return port(tx, { owner: tx?.owner }, false, async () => {
       readIdentity ??= {

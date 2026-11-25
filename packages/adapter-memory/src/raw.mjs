@@ -11,7 +11,7 @@ import { invalidateRationaleSources } from "./rationale.mjs";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { withinWindow } from "./retrieval-window.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
-import { recordCardWrite } from "./unit-of-work.mjs";
+import { advanceRawInspectEpoch, recordCardWrite } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, snapshotArray, validateLimit,
   writeNamespace } from "./validation.mjs";
 
@@ -486,6 +486,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           run.state.cardGenerations.set(namespace, (run.state.cardGenerations.get(namespace) ?? 0) + 1);
           run.stateWritten = true;
         }
+        if (fenced || deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (fenced || deleted.length) advanceRevision(run);
         if (ledgerBlanked || deletedMessages.size !== before) run.stateWritten = true;
         return { rawDeleted: deleted.length, ledgerBlanked };
@@ -522,6 +523,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             if (recorded.has(digest)) continue;
             recorded.add(digest);
             anchor.messages.set(id, recorded);
+            advanceRawInspectEpoch(state);
             run.stateWritten = true;
           }
           sessions.set(slot, anchor);
@@ -573,6 +575,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             state.rawRows.set(entry.ref.id, entry);
             archived++;
           }
+          if ((rationaleEdges && newConflict) || archived) advanceRawInspectEpoch(state);
           if (newConflict && !archived) {
             if (rationaleEdges) markDirty();
             else run.stateWritten = true;
@@ -618,6 +621,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             } else if (previous) {
               counts.existing++;
               if (previous.content !== entry.content && recordSourceConflict(state, id)) {
+                if (rationaleEdges) advanceRawInspectEpoch(state);
                 run.stateWritten = true;
               }
             } else {
@@ -625,7 +629,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               counts.archived++;
             }
           }
-          if (counts.archived) advanceRevision(run);
+          if (counts.archived) {
+            advanceRawInspectEpoch(state);
+            advanceRevision(run);
+          }
           return counts;
         };
       });
@@ -668,6 +675,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         return (getState, _markDirty, run) => {
           const state = getState();
           if (!addFence(state, slot)) return;
+          advanceRawInspectEpoch(state);
           advanceRevision(run);
         };
       });
@@ -751,6 +759,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             });
             if (changed) recordCardWrite(run, target.namespace);
           }
+          if (rawDeleted || ledgerBlanked) advanceRawInspectEpoch(state);
           if (rawDeleted) advanceRevision(run);
           if (ledgerBlanked) run.stateWritten = true;
           return { rawDeleted, ledgerBlanked };

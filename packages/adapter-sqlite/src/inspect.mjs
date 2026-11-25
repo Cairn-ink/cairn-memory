@@ -1,8 +1,8 @@
-import { createHmac } from "node:crypto";
 import { CoreError } from "@cairn-ink/core";
 import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
 import { readConflicts, storedSupersession } from "./memory-relations.mjs";
 import { readProceduralTag } from "./procedural-tags.mjs";
+import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import { topicMembershipReader } from "./topics.mjs";
@@ -24,27 +24,14 @@ const withinMemory = "owner_id = ? AND namespace_key = ? AND memory_id = ?";
 const receiptScope = "i.owner_id = ? AND i.namespace_key = ? AND i.memory_id = ?";
 const maxSqlTime = 9223372036854775807n;
 
-/** @param {Connection} db @param {Scope} scope @param {number | undefined} expectedEpoch
- * @param {Iterable<number>} [withheldPositions]
- */
-function readEpoch(db, scope, expectedEpoch, withheldPositions = []) {
-  const coordinates = scopeKey(scope);
-  let epoch = Number(db.prepare(`SELECT epoch FROM cairn_inspect_epochs
-    WHERE owner_id = ? AND namespace_key = ?`).get(...coordinates)?.epoch ?? 1);
+/** @param {Connection} db @param {Scope} scope @param {number} [expectedEpoch] */
+function readEpoch(db, scope, expectedEpoch) {
+  const [owner, namespace] = scopeKey(scope);
+  const rows = db.prepare(`SELECT namespace_key, epoch FROM cairn_inspect_epochs
+    WHERE owner_id = ? AND namespace_key IN (?, ?)`).all(owner, namespace, RAW_INSPECT_EPOCH_KEY);
+  const epoch = Number(rows.find(row => row.namespace_key === namespace)?.epoch ?? 1) +
+    Number(rows.find(row => row.namespace_key === RAW_INSPECT_EPOCH_KEY)?.epoch ?? 0);
   if (!Number.isSafeInteger(epoch)) throw new CoreError("storage_error");
-  // The namespace epoch still covers local writes. For Raw dependencies, bind
-  // the withheld receipt positions in this cursor's result set.
-  let binding;
-  for (const position of withheldPositions) {
-    if (!binding) {
-      const key = db.prepare("SELECT cursor_secret FROM cairn_inspect_identity WHERE singleton = 1").get()?.cursor_secret;
-      if (typeof key !== "string") throw new CoreError("storage_error");
-      binding = createHmac("sha256", key).update(JSON.stringify(["inspect-receipt-safety-v1", coordinates, epoch]));
-    }
-    binding.update(`:${position}`);
-  }
-  // Keep the unchanged legacy namespace epoch when every receipt is safe.
-  if (binding) epoch = Number(binding.digest().readBigUInt64BE(0) >> 12n) + 1;
   if (expectedEpoch !== undefined && expectedEpoch !== epoch) throw new CoreError("cursor_stale");
   return epoch;
 }
@@ -77,46 +64,18 @@ export function receiptProjector(db, scope, policy, receiptReadSafety) {
   };
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id
- * @param {{ time: bigint, id: string }} [after]
- */
-function receiptRows(db, scope, id, after) {
-  return db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
-      r.body, r.legacy_receipt_key
-    FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
-    WHERE ${receiptScope} AND i.excerpt IS NOT NULL ${after ? "AND (i.created_at_us, i.id) > (?, ?)" : ""}
-    ORDER BY i.created_at_us ASC, i.id ASC`).iterate(...scopeKey(scope), id, ...(after ? [after.time, after.id] : []));
-}
-
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project
  * @param {{ time: bigint, id: string }} [after]
  */
 function* visibleReceipts(db, scope, id, project, after) {
-  for (const record of receiptRows(db, scope, id, after)) {
-    const visible = project(record);
-    if (visible) yield visible;
-  }
-}
-
-/** @param {Connection} db @param {Scope} scope @param {SQLInputValue[]} stateKey
- * @param {Policy} policy @param {ReceiptProjector} project
- */
-function* withheldListReceipts(db, scope, stateKey, policy, project) {
-  const rows = db.prepare(`SELECT i.memory_id, i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
+  const records = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
-    JOIN cairn_memories m ON m.owner_id = i.owner_id AND m.namespace_key = i.namespace_key AND m.id = i.memory_id
-    WHERE i.owner_id = ? AND i.namespace_key = ? AND i.excerpt IS NOT NULL AND m.deleted = 0
-      ${stateKey.length ? "AND m.historical = ?" : ""}
-    ORDER BY i.memory_id, i.position`).iterate(...scopeKey(scope), ...stateKey);
-  let priorId, inspectable = false;
-  for (const row of rows) {
-    if (priorId !== row.memory_id) {
-      priorId = row.memory_id;
-      const entry = readEntry(db, scope, String(priorId));
-      inspectable = !!entry && !policy.hides(entry);
-    }
-    if (inspectable && !project(row)) yield Number(row.position);
+    WHERE ${receiptScope} AND i.excerpt IS NOT NULL ${after ? "AND (i.created_at_us, i.id) > (?, ?)" : ""}
+    ORDER BY i.created_at_us ASC, i.id ASC`).iterate(...scopeKey(scope), id, ...(after ? [after.time, after.id] : []));
+  for (const record of records) {
+    const visible = project(record);
+    if (visible) yield visible;
   }
 }
 
@@ -126,10 +85,12 @@ export function storedEvidence(db, scope, id) {
     FROM cairn_inspect_evidence WHERE ${withinMemory}`).get(...scopeKey(scope), id);
 }
 
-/** @param {MemoryRow} row @param {number} receiptCount @param {SQLOutputValue | undefined} filing
+/** @param {Connection} db @param {MemoryRow} row @param {ReceiptProjector} project @param {SQLOutputValue | undefined} filing
  * @returns {InspectMemoryMetadata}
  */
-function metadata({ scope, id, createdAtMs, updatedAtMs, confidence, kind, origin, revision, historical }, receiptCount, filing) {
+function metadata(db, { scope, id, createdAtMs, updatedAtMs, confidence, kind, origin, revision, historical }, project, filing) {
+  let receiptCount = 0;
+  for (const _receipt of visibleReceipts(db, scope, id, project)) receiptCount++;
   return { id, scope, createdAtMs, updatedAtMs, confidence, kind, origin, revision, state: historical ? "historical" : "active",
     receiptCount, filing: { status: filing === "filed" ? "filed" : "unfiled" } };
 }
@@ -203,6 +164,7 @@ export function createInspectStore(port, hashSession, receiptReadSafety, visibil
     async list(tx, callerScope, { states, limit, after, expectedEpoch }) {
       return port(tx, callerScope.owner, {}, db => {
         const scope = { owner: tx.owner, namespace: callerScope.namespace };
+        const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
         const project = receiptProjector(db, scope, policy, receiptReadSafety);
         const memberships = flags.placement ? topicMembershipReader(db, scope, visibility(db, scope, policy)) : undefined;
@@ -220,27 +182,22 @@ export function createInspectStore(port, hashSession, receiptReadSafety, visibil
           if (policy.hides(entry)) continue;
           const placed = memberships?.(entry.row.id);
           const filing = placed ? (placed.length ? "filed" : "unfiled") : storedEvidence(db, scope, entry.row.id)?.filing;
-          let receiptCount = 0;
-          for (const _receipt of visibleReceipts(db, scope, entry.row.id, project)) receiptCount++;
-          rows.push({ ...metadata(entry.row, receiptCount, filing),
+          rows.push({ ...metadata(db, entry.row, project, filing),
             updatedAtUs: entry.row.updatedAtUs });
           if (rows.length > limit) break;
         }
-        const withheld = expectedEpoch !== undefined || rows.length > limit
-          ? withheldListReceipts(db, scope, stateKey, policy, project) : undefined;
-        return { epoch: readEpoch(db, scope, expectedEpoch, withheld), rows };
+        return { epoch, rows };
       });
     },
 
     async item(tx, callerScope, memoryId, { limit, after, expectedEpoch, includeQualification }) {
       return port(tx, callerScope.owner, {}, db => {
         const scope = { owner: tx.owner, namespace: callerScope.namespace };
+        const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
         const project = receiptProjector(db, scope, policy, receiptReadSafety);
         const entry = readEntry(db, scope, memoryId);
-        if (!entry || policy.hides(entry)) {
-          return { epoch: readEpoch(db, scope, expectedEpoch), item: null, nextAnchor: null };
-        }
+        if (!entry || policy.hides(entry)) return { epoch, item: null, nextAnchor: null };
         const anchor = after ? resolveReceiptAnchor(db, scope, memoryId, after) : undefined;
         const rows = [];
         for (const row of visibleReceipts(db, scope, memoryId, project, anchor)) {
@@ -248,13 +205,6 @@ export function createInspectStore(port, hashSession, receiptReadSafety, visibil
           if (rows.length > limit) break;
         }
         const nextAnchor = rows.length > limit ? { row: rows[limit - 1].position } : null;
-        let receiptCount = 0;
-        const withheld = [];
-        for (const record of receiptRows(db, scope, memoryId)) {
-          if (project(record)) receiptCount++;
-          else withheld.push(Number(record.position));
-        }
-        const epoch = readEpoch(db, scope, expectedEpoch, withheld);
         const stored = storedEvidence(db, scope, memoryId);
         const qualification = includeQualification && stored?.qualification
           ? /** @type {ContextReadFields} */ (decodeJson(stored.qualification)) : null;
@@ -266,7 +216,7 @@ export function createInspectStore(port, hashSession, receiptReadSafety, visibil
         const visible = flags.placement || flags.conflictEdges || flags.supersession ? visibility(db, scope, policy) : undefined;
         const placed = flags.placement && visible ? topicMembershipReader(db, scope, visible)(memoryId) : null;
         const filing = placed ? (placed.length ? "filed" : "unfiled") : stored?.filing;
-        const memory = { ...metadata(entry.row, receiptCount, filing), text: entry.row.text };
+        const memory = { ...metadata(db, entry.row, project, filing), text: entry.row.text };
         const conflicts = flags.conflictEdges && visible ? readConflicts(db, scope, [memoryId], visible).get(memoryId) ?? [] : [];
         const linkVisible = flags.supersession && entry.row.historical && visible?.(memoryId);
         const link = linkVisible ? storedSupersession(db, scope, memoryId) : undefined;

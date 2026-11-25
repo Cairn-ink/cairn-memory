@@ -9,7 +9,7 @@ export const adapterImports = {
   "context-read.mjs": { core: "CoreError" },
   "errors.mjs": { core: "CoreError toCoreError" },
   "index-revisions.mjs": { core: "CoreError" },
-  "inspect.mjs": { crypto: "createHmac", core: "CoreError" },
+  "inspect.mjs": { core: "CoreError" },
   "memories.mjs": { core: "compareSortKey compareUtf8 CoreError" },
   "memory-relations.mjs": { core: "canonicalPair compareUtf8 CoreError" },
   "memory-rows.mjs": { crypto: "randomUUID", core: "CoreError receiptExcerpt" },
