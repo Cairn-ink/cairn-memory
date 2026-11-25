@@ -39,9 +39,12 @@ async function capture(storage, key, messages, memories) {
   const claim = await write(storage, tx => storage.capture.claim(tx, key, messages, { leaseMs: 10_000 }));
   assert.equal(claim.status, "claimed");
   await write(storage, tx => storage.capture.beginDispatch(tx, claim.token));
-  const finished = await write(storage, tx => storage.capture.finish(tx, claim.token,
-    memories.map(({ text, sources }) => ({ ...fact(text), content: text, receipts: sources.map(({ id, role, occurredAtMs }) =>
-      ({ client: key.client, sessionId: key.sessionId, messageId: id, role, occurredAtMs })) }))));
+  const finished = await write(storage, async tx => {
+    await storage.capture.assertEligible(tx, key, messages.map((_, position) => position));
+    return storage.capture.finish(tx, claim.token,
+      memories.map(({ text, sources }) => ({ ...fact(text), content: text, receipts: sources.map(({ id, role, occurredAtMs }) =>
+        ({ client: key.client, sessionId: key.sessionId, messageId: id, role, occurredAtMs })) })));
+  });
   assert.equal(finished.memories.length, memories.length);
   return finished.memories;
 }
