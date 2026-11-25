@@ -351,20 +351,70 @@ test("later explicit saves still withhold an exact re-save and multi-sentence co
   assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
 });
 
-test("a lowercase exact sentence is withheld under a keyless SHA-only legacy forget", migrationDbTest, async t => {
-  const f = await writeFixture(t, { keyed: false });
-  await f.forget();
-  const prefix = `A journal entry follows. ${forgottenSentence.toLowerCase()}`;
-  const cases = [["two sentences", prefix], ["mixed-case boundary", `${prefix} A new entry begins.`]];
-  for (const phase of ["live", "copied"]) {
-    if (phase === "copied") await f.copyFacts();
-    for (const [label, text] of cases) {
+const prefix = "A journal entry follows.";
+const suffix = "A new entry begins.";
+const lowercaseSentence = forgottenSentence.toLowerCase();
+const abbreviation = "The lantern belongs to Dr. Smith.";
+const unpunctuated = forgottenSentence.slice(0, -1);
+const fourSegments = "The journal lists Dr. Smith, Prof. Adams, and Capt. Jones.";
+const exactPassageCases = [
+  ["two sentences", forgottenSentence, `${prefix} ${lowercaseSentence}`],
+  ["mixed-case boundary", forgottenSentence, `${prefix} ${lowercaseSentence} ${suffix}`],
+  ["abbreviation in context", forgottenSentence, `Dr. Smith keeps a journal. ${lowercaseSentence} ${suffix}`],
+  ["abbreviation in passage", abbreviation, `${prefix} ${abbreviation} ${suffix}`],
+  ["lowercase abbreviation in passage", abbreviation, `${prefix} ${abbreviation.toLowerCase()} ${suffix}`],
+  ["unpunctuated final context", forgottenSentence, `${prefix} ${lowercaseSentence} ${suffix.slice(0, -1)}`],
+  ["unpunctuated exact passage", unpunctuated, `${prefix} ${unpunctuated.toLowerCase()}`],
+  ["removed period", forgottenSentence, `${prefix} ${unpunctuated.toLowerCase()}`, "saved"],
+  ["newline-separated context", forgottenSentence, `A journal entry follows\n${lowercaseSentence}\nA new entry begins`],
+  ["multiple spaces", forgottenSentence, `${prefix}   ${lowercaseSentence.replace("is ", "is   ")}   ${suffix}`],
+  ["lowercase leading context", forgottenSentence, `${prefix.toLowerCase()} ${lowercaseSentence} ${suffix}`],
+  ["four segments in passage", fourSegments, `${prefix} ${fourSegments.replace("Dr. ", "Dr.\t  ")} ${suffix}`],
+];
+
+for (const [label, forgotten, text, status = "suppressed"] of exactPassageCases) {
+  test(`keyless legacy exact passage: ${label}`, migrationDbTest, async t => {
+    const f = await writeFixture(t, { keyed: false });
+    await f.legacyText("forget", forgotten);
+    for (const phase of ["live", "copied"]) {
+      if (phase === "copied") {
+        const { facts, uncopyable } = await f.copyFacts();
+        assert.deepEqual(uncopyable, []);
+        assert.equal(facts.length, 1);
+      }
       for (const source of [web, mcp]) {
-        assert.equal((await f.service.save(scope, text, source)).status, "suppressed", `${phase} ${source.kind} ${label}`);
+        const attempt = `${phase} ${source.kind}`;
+        const result = await f.service.save(scope, text, source);
+        assert.equal(result.status, status, attempt);
+        const { rows } = await f.pool.query("SELECT id FROM memories");
+        if (status === "saved") {
+          assert.deepEqual(rows, [{ id: result.item.id }], attempt);
+          assert.deepEqual(await f.fence(result.item.id), [ref(result.item.id)], attempt);
+          // Each attempt must be a fresh insert candidate.
+          await f.pool.query("DELETE FROM memories WHERE id = $1", [result.item.id]);
+        } else {
+          assert.deepEqual(rows, [], attempt);
+        }
       }
     }
-  }
-  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
+  });
+}
+
+test("legacy exact passage cap preserves whole-text matching and keeps vector matching enabled", migrationDbTest, async t => {
+  const f = await writeFixture(t, { keyed: false });
+  const atCap = Array(200).fill("A lamp.").join(" ");
+  const exactOverCap = `${prefix} ${atCap}`;
+  const vectorOverCap = `${atCap} ${suffix}`;
+  await f.legacyText("forget", exactOverCap, { id: "whole-text", vector: far });
+  assert.equal((await f.service.save(scope, exactOverCap, web)).status, "suppressed", "whole-text match above the cap");
+  assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, []);
+
+  await f.forget();
+  const saved = await f.service.save(scope, atCap, web);
+  assert.equal(saved.status, "saved", "vector exemption at the cap");
+  assert.deepEqual(await f.fence(saved.item.id), [ref(saved.item.id)]);
+  assert.equal((await f.service.save(scope, vectorOverCap, web)).status, "suppressed", "vector match above the cap");
+  assert.deepEqual((await f.pool.query("SELECT id FROM memories")).rows, [{ id: saved.item.id }]);
 });
 
 test("an explicit duplicate cannot use the insert exemption to attach a receipt or advance recency", migrationDbTest, async t => {

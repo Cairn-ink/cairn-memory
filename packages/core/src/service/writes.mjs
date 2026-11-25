@@ -19,6 +19,8 @@ import { pauseResult } from "./pause.mjs";
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
 const sentenceSegmenter = new Intl.Segmenter("und", { granularity: "sentence" });
+const MAX_LEGACY_SAVE_SEGMENTS = 200;
+const MAX_LEGACY_SAVE_RUN = 4;
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
 
 /** @param {number | undefined} indexRevision */
@@ -274,10 +276,39 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
   };
 }
 
+/** @param {string} raw @param {string} text */
+function legacySavePassageTexts(raw, text) {
+  // ICU can keep a lowercase sentence in the preceding segment. Keep both splits.
+  const punctuation = text.split(/(?<=[.!?。！？])(?=\s)/u, MAX_LEGACY_SAVE_SEGMENTS + 1);
+  if (punctuation.length > MAX_LEGACY_SAVE_SEGMENTS) return null;
+
+  const sentences = [];
+  for (const { segment } of sentenceSegmenter.segment(raw)) {
+    sentences.push(segment);
+    if (sentences.length > MAX_LEGACY_SAVE_SEGMENTS) return null;
+  }
+
+  const candidates = new Set();
+  for (const segments of [sentences, punctuation]) {
+    for (let start = 0; start < segments.length; start++) {
+      let run = "";
+      for (let end = start; end < segments.length && end < start + MAX_LEGACY_SAVE_RUN; end++) {
+        // Preserve the original separators so fingerprinting applies its usual whitespace normalization.
+        run += segments[end];
+        candidates.add(run.trim());
+      }
+    }
+  }
+  candidates.delete("");
+  candidates.delete(raw.trim());
+  candidates.delete(text);
+  return candidates;
+}
+
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
  * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
  * @param {TextFact["sourceMemory"]} [edit]
- * @param {{ raw: string, sha256Hex: (text: string) => Promise<string>,
+ * @param {{ raw: string, text: string, sha256Hex: (text: string) => Promise<string>,
  *   digesters?: readonly RetainedDigester[] }} [explicitSave]
  */
 async function withheld(suppressions, tx, scope, source, passages, key, edit, explicitSave) {
@@ -303,24 +334,19 @@ async function withheld(suppressions, tx, scope, source, passages, key, edit, ex
     fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
   if (!legacy.length) return { blocked: false };
 
-  const { raw, sha256Hex, digesters } = explicitSave;
-  // Whole-text variants preserve legacy digest and shingle evidence. Sentence
-  // fingerprints also let exact passage matches block a multi-sentence save.
-  // ICU can keep a lowercase sentence after a period in the preceding segment.
-  const normalized = prepareCoreText(raw);
-  const sentences = new Set([
-    ...Array.from(sentenceSegmenter.segment(raw), ({ segment }) => segment.trim()),
-    ...normalized.split(/(?<=[.!?。！？])\s+/u),
-  ]);
-  // Whole-text spellings are already in passages.
-  sentences.delete(raw.trim());
-  sentences.delete(normalized);
-  const sentencePassages = await Promise.all([...sentences].filter(Boolean).map(sentence =>
-    fingerprintMemoryPassages(sentence, prepareCoreText(sentence), key, sha256Hex, digesters)));
-  const candidates = passages.concat(sentencePassages.flat());
+  const { raw, text, sha256Hex, digesters } = explicitSave;
+  const passageTexts = legacySavePassageTexts(raw, text);
+  let candidates = passages;
+  if (passageTexts !== null) {
+    const fingerprints = await Promise.all(Array.from(passageTexts, passage =>
+      fingerprintMemoryPassages(passage, prepareCoreText(passage), key, sha256Hex, digesters)));
+    candidates = passages.concat(fingerprints.flat());
+  }
   const blocked = legacy.some(entry => factBlocksIncoming(entry, { scope, passages: candidates },
     { mode: "explicitSave", key }) !== false);
-  return { blocked, mayExemptVector: legacy.some(({ fact }) => fact.explicitSaveExemptAfterUs !== "infinity") };
+  // An over-cap save keeps full vector matching because passage evidence is incomplete.
+  return { blocked, mayExemptVector: passageTexts !== null &&
+    legacy.some(({ fact }) => fact.explicitSaveExemptAfterUs !== "infinity") };
 }
 
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
@@ -440,7 +466,7 @@ export function writeMethods(deps) {
           throw new CoreError("fingerprint_key_mismatch");
         }
         if (receipts.length && await withheldReceipt(tx, scope, receipts[0])) return suppressed();
-        const explicitSave = explicit ? { raw, sha256Hex, digesters } : undefined;
+        const explicitSave = explicit ? { raw, text, sha256Hex, digesters } : undefined;
         const { blocked, mayExemptVector } = await withheld(suppressions, tx, scope, source, passages, key, undefined, explicitSave);
         if (blocked) return suppressed();
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);

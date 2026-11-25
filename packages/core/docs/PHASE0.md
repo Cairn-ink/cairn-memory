@@ -810,7 +810,11 @@ matching follows the caller's existing policy.
 
 For legacy cutoff-bearing facts, explicit saves check exact passages from both
 ICU sentence segmentation and a split of the normalized text at sentence
-punctuation followed by whitespace.
+punctuation followed by whitespace. Each split supplies individual segments and
+contiguous runs of two to four segments. Runs preserve their original separators
+and use the stored fingerprints' whitespace normalization. If either split has
+more than 200 segments, the save checks whole-text evidence and keeps vector
+matching enabled for legacy cutoff-bearing facts.
 
 The Postgres batch copy merges rows that share a slot and have identical matching
 evidence at the latest cutoff. A slot with differing evidence yields no copied
