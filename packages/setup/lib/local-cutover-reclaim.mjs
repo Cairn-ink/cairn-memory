@@ -1,7 +1,7 @@
 import { basename, dirname, join } from 'node:path';
 import { privateList, privateRead, privateRemove, syncDirectory } from '../../../integrations/client/private-state.mjs';
 import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { cutoverAttemptForName, cutoverId, legacyTargetFor, targetFor } from './local-cutover-journal.mjs';
+import { cutoverId, legacyTargetFor, taggedCutoverAttemptForName, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse } from './local-cutover-lease.mjs';
 import { canonicalPath, inside, ownedDirectory, parseStrictJSON, removeCutoverDirectory } from './local-descriptor.mjs';
 
@@ -25,11 +25,11 @@ async function storeDirectory(source) {
   return await ownedDirectory(parent, { missing: true }) ? parent : undefined;
 }
 
-async function reclaimTargets(source, attemptId, checkpoint) {
+async function reclaimTargets(source, targets, checkpoint) {
   const parent = await storeDirectory(source);
   if (parent) {
     const { cleanMigrationBootstraps } = await import('../../adapter-sqlite/src/legacy/migration-bootstrap.mjs');
-    for (const path of [targetFor(source, attemptId), legacyTargetFor(source, attemptId)]) {
+    for (const path of targets) {
       cleanMigrationBootstraps(path);
       const names = ['', '.stale'].flatMap(tail => suffixes.map(suffix => path + tail + suffix));
       const files = names.filter(file => entry(file));
@@ -57,9 +57,12 @@ async function reclaimBackup(directory, name) {
   }));
 }
 
-export async function reclaimAttempt(maintenance, { sourcePath, attemptId }, checkpoint) {
+export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targetPath }, checkpoint) {
   if (inside(maintenance, sourcePath)) throw refuse('cutover_unsafe_artifact');
-  await reclaimTargets(sourcePath, attemptId, checkpoint);
+  // A journal supplies the exact target. Historical maintenance receipts
+  // can identify an attempt by UUID alone and cover both naming generations.
+  const targets = targetPath ? [targetPath] : [targetFor(sourcePath, attemptId), legacyTargetFor(sourcePath, attemptId)];
+  await reclaimTargets(sourcePath, targets, checkpoint);
   const names = await privateList(maintenance);
   for (const name of names) {
     if (backupId(name) === attemptId || stageName(name)) await reclaimBackup(maintenance, name);
@@ -82,6 +85,15 @@ function metadataOnly(directory, names) {
   // Exclusive private writes can be interrupted with both names still linked.
   // Every link must be accounted for inside this maintenance directory.
   return [...records.values()].every(({ count, links }) => count === links);
+}
+
+export async function assertReclaimedMaintenance(directory) {
+  if (!metadataOnly(directory, await privateList(directory))) throw refuse('cutover_unsafe_artifact');
+}
+
+export async function reclaimMaintenance(root, directory) {
+  await removeCutoverDirectory(directory, names => metadataOnly(directory, names));
+  await syncDirectory(root);
 }
 
 async function readMarker(path) {
@@ -128,8 +140,7 @@ export async function reclaimPastAttempts(root, source, active, checkpoint) {
     for (const stage of stages) await reclaimBackup(directory, stage);
     await syncDirectory(directory);
     if (!current) {
-      await removeCutoverDirectory(directory, names => metadataOnly(directory, names));
-      await syncDirectory(root);
+      await reclaimMaintenance(root, directory);
       await checkpoint('reclaim-maintenance');
     }
   }
@@ -139,8 +150,8 @@ export async function reclaimPastAttempts(root, source, active, checkpoint) {
   if (!parent) return;
   let found = false;
   for (const name of await privateList(parent)) {
-    const attemptId = cutoverAttemptForName(source, name);
-    if (!attemptId || attemptId === active?.attemptId) continue;
+    const attemptId = taggedCutoverAttemptForName(source, name);
+    if (!attemptId || attemptId === active?.attemptId && !active.aborting) continue;
     const file = join(parent, name), info = entry(file);
     if (privateFile(info) && info.nlink === 1n) {
       await privateRemove(file);

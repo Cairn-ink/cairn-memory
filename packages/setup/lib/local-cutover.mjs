@@ -7,7 +7,8 @@ import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { withCutoverCapture } from './local-cutover-capture.mjs';
 import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
-import { backupFor, maintenanceFor, reclaimAttempt, reclaimPastAttempts } from './local-cutover-reclaim.mjs';
+import { assertReclaimedMaintenance, backupFor, maintenanceFor, reclaimAttempt, reclaimMaintenance,
+  reclaimPastAttempts } from './local-cutover-reclaim.mjs';
 import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, withLocalLock,
   writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
@@ -49,7 +50,7 @@ async function recoverCutoverLock(root) {
     return;
   }
   if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || owner.child !== null) return;
-  // A completed descriptor restore can precede cleanup and lock release.
+  // A completed descriptor restore can precede metadata cleanup and lock release.
   // Continue to recognize pre-existing cutover locks while their v2 journal exists.
   if (owner.cutover !== true && !journaled) return;
   const live = processStart(owner.pid);
@@ -183,20 +184,32 @@ async function finishRollback(root, descriptor, maintenance, onCheckpoint) {
 
 async function abort(root, descriptor, maintenance, onCheckpoint) {
   const { migration } = descriptor, { cutover } = migration;
+  const checkpoint = state => onCheckpoint(state, structuredClone(cutover));
+  const reclaimed = new Set();
+  const reclaimCheckpoint = async state => {
+    reclaimed.add(state);
+    await checkpoint('abort-' + state);
+  };
   cutover.aborting = true;
   await writeDescriptor(root, descriptor);
   await ensureMaintenance(root, maintenance);
-  // Keep the source-bound marker until the restored v1 and all unlinks are durable.
   await writeMarker(maintenance, cutover);
+  // Keep the v2 journal and capture snapshots until all retired bytes have
+  // been durably reclaimed. Any error leaves the abort intent available to retry.
+  await reclaimAttempt(maintenance, cutover, reclaimCheckpoint);
+  await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
+  await assertReclaimedMaintenance(maintenance);
   await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
     delete descriptor.migration;
     descriptor.version = 'cairn-local-installation-v1';
     descriptor.updatedAt = cutover.previousUpdatedAt;
     await writeDescriptor(root, descriptor, { preserveUpdatedAt: true });
   });
-  const checkpoint = state => onCheckpoint(state, structuredClone(cutover));
   await checkpoint('abort-restored');
-  await reclaimPastAttempts(root, cutover.sourcePath, null, checkpoint);
+  await reclaimMaintenance(root, maintenance);
+  reclaimed.add('reclaim-maintenance');
+  // Keep the existing abort notifications at a point where v1 is servable.
+  for (const state of reclaimed) await checkpoint(state);
   return { state: 'aborted' };
 }
 
