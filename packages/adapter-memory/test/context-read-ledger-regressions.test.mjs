@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { formatAssembly } from "@cairn-ink/conformance/context-assembly";
+import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
+import { fetchForAssembly } from "../../core/src/service/context-read-assembly-evidence.mjs";
+import { findCandidatesMethod } from "../../core/src/service/context-read-find.mjs";
+import { readContextMethod } from "../../core/src/service/context-read.mjs";
 import { amount, day, fixture, readSet, scope, source } from "./fixtures/context-read-quantity-ledger.mjs";
 
 test("every ranked ref can be fetched together and the ordinary snapshot replays", async () => {
@@ -83,6 +86,82 @@ test("the ledger deadline releases delivery while a lookup is still pending", as
   await delay(0);
   assert.deepEqual(f.scans, []);
 });
+
+for (const stop of ["deadline", "abort"]) {
+  test(`ledger preparation ${stop} cannot revive a forgotten ranked memory`, async () => {
+    async function read(enabled) {
+      const f = fixture();
+      const memory = await f.capture("Food: bread cost 3 USD.", [amount("bread", 3)]);
+      const controller = new AbortController();
+      const deadlineMs = 1000;
+      let now = 0, forgetBeforeSnapshot = false;
+      let ordinary, visibleAfterForget, fallbackAtStop;
+      const clock = { ...assemblyClock(() => now), nowMs: () => day + 5000 };
+      const storage = {
+        ...f.base,
+        capabilities: { ...f.base.capabilities, quantityLedger: enabled },
+        quantityLedger: {
+          async terms() { assert.fail("ledger terms ran after the preparation stopped"); },
+        },
+        uow: {
+          async run(owner, options, work) {
+            if (!options.readOnly || !forgetBeforeSnapshot) return f.base.uow.run(owner, options, work);
+            forgetBeforeSnapshot = false;
+            assert.equal((await f.writer.forget(scope, memory.id, source)).status, "forgotten");
+            return f.base.uow.run(owner, options, async tx => {
+              visibleAfterForget = await f.base.fence.assertVisible(tx, readSet(),
+                [{ type: "memory", namespace: scope.namespace, id: memory.id }]);
+              fallbackAtStop = ordinary?.current;
+              if (stop === "deadline") now = deadlineMs;
+              else controller.abort();
+              return work(tx);
+            });
+          },
+        },
+      };
+      const fetch = fetchForAssembly(storage);
+      const api = readContextMethod({
+        storage, clock, find: findCandidatesMethod({ storage, clock }).findForAssembly,
+        counter: { count: fixtureCount }, format: formatAssembly,
+        async fetch(...args) {
+          const evidence = await fetch(...args);
+          return {
+            ...evidence,
+            async deliver(selected, ...rest) {
+              assert.ok(selected.some(({ item }) => item.ref.id === memory.id));
+              // A ledger-free read has only the ordinary delivery snapshot.
+              if (!enabled) forgetBeforeSnapshot = true;
+              const snapshot = await evidence.deliver(selected, ...rest);
+              if (enabled) {
+                assert.equal(typeof snapshot, "string");
+                forgetBeforeSnapshot = true;
+              }
+              return snapshot;
+            },
+            prepareLedger(attempt, includeCalendar) {
+              ordinary = attempt.ordinary;
+              return evidence.prepareLedger(attempt, includeCalendar);
+            },
+          };
+        },
+      });
+      const outcome = await api(readSet(), {
+        query: "How much food today?", types: ["memory"], intent: "current", raw: false, deadlineMs,
+      }, { signal: controller.signal }).then(result => ({ result }), error => ({ error }));
+      assert.deepEqual(visibleAfterForget, []);
+      assert.ok(!outcome.result?.assembly.items.some(({ ref }) => ref.id === memory.id),
+        "the forgotten memory was delivered");
+      return { ...outcome, fallbackAtStop };
+    }
+
+    const expected = await read(false);
+    const actual = await read(true);
+    assert.equal(expected.error?.code, "snapshot_stale");
+    assert.deepEqual(actual.error, expected.error);
+    // The public abort guard can reject even while the earlier pack is still eligible.
+    assert.equal(actual.fallbackAtStop, false, "the fallback was eligible when the newer snapshot opened");
+  });
+}
 
 test("the Raw budget uses the adapter clock after the process passes the initial cutoff", async () => {
   const f = fixture({ monotonicMs: () => performance.now() });

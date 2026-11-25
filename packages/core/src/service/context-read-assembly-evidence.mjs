@@ -280,9 +280,10 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       /** @param {LedgerAttempt} attempt @param {boolean} includeCalendar */
       prepareLedger(attempt, includeCalendar) {
         const { active, ordinary } = attempt;
+        // The deadline can race the snapshot request before the callback starts.
+        ordinary.current = false;
         return uow.run(readSet.owner, { readOnly: true }, async tx => {
           active();
-          ordinary.current = false;
           await checkState(tx);
           active();
           const signer = readTokenSigner(await readStore.identity(tx));
