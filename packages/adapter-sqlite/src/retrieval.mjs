@@ -127,9 +127,10 @@ function hydrateRow(db, { row }) {
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
  * @param {(db: Connection, selection: RetrievalScope, refs: readonly ItemRef[]) => ItemRef[]} visibleRawRefs
+ * @param {(tx: import("@cairn-ink/core/ports").Tx, scope: RetrievalScope, refs: readonly ItemRef[]) => Promise<ItemRef[]>} [visibleCardRefs]
  * @returns {Pick<StorageAdapter, "lexical" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs) {
+export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, visibleCardRefs) {
   const stateToken = createSnapshotToken(storeKey);
 
   /** @param {Connection} db @param {RetrievalScope} selection @param {RecentKey | null} after
@@ -202,14 +203,18 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       },
     },
     fence: {
-      assertVisible(tx, scope, refs, intent) {
+      async assertVisible(tx, scope, refs, intent) {
         // Core supplies a new read transaction for the final delivery check.
-        return port(tx, scope?.owner, {}, db => {
+        const { selection, references, visible, raw } = await port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           const references = copyArray(refs);
           const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
-          return [...visible, ...visibleRawRefs(db, selection, references)];
+          return { selection, references, visible, raw: visibleRawRefs(db, selection, references) };
         });
+        if (!visibleCardRefs || !references.some(ref => ref.type === "card")) return [...visible, ...raw];
+        const cards = await visibleCardRefs(tx, selection, references);
+        const qualified = new Set([...visible, ...cards].map(({ type, namespace, id }) => JSON.stringify([type, namespace, id])));
+        return [...references.filter(({ type, namespace, id }) => qualified.has(JSON.stringify([type, namespace, id]))), ...raw];
       },
     },
     hydrate: {

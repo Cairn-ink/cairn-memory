@@ -138,14 +138,18 @@ export function readLegacyDenials(db, scope) {
     .all(...scopeKey(scope)).map(row => String(row.fingerprint)));
 }
 
-/** @param {Connection} db @param {Scope} scope @param {SessionHasher} hashSession */
-export function scopedSuppression(db, scope, hashSession) {
-  const facts = readFacts(db, scope);
+/** @param {Connection} db @param {Scope} scope @param {SessionHasher} hashSession
+ * @param {ReadonlySet<string>} [forgetFactIds]
+ */
+export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
+  const all = readFacts(db, scope);
+  const facts = !forgetFactIds ? all : all.filter(({ fact, factId }) =>
+    fact.origin === "forget" && forgetFactIds.has(factId));
   const texts = facts.filter(isText);
   const sessions = facts.filter(({ fact }) => fact.kind === "session");
   const windows = facts.filter(({ fact }) => fact.kind === "window");
   const hasSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
-  const legacy = readLegacyDenials(db, scope);
+  const legacy = forgetFactIds ? new Set() : readLegacyDenials(db, scope);
   const hasLegacyReceipts = [...legacy].some(key => key.startsWith("rs1:"));
 
   /** @param {readonly TextDigest[]} digests @param {string} [historyHash] */
@@ -170,23 +174,28 @@ export function scopedSuppression(db, scope, hashSession) {
       blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]);
   }
 
-  /** @param {Entry} entry */
-  function classify(entry) {
+  /** @param {Entry} entry @param {boolean} [definiteOnly] */
+  function classify(entry, definiteOnly = false) {
     const { row, legacyHash, historyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
     const receipts = sessions.length || hasSpans || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
     /** @type {FactMatchRow} */
     const candidate = { type: "memory", scope, memoryId: row.id, revision: row.revision, digests: aliases };
+    /** @param {StoredFact} stored @param {FactMatchRow} evidence */
+    const matches = (stored, evidence) => {
+      const result = factHidesRow(stored, evidence, matchPolicy);
+      return definiteOnly ? result === true : result !== false;
+    };
     const applicable = facts.filter(stored => {
       switch (stored.fact.kind) {
         case "identity":
         case "text":
-          return factHidesRow(stored, candidate, matchPolicy) !== false;
+          return matches(stored, candidate);
         case "session":
           return receipts.some(({ client, sessionId, occurredAtMs }) =>
-            factHidesRow(stored, { ...candidate, source: {
+            matches(stored, { ...candidate, source: {
               client, sessionKeyHash: hashSession(scope, client, sessionId), occurredAtMs,
-            } }, matchPolicy) !== false);
+            } }));
         case "rawSpan": {
           const { sessionKeyHash, messageKey } = stored.fact;
           // A capture receipt attributes the full message to the memory.
@@ -214,6 +223,11 @@ export function scopedSuppression(db, scope, hashSession) {
       if (!facts.length && !legacy.size) return false;
       const { applicable, legacyDenied } = classify(entry);
       return legacyDenied || applicable.length > 0;
+    },
+
+    /** @param {Entry} entry */
+    definitelyHides(entry) {
+      return classify(entry, true).applicable.length > 0;
     },
 
     /** @param {DuplicateQuery} query @param {"hash" | "full"} mode @param {FactMatchIncoming["sourceMemory"]} sourceMemory */

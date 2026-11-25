@@ -7,6 +7,9 @@ export const adapterImports = {
   "context-lexical.mjs": { crypto: "createHmac randomUUID", core: "compareCanonical CoreError scoreBM25 termFrequencies tokenizeT1" },
   "context-raw-read.mjs": { crypto: "createHmac", core: "rankScores scoreBM25 termFrequencies tokenizeT1" },
   "context-read.mjs": { core: "CoreError" },
+  "document-card-rows.mjs": {},
+  "document-card-visibility.mjs": { routing: "documentCardVisible" },
+  "document-cards.mjs": {},
   "errors.mjs": { core: "CoreError toCoreError" },
   "index-revisions.mjs": { core: "CoreError" },
   "inspect.mjs": { core: "CoreError" },
@@ -32,6 +35,7 @@ export const adapterImports = {
   "schema/open.mjs": { fs: "chmodSync realpathSync statSync", sqlite: "DatabaseSync", core: "CoreError" },
   "storage-values.mjs": { crypto: "createHash", core: "boundedText cleanContent CoreError normalizeForHash prepareCoreText receiptExcerpt PRIVACY_REDACTION_VERSIONS redactV1 validateSuppressionFact" },
   "suppressions.mjs": { crypto: "createHmac", core: "compareUtf8 CoreError factBlocksIncoming factBody factHidesRow validateSuppressionFact" },
+  "topic-card-placement.mjs": { core: "CoreError ERROR_CODES isErrorCode" },
   "topics.mjs": { crypto: "randomUUID", core: "coalesceNewTopics compareCatalogTopics compareSortKey compareUtf8 CoreError ERROR_CODES isErrorCode titleKey" },
   "uow.mjs": { async_hooks: "AsyncLocalStorage", fs: "realpathSync statSync", sqlite: "DatabaseSync", url: "pathToFileURL", util: "types", core: "CoreError" },
 };

@@ -5,15 +5,15 @@ import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 
 /** @import { StoredFact } from "@cairn-ink/core" */
-/** @import { CaptureMessage, Scope } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, DocumentCardSourceMessage, Scope } from "@cairn-ink/core/ports" */
 /** @import { Session } from "./raw-rows.mjs" */
 /** @import { Connection } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 
 /** @param {Connection} db @param {Scope} scope @param {(session: Session, message: CaptureMessage) => boolean} matches
- * @param {Session} [onlySession]
+ * @param {Session} [onlySession] @param {(source: DocumentCardSourceMessage) => void} [onBlank]
  */
-function scrubOutbox(db, scope, matches, onlySession) {
+function scrubOutbox(db, scope, matches, onlySession, onBlank) {
   const rows = db.prepare(`SELECT client_key, session_key, event_key, messages
     FROM cairn_capture_claims JOIN cairn_capture_outbox USING (owner_id, client_key, event_key)
     WHERE owner_id = ? AND namespace_key = ? AND messages IS NOT NULL
@@ -32,6 +32,7 @@ function scrubOutbox(db, scope, matches, onlySession) {
         // Retain the position and provenance for a retry and for ID-only proof.
         message.content = "";
         ledgerBlanked++;
+        onBlank?.({ ...session, messageId: message.id });
       }
     }
     if (ledgerBlanked !== before) update.run(JSON.stringify(messages), scope.owner, row.client_key, row.event_key);
@@ -56,8 +57,11 @@ export function eraseRawSessions(db, scope, sessions) {
   return { rawDeleted, ledgerBlanked };
 }
 
-/** @param {Connection} db @param {Scope} scope @param {StoredFact[]} facts @param {SessionHasher} hashSession */
-export function purgeRawMessages(db, scope, facts, hashSession) {
+/** @param {Connection} db @param {Scope} scope @param {StoredFact[]} facts @param {SessionHasher} hashSession
+ * @param {(source: DocumentCardSourceMessage) => void} [onDelete]
+ * @param {(source: DocumentCardSourceMessage) => void} [onBlank]
+ */
+export function purgeRawMessages(db, scope, facts, hashSession, onDelete, onBlank) {
   if (!facts.length) return { rawDeleted: 0, ledgerBlanked: 0 };
   const rows = db.prepare(`SELECT * FROM cairn_raw_messages WHERE owner_id = ? AND namespace_key = ?`)
     .all(...scopeKey(scope));
@@ -71,9 +75,10 @@ export function purgeRawMessages(db, scope, facts, hashSession) {
     if (matches(decoded, decoded.message)) {
       suppress(decoded, decoded.message.id);
       rawDeleted += Number(remove.run(...rawSessionKey(scope, decoded), row.message_key).changes);
+      onDelete?.({ client: decoded.client, sessionId: decoded.sessionId, messageId: decoded.message.id });
     }
   }
-  return { rawDeleted, ledgerBlanked: scrubOutbox(db, scope, matches) };
+  return { rawDeleted, ledgerBlanked: scrubOutbox(db, scope, matches, undefined, onBlank) };
 }
 
 /** @param {Connection} db @param {Scope} scope */

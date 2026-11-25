@@ -162,9 +162,10 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkRepla
 /** @param {Port} port @param {SessionHasher} hashSession
  * @param {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} index
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
+ * @param {ReturnType<typeof import("./document-cards.mjs").createDocumentCards>["purgeErasedMemory"]} [purgeCardSources]
  * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, index, scrubTitles) {
+export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -256,6 +257,7 @@ export function createMemoryStore(port, hashSession, index, scrubTitles) {
         validateId(id);
         const entry = readEntry(db, scope, id);
         if (!entry) return false;
+        purgeCardSources?.(db, tx, scope, id);
         db.prepare(`UPDATE cairn_memories
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
