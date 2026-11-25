@@ -3,13 +3,16 @@ import { CoreError } from "../errors.mjs";
 import { fuseCandidates } from "../retrieval/fusion.mjs";
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from "../retrieval/tokenize.mjs";
 import { entry } from "./entry.mjs";
-import { assertContextVisible, legacyRef, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
+import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, legacyRef, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
+import { checkRow } from "./context-read-fetch.mjs";
 import { CONTEXT_HORIZON, contextReadSet, findCandidatesInput, itemRef, readSetBinding,
   namespaceSlot } from "./context-read-input.mjs";
 import { CONTEXT_VERSION, isReadMac, newRankingId, readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @import { CallOptions, ClockAndHash, ContextCandidateDiagnostics, ContextReadSet, FindCandidatesInput,
-  FindCandidatesResult, ContextIndexObservation, ContextReadType, ReadContractStorage, StoredDocumentCardRecord } from "../ports/index.d.ts" */
+  FindCandidatesResult, ContextIndexObservation, ContextReadRef, ContextReadStore, ContextReadType,
+  ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
+/** @typedef {Awaited<ReturnType<ContextReadStore["snapshotState"]>>} Generations */
 /** @typedef {FindCandidatesResult["items"]} Items */
 /** @typedef {{ items: Items, diagnostics: ContextCandidateDiagnostics, token: Cursor }} Ranking */
 /** @typedef {{v: 1, r: string, b: string, c: string, a: string, g: string, e: number, p: number}} Cursor */
@@ -95,11 +98,25 @@ async function page({ items, diagnostics, token }, position, limit, signer) {
   throw new CoreError("context_item_too_large");
 }
 
-/** @param {{storage: Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities">,
+/** @param {{storage: Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities" | "documentCards">,
  * clock: ClockAndHash}} deps
  */
 export function findCandidatesMethod({ storage, clock }) {
-  const { contextRead: store, fence, uow } = storage;
+  const { contextRead: store, fence, uow, documentCards } = storage;
+  const cardsEnabled = hasContextCardLoader(documentCards);
+  const documentCardsOnly = storage.capabilities.documentCards && !storage.capabilities.cards;
+  /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadRef} ref
+   * @param {FindCandidatesInput["intent"]} intent @param {Generations | undefined} generations */
+  async function visibleCard(tx, readSet, ref, intent, generations) {
+    if (cardsEnabled) return !!await contextCardVerdict(documentCards, tx, ref);
+    if (!store) return false;
+    const [row] = await store.evidence(tx, readSet, [ref], intent ?? "current");
+    const lineageEnabled = generations?.[namespaceSlot(readSet, ref.scope)]?.lineage !== undefined;
+    return !!row && legacyContextCard(row, lineageEnabled) && !checkRow(ref, row);
+  }
+
+  /** @param {Items} items */
+  const fenceRefs = items => items.flatMap(({ ref }) => cardsEnabled && ref.type === "card" ? [] : [ref]);
   /** @type {Map<string, Ranking>} */
   const rankings = new Map();
   function expireRankings() {
@@ -156,7 +173,12 @@ export function findCandidatesMethod({ storage, clock }) {
         const current = await store.observeIndex(tx, readSet, selection);
         if (!current.ready || await signer.bind("index", current.indexState) !== token.g) throw new CoreError("cursor_stale");
         const result = await page(ranking, token.p, limit, signer);
-        await assertContextVisible(fence, tx, readSet, result.items.map(item => item.ref), intent, "cursor_stale");
+        const generations = !cardsEnabled && result.items.some(({ ref }) => ref.type === "card")
+          ? await store.snapshotState(tx, readSet, types) : undefined;
+        for (const { ref } of result.items) {
+          if (ref.type === "card" && !await visibleCard(tx, readSet, ref, intent, generations)) throw new CoreError("cursor_stale");
+        }
+        await assertContextVisible(fence, tx, readSet, fenceRefs(result.items), intent, "cursor_stale");
         return { result };
       }
 
@@ -180,17 +202,24 @@ export function findCandidatesMethod({ storage, clock }) {
         if (namespaceSlot(readSet, ref.scope) < 0 || !types.includes(ref.type)) throw new CoreError("index_unavailable");
         return { ref: itemRef(ref), qualified: ref, score };
       });
-      const fused = fuseCandidates(lexicalRows, [], { preset: config.preset });
+      const hasCardHits = lexicalRows.some(({ ref }) => ref.type === "card");
+      const generations = forAssembly || (!cardsEnabled && hasCardHits) ? await store.snapshotState(tx, readSet, types) : undefined;
+      const accepted = hasCardHits ?
+        (await Promise.all(lexicalRows.map(async row =>
+          row.ref.type !== "card" || await visibleCard(tx, readSet, row.qualified, intent, generations) ? row : null
+        ))).filter(row => row !== null) : lexicalRows;
+      const fused = fuseCandidates(accepted, [], { preset: config.preset });
       if (fused.mode !== "lexical") throw new CoreError("internal_error");
       const items = fused.rows.map(({ qualified: ref, fusionScore, channels }, i) => ({ ref, rank: i + 1, fusionScore, channels }));
       diagnostics.trace.timings.fusionMs = clock.monotonicMs() - fusionStarted;
-      completeCoverage(diagnostics, types, observed, lexical.matched);
+      const coverage = types.includes("card") && !cardsEnabled && documentCardsOnly && !accepted.some(({ ref }) => ref.type === "card")
+        ? { ...observed, byType: { ...observed.byType, card: { eligible: 0, indexed: 0 } } } : observed;
+      completeCoverage(diagnostics, types, coverage, accepted.length === lexical.rows.length ? lexical.matched : null);
 
       // Assembly consumes the qualified horizon and its namespace fence in
       // the search snapshot (legacy context-read-facade.mjs:773–796).
       if (forAssembly) {
-        const generations = await store.snapshotState(tx, readSet, types);
-        await assertContextVisible(fence, tx, readSet, items.map(item => item.ref), intent, "evidence_unavailable");
+        await assertContextVisible(fence, tx, readSet, fenceRefs(items), intent, "evidence_unavailable");
         /** @type {FindCandidatesResult} */
         const result = { ...diagnostics, items, version: CONTEXT_VERSION, nextCursor: null };
         return { result, generations: structuredClone(generations) };
@@ -201,7 +230,7 @@ export function findCandidatesMethod({ storage, clock }) {
           g: await signer.bind("index", observed.indexState), e: clock.nowMs() + RANKING_TTL_MS, p: 0 },
       }));
       const result = await page(ranking, 0, limit, signer);
-      await assertContextVisible(fence, tx, readSet, result.items.map(item => item.ref), intent, "evidence_unavailable");
+      await assertContextVisible(fence, tx, readSet, fenceRefs(result.items), intent, "evidence_unavailable");
       if (result.nextCursor !== null) {
         expireRankings();
         const oldest = rankings.keys().next().value;

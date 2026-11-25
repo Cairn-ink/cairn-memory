@@ -28,7 +28,8 @@ export function prepareItem(evidence, readSet, rank, intent) {
     ? { state, reviewState: item.reviewState, filing: item.filing, kind: item.kind, origin, confidence: item.confidence }
     : { state, support: item.support, origin, ...(origin === "engine" &&
       { builtAt: item.builtAt, clusterKey: item.clusterKey, status: item.status }) };
-  const original = item.type === "memory" ? item.text : item.title + "\n" + item.body;
+  const original = item.type === "memory" ? item.text :
+    evidence.documentCard && !item.title ? item.body : item.title + "\n" + item.body;
   const engine = item.type === "card" && origin === "engine";
   // Legacy context-read-assembly.mjs:10–34. The original text governs which
   // bound Memories can be replaced, including citations on timeline lines.
@@ -65,10 +66,16 @@ export function prepareItem(evidence, readSet, rank, intent) {
   };
 }
 
+/** @param {PreparedItem} item */
+export const canReplaceCitedMemory = item => item.engine || item.evidence.documentCard;
+
 /** @param {PreparedItem} card @param {PreparedItem} memory */
 export function citesMemory(card, memory) {
   const { item } = card.evidence, { ref } = memory.evidence.item;
-  if (item.type !== "card" || ref.type !== "memory" || !card.cited.has(ref.id)) return false;
+  if (item.type !== "card" || ref.type !== "memory") return false;
+  if (card.evidence.documentCard) return item.triggerMemoryRefs.some(trigger => trigger.id === ref.id &&
+    trigger.scope.owner === ref.scope.owner && trigger.scope.namespace === ref.scope.namespace && trigger.revision === ref.revision);
+  if (!card.cited.has(ref.id)) return false;
   return item.bindings.some(({ memoryRef }) => {
     if (!record(memoryRef) || memoryRef.type !== "memory" || memoryRef.revision !== ref.revision) return false;
     const { scope, namespace } = memoryRef;
@@ -140,7 +147,7 @@ export function wireItem(item, representation, sources, complete, body = item.bo
   return { ref: item.compact, rank: item.rank,
     ...(representation === "representation-v2-dated" && item.date && { date: item.date }),
     body, ...(Object.keys(metadata).length && { metadata }), sources,
-    ...(item.sourceAccess !== "available" && { sourceAccess: item.sourceAccess }),
+    ...(item.sourceAccess !== "available" && (!item.evidence.documentCard || !sources.length) && { sourceAccess: item.sourceAccess }),
     ...(!complete && { sourcesComplete: /** @type {const} */ (false) }) };
 }
 

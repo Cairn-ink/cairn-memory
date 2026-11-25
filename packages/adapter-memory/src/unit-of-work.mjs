@@ -25,13 +25,14 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
 /** @typedef {import("@cairn-ink/core/ports").DocumentCardAmendment} DocumentCardAmendment */
 /** @typedef {DocumentCardAmendment | { hidden: DocumentCardAmendment } | { hiddenReason: string } | null} AmendmentEntry */
-/** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number, hiddenReason?: string,
+/** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number, revision: number, bodyRevision: number,
+ * hiddenReason?: string,
  * updatedAtUs?: bigint, embedding?: {model: string, vector: number[], textVersion: number},
  * hiddenCard?: import("./document-cards.mjs").CardWrite, amendments?: Map<string, AmendmentEntry> }} CardEntry */
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * documentCards: Map<Namespace, Map<string, CardEntry>>, contextEpochs: Map<Namespace, number>,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
  * receiptDenials: Set<string>, deletedMessages: Set<string>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
@@ -49,6 +50,13 @@ export function indexRevisionAfterRun(run) {
   const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes + run.cardWrites;
   if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
   return revision;
+}
+
+/** @param {IssuedRun} run @param {Namespace} namespace */
+export function recordCardWrite(run, namespace) {
+  const { cardGenerations } = run.state;
+  cardGenerations.set(namespace, (cardGenerations.get(namespace) ?? 0) + 1);
+  run.cardWrites++;
 }
 
 /** @param {Row} row */
@@ -135,7 +143,7 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), documentCards: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
+    topics: new Map(), documentCards: new Map(), cardGenerations: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
     pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
     nextInspectReceiptPosition: 1, receiptDenials: new Set(), deletedMessages: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
@@ -427,7 +435,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         }),
         ...(includeDocumentCards && {
           documentCards: [...committed.documentCards].map(([namespace, cards]) =>
-            ({ namespace, cards: [...cards].map(([id, { amendments, ...entry }]) =>
+            ({ namespace, cards: [...cards].map(([id, { amendments, revision: _revision, bodyRevision: _bodyRevision, ...entry }]) =>
               [id, amendments ? { ...entry, amendments: [...amendments] } : entry]) })),
         }),
         ...(includeRationale && {

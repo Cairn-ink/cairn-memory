@@ -107,10 +107,10 @@ export declare function selectAmendmentsForRead<T extends Pick<DocumentCardAmend
   amendments: readonly T[],
 ): T[];
 
-/** The host meters the complete item by including the piece and separator in countTokens. */
+/** The host meters the complete item, including the piece, separator and any sources, in countTokens. */
 export declare function renderCardAmendments<T extends Pick<DocumentCardAmendment, "date" | "sentence">>(input: {
   amendments: readonly T[];
-  countTokens: CountTokens;
+  countTokens: (text: string, amendments: readonly T[]) => number;
   maxTokens: number;
 }): { text: string; amendments: T[] };
 
