@@ -1,16 +1,16 @@
 import { documentCardVisible } from "@cairn-ink/core/routing";
 import { exactReceiptTurn } from "./context-raw-read.mjs";
 import { receiptProjector } from "./inspect.mjs";
-import { decodeJson, readEntry } from "./memory-rows.mjs";
+import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { exactScope } from "./placement-visibility.mjs";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
-import { readRawRow } from "./raw-rows.mjs";
+import { decodeRawRow, readRawRow } from "./raw-rows.mjs";
 import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 import { readFacts, scopedSuppression } from "./suppressions.mjs";
 
-/** @import { StoredFact, TextFact } from "@cairn-ink/core" */
+/** @import { RawSpanFact, StoredFact, TextFact } from "@cairn-ink/core" */
 /** @import { DocumentCardAmendment, DocumentCardSourceMessage, ItemRef, RetrievalScope, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "../../core/src/routing/visibility.mjs" */
 /** @import { CardWrite } from "./document-card-rows.mjs" */
@@ -28,6 +28,11 @@ export function cardSourceConflictKey(source) {
   return "card-conflict:" + receiptAddressDenial(source);
 }
 
+/** @param {DocumentCardSourceMessage} source */
+function cardReceiptWithdrawalKey(source) {
+  return "card-receipt-withdrawn:" + receiptAddressDenial(source);
+}
+
 /** @param {StoredFact[]} facts @returns {TextFact[]} */
 function textFacts(facts) {
   return facts.flatMap(({ fact }) => fact.kind === "text" ? [fact] : []);
@@ -38,6 +43,11 @@ function textFacts(facts) {
  * @param {MigratedCaptureControls} [controls]
  */
 export function createCardVisibility(hashSession, receiptReadSafety, memoryVisibility, migratedRaw, controls) {
+  /** @param {Connection} db @param {Scope} scope @param {DocumentCardSourceMessage} source */
+  function rawRow(db, scope, source) {
+    return readRawRow(db, scope, migratedRaw?.storageSession(db, scope, source) ?? source, source.messageId);
+  }
+
   /** @param {Connection} db @param {Scope} scope */
   function sources(db, scope) {
     const policy = scopedSuppression(db, scope, hashSession);
@@ -52,11 +62,6 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
     /** @type {Map<string, boolean | null>} */
     const verdicts = new Map();
 
-    /** @param {DocumentCardSourceMessage} source */
-    function rawRow(source) {
-      return readRawRow(db, scope, migratedRaw?.storageSession(db, scope, source) ?? source, source.messageId);
-    }
-
     /** @param {DocumentCardSourceMessage} source @param {RawRow | undefined} row */
     function compute(source, row) {
       const sessionHash = hashSession(scope, source.client, source.sessionId);
@@ -69,7 +74,8 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
       const address = { ...source, role: row?.message.role ?? /** @type {const} */ ("user"),
         occurredAtMs: row?.message.occurredAtMs ?? null };
       if (!receiptReadSafety(db, scope, policy, address, undefined, undefined)) return true;
-      if (!row) return null;
+      const withdrawn = policy.legacy.has(cardReceiptWithdrawalKey(source));
+      if (!row) return withdrawn ? true : null;
       const sourceKey = JSON.stringify([source.client, source.sessionId, source.messageId]);
       let count = 0;
       for (const record of receipts.iterate(...scopeKey(scope), sourceKey, maxLinks + 1)) {
@@ -91,13 +97,13 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         if (!receipt || receipt.client !== source.client || receipt.sessionId !== source.sessionId ||
             receipt.messageId !== source.messageId || !exactReceiptTurn(db, scope, memoryId, receipt, row)) return true;
       }
-      return false;
+      return count === 0 && withdrawn;
     }
 
     /** @param {DocumentCardSourceMessage} source */
     function withheld(source) {
       const key = JSON.stringify([source.client, source.sessionId, source.messageId]);
-      if (!verdicts.has(key)) verdicts.set(key, compute(source, rawRow(source)));
+      if (!verdicts.has(key)) verdicts.set(key, compute(source, rawRow(db, scope, source)));
       return verdicts.get(key) ?? null;
     }
 
@@ -117,7 +123,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         : { status: "visible", revision: row.revision, content: row.text, date: row.createdAtMs };
     }
 
-    return { policy, rawRow, memoryState, withheld };
+    return { policy, memoryState, withheld };
   }
 
   /** @param {Scope} scope @param {CardWrite} card @param {DocumentCardVisibilityInput["memoryStates"]} memoryStates
@@ -159,9 +165,11 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
           if (card.sourceMessage) bindings.unshift(card.sourceMessage);
           return !bindings.some(source => withheld(source) === true) &&
             ![card.title, card.body].some(text => importTextBlocked(policy.facts, text, policy.legacy)) &&
-            !card.sourceMemories.some(({ id }) => {
+            !card.sourceMemories.some(({ id, revision }) => {
               const state = memoryState(id);
-              return state.status === "suppressed" || state.status === "forgotten";
+              return state.status === "suppressed" || state.status === "forgotten" ||
+                (card.sourceMessage === null && (state.status === "historical" ||
+                  (state.status === "visible" && state.revision !== revision)));
             });
         },
 
@@ -172,6 +180,29 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
           return withheld(amendment.sourceMessage) !== true;
         },
       };
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {string} id */
+    recordReceiptWithdrawals(db, scope, id) {
+      const keep = db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+      for (const receipt of readReceipts(db, scope, id)) {
+        const row = rawRow(db, scope, receipt);
+        // Remember the qualifying address before its receipt is removed.
+        if (row && exactReceiptTurn(db, scope, id, receipt, row)) {
+          keep.run(...scopeKey(scope), cardReceiptWithdrawalKey(receipt));
+        }
+      }
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {StoredFact<RawSpanFact>} stored */
+    *forgottenSpanSources(db, scope, stored) {
+      const rows = db.prepare(`SELECT * FROM cairn_raw_messages WHERE ${exactScope} AND message_key = ?`)
+        .iterate(...scopeKey(scope), JSON.stringify(stored.fact.messageKey));
+      for (const row of rows) {
+        const { client, sessionId, message } = decodeRawRow(row);
+        const source = { client, sessionId, messageId: message.id };
+        if (rawFactPolicy(scope, source, [stored], hashSession).purges(message)) yield source;
+      }
     },
 
     /** @param {Connection} db @param {Scope} scope @param {string} id */
@@ -190,7 +221,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
 
       /** @param {DocumentCardSourceMessage} source */
       function sourceWithheld(source) {
-        const row = readRawRow(db, scope, migratedRaw?.storageSession(db, scope, source) ?? source, source.messageId);
+        const row = rawRow(db, scope, source);
         if (!row) return null;
         return rawFactPolicy(scope, source, policy.facts, hashSession).purges(row.message);
       }

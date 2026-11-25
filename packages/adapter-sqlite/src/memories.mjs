@@ -163,9 +163,10 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkRepla
  * @param {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} index
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @param {ReturnType<typeof import("./document-cards.mjs").createDocumentCards>["purgeErasedMemory"]} [purgeCardSources]
+ * @param {ReturnType<typeof import("./document-card-visibility.mjs").createCardVisibility>["recordReceiptWithdrawals"]} [recordReceiptWithdrawals]
  * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources) {
+export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources, recordReceiptWithdrawals) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -243,6 +244,7 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
           .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify(body), ...scopeKey(scope), id);
         clearProceduralTag(db, scope, id);
         if (evidence !== null) {
+          recordReceiptWithdrawals?.(db, scope, id);
           clearReceipts(db, scope, id);
           attachReceipts(db, scope, id, evidence, nowMs);
         }

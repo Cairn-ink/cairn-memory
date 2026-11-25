@@ -8,7 +8,7 @@ import { readRawRow } from "./raw-rows.mjs";
 import { receiptAddressDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
 import { copyReceipts, digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
-/** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
+/** @import { FactMatchIncoming, FactMatchRow, RawSpanFact, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
@@ -313,9 +313,10 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
  * @param {(db: Connection, tx: Tx) => void} [markDirty]
  * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls]
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
+ * @param {(db: Connection, tx: Tx, scope: Scope, stored: StoredFact<RawSpanFact>) => void} [purgeForgottenSpan]
  * @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls, scrubTitles) {
+export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls, scrubTitles, purgeForgottenSpan) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -339,9 +340,14 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
           (owner_id, namespace_key, slot, fact_id, incarnation, epoch, created_at_ms, action_id, body)
           VALUES (?, ?, ?, lower(hex(randomblob(16))), ?, ?, ?, ?, ?) RETURNING fact_id`)
           .get(...keys, incarnation, epoch.toString(), createdAtMs, JSON.stringify(actionId), factBody(fact));
-        scrubTitles?.(db, { owner, namespace });
+        const scope = { owner, namespace };
+        const factId = String(inserted?.fact_id);
+        if (fact.kind === "rawSpan" && fact.origin === "forget") {
+          purgeForgottenSpan?.(db, tx, scope, { fact, factId, epoch, incarnation, createdAtMs });
+        }
+        scrubTitles?.(db, scope);
         markDirty?.(db, tx);
-        return { factId: String(inserted?.fact_id), epoch, createdAtMs, created: true };
+        return { factId, epoch, createdAtMs, created: true };
       });
     },
     snapshot(tx, scope, candidates) {

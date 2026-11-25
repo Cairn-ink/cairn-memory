@@ -311,8 +311,10 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
         if (!stale.some(item => item.memoryId === memoryId && item.replacementMemoryId === replacementMemoryId)) {
           db.prepare(`UPDATE cairn_document_cards SET stale = ?, revision = revision + 1 WHERE ${exactScope} AND id = ?`)
             .run(JSON.stringify([...stale, { memoryId, replacementMemoryId }]), ...scopeKey(scope), id);
+          advanceCardGeneration(db, scope);
         }
-        changed(db, tx, scope);
+        // The owner index counts every stale mark on an active card.
+        index.advanceDerived(db, tx);
       });
     },
 
@@ -350,13 +352,20 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
     },
   };
 
-  /** @param {Connection} db @param {Tx} tx @param {Scope} scope @param {readonly (ReturnType<typeof copySession> & {messageId?: string})[]} sources */
-  function purgeSources(db, tx, scope, sources) {
+  /** @param {Connection} db @param {Tx} tx @param {Scope} scope
+   * @param {Iterable<ReturnType<typeof copySession> & {messageId?: string}>} sources */
+  function purgeSources(db, tx, scope, sources, reason = "raw_deleted") {
     const selection = cardSelection();
     for (const source of sources) {
       selectAddress(db, scope, source, selection, source.messageId, legacyHashSession);
     }
-    hide(db, tx, scope, selection, "raw_deleted", true);
+    hide(db, tx, scope, selection, reason, true);
+  }
+
+  /** @param {Connection} db @param {Tx} tx @param {Scope} scope
+   * @param {import("@cairn-ink/core").StoredFact<import("@cairn-ink/core").RawSpanFact>} stored */
+  function purgeForgottenSpan(db, tx, scope, stored) {
+    purgeSources(db, tx, scope, visibility.forgottenSpanSources(db, scope, stored), "forget");
   }
 
   /** @param {Connection} db @param {Tx} tx @param {Scope} scope @param {string} id */
@@ -377,5 +386,5 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
     hide(db, tx, scope, selection, "source_memory_forgotten", true);
   }
 
-  return { store, purgeSources, purgeErasedMemory };
+  return { store, purgeSources, purgeForgottenSpan, purgeErasedMemory };
 }
