@@ -1240,8 +1240,9 @@ At write time, full-mode text facts with a keyless hosted-v1 SHA-256 digest
 and no usable shingles match every contiguous run of whole sentences in
 the incoming text. Use the writing owner's scoped facts and the historical
 hosted hash normalization and redaction spellings. Sentence boundaries
-include line breaks and terminal punctuation in Latin and CJK text. Closing
-quotes and brackets immediately after a terminator belong to that sentence.
+include line breaks and terminal punctuation in Latin and CJK text. When
+closing quotes or brackets immediately follow a terminator, boundaries fall
+both after the terminator and after the closing marks.
 A fullwidth period always marks a boundary. A lone ASCII period immediately
 before an ASCII letter or digit stays inside the sentence, as in `3.14` and
 `v1.2`.

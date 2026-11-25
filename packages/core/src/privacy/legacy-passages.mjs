@@ -8,7 +8,7 @@ import { cleanContent, normalizeForHash } from "./text.mjs";
 export const MAX_LEGACY_PASSAGE_SENTENCES = 2_000;
 const MAX_LEGACY_PASSAGE_TEXT_UNITS = 200_000;
 const encoder = new TextEncoder();
-const sentenceBreaks = /[.!?。！？．]+["'”’」』）)\]]*|\r\n?|[\n\u2028\u2029]/gu;
+const sentenceBreaks = /([.!?。！？．]+)(["'”’」』）)\]]*)|\r\n?|[\n\u2028\u2029]/gu;
 
 /** @param {TextDigest} digest */
 function isHostedSha(digest) {
@@ -61,6 +61,11 @@ function sentencesOf(spelling, contextual = false) {
     const end = match.index + punctuation.length;
     const lineBreak = /^\s/u.test(punctuation);
     if (punctuation === "." && /[A-Za-z0-9]/u.test(text.charAt(end))) continue;
+    if (match[2]) {
+      const terminatorEnd = match.index + match[1].length;
+      add(terminatorEnd, terminatorEnd);
+      if (sentences.length > MAX_LEGACY_PASSAGE_SENTENCES) return null;
+    }
     add(lineBreak ? match.index : end, end);
     if (sentences.length > MAX_LEGACY_PASSAGE_SENTENCES) return null;
   }
