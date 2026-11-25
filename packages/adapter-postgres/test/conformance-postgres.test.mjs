@@ -437,6 +437,7 @@ const selected = new Set([
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
+  "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
