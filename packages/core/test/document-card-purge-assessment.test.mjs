@@ -71,7 +71,7 @@ test("ordinary visibility agrees with core-next rules across randomized cards an
         ...(origin === "router" && { id: validId ? routed.id : "unmatched", sourceMessage, canonicalSessionKey: "session" }),
       },
       requestedScope: inScope ? scope : { ...scope, namespace: "other" },
-      memoryStates: status ? new Map([["memory", { status, revision }]]) : new Map(),
+      memoryStates: status ? new Map([["memory", { status, revision, correctedRevisions: [] }]]) : new Map(),
       sourceWithheld, textFacts, fingerprintKey: useCoreKey ? key : null,
       legacyFingerprint: legacy && { key: legacy, labels }, containmentThreshold: cutoff,
     };

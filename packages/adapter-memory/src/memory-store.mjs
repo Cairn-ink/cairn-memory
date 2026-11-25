@@ -4,7 +4,7 @@ import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
-import { addKeyedDigest } from "./privacy.mjs";
+import { addKeyedDigest, recordTextReplacement } from "./privacy.mjs";
 import { receiptAddressKey, receiptExcerptDenial, receiptIdentityKey } from "./receipt-read-safety.mjs";
 import { advanceInspectEpoch, advanceRawInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
@@ -163,6 +163,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const entry = {
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: [],
+              textVersions: [{ revision: created.revision, factEpoch: state.epoch ?? 0n }],
             };
             const receiptIds = await appendReceipts(state, entry, incoming, nowMs, proceduralTags && !fromFinish);
             entries.set(id, entry);
@@ -292,7 +293,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);
-        return async (getState) => {
+        return async (getState, _markDirty, run) => {
           const state = getState();
           const entries = state.rows.get(namespace);
           const entry = entries?.get(id);
@@ -309,6 +310,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             throw new CoreError("memory_conflict");
           }
           const revision = row.revision + 1;
+          recordTextReplacement(state, entry, run.startFactEpoch);
           Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
           if (incoming !== null) {
