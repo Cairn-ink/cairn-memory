@@ -1,12 +1,18 @@
 import type { Role, Scope } from '../ports/common.d.ts';
-import type { Quantity, QuantityLedgerDropSelector, QuantityLedgerRange, QuantityLedgerRow, QuantityLedgerStore } from '../ports/quantity-ledger.d.ts';
+import type { Quantity, QuantityLedgerDropSelector, QuantityLedgerRange, QuantityLedgerRow, QuantityLedgerStore, QuantityPeriod } from '../ports/quantity-ledger.d.ts';
 import type { Tx } from '../ports/unit-of-work.d.ts';
 
 export type * from '../ports/quantity-ledger.d.ts';
 
 export type ExtractedQuantity = Quantity & { item: number };
-export interface QuantityValidation {
-  quantities: ExtractedQuantity[];
+/** A record awaiting the capture occasion check. Ledger helpers accept dated records with period `none`. */
+export type PeriodTaggedRecord = Omit<Extract<ExtractedQuantity, { kind: 'record' }>, 'period'> & { period: QuantityPeriod };
+export interface QuantityValidationOptions {
+  /** Capture-only opt-in. Retains record period tags for the occasion check. Default validation drops these records. */
+  datedRecords?: boolean;
+}
+export interface QuantityValidation<Q = ExtractedQuantity> {
+  quantities: Q[];
   dropped: { invalid_extraction_quantity: number };
 }
 
@@ -56,7 +62,9 @@ export interface LedgerDigest {
   sources: string[];
 }
 
-export function validateQuantities(value: unknown, itemCount: number): QuantityValidation;
+export function validateQuantities(value: unknown, itemCount: number, options?: { datedRecords?: false }): QuantityValidation;
+export function validateQuantities(value: unknown, itemCount: number, options: QuantityValidationOptions):
+  QuantityValidation<ExtractedQuantity | PeriodTaggedRecord>;
 /** Attribute a batch without a store snapshot. Use reconciliation for capture writes. */
 export function attributeLedgerQuantities(memoryId: string, quantities: readonly ExtractedQuantity[],
   receipts: readonly LedgerReceipt[], captureTimeMs: number): LedgerRowAttribution[];

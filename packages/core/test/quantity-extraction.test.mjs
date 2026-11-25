@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
+import { validateQuantities } from '@cairn-ink/core/ledger';
 import { buildModelRequest, decodeModelOutput } from '../src/capture/wire.mjs';
 import { plainExtractionSpec, validatePlainCandidates, validatePlainExtraction } from '../src/extraction/extraction.mjs';
 
@@ -86,6 +87,7 @@ const invalid = {
   'invalid measure': { ...record, measure: false },
   'invalid unit': { ...record, unit: [] },
   'invalid category': { ...record, category: '\uD800' },
+  'record with period': { ...record, period: 'day' },
   'record with comparator': { ...record, comparator: 'at_most' },
   'goal without period': { ...goal, period: 'none' },
   'goal without comparator': { ...goal, comparator: 'none' },
@@ -128,15 +130,21 @@ test('holes and accessor entries count separately without reading accessor value
   });
 });
 
+const datedRecords = { ...enabled, datedRecords: true };
+
 for (const period of ['day', 'week', 'month', 'year']) {
-  test(`clears the ${period} period on a record without mutating model output`, () => {
-    const raw = { items: [item], quantities: [record, { ...record, period }, goal] };
+  test(`keeps the ${period} period only with the capture validation opt-in`, () => {
+    const tagged = { ...record, period };
+    const raw = { items: [item], quantities: [record, tagged, goal] };
     const before = structuredClone(raw);
-    const checked = validatePlainExtraction(raw, policy, enabled);
-    assert.deepEqual(checked, {
-      items: [item], quantities: [record, record, goal], dropped: { invalid_extraction_quantity: 0 },
-    });
-    assert.notEqual(checked.quantities[1], raw.quantities[1]);
+    const kept = { quantities: [record, tagged, goal], dropped: { invalid_extraction_quantity: 0 } };
+    const dropped = { quantities: [record, goal], dropped: { invalid_extraction_quantity: 1 } };
+    const checked = validatePlainExtraction(raw, policy, datedRecords);
+    assert.deepEqual(checked, { items: [item], ...kept });
+    assert.notEqual(checked.quantities[1], tagged);
+    assert.deepEqual(validatePlainExtraction(raw, policy, enabled), { items: [item], ...dropped });
+    assert.deepEqual(validateQuantities(raw.quantities, 1, datedRecords), kept);
+    assert.deepEqual(validateQuantities(raw.quantities, 1), dropped);
     assert.deepEqual(raw, before);
   });
 }
@@ -144,8 +152,10 @@ for (const period of ['day', 'week', 'month', 'year']) {
 for (const bad of [{ ...record, period: 'day', comparator: 'at_most' }, { ...record, period: 'shift' }]) {
   test(`drops a record with period ${bad.period} and comparator ${bad.comparator} when invalid`, () => {
     const raw = { items: [item], quantities: [record, bad, goal] };
-    assert.deepEqual(validatePlainExtraction(raw, policy, enabled), {
-      items: [item], quantities: [record, goal], dropped: { invalid_extraction_quantity: 1 },
-    });
+    const dropped = { quantities: [record, goal], dropped: { invalid_extraction_quantity: 1 } };
+    for (const options of [enabled, datedRecords]) {
+      assert.deepEqual(validatePlainExtraction(raw, policy, options), { items: [item], ...dropped });
+      assert.deepEqual(validateQuantities(raw.quantities, 1, options), dropped);
+    }
   });
 }

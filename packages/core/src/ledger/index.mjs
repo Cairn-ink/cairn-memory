@@ -110,6 +110,7 @@ function additionalAttributions({ memoryId, textHash, quantities, citedReceipts,
   const assignments = new Map();
   const rows = [];
   for (const quantity of quantities) {
+    if (quantity.kind === 'record' && quantity.period !== 'none') continue;
     const key = JSON.stringify(identity(quantity));
     const remaining = covered.get(key) ?? 0;
     if (remaining > 0) {

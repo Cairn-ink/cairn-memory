@@ -60,6 +60,7 @@
   "packages/core/src/index.mjs",
   "packages/core/src/ledger/digest.mjs",
   "packages/core/src/ledger/index.mjs",
+  "packages/core/src/ledger/occasion.mjs",
   "packages/core/src/ledger/quantities.mjs",
   "packages/core/src/ledger/receipt-numbers.mjs",
   "packages/core/src/ledger/terms.mjs",

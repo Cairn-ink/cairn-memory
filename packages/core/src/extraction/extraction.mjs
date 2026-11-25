@@ -84,7 +84,7 @@ export function validatePlainExtraction(output, policy, options = {}) {
   } catch {
     value = null;
   }
-  return { items, ...validateQuantities(value, items.length) };
+  return { items, ...validateQuantities(value, items.length, options) };
 }
 
 function validateCandidates(output, { sourceCount, itemLimit }, allowed) {

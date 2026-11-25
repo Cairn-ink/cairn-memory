@@ -3,6 +3,7 @@ import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
 import { reconcileLedgerQuantities } from "../ledger/index.mjs";
+import { isLedgerOccasion } from "../ledger/occasion.mjs";
 import { QUANTITY_TEXT_FIELDS } from "../ledger/quantities.mjs";
 import { readReceiptNumbers, roundReceiptNumber } from "../ledger/receipt-numbers.mjs";
 import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
@@ -19,11 +20,12 @@ import { validWriteEmbedding } from "./writes.mjs";
 
 /** @import {CaptureKey, CaptureMessage, DocumentCardEmbedding, DocumentCardSession, FinishItem, FinishResult, ItemRef,
  * Receipt, Tx} from "../ports/index.d.ts" */
-/** @import {ExtractedQuantity, LedgerReceipt} from "../ledger/index.mjs" */
+/** @import {ExtractedQuantity, LedgerReceipt, PeriodTaggedRecord} from "../ledger/index.mjs" */
 /** @import {DocumentCardVisibilityInput} from "../routing/visibility.mjs" */
 /** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
 /** @typedef {Map<string, DocumentCardEmbedding>} CardVectors */
-/** @typedef {ReturnType<typeof validatePlainExtraction>["items"][number] & {quantities?: ExtractedQuantity[]}} ExtractedCandidate */
+/** @typedef {(ExtractedQuantity | PeriodTaggedRecord)[]} CandidateQuantities */
+/** @typedef {ReturnType<typeof validatePlainExtraction>["items"][number] & {quantities?: CandidateQuantities}} ExtractedCandidate */
 /** @typedef {Awaited<ReturnType<import("../ports/privacy.d.ts").FingerprintKeyProvider["userKey"]>>} FingerprintKey */
 /** @typedef {{status: "failed", code: "fingerprint_key_mismatch"}} KeyMismatch */
 /**
@@ -105,7 +107,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
   /** @param {unknown} output @param {{sourceCount: number, itemLimit: number}} policy */
   function validateExtraction(output, policy) {
-    const checked = validatePlainExtraction(output, policy, { quantities: true });
+    const checked = validatePlainExtraction(output, policy, { quantities: true, datedRecords: true });
     for (let i = 0; i < checked.dropped.invalid_extraction_quantity; i++) {
       emitDiagnostic(diagnostics, "extract", "core_validation", "invalid_extraction_quantity");
     }
@@ -163,7 +165,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /**
    * @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages
    * @param {readonly FinishItem[]} items @param {FinishResult} result @param {CardVectors | undefined} vectors
-   * @param {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} quantities
+   * @param {WeakMap<FinishItem["receipts"], CandidateQuantities> | undefined} quantities
    * @param {Set<string> | undefined} screenedForEmbedding
    * @param {Set<string> | undefined} withheldEmbeddings
    */
@@ -228,13 +230,25 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           ? userReceipts.map(({ messageId }) => [messageId, readReceiptNumbers(byMessage.get(messageId)?.content ?? "")])
           : []);
         const receiptValues = [...recordValues.values()];
-        const quantities = extracted.filter(({ kind, value }) => {
-          if (kind === "goal") return true;
-          const rounded = roundReceiptNumber(value);
-          if (receiptValues.some(values => values.has(rounded))) return true;
-          emitDiagnostic(diagnostics, "extract", "core_validation", "ungrounded_extraction_quantity");
-          return false;
-        });
+        /** @type {ExtractedQuantity[]} */
+        const quantities = [];
+        for (const quantity of extracted) {
+          if (quantity.kind === "goal") {
+            quantities.push(quantity);
+            continue;
+          }
+          const rounded = roundReceiptNumber(quantity.value);
+          if (!receiptValues.some(values => values.has(rounded))) {
+            emitDiagnostic(diagnostics, "extract", "core_validation", "ungrounded_extraction_quantity");
+          } else if (quantity.period === "none") {
+            quantities.push(quantity);
+          } else if (userReceipts.some(({ messageId }) => recordValues.get(messageId)?.has(rounded) &&
+            isLedgerOccasion(byMessage.get(messageId)?.content ?? ""))) {
+            quantities.push({ ...quantity, period: "none" });
+          } else {
+            emitDiagnostic(diagnostics, "extract", "core_validation", "periodic_extraction_quantity");
+          }
+        }
         if (!quantities.length || !userReceipts.length) continue;
         const unresolved = () => {
           for (const _ of quantities) emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_receipt_unresolved");
@@ -484,7 +498,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const { capture } = storage;
     const archive = capabilities.rawArchive ? raw : undefined;
     // Candidate preparation and embedding preserve the receipts array through finish.
-    /** @type {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} */
+    /** @type {WeakMap<FinishItem["receipts"], CandidateQuantities> | undefined} */
     const quantities = ledger ? new WeakMap() : undefined;
     /** @type {Set<string> | undefined} */
     let screenedForEmbedding;

@@ -1,4 +1,4 @@
-/** @import { ExtractedQuantity, QuantityValidation } from './index.mjs' */
+/** @import { ExtractedQuantity, PeriodTaggedRecord, QuantityValidation, QuantityValidationOptions } from './index.mjs' */
 
 export const QUANTITY_TEXT_FIELDS = Object.freeze(/** @type {const} */ (['measure', 'unit', 'category']));
 
@@ -30,8 +30,9 @@ export function quantitySchema() {
   };
 }
 
-/** @param {unknown} value @param {number} itemCount @returns {ExtractedQuantity | null} */
-function readQuantity(value, itemCount) {
+/** @param {unknown} value @param {number} itemCount @param {boolean} datedRecords
+ * @returns {ExtractedQuantity | PeriodTaggedRecord | null} */
+function readQuantity(value, itemCount, datedRecords) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const descriptors = Object.getOwnPropertyDescriptors(value);
   if (Reflect.ownKeys(descriptors).length !== fields.length) return null;
@@ -51,27 +52,29 @@ function readQuantity(value, itemCount) {
   }
   const validKind = copy.kind === 'record'
     ? copy.comparator === 'none' && (copy.period === 'none' ||
-      (typeof copy.period === 'string' && goalPeriods.includes(copy.period)))
+      (datedRecords && typeof copy.period === 'string' && goalPeriods.includes(copy.period)))
     : typeof copy.period === 'string' && goalPeriods.includes(copy.period) &&
       typeof copy.comparator === 'string' && goalComparators.includes(copy.comparator);
   if (!validKind) return null;
-  if (copy.kind === 'record') copy.period = 'none';
-  return /** @type {ExtractedQuantity} */ (/** @type {unknown} */ (copy));
+  return /** @type {ExtractedQuantity | PeriodTaggedRecord} */ (/** @type {unknown} */ (copy));
 }
 
-/** @param {unknown} value @param {number} itemCount @returns {QuantityValidation} */
-export function validateQuantities(value, itemCount) {
+/** @param {unknown} value @param {number} itemCount @param {QuantityValidationOptions} [options]
+ * @returns {QuantityValidation<ExtractedQuantity | PeriodTaggedRecord>} */
+export function validateQuantities(value, itemCount, options) {
   const quantities = [];
   let dropped = 0;
   try {
     if (Array.isArray(value)) {
+      const datedRecords = options?.datedRecords === true;
       const length = value.length;
       if (!Number.isInteger(length) || length < 0 || length > 0xffffffff) {
         return { quantities: [], dropped: { invalid_extraction_quantity: 1 } };
       }
       for (let index = 0; index < length; index++) {
         const entry = Object.getOwnPropertyDescriptor(value, index);
-        const quantity = entry?.enumerable && Object.hasOwn(entry, 'value') ? readQuantity(entry.value, itemCount) : null;
+        const quantity = entry?.enumerable && Object.hasOwn(entry, 'value')
+          ? readQuantity(entry.value, itemCount, datedRecords) : null;
         if (quantity) quantities.push(quantity);
         else dropped++;
       }

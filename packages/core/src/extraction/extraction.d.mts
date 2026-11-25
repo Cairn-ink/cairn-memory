@@ -1,4 +1,4 @@
-import type { QuantityValidation } from '../ledger/index.mjs';
+import type { ExtractedQuantity, PeriodTaggedRecord, QuantityValidation, QuantityValidationOptions } from '../ledger/index.mjs';
 
 export type InputMessage = Readonly<{ role: 'user' | 'assistant'; content: string }>;
 export type Kind = 'fact' | 'preference' | 'decision' | 'instruction' | 'context';
@@ -24,5 +24,10 @@ export type ExtractionOptions = { quantities?: boolean };
 export function plainExtractionSpec(messages: readonly InputMessage[], options?: ExtractionOptions): ExtractSpec;
 /** Throws an error with an ExtractionValidationCode for an invalid batch. */
 export function validatePlainCandidates(output: unknown, policy: CandidatePolicy): Candidate[];
-export function validatePlainExtraction(output: unknown, policy: CandidatePolicy, options?: ExtractionOptions):
+/** Default quantity validation drops period-tagged records. Capture may retain them for the occasion check. */
+export function validatePlainExtraction(output: unknown, policy: CandidatePolicy,
+  options?: ExtractionOptions & { datedRecords?: false }):
   { items: Candidate[] } & QuantityValidation;
+export function validatePlainExtraction(output: unknown, policy: CandidatePolicy,
+  options: ExtractionOptions & QuantityValidationOptions):
+  { items: Candidate[] } & QuantityValidation<ExtractedQuantity | PeriodTaggedRecord>;

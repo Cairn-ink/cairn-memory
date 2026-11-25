@@ -27,8 +27,12 @@ Capture validates each quantity independently. Each invalid entry adds one
 content-free `invalid_extraction_quantity` count. Valid siblings and items
 still pass. An exception reading or validating the list drops the whole list
 with one count and preserves the items. Goals require a period and a comparator.
-A record returned with a valid period is stored as a dated record with the
-period cleared to `none`. A record with a comparator other than `none` is dropped.
+Default validation drops records with a period or comparator other than `none`.
+Capture opts in to retaining valid period tags through validation. After numeric
+grounding, it clears the tag to `none` only when a cited user message containing
+the matching value has an occasion verb and no rate marker. Each grounded tagged
+record that fails this check emits one content-free
+`extract/core_validation/periodic_extraction_quantity` diagnostic and is dropped.
 
 Before reconciliation, capture keeps a record only if a number in one of the
 item's cited user messages matches its magnitude after rounding both to two decimal

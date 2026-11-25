@@ -5,12 +5,13 @@ import { hostedScope as scope, serviceFake } from './helpers/service-fake.mjs';
 
 const event = { client: 'client', sessionId: 'session', eventId: 'event' };
 const occurredAtMs = 100;
-const messages = [{
-  id: 'user', role: 'user', occurredAtMs,
-  content: 'I paid $4.25 for tea this morning, as I do most days.',
-}];
+const occasion = 'I paid $8 for tea this morning, part of my daily routine.';
+const rate = 'I usually spend about $8 a day on tea.';
 
-async function capture(comparator) {
+async function capture(contents, { value = 8, period = 'day', comparator = 'none' } = {}) {
+  const messages = contents.map((content, index) => ({
+    id: `user-${index}`, role: 'user', occurredAtMs, content,
+  }));
   const { deps, hooks, storage } = serviceFake({ writes: true, capture: true, hasKey: false });
   const rows = [], diagnostics = [];
   deps.config = { quantityLedger: { enabled: true } };
@@ -26,10 +27,10 @@ async function capture(comparator) {
   storage.capture.retainedReceiptIds = async (_tx, _scope, _id, receipts) =>
     receipts.map(({ messageId }) => `canonical-${messageId}`);
   hooks.model = () => ({
-    items: [{ kind: 'fact', confidence: 1, content: 'I paid $4.25 for tea this morning.', sourceIndices: [0] }],
+    items: [{ kind: 'fact', confidence: 1, content: contents[0], sourceIndices: messages.map((_, index) => index) }],
     quantities: [{
-      item: 0, kind: 'record', measure: 'spend', value: 4.25, unit: 'USD',
-      category: 'tea', group: 'food', period: 'day', comparator,
+      item: 0, kind: 'record', measure: 'spend', value, unit: 'USD',
+      category: 'tea', group: 'food', period, comparator,
     }],
   });
   const service = createMemoryService(deps);
@@ -38,18 +39,43 @@ async function capture(comparator) {
   return { rows, diagnostics };
 }
 
-test('capture stores a grounded record returned with a day period as a dated row', async () => {
-  const { rows, diagnostics } = await capture('none');
+function assertDatedRow({ rows, diagnostics }) {
   assert.deepEqual(rows.map(({ kind, value, period, date }) => ({ kind, value, period, date })), [
-    { kind: 'record', value: 4.25, period: 'none', date: occurredAtMs },
+    { kind: 'record', value: 8, period: 'none', date: occurredAtMs },
   ]);
   assert.deepEqual(diagnostics, []);
+}
+
+function assertDropped({ rows, diagnostics }, reason) {
+  assert.deepEqual(rows, []);
+  assert.deepEqual(diagnostics, [{ version: 1, stage: 'extract', layer: 'core_validation', reason }]);
+}
+
+test('capture stores a day-tagged record as a dated row when a cited occasion states its value', async () => {
+  assertDatedRow(await capture([occasion]));
+  assertDatedRow(await capture([occasion, rate]));
+});
+
+test('capture drops a grounded day-tagged spending rate', async () => {
+  assertDropped(await capture([rate]), 'periodic_extraction_quantity');
+});
+
+test('capture drops a grounded day-tagged budget mislabelled as a record', async () => {
+  assertDropped(await capture(['My daily budget is $50.'], { value: 50 }), 'periodic_extraction_quantity');
+});
+
+test('capture requires the occasion and matching value in the same cited message', async () => {
+  assertDropped(await capture([rate, 'I paid $9 for tea this morning.']), 'periodic_extraction_quantity');
+});
+
+test('capture diagnoses a day-tagged record without the cited value as ungrounded', async () => {
+  assertDropped(await capture([occasion], { value: 9 }), 'ungrounded_extraction_quantity');
 });
 
 test('capture drops a record with a day period and a comparator', async () => {
-  const { rows, diagnostics } = await capture('at_most');
-  assert.deepEqual(rows, []);
-  assert.deepEqual(diagnostics, [
-    { version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction_quantity' },
-  ]);
+  assertDropped(await capture([occasion], { comparator: 'at_most' }), 'invalid_extraction_quantity');
+});
+
+test('capture still stores a grounded untagged record in a rate message', async () => {
+  assertDatedRow(await capture([rate], { period: 'none' }));
 });

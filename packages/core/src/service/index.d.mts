@@ -47,7 +47,8 @@ export interface MemoryServiceDeps {
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
   /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit.
-   * It emits extract/core_validation/ungrounded_extraction_quantity once per ungrounded ledger record. */
+   * Capture emits extract/core_validation/ungrounded_extraction_quantity once per ungrounded ledger record,
+   * or extract/core_validation/periodic_extraction_quantity once per grounded period-tagged record that fails the occasion check. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 
