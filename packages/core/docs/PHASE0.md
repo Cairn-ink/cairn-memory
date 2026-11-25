@@ -1180,3 +1180,28 @@ first, keeping the bare card when no suffix fits. With Raw enabled or disabled,
 a selected card occupies one item slot and replaces a cited memory at the
 card's own rank if the resulting pack fits. The citation uses the binding's
 stored revision, and replacement requires an exact qualified ref match.
+
+## Addendum 22 — Quantity ledger in Context Read (2026-11-25)
+
+Default `readContext` checks ledger intent when the adapter enables
+`quantityLedger`, supplies the store and the request selects `memory`.
+Match `readIntent` against the terms of each authorized namespace in the read
+snapshot. Use the service wall clock and `parseWindow` to select records from
+matching namespaces, including earlier records needed for calendar goals and
+goals dated before the window ends.
+
+Within the same snapshot, admit each row only if Context Read evidence and the
+visibility fence confirm a current memory, the canonical user receipt is
+retained and readable, and the current core text hash matches the row's hash.
+Repeat the checks for a packed digest in the final assembly snapshot. If the
+check fails or the evidence changed, discard the whole digest and assemble
+again with the available context evidence.
+
+The digest is one item, first at rank 1, with the existing candidate ranks
+preserved. It consumes one item slot and is counted with the full block in the
+host formatter. If the complete body and sources do not fit the budget, omit
+the digest. The wire item is `{ ref, rank: 1, kind: "quantity-ledger", body,
+sources: [{ index, role: "user", memory }] }`. Each `memory` is a distinct
+qualified compact ref contributing to the digest, and `ref` repeats its first
+source ref. Snapshot tokens continue to cover the selected ordinary Memory
+and Card evidence.

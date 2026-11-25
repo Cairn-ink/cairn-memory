@@ -383,12 +383,22 @@ export type ContextAssemblyItem = {
   rank: number;
   date?: string;
   body: string;
+  /** Computed quantity evidence anchored to its first source memory ref. */
+  kind?: "quantity-ledger";
   metadata?: ContextReadFields;
   sources: readonly ContextAssemblySource[];
   sourceAccess?: "unavailable-for-noncurrent-memory" | "unsupported";
   sourcesComplete?: false;
   evidence?: readonly (ContextAssemblyRawExcerpt & ({ body: string } | { sameAsBody: true }))[];
 } | (ContextAssemblyRawExcerpt & { layer: "Raw"; body: string });
+
+export type ContextLedgerDigestItem = {
+  ref: ContextCompactRef & { type: "memory" };
+  rank: 1;
+  kind: "quantity-ledger";
+  body: string;
+  sources: readonly { index: number; role: "user"; memory: ContextCompactRef & { type: "memory" } }[];
+};
 
 export interface ContextAssemblyValue {
   framing: string;
