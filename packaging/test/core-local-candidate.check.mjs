@@ -171,14 +171,14 @@ test('candidate archive, source graph and installed files have the same contents
   }
 
   const { openLocalService } = await import(pathToFileURL(join(installed, host)).href);
-  await assert.rejects(() => openLocalService({}, {}), /core_local_adapter_unavailable/);
+  await assert.rejects(() => openLocalService({}), /invalid_core_local_storage_options/);
 });
 
 test('builder checks installed help and handshake before publishing a candidate', t => {
   const { path } = createTestWorkspace(t);
   const build = 'packaging/build-core-local.mjs';
-  for (const file of ['LICENSE', 'packages/core/package.json', 'packages/core/src', 'packaging/core-local',
-    build, 'packaging/build.mjs', 'packaging/artifact-files.json', 'packaging/core-local-files.json',
+  for (const file of ['LICENSE', 'packages/core/package.json', 'packages/core/src', 'packages/adapter-sqlite/src',
+    'packaging/core-local', build, 'packaging/build.mjs', 'packaging/artifact-files.json', 'packaging/core-local-files.json',
     'tools/testing/vendor/acorn/acorn.mjs']) {
     cpSync(new URL('../../' + file, import.meta.url), join(path, file), { recursive: true });
   }
