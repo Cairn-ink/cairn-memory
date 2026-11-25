@@ -46,6 +46,11 @@ export interface LedgerWindow extends QuantityLedgerRange {
   label: string;
 }
 
+export interface ParsedLedgerWindow extends LedgerWindow {
+  /** The optional calendar reading shares the rolling window's exclusive end. */
+  readonly calendar?: LedgerWindow;
+}
+
 export interface LedgerDigest {
   body: string;
   sources: string[];
@@ -67,6 +72,6 @@ export function ledgerRowKey(row: LedgerRowAttribution): string;
 export function ledgerRowDeliverable(row: QuantityLedgerRow, state: LedgerReadState): boolean;
 export function ledgerRowInRange(row: Pick<QuantityLedgerRow, 'date'>, range: QuantityLedgerRange): boolean;
 export function readIntent(query: string, terms: readonly string[]): boolean;
-export function parseWindow(query: string, asOfMs: number): LedgerWindow;
+export function parseWindow(query: string, asOfMs: number): ParsedLedgerWindow;
 /** Pass only rows that have passed the delivery check. */
-export function digest(rows: readonly QuantityLedgerRow[], goals: readonly QuantityLedgerRow[], window: LedgerWindow): LedgerDigest | null;
+export function digest(rows: readonly QuantityLedgerRow[], goals: readonly QuantityLedgerRow[], window: ParsedLedgerWindow, calendarReading?: boolean): LedgerDigest | null;

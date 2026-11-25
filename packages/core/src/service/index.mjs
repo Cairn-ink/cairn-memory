@@ -26,6 +26,16 @@ function positiveInteger(value) {
   }
 }
 
+/** @param {import("./index.d.mts").MemoryServiceConfig["quantityLedger"]} quantityLedger */
+function freezeQuantityLedger(quantityLedger) {
+  if (quantityLedger === undefined) return undefined;
+  const { enabled, calendarReading } = validateObject(quantityLedger, ["enabled", "calendarReading"]);
+  if (typeof enabled !== "boolean" || (calendarReading !== undefined && typeof calendarReading !== "boolean")) {
+    throw new CoreError("invalid_input");
+  }
+  return Object.freeze({ enabled, calendarReading });
+}
+
 /** @param {import("./index.d.mts").MemoryServiceConfig} input */
 function freezeConfig(input) {
   const config = {
@@ -59,7 +69,7 @@ function freezeConfig(input) {
     // Match the capture runner's deadline range.
     if (duration > 120_000) throw new CoreError("invalid_input");
   }
-  let cards, ledger;
+  let cards;
   if (documentCards !== undefined) {
     const { enabled, amendments } = validateObject(documentCards, ["enabled", "amendments"]);
     if (typeof enabled !== "boolean" || (amendments !== undefined && typeof amendments !== "boolean")) {
@@ -67,16 +77,10 @@ function freezeConfig(input) {
     }
     cards = Object.freeze({ enabled, amendments });
   }
-  if (quantityLedger !== undefined) {
-    const { enabled } = validateObject(quantityLedger, ["enabled"]);
-    if (typeof enabled !== "boolean") throw new CoreError("invalid_input");
-    ledger = Object.freeze({ enabled });
-  }
-
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
-    documentCards: cards, quantityLedger: ledger,
+    documentCards: cards, quantityLedger: freezeQuantityLedger(quantityLedger),
   });
 }
 
@@ -146,15 +150,17 @@ function freezeDeps(input) {
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
  * @param {import("../ports/index.d.ts").ClockAndHash} clock
  * @param {Pick<import("./index.d.mts").MemoryServiceDeps, "contextReadCounter" | "contextReadFormat">} host
+ * @param {import("./index.d.mts").MemoryServiceConfig["quantityLedger"]} [quantityLedger]
  * @returns {import("./index.d.mts").ContextReadMemoryService}
  */
-function readContractMethods(storage, clock, host) {
+function readContractMethods(storage, clock, host, quantityLedger) {
   const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock });
   return {
     findCandidates,
     fetchEvidence: fetchEvidenceMethod(storage),
     readContext: readContextMethod({ storage, clock, find: findForAssembly, fetch: fetchForAssembly(storage),
-      counter: host.contextReadCounter, format: host.contextReadFormat }),
+      counter: host.contextReadCounter, format: host.contextReadFormat,
+      calendarReading: quantityLedger?.enabled === true && quantityLedger.calendarReading === true }),
     inspect: inspectMethod(storage, clock),
   };
 }
@@ -175,7 +181,8 @@ export function createMemoryService(input) {
         if (!("fence" in storage)) throw new CoreError("invalid_input");
         requireMethods(storage.fence, "assertVisible");
         requireMethods(clock, "nowMs", "monotonicMs");
-        return readContractMethods(storage, clock, "contextReadCounter" in input || "contextReadFormat" in input ? input : {});
+        return readContractMethods(storage, clock, input,
+          freezeQuantityLedger("config" in input ? input.config?.quantityLedger : undefined));
       }
       return { inspect: inspectMethod(storage, clock) };
     }
@@ -185,7 +192,7 @@ export function createMemoryService(input) {
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
       ...captureMethods(deps),
-      ...readContractMethods(deps.storage, deps.clock, deps),
+      ...readContractMethods(deps.storage, deps.clock, deps, deps.config.quantityLedger),
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
       find: findMethod(deps),
