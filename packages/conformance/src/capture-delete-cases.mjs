@@ -45,6 +45,9 @@ function conversation(contents) {
   return { session, selection: { ...session, eventId: crypto.randomUUID() }, messages };
 }
 
+/** @param {string} text */
+const collapseWhitespace = text => text.replace(/\s+/gu, " ").trim();
+
 /** @param {CaseContext} ctx @param {Map<string, string>} outputs @param {boolean} preArchived
  * @param {(stage: DeleteTiming) => Promise<void>} inject */
 function captureService(ctx, outputs, preArchived, inject) {
@@ -96,6 +99,8 @@ function captureService(ctx, outputs, preArchived, inject) {
 async function captureDelete(ctx, timing) {
   const { capture, memories, raw, uow } = ctx.adapter;
   if (typeof capture.admit !== "function") return "needs capture.admit";
+  const { load } = capture;
+  check(typeof load === "function", "Capture admission requires capture.load");
   check(raw, "rawArchive requires the raw ports");
   const scope = ctx.scope(null);
   const { owner } = scope;
@@ -104,8 +109,17 @@ async function captureDelete(ctx, timing) {
   /** @param {ReturnType<typeof conversation>["session"]} session */
   const listRaw = session => uow.run(owner, { readOnly: true }, async tx =>
     (await raw.listRaw(tx, rawScope, page)).items.filter(row => row.client === session.client && row.sessionId === session.sessionId));
+  /** @param {ReturnType<typeof conversation>["session"]} session */
+  const remove = session => uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, session));
+  /** @param {ReturnType<typeof conversation>} fixture */
+  const archive = ({ session, messages }) => {
+    /** @type {CaptureKey} */
+    const key = { scope, ...session, eventId: crypto.randomUUID(), payloadDigest: "a".repeat(64) };
+    return uow.run(owner, { pauseLock: true }, tx => raw.archive(tx, key, messages));
+  };
   const memoryTexts = () => uow.run(owner, { readOnly: true }, async tx =>
     (await memories.exportPage(tx, scope, page)).items.map(({ text }) => text).sort());
+  const unrelated = [];
 
   for (const { preArchived, deleted, control } of fixtures) {
     const label = `${timing}, ${preArchived ? "previously archived" : "without prior archive"}`;
@@ -119,15 +133,16 @@ async function captureDelete(ctx, timing) {
     /** @param {DeleteTiming} stage */
     const inject = async stage => {
       if (stage !== timing || rawAfterDelete !== undefined) return;
-      await uow.run(owner, { pauseLock: true }, tx => raw.deleteConversation(tx, scope, target.session));
+      await remove(target.session);
       rawAfterDelete = await listRaw(target.session);
     };
     const service = captureService(ctx, outputs, preArchived, inject);
 
+    const untouched = conversation(["The spare key hangs near the door."]);
+    equal((await archive(untouched)).archived, 1, `The unrelated fixture must be archived (${label})`);
+    unrelated.push({ untouched, label });
     if (preArchived) {
-      /** @type {CaptureKey} */
-      const earlier = { scope, ...target.session, eventId: crypto.randomUUID(), payloadDigest: "a".repeat(64) };
-      const { archived } = await uow.run(owner, { pauseLock: true }, tx => raw.archive(tx, earlier, target.messages));
+      const { archived } = await archive(target);
       equal(archived, target.messages.length, `The fixture must be archived (${label})`);
     }
     equal((await listRaw(target.session)).map(({ messageId }) => messageId).sort(),
@@ -142,20 +157,43 @@ async function captureDelete(ctx, timing) {
 
     check(rawAfterDelete !== undefined, `The deletion must commit at the requested timing (${label})`);
     equal(rawAfterDelete, [], `Conversation deletion must remove its Raw rows (${label})`);
-    const dump = JSON.stringify(await readDump(ctx.harness));
-    for (const [input, output] of deleted) {
-      check(!dump.includes(input), `Deleted message text must be absent from the store (${label})`);
-      check(!dump.includes(output), `Deleted extraction text must be absent from the store (${label})`);
-    }
-    equal(await listRaw(target.session), [], `Deleted conversation must leave no Raw rows (${label})`);
+    /** @param {string} checkpoint */
+    const checkTarget = async checkpoint => {
+      equal(await listRaw(target.session), [], `Deleted conversation must leave no Raw rows (${checkpoint})`);
+      const snapshot = await readDump(ctx.harness);
+      const dump = JSON.stringify(snapshot).toLowerCase();
+      const collapsedDump = JSON.stringify(snapshot, (_key, value) =>
+        typeof value === "string" ? collapseWhitespace(value) : value).toLowerCase();
+      /** @param {string} text */
+      const contains = text => dump.includes(JSON.stringify(text).slice(1, -1).toLowerCase()) ||
+        collapsedDump.includes(JSON.stringify(collapseWhitespace(text)).slice(1, -1).toLowerCase());
+      for (const [input, output] of deleted) {
+        check(!contains(input), `Deleted message text must be absent from the store (${checkpoint})`);
+        check(!contains(output), `Deleted extraction text must be absent from the store (${checkpoint})`);
+      }
+      const admission = await uow.run(owner, { readOnly: true }, tx => load.call(capture, tx, { scope, ...target.selection }));
+      check(admission === null || admission.messages.every(({ content }) => content === ""),
+        `Deleted capture must leave no message text in the ledger (${checkpoint})`);
+      equal((await remove(target.session)).rawDeleted, 0,
+        `Deleted conversation must leave no physically stored Raw rows (${checkpoint})`);
+    };
+    await checkTarget(label);
     equal(await memoryTexts(), before, `Deleted conversation must leave no memory (${label})`);
 
     equal((await service.enqueueCapture(scope, { ...survivor.selection, messages: survivor.messages })).status,
       "accepted", `The control capture must be admitted (${label})`);
     await service.runCapture(scope, survivor.selection);
+    await checkTarget(`${label}, after control capture`);
     equal(await memoryTexts(), [...before, controlOutput].sort(), `The control capture must store its memory (${label})`);
     equal((await listRaw(survivor.session)).map(({ messageId, content }) => [messageId, content]),
       [[survivor.messages[0].id, controlInput]], `The control capture must store its Raw row (${label})`);
+  }
+  for (const { untouched, label } of unrelated) {
+    equal((await listRaw(untouched.session)).map(({ messageId, content }) => [messageId, content]),
+      [[untouched.messages[0].id, untouched.messages[0].content]],
+      `The unrelated conversation must keep its listed Raw row (${label})`);
+    equal((await remove(untouched.session)).rawDeleted, 1,
+      `The unrelated conversation must keep its physically stored Raw row (${label})`);
   }
 }
 
