@@ -1207,7 +1207,7 @@ replaces a cited memory at the card's own rank if the resulting pack fits.
 The citation uses the binding's stored revision, and replacement requires an
 exact qualified ref match.
 
-## Addendum 22 — Quantity ledger in Context Read (2026-11-25)
+## Addendum 23 — Quantity ledger in Context Read (2026-11-25)
 
 Default `readContext` checks ledger intent when the adapter enables
 `quantityLedger`, supplies the store and the request selects `memory`.
