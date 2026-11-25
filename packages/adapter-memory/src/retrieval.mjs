@@ -129,15 +129,25 @@ async function passage(text, key) {
 }
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
- * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceCheck>} [rawSourceVisible]
+ * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceChecks>["sourceVisible"]} [rawSourceVisible]
  * @param {RawSourceWithholding} [rawSourceWithholding] */
-export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible, rawSourceWithholding) {
+export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, rawSourceWithholding) {
   /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
   const fingerprintKeys = new WeakMap();
+  /** @param {Tx} tx */
+  function fingerprintKeyFor(tx) {
+    let key = fingerprintKeys.get(tx);
+    if (!key) {
+      key = keys.userKey(tx.owner);
+      fingerprintKeys.set(tx, key);
+    }
+    return key;
+  }
+
   /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card
    * @param {boolean} [requireRaw] @param {State["facts"]} [purgeFacts]
    * @returns {Promise<DocumentCardVisibilityInput | null>} */
-  return async function cardVisibilityInput(tx, state, scope, card, requireRaw = false, purgeFacts) {
+  async function cardVisibilityInput(tx, state, scope, card, requireRaw = false, purgeFacts) {
     const definiteOnly = purgeFacts !== undefined;
     const policy = matchFacts(purgeFacts ?? state.facts, scope);
     const rows = state.rows.get(scope.namespace);
@@ -160,14 +170,7 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible, ra
     let fingerprintKey = null;
     const { textFacts } = policy;
     try {
-      if (textFacts.length) {
-        let key = fingerprintKeys.get(tx);
-        if (!key) {
-          key = keys.userKey(tx.owner);
-          fingerprintKeys.set(tx, key);
-        }
-        fingerprintKey = await key;
-      }
+      if (textFacts.length) fingerprintKey = await fingerprintKeyFor(tx);
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
         if (purgeFacts !== undefined) {
@@ -207,19 +210,16 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible, ra
       requestedScope: scope, memoryStates,
       sourceWithheld, textFacts, fingerprintKey,
     };
-  };
-}
+  }
 
-/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
- * @param {RawSourceWithholding} [rawSourceWithholding] */
-export function createCardAmendmentWithholding(matchFacts, keys, rawSourceWithholding) {
-  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source @param {State["facts"]} facts */
-  return async function amendmentWithheld(state, scope, source, facts) {
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source
+   * @param {State["facts"]} facts */
+  async function amendmentWithheld(tx, state, scope, source, facts) {
     if (rawSourceWithholding) return await rawSourceWithholding(state, scope, source, true, [...facts.values()]) === true;
     // Without an archive, compare the original admitted message retained by capture.
     const { client, sessionId, messageId } = source;
     const policy = matchFacts(facts, scope);
-    const key = policy.textFacts.length ? await keys.userKey(scope.owner) : null;
+    const key = policy.textFacts.length ? await fingerprintKeyFor(tx) : null;
     let matched = false;
     for (const claim of state.claims.values()) {
       if (claim.status !== "finished" || claim.key.scope.namespace !== scope.namespace ||
@@ -234,10 +234,11 @@ export function createCardAmendmentWithholding(matchFacts, keys, rawSourceWithho
       }
     }
     return matched;
-  };
+  }
+  return { cardVisibilityInput, amendmentWithheld };
 }
 
-/** @param {ReturnType<typeof createCardVisibilityInput>} buildInput */
+/** @param {ReturnType<typeof createCardVisibilityInputs>["cardVisibilityInput"]} buildInput */
 export function createCardVisibility(buildInput) {
   /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [requireRaw] */
   return async (tx, state, scope, card, requireRaw) => {
@@ -324,7 +325,9 @@ export function createDocumentCardCandidates(port, cardVisible) {
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
 export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
-  visibleRawRefs, cardVisible = createCardVisibility(createCardVisibilityInput(matchFacts, { async userKey() { return null; } }))) {
+  visibleRawRefs, cardVisible = createCardVisibility(createCardVisibilityInputs(matchFacts, {
+    async userKey() { return null; },
+  }).cardVisibilityInput)) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>

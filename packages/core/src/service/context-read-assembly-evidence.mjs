@@ -1,16 +1,20 @@
 import { CoreError } from "../errors.mjs";
-import { assertContextVisible, qualifyEvidence } from "./context-read-evidence.mjs";
+import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
+import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
 import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./context-read-fetch.mjs";
 import { itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
 import { readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @import { ContextEvidenceRow, ContextRawTurn, ContextReadRef, ContextReadSelection, ContextReadSet,
-  ContextReadStore, ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
+  ContextReadStore, DocumentCardAmendment, ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
 /** @typedef {Awaited<ReturnType<ContextReadStore["snapshotState"]>>} Generations */
 /** @typedef {ReturnType<typeof readTokenSigner>} Signer */
 
-/** @param {ContextEvidenceRow} row @param {Signer} signer @param {boolean} lineageEnabled */
-async function qualifyForAssembly(row, signer, lineageEnabled) {
+/** @typedef {Pick<DocumentCardAmendment, "date" | "sentence" | "quote">} ReadAmendment */
+
+/** @param {ContextEvidenceRow} row @param {Signer} signer @param {boolean} lineageEnabled
+ * @param {readonly ReadAmendment[]} amendments @param {boolean} documentCard */
+async function qualifyForAssembly(row, signer, lineageEnabled, amendments, documentCard) {
   const item = await qualifyEvidence(row, signer);
   const receipts = row.type === "memory" && item.type === "memory" && item.provenance.sourceAccess === "available"
     ? item.provenance.sources.map(source => row.receipts.find(receipt => receipt.id === source.receiptId))
@@ -18,14 +22,15 @@ async function qualifyForAssembly(row, signer, lineageEnabled) {
   const sources = receipts.flatMap(receipt => receipt ? [receipt] : []);
   // Keep the public fetch fence replayable. The assembly-only witness also
   // protects the event times and lineage carried by those qualified receipts.
-  return { item, sources, fence: await evidenceFence(signer, item, row, lineageEnabled),
+  return { item, sources, amendments, documentCard, fence: await evidenceFence(signer, item, row, lineageEnabled),
     witness: JSON.stringify(sources.map(({ id, occurredAtMs, sourceTimesMs, rawTurns }) =>
-      [id, occurredAtMs, sourceTimesMs, rawTurns])) };
+      [id, occurredAtMs, sourceTimesMs, rawTurns])) + JSON.stringify(amendments) };
 }
 
 /** @typedef {Awaited<ReturnType<typeof qualifyForAssembly>>} AssemblyEvidence */
-/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "uow" | "fence">} storage */
-export function fetchForAssembly({ contextRead: store, uow, fence }) {
+/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "uow" | "fence" | "documentCards">} storage */
+export function fetchForAssembly({ contextRead: store, uow, fence, documentCards }) {
+  const cardsEnabled = hasContextCardLoader(documentCards);
   /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {Generations} observed
    * @param {readonly ContextReadRef[]} refs */
   return async (readSet, { intent, types }, observed, refs) => {
@@ -43,10 +48,32 @@ export function fetchForAssembly({ contextRead: store, uow, fence }) {
     /** @param {Tx} tx @param {Signer} signer @param {readonly ContextReadRef[]} requested */
     async function evidence(tx, signer, requested) {
       const rows = requested.length ? structuredClone(await readStore.evidence(tx, readSet, requested, intent)) : [];
-      return Promise.all(requested.map((ref, i) => {
+      return Promise.all(requested.map(async (ref, i) => {
         const row = rows[i];
-        return !row || checkRow(ref, row) ? null :
-          qualifyForAssembly(row, signer, expected[namespaceSlot(readSet, ref.scope)].lineage !== undefined);
+        if (!row || checkRow(ref, row)) return null;
+        /** @type {ReadAmendment[]} */
+        const amendments = [];
+        const lineage = expected[namespaceSlot(readSet, ref.scope)].lineage !== undefined;
+        const legacy = !cardsEnabled && legacyContextCard(row, lineage);
+        const documentCard = row.type === "card" && !legacy;
+        if (documentCard) {
+          const cardVisibility = await contextCardVerdict(documentCards, tx, ref, row.item);
+          if (!cardVisibility) return null;
+          const card = readStore.documentCardAmendmentSource && documentCards
+            ? await Promise.resolve().then(() => documentCards.get(tx, ref.scope, ref.id)).catch(() => null) : null;
+          const stored = card?.id === ref.id && card.scope.owner === ref.scope.owner && card.scope.namespace === ref.scope.namespace
+            ? card.amendments : [];
+          const visible = await selectVisibleAmendmentsForRead(stored, async ({ sourceMessage, quote }) => {
+            try {
+              const projection = await readStore.documentCardAmendmentSource?.(tx, readSet, ref.scope, { sourceMessage, quote });
+              return !!projection && documentCardAmendmentVisible({ ...projection, scope: ref.scope, cardVisibility });
+            } catch {
+              return false;
+            }
+          });
+          for (const { date, sentence, quote } of visible) amendments.push({ date, sentence, quote });
+        }
+        return qualifyForAssembly(row, signer, lineage, amendments, documentCard);
       }));
     }
     const prepared = await uow.run(readSet.owner, { readOnly: true }, async tx => {
@@ -55,9 +82,10 @@ export function fetchForAssembly({ contextRead: store, uow, fence }) {
       const scope = await signer.bind("snapshot-scope", readSetBinding(readSet));
       const rows = await evidence(tx, signer, refs);
       const selection = { owner: readSet.owner, namespaces: readSet.namespaces };
-      const visible = refs.length ? await fence.assertVisible(tx, selection, refs.map(itemRef),
+      const fenceRefs = cardsEnabled ? refs.filter(ref => ref.type !== "card") : refs;
+      const visible = fenceRefs.length ? await fence.assertVisible(tx, selection, fenceRefs.map(itemRef),
         intent === "history" ? "read" : undefined) : [];
-      return { scope, rows: rows.map((row, i) => visible.some(({ id, type, namespace }) =>
+      return { scope, rows: rows.map((row, i) => row?.documentCard || visible.some(({ id, type, namespace }) =>
         id === refs[i].id && type === refs[i].type && namespace === refs[i].scope.namespace) ? row : null) };
     });
     /** @param {readonly AssemblyEvidence[]} selected */
@@ -86,7 +114,8 @@ export function fetchForAssembly({ contextRead: store, uow, fence }) {
           if (selected.some((row, i) => row.fence !== current[i]?.fence || row.witness !== current[i]?.witness)) {
             throw new CoreError("snapshot_stale");
           }
-          await assertContextVisible(fence, tx, readSet, delivered, intent, "snapshot_stale");
+          await assertContextVisible(fence, tx, readSet,
+            selected.flatMap(({ item, documentCard }) => documentCard ? [] : [item.ref]), intent, "snapshot_stale");
           if (rawTurns.length) {
             let rawCurrent = false;
             try {

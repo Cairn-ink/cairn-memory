@@ -96,20 +96,24 @@ export function createRawLineage(storeKey, hashSession) {
       return false;
     },
 
-    /** @param {Connection} db @param {Scope} scope @param {Session & {messageId: string}} receipt */
-    hasPossibleReceiptSource(db, scope, receipt) {
+    /** @param {Connection} db @param {Scope} scope @param {Session & {messageId: string}} receipt
+     * @param {boolean} [addressOnly]
+     */
+    hasPossibleReceiptSource(db, scope, receipt, addressOnly = false) {
       const { client, sessionId, messageId } = receipt;
       if (db.prepare(`SELECT 1 FROM cairn_raw_messages WHERE ${rawSessionWhere} LIMIT 1`)
         .get(...rawSessionKey(scope, receipt))) return true;
       const messageTag = tag(["raw-lineage-id", scope.owner, client, messageId]);
       const sessionTag = tag(["raw-lineage-session", scope.owner, client, sessionId]);
       const clientKey = JSON.stringify(client);
+      const [owner, namespace] = scopeKey(scope);
       // Without the full turn, even a root with a different content proof is possible.
+      // A bare address needs evidence in its own scope before it implies a Raw source.
       return Boolean(db.prepare(`SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ? AND client_key = ?
-        AND message_tag = ?
+        AND message_tag = ? AND (namespace_key = ? OR ?)
         UNION ALL SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ? AND client_key = ?
         AND namespace_key = ? AND session_tag = ? LIMIT 1`)
-        .get(scope.owner, clientKey, messageTag, ...scopeKey(scope), clientKey, sessionTag));
+        .get(owner, clientKey, messageTag, namespace, addressOnly ? 0 : 1, owner, namespace, clientKey, sessionTag));
     },
 
     /** @param {Connection} db @param {Scope} scope @param {RawRow} source

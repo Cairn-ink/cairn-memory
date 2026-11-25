@@ -1,6 +1,7 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
 import { DOCUMENT_CARD_SEARCH_TEXT_VERSION } from "@cairn-ink/core/routing";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
+import { recordCardWrite } from "./unit-of-work.mjs";
 import { copyScope, readEmbedding, snapshotArray, validateCardId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideOptions, DocumentCardHideSelector, DocumentCardSourceMessage,
@@ -11,8 +12,7 @@ import { copyScope, readEmbedding, snapshotArray, validateCardId, validateTime, 
 /** @typedef {import("./unit-of-work.mjs").CardEntry} CardEntry */
 /** @typedef {import("./unit-of-work.mjs").AmendmentEntry} AmendmentEntry */
 /** @typedef {import("./unit-of-work.mjs").State} State */
-/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardVisibilityInput>} CardVisibilityInput */
-/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardAmendmentWithholding>} CardAmendmentWithholding */
+/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardVisibilityInputs>} CardVisibilityInputs */
 /** @typedef {{ card: (card: CardWrite) => boolean,
  * amendment?: (amendment: DocumentCardAmendment) => boolean }} HideMatcher */
 
@@ -95,16 +95,22 @@ function hideMatching(state, namespace, match, reason, { purge = false, retainTe
       entry.card = null;
       delete entry.embedding;
       if (purge || !retainText) delete entry.amendments;
+      entry.revision++;
       changed = true;
       continue;
     }
     if (!match.amendment) continue;
+    let changedAmendment = false;
     for (const [amendmentId, value] of entry.amendments ?? []) {
       const visible = entry.card ? visibleAmendment(value) : null;
       const amendment = purge ? storedAmendment(value) : visible;
       if (!amendment || !match.amendment(amendment)) continue;
       entry.amendments?.set(amendmentId, purge ? { hiddenReason: reason } : retainText ? { hidden: amendment } : null);
       if (visible) hidden++;
+      changedAmendment = true;
+    }
+    if (changedAmendment) {
+      entry.revision++;
       changed = true;
     }
   }
@@ -125,7 +131,8 @@ export function purgeDeletedDocumentSources(state, namespace, isDeleted) {
 }
 
 /** @param {Port} port @param {() => number} now
- * @param {CardVisibilityInput} buildVisibilityInput @param {CardAmendmentWithholding} amendmentWithheld
+ * @param {CardVisibilityInputs["cardVisibilityInput"]} buildVisibilityInput
+ * @param {CardVisibilityInputs["amendmentWithheld"]} amendmentWithheld
  * @param {boolean} searchEnabled @returns {DocumentCardStore<StoredDocumentCardRecord>} */
 export function createDocumentCardStore(port, now, buildVisibilityInput, amendmentWithheld, searchEnabled) {
   /** @param {Tx} tx @param {Scope} scope @param {() => HideMatcher} prepare */
@@ -135,8 +142,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
       const match = prepare();
       return (getState, _markDirty, run) => {
         const { hidden, changed } = hideMatching(getState(), namespace, match, reason, options);
-        if (hidden) run.cardWrites++;
-        else if (changed) run.stateWritten = true;
+        if (changed) recordCardWrite(run, namespace);
         return { hidden };
       };
     });
@@ -185,9 +191,13 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
             searchIndex = { updatedAtUs: writeTime(updatedAtMs).updatedAtUs, embedding: indexedEmbedding };
           }
           if (previous) dropCardPlacement(state, namespace, copy.id);
-          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex });
+          const bodyChanged = previous?.card?.title !== copy.title || previous?.card?.body !== copy.body;
+          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex,
+            revision: (previous?.revision ?? 0) + 1,
+            bodyRevision: (previous?.bodyRevision ?? 0) + Number(bodyChanged),
+          });
           state.documentCards.set(namespace, cards);
-          run.cardWrites++;
+          recordCardWrite(run, namespace);
           return { status: previous ? "replaced" : "inserted" };
         };
       });
@@ -213,7 +223,8 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           if (sourceMemories.length === existing.length && sourceMemories.every(({ id, revision }, index) =>
             id === existing[index].id && revision === existing[index].revision)) return { status: "unchanged" };
           entry.card = { ...entry.card, sourceMemories };
-          run.cardWrites++;
+          entry.revision++;
+          recordCardWrite(run, scope.namespace);
           return { status: "linked" };
         };
       });
@@ -231,7 +242,8 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           const amendments = entry.amendments ??= new Map();
           if (amendments.has(copy.amendmentId)) return { status: "unchanged" };
           amendments.set(copy.amendmentId, copy);
-          run.cardWrites++;
+          entry.revision++;
+          recordCardWrite(run, scope.namespace);
           return { status: "inserted" };
         };
       });
@@ -244,12 +256,12 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
         requireString(amendmentId);
         return (getState, _markDirty, run) => {
           const entry = getState().documentCards.get(scope.namespace)?.get(cardId);
-          const value = entry?.amendments?.get(amendmentId) ?? null;
-          const visible = entry?.card ? visibleAmendment(value) : null;
-          if (!(purge ? storedAmendment(value) : visible)) return;
-          entry?.amendments?.set(amendmentId, purge ? { hiddenReason: reason } : null);
-          if (visible) run.cardWrites++;
-          else run.stateWritten = true;
+          if (!entry?.amendments) return;
+          const value = entry.amendments.get(amendmentId) ?? null;
+          if (!(purge ? storedAmendment(value) : entry.card && visibleAmendment(value))) return;
+          entry.amendments.set(amendmentId, purge ? { hiddenReason: reason } : null);
+          entry.revision++;
+          recordCardWrite(run, scope.namespace);
         };
       });
     },
@@ -290,7 +302,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
             const amendment = storedAmendment(value);
             if (!amendment || (!selected && !matches?.some(({ amendment: match }) => match?.(amendment)))) continue;
             const { amendmentId, sourceMessage } = amendment;
-            const sourceWithheld = await amendmentWithheld(state, scope, sourceMessage, facts).catch(() => false);
+            const sourceWithheld = await amendmentWithheld(tx, state, scope, sourceMessage, facts).catch(() => false);
             amendments.push({ amendmentId, sourceMessage, sourceWithheld });
           }
           if (!selected && amendments.length === 0) continue;
@@ -313,8 +325,9 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           if (!entry?.card) return;
           if (!entry.card.stale.some((item) => item.memoryId === memoryId && item.replacementMemoryId === replacementMemoryId)) {
             entry.card = { ...entry.card, stale: [...entry.card.stale, stale] };
+            entry.revision++;
           }
-          run.cardWrites++;
+          recordCardWrite(run, namespace);
         };
       });
     },

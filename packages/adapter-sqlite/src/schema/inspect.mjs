@@ -83,7 +83,7 @@ function epochTriggers(table) {
 }
 
 const triggers = ["cairn_memories", "cairn_receipts", "cairn_suppression_facts", "cairn_legacy_denials",
-  "cairn_inspect_evidence"].map(epochTriggers).join("");
+  "cairn_inspect_evidence", "cairn_topic_memberships", "cairn_supersessions", "cairn_conflicts"].map(epochTriggers).join("");
 
 // An empty namespace key is reserved for Raw changes that can affect forks
 // in other namespaces. Ordinary inspect epochs retain their existing binding.

@@ -19,7 +19,8 @@ const invalid = (error) => error instanceof CoreError && error.code === "invalid
 
 const write = ({ uow }, fn) => uow.run(owner, { pauseLock: true }, fn);
 const read = ({ uow }, fn) => uow.run(owner, { readOnly: true }, fn);
-const claim = (adapter) => write(adapter, (tx) => adapter.capture.claim(tx, key, [], { leaseMs: 100 }));
+const message = { id: first.messageId, role: first.role, occurredAtMs: first.occurredAtMs, content: "Test source" };
+const claim = (adapter) => write(adapter, (tx) => adapter.capture.claim(tx, key, [message], { leaseMs: 100 }));
 
 function withEmptyIterator(values) {
   return Object.defineProperty(values, Symbol.iterator, { value: function* () {} });
@@ -94,7 +95,10 @@ test("applyPlacement rejects malformed proposal arrays before checking the index
 test("finish commits and replays the indexed item despite an empty iterator", async () => {
   const adapter = createMemoryAdapter({ now: () => 0 });
   const { token } = await claim(adapter);
-  const result = await write(adapter, (tx) => adapter.capture.finish(tx, token, withEmptyIterator([item])));
+  const result = await write(adapter, async (tx) => {
+    await adapter.capture.assertEligible(tx, key, [0]);
+    return adapter.capture.finish(tx, token, withEmptyIterator([item]));
+  });
   const replay = await claim(adapter);
   assert.deepEqual(replay, { status: "rawReplay", result });
   assert.equal(replay.result.memories.length, 1);
@@ -106,7 +110,10 @@ test("finish keeps the indexed receipt from a foreign-realm array with an empty 
   const adapter = createMemoryAdapter({ now: () => 0 });
   const { token } = await claim(adapter);
   const receipts = withEmptyIterator(runInNewContext("[receipt]", { receipt: first }));
-  const result = await write(adapter, (tx) => adapter.capture.finish(tx, token, [{ ...item, receipts }]));
+  const result = await write(adapter, async (tx) => {
+    await adapter.capture.assertEligible(tx, key, [0]);
+    return adapter.capture.finish(tx, token, [{ ...item, receipts }]);
+  });
   const [saved] = await hydrate(adapter, [{ type: "memory", id: result.memories[0].id, namespace: null }]);
   assert.deepEqual(saved.receipts, [first]);
 });

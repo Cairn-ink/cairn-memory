@@ -166,11 +166,14 @@ test("admitted capture retains one bounded, redacted receipt with stable identit
   const claim = await write(tx => adapter.capture.claim(tx, key, [message], { leaseMs: 10_000 }));
   assert.equal(claim.status, "claimed");
   await write(tx => adapter.capture.beginDispatch(tx, claim.token));
-  const finished = await write(tx => adapter.capture.finish(tx, claim.token, [{
-    content: original, kind: "fact", confidence: 0.8, embedding: null,
-    textHash: "sha256:" + createHash("sha256").update(original.toLowerCase()).digest("hex"),
-    receipts: [{ client: key.client, sessionId: key.sessionId, messageId: message.id, role: "user", occurredAtMs: null }],
-  }]));
+  const finished = await write(async tx => {
+    await adapter.capture.assertEligible(tx, key, [0]);
+    return adapter.capture.finish(tx, claim.token, [{
+      content: original, kind: "fact", confidence: 0.8, embedding: null,
+      textHash: "sha256:" + createHash("sha256").update(original.toLowerCase()).digest("hex"),
+      receipts: [{ client: key.client, sessionId: key.sessionId, messageId: message.id, role: "user", occurredAtMs: null }],
+    }]);
+  });
   const { id, revision } = finished.memories[0];
   const ref = { scope, type: "memory", id, revision };
   const retained = await adapter.uow.run(scope.owner, { readOnly: true }, tx =>

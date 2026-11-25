@@ -74,6 +74,9 @@ export interface FinishResult {
 
 /** Writes the capture's memories and completes the claim in one transaction. */
 export interface CaptureFinish {
+  /**
+   * finish(tx, token, items) writes nothing and throws (code unpinned; the UnitOfWork rolls back) unless every receipt of every item maps to exactly one admitted message of this claim: same client and sessionId as the claim's key, and a messageId matching exactly one admitted position. That position must also be in the selection passed to the most recent assertEligible for this claim's key in the same transaction. A finish with no items needs no assertion. An item with no receipts is not bound (stated limit; core never sends one).
+   */
   finish(tx: Tx, token: string, items: readonly FinishItem[]): Promise<FinishResult>;
   /** Canonical IDs of the matched, retained capture receipts in input order. Null denotes no match. */
   retainedReceiptIds?(tx: Tx, scope: Scope, memoryId: string,

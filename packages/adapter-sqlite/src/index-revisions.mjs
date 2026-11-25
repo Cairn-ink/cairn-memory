@@ -87,6 +87,11 @@ export function createIndexRevisions(uow, port) {
       advance(db, tx, indexRun(tx));
     },
 
+    /** @param {Connection} db @param {Tx} tx */
+    start(db, tx) {
+      return startRevision(db, tx, indexRun(tx));
+    },
+
     /** @param {Tx} tx */
     indexRevision(tx) {
       return port(tx, tx?.owner, {}, db => startRevision(db, tx, indexRun(tx)));

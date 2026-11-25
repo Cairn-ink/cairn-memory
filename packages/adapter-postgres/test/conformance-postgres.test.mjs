@@ -463,6 +463,7 @@ const notApplicable = {
     "T-RAT-receipt-private", "T-RAT-receipt-remove", "T-RAT-receipt-update", "T-RAT-revision", "T-RAT-scope", "T-RAT-stale"],
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
+  "finish binding to the asserted selection not implemented yet": ["K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

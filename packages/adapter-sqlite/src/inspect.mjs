@@ -1,15 +1,18 @@
 import { CoreError } from "@cairn-ink/core";
 import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
+import { readConflicts, storedSupersession } from "./memory-relations.mjs";
 import { readProceduralTag } from "./procedural-tags.mjs";
 import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
+import { topicMembershipReader } from "./topics.mjs";
 
 /** @import { ContextReadFields, InspectMemoryMetadata, InspectReceipt, InspectReceiptAnchor, InspectStore,
  * MemoryRow, Scope } from "@cairn-ink/core/ports" */
 /** @import { SQLInputValue, SQLOutputValue } from "node:sqlite" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
+/** @import { PlacementVisibility, ScopedVisibility } from "./placement-visibility.mjs" */
 /** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @import { StoredReceipt } from "./receipt-identity.mjs" */
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
@@ -122,16 +125,18 @@ export function anchorsVisible(db, scope, id, project, anchors) {
 
 /** @param {Connection} db @param {Scope} scope @param {Policy} policy
  * @param {ReceiptProjector} project @param {SQLOutputValue | undefined} stored
+ * @param {ReturnType<typeof storedSupersession>} current @param {ScopedVisibility | undefined} visible
  * @returns {ContextReadFields}
  */
-function supersession(db, scope, policy, project, stored) {
-  const link = stored ? /** @type {{ previousRevision: number, memoryId: string, revision: number, receiptIds: string[] }} */ (
+function supersession(db, scope, policy, project, stored, current, visible) {
+  const link = current ?? (stored ? /** @type {{ previousRevision: number, memoryId: string, revision: number, receiptIds: string[] }} */ (
     decodeJson(stored)
-  ) : null;
+  ) : null);
   const unavailable = { previousRevision: link?.previousRevision ?? null, replacement: null, receiptIds: [], evidenceAvailable: false };
   if (!link) return unavailable;
   const replacement = readEntry(db, scope, link.memoryId);
-  if (!replacement || replacement.row.revision < link.revision || policy.hides(replacement)) return unavailable;
+  if (!replacement || replacement.row.revision < link.revision || policy.hides(replacement) ||
+      (visible && !visible(link.memoryId))) return unavailable;
   const receiptIds = [...receiptsById(db, scope, link.memoryId, project, link.receiptIds)]
     .flatMap(([id, receipt]) => receipt ? [id] : []);
   return {
@@ -142,8 +147,10 @@ function supersession(db, scope, policy, project, stored) {
   };
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @param {ReceiptReadSafety} receiptReadSafety @returns {InspectStore} */
-export function createInspectStore(port, hashSession, receiptReadSafety) {
+/** @param {Port} port @param {SessionHasher} hashSession @param {ReceiptReadSafety} receiptReadSafety
+ * @param {PlacementVisibility} visibility @param {Readonly<Record<string, boolean>>} flags @returns {InspectStore}
+ */
+export function createInspectStore(port, hashSession, receiptReadSafety, visibility, flags) {
   return {
     async identity(tx) {
       return port(tx, tx.owner, {}, db => {
@@ -154,11 +161,13 @@ export function createInspectStore(port, hashSession, receiptReadSafety) {
       });
     },
 
-    async list(tx, scope, { states, limit, after, expectedEpoch }) {
-      return port(tx, scope.owner, {}, db => {
+    async list(tx, callerScope, { states, limit, after, expectedEpoch }) {
+      return port(tx, callerScope.owner, {}, db => {
+        const scope = { owner: tx.owner, namespace: callerScope.namespace };
         const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
         const project = receiptProjector(db, scope, policy, receiptReadSafety);
+        const memberships = flags.placement ? topicMembershipReader(db, scope, visibility(db, scope, policy)) : undefined;
         const anchor = after && after.updatedAtUs <= maxSqlTime ? after : undefined;
         /** @type {SQLInputValue[]} */
         const stateKey = states.length === 1 ? [Number(states[0] === "historical")] : [];
@@ -171,7 +180,9 @@ export function createInspectStore(port, hashSession, receiptReadSafety) {
         for (const record of scan) {
           const entry = decodeEntry(scope, record);
           if (policy.hides(entry)) continue;
-          rows.push({ ...metadata(db, entry.row, project, storedEvidence(db, scope, entry.row.id)?.filing),
+          const placed = memberships?.(entry.row.id);
+          const filing = placed ? (placed.length ? "filed" : "unfiled") : storedEvidence(db, scope, entry.row.id)?.filing;
+          rows.push({ ...metadata(db, entry.row, project, filing),
             updatedAtUs: entry.row.updatedAtUs });
           if (rows.length > limit) break;
         }
@@ -179,8 +190,9 @@ export function createInspectStore(port, hashSession, receiptReadSafety) {
       });
     },
 
-    async item(tx, scope, memoryId, { limit, after, expectedEpoch, includeQualification }) {
-      return port(tx, scope.owner, {}, db => {
+    async item(tx, callerScope, memoryId, { limit, after, expectedEpoch, includeQualification }) {
+      return port(tx, callerScope.owner, {}, db => {
+        const scope = { owner: tx.owner, namespace: callerScope.namespace };
         const epoch = readEpoch(db, scope, expectedEpoch);
         const policy = scopedSuppression(db, scope, hashSession);
         const project = receiptProjector(db, scope, policy, receiptReadSafety);
@@ -201,16 +213,24 @@ export function createInspectStore(port, hashSession, receiptReadSafety) {
           ? { procedural: tag.positive, tagRevision: tag.tagRevision, origin: tag.origin, anchors: tag.anchors }
           : stored?.procedural ? /** @type {Procedural} */ (decodeJson(stored.procedural)) : undefined;
         const proceduralSafety = procedural ? anchorsVisible(db, scope, memoryId, project, procedural.anchors) : undefined;
-        const memory = { ...metadata(db, entry.row, project, stored?.filing), text: entry.row.text };
+        const visible = flags.placement || flags.conflictEdges || flags.supersession ? visibility(db, scope, policy) : undefined;
+        const placed = flags.placement && visible ? topicMembershipReader(db, scope, visible)(memoryId) : null;
+        const filing = placed ? (placed.length ? "filed" : "unfiled") : stored?.filing;
+        const memory = { ...metadata(db, entry.row, project, filing), text: entry.row.text };
+        const conflicts = flags.conflictEdges && visible ? readConflicts(db, scope, [memoryId], visible).get(memoryId) ?? [] : [];
+        const linkVisible = flags.supersession && entry.row.historical && visible?.(memoryId);
+        const link = linkVisible ? storedSupersession(db, scope, memoryId) : undefined;
+        const legacyLink = !flags.supersession || linkVisible ? stored?.supersession : undefined;
         return {
           epoch, nextAnchor,
           item: {
-            memory, receipts: rows.slice(0, limit).map(({ receipt }) => receipt), placements: [], conflicts: [],
+            memory, receipts: rows.slice(0, limit).map(({ receipt }) => receipt),
+            placements: (placed ?? []).map(id => ({ id })), conflicts: conflicts.map(edge => ({ ...edge })),
             ...(includeQualification && { qualification: qualification &&
               anchorsVisible(db, scope, memoryId, project, qualification.anchors) ? qualification : null }),
             ...(proceduralSafety && { procedural }),
             ...(proceduralSafety === null && { procedural: null }),
-            ...(entry.row.historical && { supersession: supersession(db, scope, policy, project, stored?.supersession) }),
+            ...(entry.row.historical && { supersession: supersession(db, scope, policy, project, legacyLink, link, visible) }),
           },
         };
       });
