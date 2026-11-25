@@ -36,13 +36,11 @@ function unionMemoryLinks(existing, links) {
 /** @param {State} state @param {Scope} scope @param {MemoryLinks} existing
  * @param {MemoryLinks} incoming @param {boolean} bodyChanged @param {boolean} union */
 function updateMemoryLinks(state, scope, existing, incoming, bodyChanged, union) {
-  const rows = state.rows.get(scope.namespace);
   const pinned = new Set();
   const retained = existing.filter(({ id, revision }) => {
-    const memory = rows?.get(id)?.row;
     const evidence = memoryCorrectionEvidence(state, scope, { id, revision });
     const corrected = evidence.unresolvedCorrection || evidence.correctedRevisions.includes(revision);
-    if (!bodyChanged && (corrected || (memory && incoming.some(link => link.id === id && link.revision > memory.revision)))) {
+    if (!bodyChanged && corrected) {
       pinned.add(id);
       return true;
     }
@@ -52,6 +50,15 @@ function updateMemoryLinks(state, scope, existing, incoming, bodyChanged, union)
   if (!union && !pinned.size) return incoming;
   return unionMemoryLinks(retained, incoming.filter(({ id }) => !pinned.has(id)))
     .flatMap(link => pinned.has(link.id) ? existing.filter(({ id }) => id === link.id) : [link]);
+}
+
+/** @param {State} state @param {Scope["namespace"]} namespace @param {MemoryLinks} links */
+function hasFutureCitation(state, namespace, links) {
+  const rows = state.rows.get(namespace);
+  return links.some(link => {
+    const memory = rows?.get(link?.id)?.row;
+    return memory !== undefined && link.revision > memory.revision;
+  });
 }
 
 /** @param {DocumentCardHideSelector} selector @returns {HideMatcher} */
@@ -160,7 +167,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
   /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardEntry | undefined} entry */
   async function readStoredCard(tx, state, scope, entry) {
     const card = entry?.card;
-    if (!card) return null;
+    if (!card || hasFutureCitation(state, scope.namespace, card.sourceMemories)) return null;
     if (hasReplacedCitation(state, card)) {
       const input = await buildVisibilityInput(tx, state, scope, card);
       if (!input || !(await documentCardVisible(input)).visible) return null;
@@ -207,6 +214,8 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           const cards = state.documentCards.get(namespace) ?? new Map();
           const previous = cards.get(copy.id);
           if (previous && !previous.card) return { status: "tombstoned" };
+          // A later correction cannot make a citation written before its text valid.
+          if (hasFutureCitation(state, namespace, copy.sourceMemories)) throw new CoreError("invalid_input");
           if (previous?.card?.contentHash === copy.contentHash) return { status: "unchanged" };
           const bodyChanged = previous?.card?.body !== copy.body;
           const titleChanged = previous?.card?.title !== copy.title;
@@ -252,6 +261,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           const entry = state.documentCards.get(scope.namespace)?.get(cardId);
           if (!entry) return { status: "not_found" };
           if (!entry.card) return { status: "tombstoned" };
+          if (hasFutureCitation(state, scope.namespace, incoming)) throw new CoreError("invalid_input");
           const existing = entry.card.sourceMemories;
           const sourceMemories = updateMemoryLinks(state, scope, existing, incoming, false, true);
           if (sourceMemories.length === existing.length && sourceMemories.every(({ id, revision }, index) =>

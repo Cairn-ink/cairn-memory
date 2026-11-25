@@ -66,3 +66,24 @@ test("independent forget evidence still authorizes purge of a correction-withhel
   assert.deepEqual(await documentCardVisible(input, { definiteOnly: true }),
     { visible: false, reason: "source_memory_forgotten" });
 });
+
+test("future citations are uncertain for message-backed and authored cards", async () => {
+  const source = { ...linked, revision: 2 };
+  for (const status of ["visible", "historical"]) {
+    const state = { status, revision: 1, correctedRevisions: [] };
+    for (const origin of ["router", "import", "manual"]) {
+      const input = visibilityInput(origin, state, source);
+      assert.deepEqual(await documentCardVisible(input), uncertain, origin + " " + status);
+      assert.deepEqual(await documentCardVisible(input, { definiteOnly: true }), uncertain);
+    }
+  }
+});
+
+test("revision zero is valid cutoff evidence", async () => {
+  const state = { status: "visible", revision: 2, correctedRevisions: [0, 1] };
+  for (const origin of ["router", "import", "manual"]) {
+    assert.deepEqual(await documentCardVisible(visibilityInput(origin, state, { ...linked, revision: 0 })), withheld);
+    assert.deepEqual(await documentCardVisible(visibilityInput(origin, state, { ...linked, revision: 2 })),
+      { visible: true, reason: null });
+  }
+});

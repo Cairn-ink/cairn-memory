@@ -15,10 +15,10 @@ import { redactDocumentText } from "../routing/redaction.mjs";
 import { pauseResult } from "./pause.mjs";
 import { validWriteEmbedding } from "./writes.mjs";
 
-/** @import {CaptureKey, CaptureMessage, DocumentCardEmbedding, DocumentCardRecord, DocumentCardSession, FinishItem, FinishResult, ItemRef,
+/** @import {CaptureKey, CaptureMessage, DocumentCardEmbedding, DocumentCardSession, FinishItem, FinishResult, ItemRef,
  * Receipt, Tx} from "../ports/index.d.ts" */
 /** @import {ExtractedQuantity, LedgerReceipt} from "../ledger/index.mjs" */
-/** @import {DocumentCardMemoryState, DocumentCardVisibilityInput} from "../routing/visibility.mjs" */
+/** @import {DocumentCardVisibilityInput} from "../routing/visibility.mjs" */
 /** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
 /** @typedef {Map<string, DocumentCardEmbedding>} CardVectors */
 /** @typedef {ReturnType<typeof validatePlainExtraction>["items"][number] & {quantities?: ExtractedQuantity[]}} ExtractedCandidate */
@@ -272,37 +272,17 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /** @param {Tx} tx @param {CaptureKey["scope"]} scope @param {ItemRef} target
    * @param {DocumentCardVisibilityInput} [newCard] */
   async function visibleWithEvidence(tx, scope, target, newCard) {
-    const [input] = cards?.visibilityInputs
-      ? await cards.visibilityInputs(tx, scope, [target], { requireRaw: false, newCard })
-      : [newCard];
-    return input?.card.id === target.id && (await documentCardVisible({ ...input, requestedScope: scope })).visible;
+    const inputs = await cards?.visibilityInputs?.(tx, scope, [target], { requireRaw: false, newCard });
+    const input = inputs?.[0];
+    return input?.card?.id === target.id && (await documentCardVisible({ ...input, requestedScope: scope })).visible;
   }
 
-  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @param {DocumentCardRecord} card */
-  async function visible(tx, scope, card) {
-    const read = readScope(scope);
-    const target = ref(scope, "card", card.id);
-    const shown = await fence.assertVisible(tx, read, [target], "read");
-    if (!shown.some(item => item.type === target.type && item.id === target.id && item.namespace === target.namespace)) {
-      return false;
-    }
-    if (cards?.visibilityInputs) return visibleWithEvidence(tx, scope, target);
-    const refs = card.sourceMemories.map(({ id }) => ref(scope, "memory", id));
-    const rows = refs.length ? await hydrate.hydrate(tx, read, refs, "read") : [];
-    /** @type {Map<string, DocumentCardMemoryState>} */
-    const memoryStates = new Map();
-    for (const { memory } of rows) {
-      if (memory?.scope.owner === scope.owner && memory.scope.namespace === scope.namespace) {
-        // The adapter's card fence above already checked correction evidence in this Tx.
-        memoryStates.set(memory.id, {
-          status: memory.historical ? "historical" : "visible", revision: memory.revision, correctedRevisions: [],
-        });
-      }
-    }
-    return (await documentCardVisible({
-      card: { ...card, canonicalSessionKey: sessionKey(card.sourceMessage) }, requestedScope: scope, memoryStates,
-      sourceWithheld: false,
-    })).visible;
+  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @param {string} cardId */
+  async function visible(tx, scope, cardId) {
+    const target = ref(scope, "card", cardId);
+    const shown = await fence.assertVisible(tx, readScope(scope), [target], "read");
+    return shown.some(item => item.type === target.type && item.id === target.id && item.namespace === target.namespace) &&
+      await visibleWithEvidence(tx, scope, target);
   }
 
   /**
@@ -326,7 +306,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           const source = card.sourceMessage;
           if (!source || (source.client === client && source.sessionId === sessionId)) continue;
           const date = utcDate(card.date);
-          if (date === null || date > dates[0] || !await visible(tx, scope, card)) continue;
+          if (date === null || date > dates[0] || !await visible(tx, scope, card.id)) continue;
           eligible.push({ ...card, date });
         }
         return eligible;
@@ -343,7 +323,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       /** @param {Tx} tx @param {string} cardId */
       async function cardStillEligible(tx, cardId) {
         const card = await cards?.get(tx, scope, cardId);
-        return !!card?.sourceMessage && card.contentHash === byCard.get(cardId)?.contentHash && await visible(tx, scope, card);
+        return !!card?.sourceMessage && card.contentHash === byCard.get(cardId)?.contentHash && await visible(tx, scope, cardId);
       }
 
       /** @param {Tx} tx @param {string} cardId @param {CaptureMessage} message */
@@ -573,10 +553,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
               sourceMessage: { client, sessionId, messageId: message.id }, sourceMemories: [] },
             requestedScope: scope, memoryStates: new Map(), sourceWithheld: false,
           };
-          const stored = cards.visibilityInputs ? null : await cards.get(tx, scope, card.id);
-          if (stored
-            ? !stored.sourceMessage || !await visible(tx, scope, { ...stored, sourceMessage: stored.sourceMessage })
-            : !await visibleWithEvidence(tx, scope, target, newCard)) continue;
+          const stored = await cards.get(tx, scope, card.id);
+          // A null get can mean either absent or withheld. The loader can confirm
+          // absence and accept newCard, or supply the verdict for the stored card.
+          if (!await visibleWithEvidence(tx, scope, target, stored ? undefined : newCard)) continue;
           const text = documentCardSearchText(card);
           const payload = [text, card.body, ...cardPassageTexts(card)];
           if (!await withholds(payload)) survivors.push({ message, text });

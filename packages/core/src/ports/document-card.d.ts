@@ -174,6 +174,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * Provider refreshes can set requireRaw to false to allow stores without Raw.
    * During capture, newCard supplies Core's already screened input for a matching
    * ref only when no record exists. Existing records use the store's live evidence.
+   * Card provider sends require a visibility input even when get returned null.
    */
   visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[],
     options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<DocumentCardVisibilityInput | null>>;

@@ -158,7 +158,7 @@ async function readCardVisibility(input, definiteOnly) {
         case "visible": {
           const revision = field(state, "revision");
           const unresolvedCorrection = field(state, "unresolvedCorrection");
-          if (!natural(revision) ||
+          if (!natural(revision) || source.revision > revision ||
               (unresolvedCorrection !== undefined && typeof unresolvedCorrection !== "boolean")) return hidden("uncertain");
           const correctedRevisions = array(field(state, "correctedRevisions"), replaced => {
             if (!natural(replaced) || replaced >= revision) throw new TypeError("Invalid corrected revision");

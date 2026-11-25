@@ -52,10 +52,10 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     const refs = cards.map(({ id }) => /** @type {ItemRef} */ ({ type: 'card', id, namespace }));
     const visible = await fence.assertVisible(tx, { owner, namespaces: [namespace] }, refs);
     const shown = new Set(visible.filter((ref) => ref.type === 'card' && ref.namespace === namespace).map(({ id }) => id));
-    if (!documentCards.visibilityInputs || !shown.size) return shown;
+    if (!documentCards.visibilityInputs || !shown.size) return new Set();
     const candidates = refs.filter(({ id }) => shown.has(id));
     const evidence = await documentCards.visibilityInputs(tx, scope, candidates, { requireRaw: false });
-    const inputs = new Map(candidates.map((ref, index) => [ref, evidence[index]]));
+    const inputs = new Map(candidates.map((ref, index) => [ref, evidence?.[index]]));
     const { rows } = await visibleDocumentCardRows(candidates.map(ref => ({ ref })), ref => {
       const input = inputs.get(ref);
       return input ? { ...input, requestedScope: scope } : null;

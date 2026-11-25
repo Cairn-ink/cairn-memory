@@ -89,7 +89,7 @@ test("malformed link inputs fail even after a matching receipt", () => {
 
 test("message-backed cards stay visible at any current revision", async () => {
   for (const origin of ["router", undefined]) {
-    for (const revision of [1, 2, 3]) {
+    for (const revision of [2, 3]) {
       const memoryStates = new Map([["memory", { status: "visible", revision, correctedRevisions: [] }]]);
       const input = { ...read, card: { ...card, origin }, memoryStates };
       assert.deepEqual(await documentCardVisible(input), visible);

@@ -2,8 +2,8 @@ import { coreDigest, factIncarnationBody, placePendingCards } from "@cairn-ink/c
 import { buildDocumentCard, documentCardStaleness } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "./context-assembly-cases.mjs";
-import { captureService, client, firstDay, message, nextDay } from "./capture-documents-support.mjs";
-import { check, equal, readDump, rejects, row, source } from "./support.mjs";
+import { client, firstDay, message, nextDay } from "./capture-documents-support.mjs";
+import { check, equal, isCoreErrorShape, readDump, rejects, row, source } from "./support.mjs";
 
 /** @import { CaptureMessage, ContextCardRef, ContextReadStore, DetectChangesRequest, DocumentCardSession,
  * DocumentCardWrite, ItemRef, ModelRequest, StorageAdapter, StoredDocumentCardRecord, Tx,
@@ -17,8 +17,30 @@ const query = "albatross";
 const sessionId = "maintenance";
 const change = message("change", "The new inspection day is Tuesday.", nextDay);
 
-/** @param {CaseContext} ctx @param {CaptureMessage} [initial] */
-async function fixture(ctx, initial = message("manual", "Albatross field guide\n\nKeep a log of every maintenance visit.")) {
+/** @import { MemoryServiceDeps } from "@cairn-ink/core/service" */
+
+/** @param {CaseContext} ctx @param {MemoryServiceDeps["storage"]} storage
+ * @param {MemoryServiceDeps["config"]} config
+ * @param {Pick<NonNullable<MemoryServiceDeps["model"]>, "detectChanges" | "verifyChange">} [methods]
+ * @param {MemoryServiceDeps["embedder"]} [embedder] */
+function cardService(ctx, storage, config, methods = {}, embedder = {
+  model: "test", dimensions: ctx.embeddingDimensions ?? 1,
+  async embed(texts) { return texts.map(() => Float32Array.from(ctx.embeddingDimensions ? ctx.vec(0) : [1])); },
+}) {
+  return createMemoryService({
+    storage, config, embedder,
+    ...(ctx.harness.hashSessionKey && { documentCardSessionKey: (/** @type {DocumentCardSession} */ { client, sessionId }) =>
+      ctx.harness.hashSessionKey?.(client, sessionId) ?? null }),
+    clock: assemblyClock(),
+    model: { model: "test", contextWindow: 32_768, countTokens: () => 1, async call() { return { items: [] }; }, ...methods },
+    gate: { async assertOpen() {} }, tokens: { countTokens: () => 1 },
+  });
+}
+
+/** @param {CaseContext} ctx @param {CaptureMessage} [initial]
+ * @param {{ citationRevision?: number, seedCard?: boolean }} [options] */
+async function fixture(ctx, initial = message("manual", "Albatross field guide\n\nKeep a log of every maintenance visit."),
+    { citationRevision, seedCard = true } = {}) {
   const storage = /** @type {StorageAdapter<StoredDocumentCardRecord> & { contextRead?: ContextReadStore }} */ (ctx.adapter);
   const { documentCards: cards, raw, uow, memories, fence } = storage;
   check(cards, "Expected a document card store");
@@ -37,10 +59,10 @@ async function fixture(ctx, initial = message("manual", "Albatross field guide\n
   /** @type {DocumentCardWrite<StoredDocumentCardRecord>} */
   const card = { id: built.id, scope, origin: "router", title: built.title, body: built.body, date: built.date,
     contentHash: await ctx.hash(built.body), sourceMessage: { client, sessionId, messageId: initial.id },
-    sourceMemories: [{ id: link.id, revision: link.revision }], sentences: [], stale: [] };
+    sourceMemories: [{ id: link.id, revision: citationRevision ?? link.revision }], sentences: [], stale: [] };
   await write(async tx => {
     if (raw) await raw.archive(tx, { scope, client, sessionId, eventId: initial.id, payloadDigest: "a".repeat(64) }, [initial]);
-    await cards.put(tx, scope, card);
+    if (seedCard) await cards.put(tx, scope, card);
   });
 
   /** @type {ItemRef} */
@@ -57,21 +79,28 @@ async function fixture(ctx, initial = message("manual", "Albatross field guide\n
   });
   const { findCandidates, fetchEvidence, readContext } = reads;
   check(findCandidates && fetchEvidence && readContext, "Expected Context Read service entries");
-  const capture = captureService(ctx, { documentCards: { enabled: true, amendments: true } });
+  const corrections = cardService(ctx, storage, { documentCards: { enabled: true } });
   /** @param {"new" | "same" | "none"} receipt */
-  async function correct(receipt) {
+  async function commitCorrection(receipt) {
     const session = receipt === "same" ? sessionId : "editor";
     const editor = message("editor-message", corrected, nextDay);
     if (raw && receipt !== "none") {
       await write(tx => raw.archive(tx, { scope, client, sessionId: session, eventId: editor.id, payloadDigest: "b".repeat(64) }, [editor]));
     }
-    const result = await capture.service.correct(scope, link.id, link.revision, corrected, source,
+    return corrections.correct(scope, link.id, link.revision, corrected, source,
       receipt === "none" ? undefined : { receipt: { client, sessionId: session,
         messageId: editor.id, occurredAtMs: nextDay, role: "user", excerpt: corrected } });
-    check(result.status === "saved" && result.item.revision === link.revision + 1, "Expected a committed correction");
+  }
+  /** @param {Awaited<ReturnType<typeof commitCorrection>> | undefined} result */
+  function assertCorrection(result) {
+    check(result?.status === "saved" && result.item.revision === link.revision + 1, "Expected a committed correction");
     return result.item;
   }
-  return { storage, cards, scope, read, write, card, ref, set, request, link, correct,
+  /** @param {"new" | "same" | "none"} receipt */
+  async function correct(receipt) {
+    return assertCorrection(await commitCorrection(receipt));
+  }
+  return { storage, cards, scope, read, write, card, ref, set, request, link, correct, commitCorrection, assertCorrection,
     reads: { ...reads, findCandidates, fetchEvidence, readContext },
     visible: () => read(tx => fence.assertVisible(tx, set, [ref], "read")) };
 }
@@ -131,7 +160,7 @@ async function assertWithheld(ctx, f, before) {
     const detected = [];
     /** @type {VerifyChangeRequest[]} */
     const verified = [];
-    const capture = captureService(ctx, { documentCards: { enabled: true, amendments: true } }, undefined, {
+    const capture = cardService(ctx, f.storage, { documentCards: { enabled: true, amendments: true } }, {
       async detectChanges(request) {
         detected.push(request);
         return { changes: [{ card_id: card.id, quote: change.content, new_value: change.content }] };
@@ -141,7 +170,7 @@ async function assertWithheld(ctx, f, before) {
         return { applies: true, line: change.content };
       },
     });
-    await capture.capture("inspection", change.id, [change]);
+    await runCapture(capture, f.scope, "inspection", change.id, [change]);
     check(!detected.some(({ input }) => input.includes(card.id) || input.includes(card.body)),
       "Detection received an ineligible card");
     equal(verified, [], "Verification received an ineligible card");
@@ -210,6 +239,69 @@ const withholdForSourcedFact = origin => async (/** @type {CaseContext} */ ctx) 
       "changed", "Expected an in-place text replacement");
   });
   await assertWithheld(ctx, f, ref);
+};
+
+/** @param {Fixture} f */
+function citationDelivery(f) {
+  return Promise.all([
+    f.read(tx => f.cards.get(tx, f.scope, f.card.id)), f.reads.readCard(f.scope, f.card.id), f.visible(),
+  ]);
+}
+
+/** @param {ReturnType<typeof cardService>} service @param {Fixture["scope"]} scope
+ * @param {string} sessionId @param {string} eventId @param {CaptureMessage[]} messages */
+async function runCapture(service, scope, sessionId, eventId, messages) {
+  const selection = { client, sessionId, eventId };
+  equal((await service.enqueueCapture(scope, { ...selection, messages })).status, "accepted", "Expected capture admission");
+  equal((await service.runCapture(scope, selection)).status, "done", "Expected capture to finish");
+}
+
+/** @param {"present" | "omitted" | "missing"} evidence */
+const recaptureEmbedding = evidence => async (/** @type {CaseContext} */ ctx) => {
+  if (!ctx.adapter.capture.admit) return "needs capture.admit";
+  const initial = message("manual", "Remember this Albatross field guide.\n\n" +
+    "Keep a log of every maintenance visit. ".repeat(7).trimEnd());
+  const control = message("control", "Remember this separate safety checklist. " +
+    "Check the flashlight at the supply station. ".repeat(7).trimEnd());
+  const f = await fixture(ctx, initial);
+  await f.correct("none");
+  const before = (await dumpOwner(ctx, f)).documentCards;
+  /** @type {string[][]} */
+  const embeddings = [];
+  /** @type {string[]} */
+  const puts = [];
+  const documentCards = { ...f.cards, async put(/** @type {Tx} */ tx, /** @type {Fixture["scope"]} */ scope,
+      /** @type {DocumentCardWrite<StoredDocumentCardRecord>} */ card,
+      /** @type {Parameters<Fixture["cards"]["put"]>[3]} */ embedding) {
+    const result = await f.cards.put(tx, scope, card, embedding);
+    if (card.id === f.card.id) puts.push(result.status);
+    return result;
+  } };
+  if (evidence === "omitted") delete documentCards.visibilityInputs;
+  else if (evidence === "missing") {
+    documentCards.visibilityInputs = async (tx, scope, refs, options) => {
+      const inputs = await f.cards.visibilityInputs?.(tx, scope, refs, options);
+      return refs.map(({ id }, index) => id === f.card.id ? null : inputs?.[index] ?? null);
+    };
+  }
+  const service = cardService(ctx, { ...f.storage, documentCards }, { documentCards: { enabled: true } }, {}, {
+    model: "test", dimensions: ctx.embeddingDimensions ?? 1, async embed(texts) {
+      embeddings.push([...texts]);
+      return texts.map(() => Float32Array.from(ctx.embeddingDimensions ? ctx.vec(0) : [1]));
+    },
+  });
+  await runCapture(service, f.scope, sessionId, "fresh-event", [initial, control]);
+  check(!embeddings.flat().some(text => text.includes(f.card.body)), "The embedder received the old card body");
+  if (evidence === "omitted") equal(embeddings, [], "Missing evidence must withhold ambiguous card IDs");
+  else check(embeddings.flat().some(text => text.includes(control.content)), "Expected the eligible control to reach the embedder");
+  equal(puts, ["unchanged"], "Recapture must keep the stored body revision");
+  const after = (await dumpOwner(ctx, f)).documentCards;
+  const storedCard = (/** @type {unknown} */ snapshot) => {
+    check(Array.isArray(snapshot), "Expected a card storage snapshot");
+    return snapshot.flatMap(({ cards }) => cards).find(([id]) => id === f.card.id);
+  };
+  check(storedCard(before), "Expected the old body in storage");
+  equal(storedCard(after), storedCard(before), "Recapture changed the stored card");
 };
 
 /** @type {readonly ConformanceCase[]} */
@@ -301,10 +393,12 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
     const detected = [];
     /** @type {VerifyChangeRequest[]} */
     const verified = [];
-    const capture = captureService(ctx, { documentCards: { enabled: true, amendments: true } }, undefined, {
+    /** @type {Awaited<ReturnType<Fixture["commitCorrection"]>> | undefined} */
+    let correction;
+    const capture = cardService(ctx, f.storage, { documentCards: { enabled: true, amendments: true } }, {
       async detectChanges(request) {
         detected.push(request);
-        await f.correct("none");
+        correction = await f.commitCorrection("none");
         return { changes: [{ card_id: f.card.id, quote: change.content, new_value: change.content }] };
       },
       async verifyChange(request) {
@@ -312,7 +406,8 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
         return { applies: true, line: change.content };
       },
     });
-    await capture.capture("inspection", change.id, [change]);
+    await runCapture(capture, f.scope, "inspection", change.id, [change]);
+    f.assertCorrection(correction);
     check(detected.some(({ input }) => input.includes(f.card.id)), "Detection did not receive the card before correction");
     equal(verified, [], "Verification received the card after correction");
     equal(await f.visible(), [], "Expected the correction inside detection to commit");
@@ -348,50 +443,83 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
     const read = await f.reads.readCard(f.scope, f.card.id);
     check(read.status === "found" && read.card.body === body, "A post-replacement metadata revision hid the new body");
   }),
-  testCase("RECAPTURE-EMBED", "recapturing a corrected card never embeds the stored body", async ctx => {
+  testCase("RECAPTURE-EMBED", "recapturing a corrected card never embeds the stored body", recaptureEmbedding("present"), ["rawArchive"]),
+  testCase("RECAPTURE-NO-INPUT-PORT", "recapture without a visibility loader withholds the old body",
+    recaptureEmbedding("omitted"), ["rawArchive"]),
+  testCase("RECAPTURE-MISSING-INPUT", "a missing card verdict still permits the eligible embedding control",
+    recaptureEmbedding("missing"), ["rawArchive"]),
+  testCase("AMEND-NO-INPUT-PORT", "amendment sends stop when the visibility loader is missing", async ctx => {
     if (!ctx.adapter.capture.admit) return "needs capture.admit";
-    const initial = message("manual", "Remember this Albatross field guide.\n\n" +
-      "Keep a log of every maintenance visit. ".repeat(7).trimEnd());
-    const control = message("control", "Remember this separate safety checklist. " +
-      "Check the flashlight at the supply station. ".repeat(7).trimEnd());
-    const f = await fixture(ctx, initial);
-    await f.correct("none");
-    const before = (await dumpOwner(ctx, f)).documentCards;
-    /** @type {string[][]} */
-    const embeddings = [];
-    /** @type {string[]} */
-    const puts = [];
-    const service = createMemoryService({
-      storage: { ...f.storage, documentCards: { ...f.cards, async put(tx, scope, card, embedding) {
-        const result = await f.cards.put(tx, scope, card, embedding);
-        if (card.id === f.card.id) puts.push(result.status);
-        return result;
-      } } },
-      ...(ctx.harness.hashSessionKey && { documentCardSessionKey: (/** @type {DocumentCardSession} */ { client, sessionId }) =>
-        ctx.harness.hashSessionKey?.(client, sessionId) ?? null }),
-      clock: assemblyClock(), config: { documentCards: { enabled: true } },
-      model: { model: "test", contextWindow: 32_768, countTokens: () => 1, async call() { return { items: [] }; } },
-      embedder: { model: "test", dimensions: ctx.embeddingDimensions ?? 1, async embed(texts) {
-        embeddings.push([...texts]);
-        return texts.map(() => Float32Array.from(ctx.embeddingDimensions ? ctx.vec(0) : [1]));
-      } },
-      gate: { async assertOpen() {} }, tokens: { countTokens: () => 1 },
+    const f = await fixture(ctx);
+    const sends = [];
+    for (const stage of ["detect", "verify"]) {
+      const documentCards = { ...f.cards };
+      /** @type {string[]} */
+      const sent = [];
+      if (stage === "detect") delete documentCards.visibilityInputs;
+      const service = cardService(ctx, { ...f.storage, documentCards }, { documentCards: { enabled: true, amendments: true } }, {
+        async detectChanges() {
+          sent.push("detect");
+          delete documentCards.visibilityInputs;
+          return { changes: [{ card_id: f.card.id, quote: change.content, new_value: change.content }] };
+        },
+        async verifyChange() {
+          sent.push("verify");
+          return { applies: true, line: change.content };
+        },
+      });
+      await runCapture(service, f.scope, "inspection", stage + "-change", [change]);
+      sends.push(sent);
+    }
+    equal(sends, [[], ["detect"]], "A missing card verdict did not stop an amendment send");
+  }),
+  testCase("CLASSIFY-NO-INPUT-PORT", "classification without a visibility loader withholds existing cards", async ctx => {
+    const f = await fixture(ctx);
+    const { placement } = ctx.adapter;
+    check(placement, "Expected placement");
+    const documentCards = { ...f.cards };
+    delete documentCards.visibilityInputs;
+    const pending = await f.read(tx => placement.pendingCards(tx, f.scope, { limit: 5 }));
+    equal(pending.map(({ cardId }) => cardId), [f.card.id], "Expected an eligible placement card");
+    /** @type {ModelRequest[]} */
+    const sent = [];
+    await placePendingCards({
+      uow: f.storage.uow, scope: f.scope, placement, documentCards, fence: f.storage.fence,
+      gate: { async assertOpen() {} },
+      model: { model: "test", contextWindow: 32_768, countTokens: () => 1,
+        async call(_stage, request) {
+          sent.push(request);
+          return { items: [] };
+        } },
     });
-    const selection = { client, sessionId, eventId: "fresh-event" };
-    equal((await service.enqueueCapture(f.scope, { ...selection, messages: [initial, control] })).status,
-      "accepted", "Expected fresh event admission");
-    equal((await service.runCapture(f.scope, selection)).status, "done", "Expected recapture to finish");
-    check(embeddings.flat().some(text => text.includes(control.content)), "Expected the eligible control to reach the embedder");
-    check(!embeddings.flat().some(text => text.includes(f.card.body)), "The embedder received the old card body");
-    equal(puts, ["unchanged"], "Recapture must keep the stored body revision");
-    const after = (await dumpOwner(ctx, f)).documentCards;
-    const storedCard = (/** @type {unknown} */ snapshot) => {
-      check(Array.isArray(snapshot), "Expected a card storage snapshot");
-      return snapshot.flatMap(({ cards }) => cards).find(([id]) => id === f.card.id);
-    };
-    check(storedCard(before), "Expected the old body in storage");
-    equal(storedCard(after), storedCard(before), "Recapture changed the stored card");
-  }, ["rawArchive"]),
+    equal(sent, [], "Classification received a card without a verdict");
+  }, ["placement"]),
+  testCase("REVISION-ZERO", "revision zero stays below the replacement cutoff", async ctx => {
+    const f = await fixture(ctx, undefined, { citationRevision: 0 });
+    const before = await citationDelivery(f);
+    await f.correct("none");
+    const hidden = [null, { status: "not_found" }, []];
+    equal([before, await citationDelivery(f)], [hidden, hidden], "Revision zero escaped the correction cutoff");
+  }),
+  testCase("FUTURE-CITATION", "a future citation stays withheld when correction reaches its revision", async ctx => {
+    const f = await fixture(ctx, undefined, { citationRevision: 2, seedCard: false });
+    equal(f.link.revision, 1, "Expected a citation one revision ahead of the memory");
+    const error = await f.write(tx => f.cards.put(tx, f.scope, f.card)).then(() => null, error => error);
+    const before = await citationDelivery(f);
+    await f.correct("none");
+    const after = await citationDelivery(f);
+    const hidden = [null, { status: "not_found" }, []];
+    equal([before, after], [hidden, hidden], "A future citation was delivered before or after correction");
+    check(isCoreErrorShape(error) && error.code === "invalid_input", "Expected the store to reject the future citation");
+
+    const body = "Every visit checks the new hardware.";
+    const contentHash = await ctx.hash(body);
+    await f.write(tx => f.cards.put(tx, f.scope, { ...f.card, body, contentHash }));
+    await rejects(() => f.write(tx => f.cards.linkMemories(tx, f.scope, f.card.id,
+      [{ id: f.link.id, revision: 3 }])), "invalid_input");
+    equal((await f.read(tx => f.cards.get(tx, f.scope, f.card.id)))?.sourceMemories, f.card.sourceMemories,
+      "Rejecting a future link must preserve the real citation");
+  }),
   testCase("SAME-BODY-PUT", "a different content hash and title cannot advance an unchanged body's citation", async ctx => {
     const f = await fixture(ctx);
     const { memories } = f.storage;
@@ -446,7 +574,7 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
       await f.storage.memories.replaceContent(tx, f.scope, f.link.id, f.link.revision, next, null, nextDay);
     });
     equal(await f.visible(), [f.ref], "A forget fact for earlier text is not an in-place edit fact");
-    const { service } = captureService(ctx, { documentCards: { enabled: true } });
+    const service = cardService(ctx, f.storage, { documentCards: { enabled: true } });
     equal((await service.forget(f.scope, f.link.id, source)).status, "forgotten", "Expected memory forget");
     equal(await f.visible(), [], "Forget still withholds dependent cards");
     equal((await f.write(tx => f.cards.put(tx, f.scope, f.card))).status, "tombstoned", "Forget still purges the card");

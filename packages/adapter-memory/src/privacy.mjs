@@ -94,9 +94,10 @@ export function memoryCorrectionEvidence(state, scope, { id, revision }) {
     }
   }
   // A replacement invalidates every earlier revision, including revisions that only
-  // changed metadata or receipts. Later metadata and receipt writes leave this cutoff intact.
-  const newestReplacement = hasReplacement ? current?.revision ?? 1 : 1;
-  const correctedRevisions = Array.from({ length: newestReplacement - 1 }, (_, index) => index + 1);
+  // changed metadata or receipts. Memory revisions start at 1, and later metadata
+  // and receipt writes leave the replacement cutoff intact.
+  const cutoff = hasReplacement ? current?.revision ?? 1 : 1;
+  const correctedRevisions = Array.from({ length: cutoff }, (_, revision) => revision);
   return { correctedRevisions, unresolvedCorrection };
 }
 
