@@ -195,12 +195,23 @@ export function endpointEvidenceSql(currentness) {
   ].join(" || ");
 }
 
+const CORE_VISIBILITY_COLUMNS = `fact_id, action_id, incarnation, epoch::text, body,
+  ${CREATED_AT_US}::text AS created_at_us, kind, origin, mode, slot`;
+
+/** @param {Query} query @param {Scope} scope @param {string} messageId */
+export async function readRawSpanFacts(query, scope, messageId) {
+  const { rows } = await query(`SELECT ${CORE_VISIBILITY_COLUMNS}
+    FROM core_suppression_facts WHERE user_id = $1 AND kind = 'rawSpan'
+      AND (body ->> 'namespace') IS NOT DISTINCT FROM $2::text AND body ->> 'messageKey' = $3`,
+  [scope.owner, scope.namespace, messageId]);
+  return rows.map(row => decodeCoreFact(row, scope.owner));
+}
+
 export function visibilityFactsSql({
   textOnly = "false", legacyOnly = "false", limit = "NULL", allowPendingLegacy = "false", rawSpans = "false",
   hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL", rowEvidence = false,
 } = {}) {
-  const liveFacts = `SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
-    ${CREATED_AT_US}::text AS created_at_us, kind, origin, mode, slot
+  const liveFacts = `SELECT false AS legacy, false AS pending, ${CORE_VISIBILITY_COLUMNS}
     FROM core_suppression_facts WHERE user_id = $1
       AND (kind IN ('identity', 'text', 'session', 'window') OR (${rawSpans} AND kind = 'rawSpan'))
       AND (NOT ${textOnly} OR kind = 'text') AND NOT ${legacyOnly}

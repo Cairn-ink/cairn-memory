@@ -135,6 +135,44 @@ test("purging one source message removes only its quantities", migrationDbTest, 
   assert.equal(await revision(), index + 1);
 });
 
+test("text purge commits with NUL-bearing outbox IDs and drops matching quantities", migrationDbTest, async t => {
+  for (const storage of ["legacy request", "Core metadata"]) {
+    await t.test(storage, async t => {
+      const { raw, event, messages, before, readLedger, write, revision, pool } = await capturePair(t);
+      const [target, survivor] = messages;
+      const withNul = { ...target, id: survivor.id + "\0".repeat(201) };
+      const batch = [withNul, target, survivor];
+      // Leave the retained receipt and ledger sources in place to exercise outbox-only cleanup.
+      await pool.query("DELETE FROM raw_messages");
+      await pool.query("DELETE FROM capture_events");
+      if (storage === "legacy request") {
+        const request = { client: event.client, session_id: event.sessionId, event_id: event.eventId,
+          messages: batch.map(({ id, role, content }) => ({ id, role, content })) };
+        await pool.query(`INSERT INTO capture_events (user_id, client, event_id, session_id, received_at, raw_request)
+          VALUES ($1, $2, $3, $4, now(), $5::jsonb)`,
+        [scope.owner, event.client, event.eventId, event.sessionId, JSON.stringify(JSON.stringify(request))]);
+      } else {
+        const capture = createPostgresCapturePorts({ lineageSecret: randomUUID() });
+        const key = { ...event, scope, payloadDigest: sha256Hex("event") };
+        assert.deepEqual(await write(tx => capture.admit(tx, key, batch)), { status: "admitted" });
+        const { rows: [row] } = await pool.query("SELECT raw_request, core_outbox_metadata FROM capture_events");
+        assert.equal(row.raw_request.messages[0].id, "message-0");
+        assert.equal(JSON.parse(row.core_outbox_metadata)[0].id, withNul.id);
+      }
+      const fact = { ...scope, actionId: randomUUID(), origin: "forget", kind: "text", mode: "exact",
+        text: { digests: [await coreDigest(target.content)] } };
+      const index = await revision();
+      assert.deepEqual(await write(tx => raw.purgeWithheld(tx, scope, [{ fact }])), { rawDeleted: 0, ledgerBlanked: 2 });
+      const { rows: [{ raw_request }] } = await pool.query("SELECT raw_request FROM capture_events");
+      const request = typeof raw_request === "string" ? JSON.parse(raw_request) : raw_request;
+      assert.deepEqual(request.messages.map(({ content }) => content), ["", "", survivor.content]);
+      const retained = before.byMemory[1];
+      assert.deepEqual(await readLedger(), { byMemory: [[], retained], rows: retained, terms: ["bus", "fare", "transport"] });
+      assert.equal(await revision(), index + 1);
+    });
+  }
+});
+
 test("Postgres quantity ledger isolates both owners and namespaces in reads, deletes and terms", migrationDbTest, async t => {
   const { ledger, run, insert } = await setup(t);
   const named = { ...scope, namespace: "project\0shared" };

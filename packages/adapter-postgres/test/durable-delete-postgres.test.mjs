@@ -3,8 +3,9 @@ import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   createPostgresCapturePorts, createPostgresMemoryStore, createPostgresRawPorts,
-  createPostgresSuppressionStore, createPostgresUnitOfWork,
+  createPostgresQuantityLedgerStore, createPostgresSuppressionStore, createPostgresUnitOfWork,
 } from "../src/index.mjs";
+import { canonicalReceiptId } from "../src/memory-rows.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const scope = { owner: "owner", namespace: null };
@@ -121,14 +122,27 @@ for (const deleteClient of ["coding-client", "mcp"]) {
     const unrelated = { ...newEvent(reported.sessionId), client: "another-client" };
     const original = message("The spool is copper.", 150);
     const late = message("The spool was replaced.", 300);
+    const memoryId = randomUUID();
     await pool.query(`INSERT INTO memories
       (id, user_id, text, text_hash, kind, embedding, embedding_model, source_kind, source_client, source_session_id)
       VALUES ($1, $2, $3, $4, 'fact', $5, 'fixture', 'mcp', $6, $7)`,
-    [randomUUID(), scope.owner, original.content, hash(original.content), JSON.stringify(vector), reported.client, reported.sessionId]);
+    [memoryId, scope.owner, original.content, hash(original.content), JSON.stringify(vector), reported.client, reported.sessionId]);
     for (const event of [reported, physical, unrelated]) {
       assert.deepEqual(await write(tx => capture.admit(tx, event, [original])), { status: "admitted" });
       assert.deepEqual(await archive(event, original), { archived: 1 });
     }
+    const clients = [reported.client, physical.client];
+    await pool.query(`INSERT INTO core_memory_receipts (user_id, memory_id, client, session_id, message_id, role)
+      SELECT $1, $2, client, $3, $4, $5 FROM unnest($6::text[]) AS addresses(client)`,
+    [scope.owner, memoryId, reported.sessionId, original.id, original.role, clients]);
+    const ledger = createPostgresQuantityLedgerStore();
+    const quantities = await Promise.all([reported, physical].map(async event => ({
+      memoryId, receiptId: await canonicalReceiptId(scope.owner, scope.namespace, memoryId, receipt(event, original)),
+      textHash: `sha256:${hash(original.content)}`, date: original.occurredAtMs, ordinal: 0,
+      kind: "record", measure: "weight", category: "spool", value: 6, unit: "g", group: "materials",
+      period: "none", comparator: "none",
+    })));
+    assert.deepEqual(await write(tx => ledger.put(tx, scope, quantities)), { inserted: 2 });
 
     // A legacy fence may exist at just the physical address before deletion.
     await write(tx => raw.fenceSession(tx, scope, physical));
@@ -144,7 +158,14 @@ for (const deleteClient of ["coding-client", "mcp"]) {
       finishItem("A derived memory.", [receipt(reported, original)]),
     ])), { code: "lineage_fenced" });
 
+    assert.deepEqual((await pool.query(`SELECT source_client, source_session_id, source_message_id
+      FROM core_quantity_ledger WHERE memory_id = $1 ORDER BY source_client`, [memoryId])).rows,
+    clients.map(client => ({ source_client: client, source_session_id: reported.sessionId, source_message_id: original.id })));
+    assert.deepEqual(await read(tx => ledger.terms(tx, scope)), ["materials", "spool", "weight"]);
     assert.deepEqual(await remove(deleteClient === physical.client ? physical : reported), { rawDeleted: 2 });
+    assert.deepEqual(await read(tx => ledger.listForMemory(tx, scope, memoryId)), []);
+    assert.deepEqual(await read(tx => ledger.list(tx, scope, { fromMs: 0, toMs: late.occurredAtMs })), []);
+    assert.deepEqual(await read(tx => ledger.terms(tx, scope)), []);
     assert.deepEqual((await pool.query(`SELECT client FROM capture_raw_fences
       WHERE user_id = $1 AND session_id = $2 ORDER BY client`, [scope.owner, reported.sessionId])).rows,
     [{ client: reported.client }, { client: physical.client }]);

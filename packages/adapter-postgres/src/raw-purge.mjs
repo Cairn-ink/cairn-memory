@@ -3,7 +3,7 @@ import {
   normalizeForHash, PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1,
 } from "../../core/src/index.mjs";
 import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
-import { decodeRequest, hostedTime, jsonbSource } from "./capture-input.mjs";
+import { decodeRequest, hostedTime, jsonbSource, pgText } from "./capture-input.mjs";
 import { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
 import { conversationSessions } from "./raw-session.mjs";
 
@@ -151,7 +151,8 @@ export async function scrubLedger(query, scope, sessions, matches) {
         if (!matches || await matches(message)) {
           if (message.content !== "") {
             const messageId = metadata?.[index]?.id ?? message.id;
-            if (matches && typeof messageId === "string") removed.push({ client, sessionId: session_id, messageId });
+            // Outbox IDs can escape characters that a ledger source's text column cannot store.
+            if (matches && pgText(messageId)) removed.push({ client, sessionId: session_id, messageId });
             message.content = "";
             ledgerBlanked++;
             changed = true;

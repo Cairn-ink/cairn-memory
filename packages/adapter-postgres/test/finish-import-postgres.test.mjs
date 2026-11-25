@@ -114,6 +114,38 @@ test("a finish cache cannot supply a receipt for a Raw-withheld span", migration
   });
 });
 
+test("an existing Raw row cannot supply a receipt for a Raw-withheld span", migrationDbTest, async t => {
+  const hashSessionKey = (client, sessionId) => hash(JSON.stringify([client, sessionId]));
+  const { key, pool, capture, raw, acquire, run } = await fixture(t, { hashSessionKey });
+  const suppressions = createPostgresSuppressionStore({ hashSessionKey });
+  const source = message("Tea cost 6.25 USD.");
+  const other = message("The kettle sits on the counter.");
+  const token = await acquire([source, other]);
+  const finished = item(source.content, key, source);
+  const receipt = { ...finished.receipts[0], excerpt: source.content };
+  const withheld = (tx, input = receipt) => suppressions.receiptWithheld(tx, key.scope, input);
+  await run(async tx => {
+    assert.equal((await capture.finish(tx, token, [finished])).memories.length, 1);
+    assert.deepEqual(await raw.archive(tx, key, [source, other]), { archived: 2 });
+    assert.equal(await withheld(tx), false);
+    const fact = { ...key.scope, actionId: randomUUID(), origin: "forget", kind: "rawSpan",
+      sessionKeyHash: hashSessionKey(key.client, key.sessionId), messageKey: source.id,
+      startUtf16: 0, endUtf16: 3, contentDigest: hash("Tea") };
+    const disjoint = { ...fact, actionId: randomUUID(),
+      startUtf16: source.content.length, endUtf16: source.content.length + 3 };
+    await suppressions.writeFact(tx, disjoint, hash(factIncarnationBody(disjoint)));
+    assert.equal(await withheld(tx), false);
+    await suppressions.writeFact(tx, fact, hash(factIncarnationBody(fact)));
+    assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 0 });
+    assert.equal(await withheld(tx), true);
+    assert.equal(await withheld(tx, { ...receipt, excerpt: "cost 6.25 USD." }), true);
+    assert.equal(await withheld(tx, { ...receipt, messageId: other.id, excerpt: other.content }), false);
+  });
+  const { rows } = await pool.query("SELECT content FROM raw_messages WHERE message_id = $1", [source.id]);
+  assert.deepEqual(rows, [{ content: source.content }]);
+  assert.equal(await run(withheld), true);
+});
+
 test("finish rejects foreign and expired tokens and only the replacement can complete", migrationDbTest, async (t) => {
   const db = await fixture(t);
   const { uow, otherOwner, key, capture, acquire, run, advanceClock } = db;
