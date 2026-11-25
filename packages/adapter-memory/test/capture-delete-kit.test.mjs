@@ -41,9 +41,10 @@ async function loadRawVariant(variant, mutate) {
 }
 
 function retainLedger(source) {
-  const matcher = /\(?key\)? => slots\.has\(sessionSlot\(namespace, key\)\)/gu;
-  assert.equal(source.match(matcher)?.length, 1, "Expected one ledger blanking matcher for conversation deletion");
-  return source.replace(matcher, "() => false");
+  // The conversation-delete blanking call, whether it passes a named session matcher or an inline one.
+  const matcher = /blankCaptureMessages\(state, namespace, (?:matchesSession|\(?key\)? => slots\.has\(sessionSlot\(namespace, key\)\))\)/gu;
+  assert.equal(source.match(matcher)?.length, 1, "Expected one ledger blanking call for conversation deletion");
+  return source.replace(matcher, "blankCaptureMessages(state, namespace, () => false)");
 }
 
 async function rejectsCaptureDelete(create, message, suffix = "") {
