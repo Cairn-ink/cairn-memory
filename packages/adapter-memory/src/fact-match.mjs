@@ -133,15 +133,10 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
   const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
   const snapshotCapture = { ...capture, rowShingles: true };
 
-  /** @param {State["facts"]} facts @param {Scope} scope */
-  return function matchFacts(facts, scope) {
-    const scoped = [...facts.values()].filter(({ fact }) =>
-      fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-    const texts = scoped.filter((stored) => isKind(stored, "text"));
-    const sessions = scoped.filter((stored) => isKind(stored, "session"));
-
+  /** @param {Scope} scope @param {typeof import("@cairn-ink/core").factHidesRow} factHidesRow */
+  function createRowMatcher(scope, factHidesRow) {
     /** @param {Entry} entry */
-    function rowMatcher({ row, receipts }) {
+    return function rowMatcher({ row, receipts }) {
       /** @type {FactMatchRow} */
       const candidate = {
         type: "memory", scope, memoryId: row.id, revision: row.revision,
@@ -160,7 +155,18 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
             return false;
         }
       };
-    }
+    };
+  }
+
+  /** @param {State["facts"]} facts @param {Scope} scope */
+  return function matchFacts(facts, scope) {
+    const scoped = [...facts.values()].filter(({ fact }) =>
+      fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
+    const texts = scoped.filter((stored) => isKind(stored, "text"));
+    const sessions = scoped.filter((stored) => isKind(stored, "session"));
+    const rowMatcher = createRowMatcher(scope, factHidesRow);
+    // Only a proven match is enough for erasure.
+    const definiteRowMatcher = createRowMatcher(scope, (...args) => factHidesRow(...args) === true);
 
     /** @param {SourceRef["client"]} client @param {SourceRef["sessionId"]} sessionId */
     function blocksSession(client, sessionId) {
@@ -189,6 +195,11 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
       /** @param {Entry} entry */
       hides(entry) {
         return scoped.length > 0 && scoped.some(rowMatcher(entry));
+      },
+
+      /** @param {Entry} entry */
+      definitelyHides(entry) {
+        return scoped.length > 0 && scoped.some(definiteRowMatcher(entry));
       },
 
       /** @param {CanonicalQuery} query @param {"hash" | "full"} mode
@@ -224,18 +235,27 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
 
       textFacts: texts.map(({ fact }) => fact),
 
-      /** @param {CardWrite} card @param {FactMatchIncoming["passages"]} passages */
-      withholdsCardSource({ sourceMessage, sourceMemories, date }, passages) {
+      /** @param {Pick<CardWrite, "sourceMessage" | "sourceMemories" | "date">} card
+       * @param {FactMatchIncoming["passages"]} passages */
+      cardSourceWithholding({ sourceMessage, sourceMemories, date }, passages) {
         if (!sourceMessage) return false;
         const { client, sessionId } = sourceMessage;
-        return scoped.some((stored) => {
+        let result = /** @type {false | "ineligible"} */ (false);
+        for (const stored of scoped) {
           if (stored.fact.kind === "identity") {
-            return sourceMemories.some(({ id, revision }) => factHidesRow(stored,
-              { type: "memory", scope, memoryId: id, revision }, policy) !== false);
+            for (const { id, revision } of sourceMemories) {
+              const match = factHidesRow(stored, { type: "memory", scope, memoryId: id, revision }, policy);
+              if (match === true) return true;
+              if (match === "ineligible") result = match;
+            }
+          } else {
+            const match = factBlocksIncoming(stored,
+              { scope, session: { client, sessionId }, occurredAtMs: date, passages }, capture);
+            if (match === true) return true;
+            if (match === "ineligible") result = match;
           }
-          return factBlocksIncoming(stored, { scope, session: { client, sessionId }, occurredAtMs: date, passages },
-            capture) !== false;
-        });
+        }
+        return result;
       },
 
       /** @param {ReturnType<typeof copySuppressionCandidates>} candidates */
@@ -247,8 +267,9 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
         };
       },
 
-      /** @param {string} memoryId @param {Entry | undefined} entry */
-      factsFor(memoryId, entry) {
+      /** @param {string} memoryId @param {Entry | undefined} entry @param {boolean} [definiteOnly] */
+      factsFor(memoryId, entry, definiteOnly) {
+        if (entry && definiteOnly) return structuredClone(scoped.filter(definiteRowMatcher(entry)));
         const applicable = entry ? scoped.filter(rowMatcher(entry)) :
           scoped.filter(({ fact }) => fact.kind === "identity" && fact.memoryId === memoryId);
         return structuredClone(applicable);

@@ -35,6 +35,10 @@ export declare function requiresLegacyMacDomain(fact: TextFact): boolean;
 export declare function withholdsAnyPassage(
   passages: readonly PassageFingerprint[], facts: readonly TextFact[], threshold?: number,
 ): boolean;
+/** @internal Distinguishes definite passage matches from ineligible evidence. */
+export declare function passageWithholding(
+  passages: readonly PassageFingerprint[], facts: readonly TextFact[], threshold?: number,
+): boolean | "ineligible";
 export declare function blocksMemoryPassage(
   passages: readonly PassageFingerprint[], facts: readonly TextFact[], key: { id: string } | null,
   threshold?: number, edit?: { id: string; createdAtMs: number },
