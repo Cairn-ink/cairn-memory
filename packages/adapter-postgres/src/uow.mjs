@@ -4,7 +4,8 @@ import { isReadStatement } from "./read-only.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexStart?: bigint }} Run */
+/** @import { VisibilityFactsCache } from "./memory-visibility.mjs" */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexStart?: bigint, visibilityFacts?: VisibilityFactsCache }} Run */
 
 const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
@@ -155,7 +156,11 @@ export function createPostgresUnitOfWork(source) {
     try {
       const connection = await source.connect();
       /** @type {Run} */
-      const state = { connection, pending: new Set(), pauseLock: pauseLock === true };
+      const state = {
+        connection, pending: new Set(), pauseLock: pauseLock === true,
+        // Only repeatable-read, read-only runs can reuse their statement's facts.
+        visibilityFacts: readOnly ? new Map() : undefined,
+      };
       let committed = false;
       let sharedPauseHeld = false;
       try {
@@ -188,6 +193,7 @@ export function createPostgresUnitOfWork(source) {
           } finally {
             liveRuns.delete(tx);
             await Promise.allSettled(state.pending);
+            state.visibilityFacts?.clear();
             if (state.failure) throw state.failure;
           }
         } catch (error) {
