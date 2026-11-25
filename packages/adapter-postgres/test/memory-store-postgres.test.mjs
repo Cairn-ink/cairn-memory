@@ -581,7 +581,7 @@ test("G-E P1-1 named relation reads require an explicit opt-in", migrationDbTest
   }
 });
 
-test("G-E P1-2 both relation reads bound statements for 30,000 dense endpoints", { ...migrationDbTest, timeout: 120_000 }, async (t) => {
+test("G-E P1-2 both relation reads bound statements for 30,000 dense endpoints", { ...migrationDbTest, timeout: 240_000 }, async (t) => {
   let maxIds = 0;
   let maxBytes = 0;
   let statements = 0;

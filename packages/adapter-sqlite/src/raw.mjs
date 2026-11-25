@@ -137,7 +137,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
           migratedRaw.fenceArrival(db, selection, session, batch);
           return { ...counts, withheld: batch.length };
         }
-        if (lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
+        if (lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch), batch)) {
           return { ...counts, withheld: batch.length };
         }
         const legacy = readLegacyDenials(db, selection);
