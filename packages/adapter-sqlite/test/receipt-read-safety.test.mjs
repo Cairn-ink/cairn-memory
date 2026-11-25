@@ -54,10 +54,13 @@ async function finishCapture(storage, retained) {
   assert.equal(claim.status, "claimed");
   await write(storage, tx => storage.capture.beginDispatch(tx, claim.token));
   const content = "Visible Memory with conflicting role";
-  const result = await write(storage, tx => storage.capture.finish(tx, claim.token, [{
-    content, kind: "fact", confidence: 1, embedding: null, textHash: "sha256:" + sha256(content.toLowerCase()),
-    receipts: [{ client, sessionId, messageId, role, occurredAtMs }],
-  }]));
+  const result = await write(storage, async tx => {
+    await storage.capture.assertEligible(tx, key, [0]);
+    return storage.capture.finish(tx, claim.token, [{
+      content, kind: "fact", confidence: 1, embedding: null, textHash: "sha256:" + sha256(content.toLowerCase()),
+      receipts: [{ client, sessionId, messageId, role, occurredAtMs }],
+    }]);
+  });
   const { id, revision } = result.memories[0];
   return { type: "memory", scope, id, revision };
 }

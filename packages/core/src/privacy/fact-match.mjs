@@ -102,6 +102,7 @@ function matchReader() {
         fact: (value) => record(value, [
           "kind", "origin", "owner", "namespace", "actionId", "memoryId", "throughRevision", "mode", "client",
           "unknownTime", "anchor", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16", "contentDigest",
+          "explicitSaveExemptAfterUs", "legacyTextHash",
         ], {
           text: (value) => record(value, ["keyId"], { ...passageLists, embedding: (value) => list(value, scalar) }),
           sourceMemory: incarnation,
@@ -117,10 +118,11 @@ function matchReader() {
       return !(fact.kind === "text" && fact.mode === "full" && policy && typeof policy === "object" &&
         !Array.isArray(policy) && field(policy, "rowShingles") === false);
     },
-    /** @param {FactMatchRow} row @param {boolean} useShingles */
-    row(row, useShingles) {
+    /** @param {FactMatchRow} row @param {boolean} useShingles @param {boolean} usePhysicalSource */
+    row(row, useShingles, usePhysicalSource) {
       return /** @type {FactMatchRow} */ (/** @type {unknown} */ (record(row, [
         "type", "memoryId", "revision", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16",
+        ...(usePhysicalSource ? ["sourceKind", "createdAtUs"] : []),
         ...(useShingles ? ["keyId"] : []),
       ], { scope, source, ...(useShingles ? fingerprintLists : fingerprintDigests), embedding: candidateEmbedding })));
     },
@@ -209,9 +211,10 @@ function checksExplicitPassages(fact, edit, passages) {
  * precedence over unavailable evidence from another comparison.
  * @param {readonly TextCandidate[]} passages @param {TextFact} fact @param {FactMatchPolicy} policy
  * @param {IncomingFactMatchPolicy} [explicit] @param {FactMatchIncoming["sourceMemory"]} [edit]
+ * @param {boolean} [skipVector]
  * @returns {FactMatchResult}
  */
-function matchPassages(passages, fact, policy, explicit, edit) {
+function matchPassages(passages, fact, policy, explicit, edit, skipVector = false) {
   const threshold = policy.containmentThreshold === undefined ? CONTAINMENT_THRESHOLD : policy.containmentThreshold;
   if (!Array.isArray(passages) || !isValidFingerprint(fact.text) || !isValidThreshold(threshold)) return "ineligible";
   if (explicit && ((explicit.key != null && !nonempty(explicit.key.id)) ||
@@ -243,7 +246,7 @@ function matchPassages(passages, fact, policy, explicit, edit) {
     const shingles = useShingles &&
       shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable);
     if (shingles === true) return true;
-    const vector = explicit ? false : vectorMatch(passage, fact, policy);
+    const vector = skipVector ? false : vectorMatch(passage, fact, policy);
     if (vector === true) return true;
     if (shingles === "ineligible" || vector === "ineligible") result = "ineligible";
   }
@@ -283,6 +286,13 @@ function windowMatches(fact, client, time) {
   return fact.client !== null && !nonempty(client) ? "ineligible" : true;
 }
 
+/** @param {bigint | "-Infinity" | "Infinity" | undefined} createdAtUs @param {string} cutoff */
+function isAfterExplicitSaveCutoff(createdAtUs, cutoff) {
+  if (createdAtUs === undefined || createdAtUs === "-Infinity" || cutoff === "infinity") return false;
+  if (createdAtUs === "Infinity") return true;
+  return typeof createdAtUs === "bigint" && (cutoff === "-infinity" || createdAtUs > BigInt(cutoff));
+}
+
 /** @param {SuppressionFact} fact @param {FactMatchRow} row @param {FactMatchPolicy} policy @returns {FactMatchResult} */
 function hidesRow(fact, row, policy) {
   const scoped = scopeMatches(fact, row?.scope);
@@ -294,8 +304,13 @@ function hidesRow(fact, row, policy) {
       if (fact.memoryId !== row.memoryId) return false;
       if (fact.throughRevision === undefined) return true;
       return natural(row.revision) ? row.revision <= fact.throughRevision : "ineligible";
-    case "text":
-      return matchPassages([row], fact, policy);
+    case "text": {
+      const cutoff = fact.explicitSaveExemptAfterUs;
+      const exempt = cutoff !== undefined && row.type !== "raw" &&
+        (row.sourceKind === "mcp" || row.sourceKind === "web") &&
+        isAfterExplicitSaveCutoff(row.createdAtUs, cutoff);
+      return matchPassages([row], fact, policy, undefined, undefined, exempt);
+    }
     case "session":
       return sessionMatches(fact.session, row.source, policy);
     case "window":
@@ -316,9 +331,10 @@ function blocksIncoming(fact, incoming, policy) {
   if (scoped !== true) return scoped;
   if (policy?.mode !== "capture" && policy?.mode !== "explicitSave") return "ineligible";
   switch (fact.kind) {
-    case "text":
-      return matchPassages(incoming.passages, fact, policy,
-        policy.mode === "explicitSave" ? policy : undefined, incoming.sourceMemory);
+    case "text": {
+      const explicit = policy.mode === "explicitSave" && fact.explicitSaveExemptAfterUs === undefined ? policy : undefined;
+      return matchPassages(incoming.passages, fact, policy, explicit, incoming.sourceMemory, explicit !== undefined);
+    }
     case "session":
       return sessionMatches(fact.session, incoming.session, policy);
     case "window":
@@ -338,7 +354,8 @@ export function factHidesRow(storedFact, row, policy = {}) {
   try {
     const snapshot = matchReader();
     const fact = validateSuppressionFact(snapshot.fact(storedFact));
-    const candidate = snapshot.row(row, snapshot.useCandidateShingles(fact, policy));
+    const candidate = snapshot.row(row, snapshot.useCandidateShingles(fact, policy),
+      fact.kind === "text" && fact.explicitSaveExemptAfterUs !== undefined);
     const rules = snapshot.policy(policy);
     if (!isValidPolicy(rules)) return "ineligible";
     return hidesRow(fact, candidate, rules);
@@ -349,7 +366,7 @@ export function factHidesRow(storedFact, row, policy = {}) {
 
 /**
  * `rowShingles` defaults to true. Set it to false to skip containment for full text facts.
- * Enabled vectors still apply in capture mode. Explicit saves use exact digests.
+ * Legacy cutoff facts use full matching on incoming writes, including explicit saves.
  * @param {StoredFact} storedFact @param {FactMatchIncoming} incoming @param {IncomingFactMatchPolicy} policy @returns {FactMatchResult}
  */
 export function factBlocksIncoming(storedFact, incoming, policy) {

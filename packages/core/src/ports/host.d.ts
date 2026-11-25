@@ -2,10 +2,11 @@ import type { Capabilities } from "../capabilities.mjs";
 import type { ErrorCode } from "../errors.mjs";
 import type { CallOptions, Counters, MemoryKind, MemoryRow, Namespace, Origin, OwnerId, Receipt, Revision, Role, Scope, SortKeyUs, SourceRef } from "./common.d.ts";
 import type { CaptureMessage } from "./capture.d.ts";
-import type { StoredDocumentCardRecord } from "./document-card.d.ts";
+import type { DocumentCardAmendment, StoredDocumentCardRecord } from "./document-card.d.ts";
 import type { RawSegment, RetrievalScope } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 import type { StorageAdapter } from "./index.d.ts";
+import type { documentCardAmendmentVisible } from "../routing/amendments.mjs";
 import type { DocumentCardFindItem } from "../routing/index.mjs";
 
 export interface SessionStartGroup {
@@ -389,8 +390,15 @@ export type ContextAssemblyItem = {
   evidence?: readonly (ContextAssemblyRawExcerpt & ({ body: string } | { sameAsBody: true }))[];
 } | (ContextAssemblyRawExcerpt & { layer: "Raw"; body: string });
 
+export type ContextLedgerDigest = {
+  body: string;
+  sources: readonly { index: number; role: "user"; memory: ContextCompactRef & { type: "memory" } }[];
+};
+
 export interface ContextAssemblyValue {
   framing: string;
+  /** Computed evidence rendered before the ranked items. Source refs are attribution. */
+  ledgerDigest?: ContextLedgerDigest;
   items: readonly ContextAssemblyItem[];
 }
 
@@ -438,6 +446,7 @@ export interface ContextReadTokenCounter {
 }
 
 /** Pure synchronous formatter for the exact block the host delivers. */
+/** Render an included ledger digest before the ranked items. */
 export type ContextReadBlockFormatter = (value: ContextAssemblyValue) => string;
 
 /** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */
@@ -516,6 +525,11 @@ export interface ContextReadStore extends ReadIdentityPort {
    * Withhold unsafe receipts and any qualification they anchor inside this read transaction. */
   evidence(tx: Tx, readSet: ContextReadSet, refs: readonly ContextReadRef[],
     intent: ContextReadIntent): Promise<readonly (ContextEvidenceRow | null)[]>;
+  /** Complete Raw projection for an amendment quote verified against its source turn in this read snapshot. */
+  documentCardAmendmentSource?(tx: Tx, readSet: ContextReadSet, scope: Scope,
+    amendment: Pick<DocumentCardAmendment, "sourceMessage" | "quote">): Promise<
+    Pick<Parameters<typeof documentCardAmendmentVisible>[0], "source" | "sourceIdentity"> | null
+  >;
   readonly raw?: ContextRawReadStore;
 }
 

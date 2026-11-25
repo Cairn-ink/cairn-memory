@@ -73,9 +73,12 @@ async function captureWithReceipt({ storage, write }, key) {
   assert.equal(claim.status, "claimed");
   await write(tx => storage.capture.beginDispatch(tx, claim.token));
   const textHash = `sha256:${(await coreDigest(message.content)).value}`;
-  const result = await write(tx => storage.capture.finish(tx, claim.token, [{ content: message.content,
-    textHash, kind: "fact", confidence: 1, embedding: null, receipts: [receipt(key)],
-  }]));
+  const result = await write(async tx => {
+    await storage.capture.assertEligible(tx, key, [0]);
+    return storage.capture.finish(tx, claim.token, [{ content: message.content,
+      textHash, kind: "fact", confidence: 1, embedding: null, receipts: [receipt(key)],
+    }]);
+  });
   assert.equal(result.memories.length, 1);
   return result.memories[0].id;
 }

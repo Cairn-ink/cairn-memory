@@ -822,8 +822,6 @@ The MCP host uses these status mappings.
 
 ## Addendum 20 — In-transaction hosted write hooks and pause-locked Postgres snapshots
 
-*Number provisional until merge. Addendum 19 is used by the pending document-card Find and Read change.*
-
 The hosted host needs to finish document-card routing and binding with capture, persist explicit-save
 receipts and the idempotent save envelope with save, and maintain the legacy suppression and evidence
 fences with forget and correct. Core remains the sole memory writer. The same database commit makes the
@@ -1152,3 +1150,86 @@ fences. Keep the legacy projection until reverse cutover is retired.
    a clean shadow comparison throughout that period.
 5. **Pool operation.** The deployment owner sets transaction-pool capacity, fairness budgets and
    failure signals for the two-backend setup using workload numbers from the orchestrator owner.
+
+## Addendum 21 — Legacy explicit-save read parity
+
+On reads, a legacy edit fact matches by physical `text_hash` equality alone.
+
+A full text suppression fact with origin `forget`, `correct`, or `backfill`
+may persist `explicitSaveExemptAfterUs` as a canonical integer string of epoch
+microseconds or as `-infinity`. On reads, the matcher skips vector matching for
+physical `mcp` or `web` rows with a server creation time strictly later than
+that cutoff.
+Any full text fact may use `infinity` to keep vector matching enabled at every
+timestamp. Exact digests and any containment checks enabled by the caller
+still apply. When the field is absent, full text matching follows the caller's
+existing policy.
+
+On writes, legacy cutoff facts apply the full policy. Write-side parity with
+the hosted explicit-save exemption is deferred. Core can therefore block a
+new save that the read policy would show if the hosted writer had stored it.
+
+The Postgres batch copy merges rows that share a slot and have identical matching
+evidence at the latest cutoff. A slot with differing evidence yields no copied
+fact and returns every affected legacy row ID in `uncopyable`. The host may set
+`legacy_writes_reconciled` only once legacy writes have stopped, all facts are
+copied, and the owner has no uncopyable rows. The live union applies every legacy
+row until reconciliation.
+
+## Addendum 22 — Document cards in Context Read (2026-11-25)
+
+The memory adapter supplies document cards to the Context Read `card` channel
+when both capabilities are enabled. It scores exactly `documentCardSearchText`
+with the memory lexical scorer and keeps memory corpus statistics independent.
+The card ref carries the record revision and the title/body revision. The
+snapshot binds each namespace's card generation alongside its memory epoch.
+Card writes in excluded namespaces leave the read set's card generations and
+candidate cursors unchanged.
+
+Core checks `documentCards.visibilityInputs` and `documentCardVisible` inside
+the evidence read transaction and again in the final assembly snapshot. Missing,
+failed, or withheld inputs make document-card evidence unavailable. Adapters
+without the loader can still serve legacy engine and lineage cards with their
+existing index counts. For assembly, Core checks each amendment against the
+card verdict and its whole-message Raw projection in the same snapshot. The
+source must pass the turn and receipt-ancestry checks shared with Addendum 19.
+An ID-less receipt requires exact capture lineage and the retained receipt
+address on a current, visible memory. The quote must occur in the archived user
+turn, which must have no recorded conflict. Select up to five visible amendments,
+newest first, and render them in date order with their source quotes. The card
+and its amendment sources omit session IDs.
+
+At the card's rank in the shared whole-item budget, count the complete body,
+suffix, and sources against the remaining tokens. Drop the oldest amendments
+first, keeping the bare card when no suffix fits. Under every packing policy,
+with Raw enabled or disabled, a selected card occupies one item slot and
+replaces a cited memory at the card's own rank if the resulting pack fits.
+The citation uses the binding's stored revision, and replacement requires an
+exact qualified ref match.
+
+## Addendum 23 — Quantity ledger in Context Read (2026-11-25)
+
+Default `readContext` checks ledger intent when the adapter enables
+`quantityLedger`, supplies the store and the request selects `memory`.
+Check the query for a ledger cue before any ledger lookup. In each authorized
+namespace, use the store's terms as a prefilter. Use the service wall clock and
+`parseWindow` to select records, including earlier records needed for calendar
+goals and goals dated before the window ends.
+
+Within the same snapshot, admit each row only if Context Read evidence and the
+visibility fence confirm a current memory, the canonical user receipt is
+retained and readable, and the current core text hash matches the row's hash.
+Match intent again against the measure, group and category of deliverable
+in-window records and eligible goals before including that namespace. Repeat
+these checks in the final assembly snapshot. Pack ordinary evidence before
+starting the optional ledger work. If the read deadline expires, a check
+fails or the evidence changes, omit the digest and validate ordinary evidence
+for delivery. Ledger work leaves the ordinary pack's deadline diagnostics intact.
+
+The optional assembly field `ledgerDigest` carries
+`{ body, sources: [{ index, role: "user", memory }] }`. The host formatter
+renders it before the ranked items and counts its full text in the block.
+It consumes one item slot. Include the complete body and all sources only
+when they fit the budget. Each `memory` is a distinct qualified compact ref
+for attribution. The `items` array retains ordinary refs and ranks, and
+snapshot tokens cover the selected ordinary Memory and Card evidence.

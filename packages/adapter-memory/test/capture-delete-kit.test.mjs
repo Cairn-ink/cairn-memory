@@ -232,11 +232,32 @@ test("K-CAP-DEL-1 rejects a delete that does nothing", async () => {
     { message: "Conversation deletion must remove its Raw rows (before capture, previously archived)" });
 });
 
-test("K-CAP-DEL cases still pass with an always-allowing assertEligible", async () => {
+test("K-CAP-DEL cases still pass when assertEligible allows the deletion target", async () => {
   const factory = rawFactory({
     create(options) {
       const adapter = createMemoryAdapter(options);
-      adapter.capture.assertEligible = async () => {};
+      const { admit, assertEligible } = adapter.capture;
+      const { deleteConversation } = adapter.raw;
+      const sessionKey = ({ owner, namespace }, { client, sessionId }) => JSON.stringify([owner, namespace, client, sessionId]);
+      const admitted = new Map();
+      adapter.capture.admit = async (tx, key, messages) => {
+        const result = await admit(tx, key, messages);
+        if (result.status === "admitted") {
+          admitted.set(sessionKey(key.scope, key), { eventId: key.eventId, payloadDigest: key.payloadDigest, deleted: false });
+        }
+        return result;
+      };
+      adapter.raw.deleteConversation = async (tx, scope, session) => {
+        const result = await deleteConversation(tx, scope, session);
+        const target = admitted.get(sessionKey(scope, session));
+        if (target) target.deleted = true;
+        return result;
+      };
+      adapter.capture.assertEligible = async (tx, key, positions) => {
+        const target = admitted.get(sessionKey(key.scope, key));
+        if (target?.deleted && target.eventId === key.eventId && target.payloadDigest === key.payloadDigest) return;
+        return assertEligible(tx, key, positions);
+      };
       return adapter;
     },
   });

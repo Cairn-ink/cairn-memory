@@ -9,10 +9,12 @@ import { readSourceKind } from "./memory-metadata.mjs";
 
 export const TEXT_HASH = "'sha256:' || text_hash";
 export const CREATED_MS = "COALESCE(core_created_at_ms, floor(EXTRACT(EPOCH FROM created_at) * 1000))";
+export const CREATED_AT_US = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)";
 export const WRITE_TIME_US = "(EXTRACT(EPOCH FROM updated_at) * 1000000)::bigint";
 export const MATCH_COLUMNS = `id, core_namespace, revision, ${WRITE_TIME_US}::text AS updated_us`;
 export const MEMORY_COLUMNS = `${MATCH_COLUMNS}, ${TEXT_HASH} AS logical_hash, core_digests, kind, origin,
   confidence, text, source_kind, source_client, source_session_id, ${CREATED_MS}::text AS created_ms,
+  ${CREATED_AT_US}::text AS created_at_us,
   embedding_model, embedding::text, currentness`;
 
 /** @param {string} parameter */
@@ -75,7 +77,18 @@ export function readMemory(row, owner) {
 
 /** @param {any} row @param {string} owner */
 export function readEntry(row, owner) {
-  return { memory: readMemory(row, owner), digests: /** @type {TextDigest[] | null} */ (row.core_digests) };
+  return { memory: readMemory(row, owner), digests: /** @type {TextDigest[] | null} */ (row.core_digests),
+    ...physicalSource(row) };
+}
+
+/** @param {any} row
+ * @returns {{ sourceKind: string | undefined, createdAtUs: bigint | "-Infinity" | "Infinity" | undefined }} */
+function physicalSource(row) {
+  const us = /** @type {string | null | undefined} */ (row.created_at_us);
+  return {
+    sourceKind: /** @type {string | undefined} */ (row.source_kind),
+    createdAtUs: us === "Infinity" || us === "-Infinity" ? us : us == null ? undefined : BigInt(us),
+  };
 }
 
 /** @typedef {ReturnType<typeof readEntry>} MemoryEntry */
@@ -89,7 +102,7 @@ export function readCandidate(row, owner) {
     text: /** @type {string | undefined} */ (row.text ?? undefined),
     embedding: row.embedding == null ? undefined : { vector: /** @type {number[]} */ (JSON.parse(row.embedding)) },
   };
-  return { memory, digests: /** @type {TextDigest[] | null} */ (row.core_digests) };
+  return { memory, digests: /** @type {TextDigest[] | null} */ (row.core_digests), ...physicalSource(row) };
 }
 
 /** @param {Query} query @param {string} owner @param {string | null} namespace @param {string} id */

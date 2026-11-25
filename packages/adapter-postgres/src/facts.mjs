@@ -132,6 +132,8 @@ const factFields = {
   identity: { ...baseFields, memoryId: copyString, throughRevision: optional(copyNumber) },
   text: {
     ...baseFields, mode: copyString,
+    legacyTextHash: optional(copyString),
+    explicitSaveExemptAfterUs: optional(copyString),
     text: (/** @type {unknown} */ value) => copyObject(value, textFields),
     sourceMemory: optional(nullable((value) => copyObject(value, sourceMemoryFields))),
   },
@@ -205,7 +207,9 @@ function slotTarget(fact, historical) {
     case "text": {
       const target = historical ? historicalDigestTarget : digestTarget;
       const digests = sortDigests(fact.text.digests, target).map(target);
-      return ["text", fact.mode, digests, fact.sourceMemory?.id ?? null];
+      const targetFields = ["text", fact.mode, digests, fact.sourceMemory?.id ?? null];
+      if (fact.legacyTextHash !== undefined) targetFields.push(fact.legacyTextHash);
+      return targetFields;
     }
     case "session": {
       const { session } = fact;

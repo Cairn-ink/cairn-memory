@@ -99,12 +99,9 @@ function checkLineage(state, links, sourceLineageVisible, readQualified, retains
 /** @param {Archive} archive
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {Parameters<typeof currentMemoryReceipts>[3]} receiptReadSafety */
-export function createCardRawSourceCheck({ findVisibleSource, sourceLineageVisible }, matchFacts, receiptReadSafety) {
-  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source */
-  return async (state, scope, source) => {
-    const row = await findVisibleSource(state, scope, source);
-    // A conflicting replay invalidates whole-message evidence for cards.
-    if (!row || state.rawConflicts.has(row.ref.id)) return false;
+export function createCardRawSourceChecks({ findVisibleSource, sourceLineageVisible }, matchFacts, receiptReadSafety) {
+  /** @param {State} state @param {Scope} scope @param {RawEntry} row */
+  async function lineageVisible(state, scope, row) {
     const links = receiptLinks(state, { owner: scope.owner, namespaces: [scope.namespace] },
       new Set([sourceSlot(scope, row)]), () => false);
     if (!links) return false;
@@ -118,12 +115,34 @@ export function createCardRawSourceCheck({ findVisibleSource, sourceLineageVisib
             source.messageId === receipt.messageId && source.captureEventId === receipt.captureEventId);
       });
     return current(scope, row);
-  };
+  }
+
+  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source */
+  async function sourceVisible(state, scope, source) {
+    const row = await findVisibleSource(state, scope, source);
+    // A conflicting replay invalidates whole-message evidence for cards.
+    return !!row && !state.rawConflicts.has(row.ref.id) && await lineageVisible(state, scope, row);
+  }
+  return { sourceVisible, lineageVisible };
 }
 
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
- * @param {Archive} archive @param {ContextReadStore} store @returns {ContextReadStore} */
-export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible }, store) {
+ * @param {Archive} archive @param {ContextReadStore} store
+ * @param {{ raw: boolean, amendmentLineage?: ReturnType<typeof createCardRawSourceChecks>["lineageVisible"] }} options
+ * @returns {ContextReadStore} */
+export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible, amendmentSource }, store,
+  { raw: rawEnabled, amendmentLineage }) {
+  /** @type {ContextReadStore} */
+  const context = amendmentLineage ? {
+    ...store,
+    async documentCardAmendmentSource(tx, readSet, scope, { sourceMessage, quote }) {
+      if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace)) return null;
+      return port(tx, scope, false, state => amendmentSource(state, scope, sourceMessage, quote,
+        row => amendmentLineage(state, scope, row)));
+    },
+  } : store;
+  if (!rawEnabled) return context;
+
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
   function currentLineage(tx, readSet, state, links) {
     return checkLineage(state, links, sourceLineageVisible, async ref => {
@@ -209,7 +228,7 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
     },
   };
   return {
-    ...store, raw,
+    ...context, raw,
     async evidence(tx, readSet, refs, intent) {
       const rows = await store.evidence(tx, readSet, refs, intent);
       return port(tx, readSet, false, state => Promise.all(rows.map(async row => {
