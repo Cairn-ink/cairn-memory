@@ -11,14 +11,14 @@ import { legacyEpoch, planSafety } from "./safety.mjs";
 /** @import { InsertRow, Scope } from "@cairn-ink/core/ports" */
 
 /** @param {{ owner_id: string, scope: string, project_id: string }} row @returns {Scope} */
-function fromNamespace({ owner_id, scope, project_id }) {
+export function fromNamespace({ owner_id, scope, project_id }) {
   if (scope === "project") legacyIdentifier(project_id);
   else if (scope !== "personal" || project_id !== "") refuse("legacy_incomplete");
   return { owner: legacyIdentifier(owner_id), namespace: scope + "\0" + project_id };
 }
 
 /** @param {string} value */
-function timestamp(value) {
+export function timestamp(value) {
   const parts = /^((?:\d{4}|[+-]\d{6})-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?Z$/u.exec(value);
   if (!parts) return refuse("legacy_incomplete");
   const whole = Date.parse(parts[1] + ".000Z");
@@ -185,7 +185,9 @@ export function planMigration(source) {
   return {
     memoryRows, receiptRows, markers, epochs: ownerEpochs, pause, revisions, withheldReceipts,
     anchors, closed: [...closed.values()], ledger, safety,
-    evidence: encodeEvidence({ history, namespaceEpochs, episodeControls, consent, rawControls, scopedCaptureControls: true, withheldReceipts,
+    evidence: encodeEvidence({ history: [], namespaceEpochs, episodeControls, consent, rawControls, scopedCaptureControls: true, withheldReceipts,
+      ...(source.placement.topics.length || source.placement.conflicts.length || source.placement.completed.length ||
+        history.length ? { placementConversion: true } : {}),
       legacyRawHashing: source.rawPrivacy !== null, localRawPrivacy: source.localRawPrivacy, rawDeletionActions: source.rawPrivacy?.actions ?? [],
       rawDeletionEffects: source.rawPrivacy?.effects ?? [], archived: source.archive.counts, ledger, dropped: source.dropped }),
     pausedOwners: pause.filter(([, paused]) => paused === 1).map(([owner]) => String(owner)).sort(),

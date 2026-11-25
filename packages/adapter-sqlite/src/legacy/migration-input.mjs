@@ -61,13 +61,16 @@ export function readMigrationInput(input) {
     const hasRawAncestry = rawPrivacy && legacyReceiptHasRawAncestry(db, rawPrivacy.key);
     const receipts = rows(db, "SELECT rowid AS inspect_position, * FROM receipts ORDER BY memory_id, created_at, id");
     let withheldReceipts = 0;
+    const withheldPlacement = new Set();
     const rawAncestryEmpty = new Map();
     const visibleReceipts = receipts.filter(({ inspect_position: _position, ...receipt }) => {
       const memory = byId.get(receipt.memory_id);
       const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
       const allowed = memory.deleted !== 1n && receiptReadSafety(db, { namespace, receipt, memo }).allowed;
-      if (!allowed) withheldReceipts++;
-      else if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
+      if (!allowed) {
+        withheldReceipts++;
+        withheldPlacement.add(receipt.memory_id);
+      } else if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
       return allowed;
     });
     const archive = readLegacyArchive(db, file, rawPrivacy, visibleReceipts);
@@ -85,6 +88,19 @@ export function readMigrationInput(input) {
       storeId: inventory.storeId, physical: inventory.physical, logicalDigest: proof.logicalDigest,
       target: target.path, checkSource: file.check, withheldReceipts,
       memories, receipts: visibleReceipts,
+      placement: {
+        topics: rows(db, "SELECT * FROM mocs ORDER BY id"),
+        edges: rows(db, "SELECT * FROM moc_edges ORDER BY parent_id, child_id"),
+        sources: rows(db, "SELECT * FROM moc_title_sources ORDER BY moc_id, memory_id"),
+        members: rows(db, "SELECT * FROM moc_memory_refs ORDER BY moc_id, memory_id"),
+        conflicts: rows(db, "SELECT * FROM memory_conflicts ORDER BY left_memory_id, right_memory_id, source"),
+        completed: rows(db, `SELECT c.owner_id, c.scope, c.project_id,
+          json_extract(f.value, '$.memoryId') AS id, json_extract(f.value, '$.revision') AS revision
+          FROM capture_initial_classification c, json_each(c.final_refs) f
+          WHERE c.status = 'applied' AND EXISTS (SELECT 1 FROM json_each(c.selected_refs) s
+            WHERE json_extract(s.value, '$.memoryId') = json_extract(f.value, '$.memoryId'))`),
+        withheld: withheldPlacement,
+      },
       denials: rows(db, "SELECT * FROM suppressed ORDER BY owner_id, scope, project_id, fingerprint"),
       namespaceEpochs, history, inspect: {
         ...inspect,

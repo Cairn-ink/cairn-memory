@@ -66,7 +66,11 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const conflicts = flags.conflictEdges ? handleWriteRejections(relations.conflicts, ["insert", "invalidate"]) : undefined;
   const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles);
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
-  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, flags);
+  // Keep migrated evidence readable by inspect even for hosts that have not
+  // enabled the optional placement and relation mutation ports.
+  const inspectFlags = controls?.evidence.placementConversion === true
+    ? { placement: true, supersession: true, conflictEdges: true } : flags;
+  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, inspectFlags);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
   const rawContext = flags.contextRawRead
