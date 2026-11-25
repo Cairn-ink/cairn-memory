@@ -153,7 +153,11 @@ export function planMigration(source) {
     receiptOrder.set(row.memory_id, state);
     const excerpt = receiptExcerpt(row.excerpt);
     const address = { client, sessionId, messageId, role: row.role };
-    const body = { ...address, occurredAtMs: null, legacy: { id, excerpt, createdAt: row.created_at, canonicalRead: true,
+    const eventTime = row.occurred_at;
+    const occurredAtMs = eventTime == null ? null : Date.parse(eventTime);
+    if (occurredAtMs !== null && (typeof eventTime !== "string" || !Number.isSafeInteger(occurredAtMs) ||
+        new Date(occurredAtMs).toISOString() !== eventTime)) return refuse("legacy_incomplete");
+    const body = { ...address, occurredAtMs, legacy: { id, excerpt, createdAt: row.created_at, canonicalRead: true,
       root: "legacy-attested", spans: source.archive.spans.get(id) },
       ...(excerpt !== row.excerpt && { receiptKey: receiptIdentityKey({ ...address, excerpt }) }) };
     receiptRows.push([...keys, row.memory_id, ++state.ordinal, sourceKey, row.receipt_key, JSON.stringify(body)]);

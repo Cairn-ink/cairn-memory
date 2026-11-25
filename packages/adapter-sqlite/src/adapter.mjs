@@ -59,7 +59,8 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
   const visibility = createPlacementVisibility(hashSessionKey, receiptReadSafety, migratedRaw);
   const scrubTitles = createTitleScrubber(visibility);
-  const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now, topicOptions),
+  const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now,
+    topicOptions, controls !== undefined),
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
   const relations = createRelationStores(port, index, visibility);
   const supersession = flags.supersession ? handleWriteRejections(relations.supersession, ["record", "markHistorical"]) : undefined;

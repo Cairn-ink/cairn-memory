@@ -197,11 +197,15 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session} session */
-  function addFence(db, scope, { client, sessionId }) {
-    const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
-      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(scope), hashSession(scope, client, sessionId));
-    if (added.changes) advanceSuppressionEpoch(db, scope.owner);
-    return !!added.changes;
+  function addFence(db, scope, session) {
+    const hashes = migratedRaw?.fenceHashes(scope, session) ?? [hashSession(scope, session.client, session.sessionId)];
+    const insert = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
+      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`);
+    const keys = scopeKey(scope);
+    let added = false;
+    for (const hash of hashes) if (insert.run(...keys, hash).changes) added = true;
+    if (added) advanceSuppressionEpoch(db, scope.owner);
+    return added;
   }
 
   /** @param {import("@cairn-ink/core/ports").Scope} scope

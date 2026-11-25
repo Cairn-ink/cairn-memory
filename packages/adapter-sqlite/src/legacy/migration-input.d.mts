@@ -20,7 +20,7 @@ export interface LegacyMemory extends NamespaceRow {
 }
 export interface LegacyReceipt {
   id: string; memory_id: string; receipt_key: string; client: string; session_id: string; event_id: string;
-  role: "user" | "assistant"; excerpt: string; created_at: string;
+  role: "user" | "assistant"; excerpt: string; created_at: string; occurred_at?: string | null;
 }
 export interface LegacyHistory extends NamespaceRow {
   previous_memory_id: string; previous_revision: bigint; replacement_memory_id: string;

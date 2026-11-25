@@ -83,6 +83,11 @@ export function convertPlacement(db, source, sessionKey) {
     const scope = fromNamespace(topic);
     if (!current(scope, memory_id, memory_revision)) {
       hiddenTitles.add(moc_id);
+      const memory = visible(scope, memory_id);
+      if (memory?.currentness === "current" && memory_revision < memory.revision) {
+        // Legacy filing still advances groups that cite an earlier revision.
+        tables.cairn_topic_sources.push([...scopeKey(scope), moc_id, memory_id, 0]);
+      }
       continue;
     }
     hasSource.add(moc_id);
