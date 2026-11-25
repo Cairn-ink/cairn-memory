@@ -67,7 +67,11 @@ export function legacySuppressionsToFacts(
 ): { facts: SuppressionFact[]; uncopyable: string[] };
 type SessionHashOptions = Pick<FactMatchPolicy, "hashSessionKey">;
 export function createPostgresSuppressionStore(
-  options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed"; allowNonNullNamespace?: boolean },
+  options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & {
+    sessionRefs?: "plain" | "hashed";
+    allowNonNullNamespace?: boolean;
+    lineageSecret?: string;
+  },
 ): SuppressionStore;
 export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
 export { createPostgresRawPorts } from "./raw.mjs";

@@ -1,8 +1,12 @@
 import { CoreError, factBlocksIncoming, validateSuppressionFact } from "../../core/src/index.mjs";
+import { copyMessages } from "./capture-input.mjs";
+import { createCaptureProofs } from "./capture-source.mjs";
+import { copyReceipts, inputText } from "./memory-input.mjs";
 import { readReceipts, selectMemory } from "./memory-rows.mjs";
 import {
   decodeCoreFact, matchesRowFact, readVisibilityFacts, rowFactCandidate, rowVisibilityPolicy, sessionBlocksIncoming, usesSource,
 } from "./memory-visibility.mjs";
+import { assertReceiptSource } from "./receipt-source.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { FactMatchPolicy, StoredFact, TextFact } from "../../core/src/index.mjs" */
@@ -159,10 +163,11 @@ async function legacyFacts(query, scope) {
   return scope.namespace === null ? facts : [];
 }
 
-/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean}} options */
-export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace = false }) {
+/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean, lineageSecret?: string}} options */
+export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace = false, lineageSecret }) {
   const policy = rowVisibilityPolicy(hashSessionKey);
   const capture = /** @type {const} */ ({ hashSessionKey, mode: "capture" });
+  const captureProofs = lineageSecret === undefined ? undefined : createCaptureProofs(lineageSecret);
 
   /** @type {SuppressionStore["snapshot"]} */
   async function snapshot(tx, scope, candidates) {
@@ -216,6 +221,29 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
     });
   }
 
+  /** @type {NonNullable<SuppressionStore["receiptWithheld"]>} */
+  async function receiptWithheld(tx, scope, input, admitted) {
+    const scoped = readScope(tx, scope, allowNonNullNamespace);
+    const [receipt] = copyReceipts([input]);
+    inputText(input.excerpt);
+    const messages = admitted === undefined ? [] : copyMessages([admitted]);
+    if (messages.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
+      return true;
+    }
+    return runOperation(tx, async (query) => {
+      try {
+        await assertReceiptSource(query, scoped, receipt, captureProofs, hashSessionKey, messages);
+        return false;
+      } catch (error) {
+        if (error instanceof CoreError &&
+            (error.code === "suppressed" || error.code === "lineage_fenced" || error.code === "raw_lineage_unavailable")) {
+          return true;
+        }
+        throw error;
+      }
+    });
+  }
+
   /** @type {SuppressionStore["factsFor"]} */
   async function factsFor(tx, scope, target) {
     let scoped;
@@ -253,5 +281,5 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
     });
   }
 
-  return { snapshot, factsFor };
+  return { snapshot, receiptWithheld, factsFor };
 }

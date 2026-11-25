@@ -112,7 +112,7 @@ async function fixture(t, { archiveFirst = true, batch = messages, now, onStage,
     async ledger(event = key) {
       const { rows: [row] } = await pool.query(`SELECT raw_request FROM capture_events
         WHERE user_id = $1 AND client = $2 AND event_id = $3`, [owner, event.client, event.eventId]);
-      return row.raw_request;
+      return row?.raw_request;
     },
     async savedMemory() {
       return (await pool.query("SELECT text FROM memories WHERE user_id = $1", [owner])).rows;
@@ -218,7 +218,7 @@ test("a ledger-only conversation delete advances the index once and leaves unrel
   assert.equal(await db.revision(), revision + 1n);
 });
 
-test("conversation delete makes direct replay terminal and allows a new event", migrationDbTest, async (t) => {
+test("conversation delete makes direct replay terminal and fences a new event", migrationDbTest, async (t) => {
   const [message] = messages;
   const batch = [message];
   const db = await fixture(t, { archiveFirst: false, batch });
@@ -256,15 +256,11 @@ test("conversation delete makes direct replay terminal and allows a new event", 
   assert.deepEqual(await db.rawRows(), []);
 
   const newEvent = { ...direct, eventId: randomUUID() };
-  const fresh = await claim(newEvent);
-  assert.equal(fresh.status, "claimed");
-  assert.notEqual(fresh.token, first.token);
-  const { result, archived } = await finish(newEvent, fresh.token);
-  assert.deepEqual(result.memories.map(({ outcome }) => outcome), ["inserted"]);
-  assert.equal(archived, 1);
-  assert.deepEqual(await db.savedMemory(), [{ text: memoryText }]);
-  assert.deepEqual((await db.rawRows()).map(({ message_id, content }) => ({ message_id, content })),
-    [{ message_id: message.id, content: message.content }]);
+  assert.deepEqual(await claim(newEvent), { status: "duplicate" });
+  assert.equal(await db.ledger(newEvent), undefined);
+  assert.deepEqual(await write((tx) => raw.archive(tx, newEvent, batch)), { archived: 0 });
+  assert.deepEqual(await db.savedMemory(), []);
+  assert.deepEqual(await db.rawRows(), []);
 });
 
 test("a marker-only conversation delete advances the index once", migrationDbTest, async (t) => {

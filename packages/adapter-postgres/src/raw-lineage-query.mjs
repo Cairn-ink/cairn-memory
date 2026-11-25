@@ -94,6 +94,10 @@ export const CHECK_LINEAGE = `WITH RECURSIVE fences AS MATERIALIZED (${FENCES("$
     )
     WHERE l.proven AND (l.session_id, l.namespace) IS DISTINCT FROM ($4::text, $3::text)
   ) AS proven,
+  $11::boolean AND EXISTS (
+    SELECT 1 FROM capture_raw_lineage l WHERE l.user_id = $1 AND l.client = $2
+      AND ($7::boolean OR EXISTS (SELECT 1 FROM fences f WHERE f.session_id = l.session_id))
+  ) AS unresolved_anchors,
   ${EXCEEDED} AS exceeded,
   ARRAY(SELECT DISTINCT jsonb_build_array(session_id, namespace, unscoped, proven) FROM linked
     WHERE $7::boolean AND (session_id, namespace) IS DISTINCT FROM ($4::text, $3::text)) AS hash_candidates,

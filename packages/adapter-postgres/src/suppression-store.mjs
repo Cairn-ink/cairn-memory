@@ -7,7 +7,9 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { SuppressionStore } from "../../core/src/ports/privacy.d.ts" */
 /** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
-/** @typedef {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {sessionRefs?: "plain" | "hashed", allowNonNullNamespace?: boolean}} SuppressionOptions */
+/** @typedef {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {
+ *   sessionRefs?: "plain" | "hashed", allowNonNullNamespace?: boolean, lineageSecret?: string
+ * }} SuppressionOptions */
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 const CREATED_AT_US = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us";
