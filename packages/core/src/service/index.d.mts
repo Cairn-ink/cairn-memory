@@ -25,7 +25,11 @@ export interface MemoryServiceConfig {
   /** Opt in to capture-time cards and, separately, post-commit amendments. Requires documentCards storage. */
   readonly documentCards?: { readonly enabled: boolean; readonly amendments?: boolean };
   /** Opt in to quantity extraction and persistence. Requires quantityLedger storage and a model. */
-  readonly quantityLedger?: { readonly enabled: boolean };
+  readonly quantityLedger?: {
+    readonly enabled: boolean;
+    /** Include calendar comparisons for “this week” and “this month” when the ledger is enabled. */
+    readonly calendarReading?: boolean;
+  };
 }
 
 export interface MemoryServiceDeps {

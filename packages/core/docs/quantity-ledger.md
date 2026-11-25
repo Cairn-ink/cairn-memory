@@ -68,13 +68,38 @@ uncertain state excludes the row.
 
 `readIntent` checks the query against the store's terms before listing
 rows. English cues and the fixed Chinese aliases work with stored terms.
-`parseWindow` uses UTC calendar days and Monday-start weeks. Supply checked
-rows to `digest` for totals, counts, daily averages and weekly or monthly
-subtotals. Units stay separate. Currency displays two decimals, using up to six
-significant digits when a non-zero amount would round to zero. Other units
-display up to six significant digits. The newest cumulative steps
-record supplies each day's total. Supply applicable goals and any earlier checked records
-needed for a calendar goal's period to date. Each comparator has its own
-latest goal. Goal status compares the total and limit at the unit's display
-precision. A goal with no matching records in the requested window reports
-that absence.
+`parseWindow` uses UTC days. “This week” and 這週 or 本週 use the last 7 days.
+“This month” and 這個月 use the last 30 days. Both include the as-of day and
+end at the next UTC midnight. The digest states the rolling reading in its
+header and uses those days for its totals, subtotals and daily averages.
+
+Set `quantityLedger.calendarReading: true` alongside `quantityLedger.enabled: true`
+on a service with quantity-ledger storage to include the calendar reading for
+these two windows. The digest names the date range once after the header and
+follows each summary with its calendar total, count and daily average. Calendar
+weeks start on Monday and calendar months start on the first. A reading with no
+records for a summary shows a zero total, zero records and a zero average. The
+optional comparison extends the checked source range to cover both readings.
+The digest and its sources use one item slot and count toward the formatted read.
+
+Supply checked rows to `digest` for totals, counts, daily averages and weekly
+or monthly subtotals. Units stay separate. Currency displays two decimals,
+using up to six significant digits when a non-zero amount would round to
+zero. Other units display up to six significant digits. The newest cumulative
+steps record supplies each day's total. Supply applicable goals and any
+earlier checked records needed for a calendar goal's period to date. Daily
+goals use the requested window, including the rolling days for “this week”
+and “this month”. Each comparator has its own latest goal. Goal status
+compares the total and limit at the unit's display precision. A goal with no
+matching records in the requested window reports that absence.
+
+In a synthetic Saturday read with one Sunday transit record and one Saturday
+food record, `tiktoken` `o200k_base` `encode_ordinary` measured these counts.
+The formatted-read cost is the token difference between the same JSON read
+with and without the digest, including its generated source refs.
+
+| Reading | Body tokens | Formatted-read tokens |
+| --- | ---: | ---: |
+| Calendar week on core-next | 90 | 156 |
+| Rolling week, default | 170 | 294 |
+| Rolling week with calendar comparisons | 318 | 442 |

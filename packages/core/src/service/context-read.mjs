@@ -100,9 +100,10 @@ async function beforeLedgerDeadline(now, deadline, signal, attempt) {
 /** @param {{ storage: KeylessStorage | ReadContractStorage, clock: ClockAndHash,
  * find: ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"],
  * fetch: ReturnType<typeof import("./context-read-assembly-evidence.mjs").fetchForAssembly>,
+ * calendarReading?: boolean,
  * counter?: KeylessMemoryServiceDeps["contextReadCounter"], format?: KeylessMemoryServiceDeps["contextReadFormat"] }} deps
  * @returns {NonNullable<MemoryService["readContext"]>} */
-export function readContextMethod({ storage, clock, find, fetch, counter, format }) {
+export function readContextMethod({ storage, clock, find, fetch, counter, format, calendarReading = false }) {
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
    * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger */
@@ -125,7 +126,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
       candidate.types.includes("memory") && hasLedgerCue(candidate.query)
-      ? { query: candidate.query, asOfMs: clock.nowMs() } : undefined;
+      ? { query: candidate.query, asOfMs: clock.nowMs(), calendarReading } : undefined;
     const evidence = await fetch(readSet, candidate, found.generations, items.map(item => item.ref), ledgerRequest);
     const prepared = evidence.rows.flatMap((row, i) => row ? [prepareItem(row, readSet, items[i].rank, candidate.intent)] : []);
     let rawCoverage = rawRead.coverage;

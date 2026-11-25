@@ -1,6 +1,6 @@
 import { CoreError } from "../errors.mjs";
 import { digest, ledgerRowDeliverable, ledgerRowInRange, ledgerRowKey, parseWindow, readIntent } from "../ledger/index.mjs";
-import { weekStart, yearStart } from "../ledger/window.mjs";
+import { ledgerWindowRange, weekStart, yearStart } from "../ledger/window.mjs";
 import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
@@ -16,7 +16,7 @@ import { readTokenSigner } from "./context-read-tokens.mjs";
 /** @typedef {ReturnType<typeof readTokenSigner>} Signer */
 
 /** @typedef {Pick<DocumentCardAmendment, "date" | "sentence" | "quote">} ReadAmendment */
-/** @typedef {{ query: string, asOfMs: number }} LedgerRequest */
+/** @typedef {{ query: string, asOfMs: number, calendarReading: boolean }} LedgerRequest */
 /** @typedef {{ witness: string, active: () => void }} LedgerCheck */
 
 const MIN_EVENT_MS = -8_640_000_000_000_000;
@@ -26,14 +26,14 @@ export const staleLedger = new Error("stale quantity ledger");
  * @param {VisibilityFence} fence @param {Tx} tx @param {Signer} signer @param {ContextReadSet} readSet
  * @param {LedgerRequest} request @param {() => void} active
  * @returns {Promise<{ value: ContextLedgerDigest, witness: string } | null>} */
-async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs }, active) {
+async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, active) {
   try {
     /** @type {ReturnType<typeof parseWindow> | undefined} */
     let window;
     /** @type {QuantityLedgerRow[]} */
     const checked = [];
-    /** @type {string[]} */
-    const rowKeys = [];
+    /** @type {{ key: string, id: string, goalContext: boolean }[]} */
+    const witnessRows = [];
     /** @type {Map<string, ContextEvidenceRow & { type: "memory" }>} */
     const sourceRows = new Map();
     for (const namespace of readSet.namespaces) {
@@ -42,7 +42,7 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
       const terms = await ledger.terms(tx, scope);
       active();
       if (!readIntent(query, terms)) continue;
-      const range = window ??= parseWindow(query, asOfMs);
+      const range = ledgerWindowRange(window ??= parseWindow(query, asOfMs), calendarReading);
       const start = Math.min(range.fromMs, weekStart(range.toMs - 1), yearStart(range.toMs - 1));
       const earlier = { fromMs: MIN_EVENT_MS, toMs: range.fromMs };
       active();
@@ -94,13 +94,14 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
         .sort((a, b) => compareUtf8(a.key, b.key));
       for (const { row, key } of ordered) {
         active();
-        checked.push({ ...row, memoryId: scopedId(row.memoryId) });
-        rowKeys.push(key);
+        const id = scopedId(row.memoryId);
+        checked.push({ ...row, memoryId: id });
+        witnessRows.push({ key, id, goalContext: !!window.calendar && row.kind === "record" && !ledgerRowInRange(row, range) });
       }
     }
     active();
     if (!window) return null;
-    const result = digest(checked.filter(row => row.kind === "record"), checked.filter(row => row.kind === "goal"), window);
+    const result = digest(checked.filter(row => row.kind === "record"), checked.filter(row => row.kind === "goal"), window, calendarReading);
     if (!result) return null;
     const sources = [];
     const fences = [];
@@ -118,6 +119,10 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
     }
     active();
     const value = { body: result.body, sources };
+    // Earlier records can affect the rolling goal comparison. Only keep their
+    // witness keys when the digest actually used their memory as a source.
+    const sourceIds = new Set(result.sources);
+    const rowKeys = witnessRows.filter(row => !row.goalContext || sourceIds.has(row.id)).map(row => row.key);
     return { value, witness: JSON.stringify([value, rowKeys, fences]) };
   } catch {
     // Ledger evidence is optional when any read or visibility check fails.

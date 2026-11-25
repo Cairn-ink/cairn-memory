@@ -1,6 +1,6 @@
 import { CoreError } from '../errors.mjs';
 
-/** @import { LedgerWindow, QuantityLedgerRange, QuantityLedgerRow } from './index.mjs' */
+/** @import { ParsedLedgerWindow, QuantityLedgerRange, QuantityLedgerRow } from './index.mjs' */
 
 export const DAY_MS = 86_400_000;
 
@@ -36,8 +36,14 @@ export function ledgerRowInRange(row, range) {
   return row.date >= range.fromMs && row.date < range.toMs;
 }
 
+/** @param {ParsedLedgerWindow} window @param {boolean} calendarReading @returns {QuantityLedgerRange} */
+export function ledgerWindowRange(window, calendarReading) {
+  if (!calendarReading || !window.calendar) return window;
+  return { fromMs: Math.min(window.fromMs, window.calendar.fromMs), toMs: window.toMs };
+}
+
 /** UTC calendar days with an exclusive end. Calendar weeks start on Monday.
- * @param {string} query @param {number} asOfMs @returns {LedgerWindow}
+ * @param {string} query @param {number} asOfMs @returns {ParsedLedgerWindow}
  */
 export function parseWindow(query, asOfMs) {
   if (!validTime(asOfMs)) throw new CoreError('invalid_input');
@@ -45,6 +51,8 @@ export function parseWindow(query, asOfMs) {
   let toMs = today + DAY_MS;
   let fromMs = today - 6 * DAY_MS;
   let label = 'last 7 days';
+  /** @type {ParsedLedgerWindow['calendar']} */
+  let calendar;
   const text = query.normalize('NFKC');
   const trailing = text.match(/\blast\s+(\d+)\s+days?\b|最近\s*(\d+)\s*天/iu);
   if (/\byesterday\b|昨天/iu.test(text)) {
@@ -59,15 +67,16 @@ export function parseWindow(query, asOfMs) {
     fromMs = toMs - 7 * DAY_MS;
     label = 'last week';
   } else if (/\bthis week\b|這週|本週/iu.test(text)) {
-    fromMs = weekStart(today);
-    label = 'this week';
+    label = 'this week, read as the last 7 days';
+    calendar = { fromMs: weekStart(today), toMs, label: 'calendar week so far' };
   } else if (/\blast month\b|上個月/iu.test(text)) {
     toMs = monthStart(today);
     fromMs = monthStart(today, -1);
     label = 'last month';
   } else if (/\bthis month\b|這個月/iu.test(text)) {
-    fromMs = monthStart(today);
-    label = 'this month';
+    fromMs = today - 29 * DAY_MS;
+    label = 'this month, read as the last 30 days';
+    calendar = { fromMs: monthStart(today), toMs, label: 'calendar month so far' };
   } else if (/\blast 3 months\b|最近\s*[三3]\s*個月/iu.test(text)) {
     fromMs = monthStart(today, -2);
     label = 'last 3 months';
@@ -80,5 +89,7 @@ export function parseWindow(query, asOfMs) {
     }
   }
   if (!validTime(fromMs) || !validTime(toMs)) throw new CoreError('invalid_input');
-  return { fromMs, toMs, label };
+  const window = { fromMs, toMs, label };
+  if (calendar) Object.defineProperty(window, 'calendar', { value: calendar });
+  return window;
 }

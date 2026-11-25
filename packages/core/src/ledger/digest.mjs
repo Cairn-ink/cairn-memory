@@ -1,7 +1,7 @@
 import { compareUtf8 } from '../utf8.mjs';
 import { DAY_MS, dayLabel, dayStart, ledgerRowInRange, monthStart, weekStart, yearStart } from './window.mjs';
 
-/** @import { LedgerDigest, LedgerWindow, QuantityLedgerRow } from './index.mjs' */
+/** @import { LedgerDigest, LedgerWindow, ParsedLedgerWindow, QuantityLedgerRow } from './index.mjs' */
 
 const numbers = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 });
 const currencyNumbers = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -113,38 +113,59 @@ function compareGoal(goal, records, window) {
  * Summarize rows that have passed the delivery check in the read snapshot.
  * @param {readonly QuantityLedgerRow[]} rows
  * @param {readonly QuantityLedgerRow[]} goals
- * @param {LedgerWindow} window
+ * @param {ParsedLedgerWindow} window
+ * @param {boolean} [calendarReading]
  * @returns {LedgerDigest | null}
  */
-export function digest(rows, goals, window) {
+export function digest(rows, goals, window, calendarReading = false) {
   if (window.fromMs >= window.toMs) return null;
   const asOf = rows.filter(row => row.kind === 'record' && row.date < window.toMs);
   const distinct = [...asOf.filter(row => row.measure !== 'steps'),
     ...latest(asOf.filter(row => row.measure === 'steps'), row => JSON.stringify([row.unit, dayStart(row.date)]))];
   const used = distinct.filter(row => ledgerRowInRange(row, window));
+  const calendar = calendarReading ? window.calendar : undefined;
+  const calendarRows = calendar ? distinct.filter(row => ledgerRowInRange(row, calendar)) : [];
+  const selected = calendar ? [...used, ...calendarRows.filter(row => !ledgerRowInRange(row, window))] : used;
   const targets = latest(goals.filter(row => row.kind === 'goal' && row.date < window.toMs),
     row => JSON.stringify([row.measure, row.unit, row.group, row.category, row.period, row.comparator]));
-  if (!used.length && !targets.length) return null;
+  if (!selected.length && !targets.length) return null;
 
   const parts = [`Computed ledger for ${dayLabel(window.fromMs)} to ${dayLabel(window.toMs - 1)} (${window.label}), from the dated records you mentioned.`];
-  for (const entries of groupBy(used, row => JSON.stringify([row.measure, row.unit])).values()) {
-    const { measure, unit } = entries[0];
+  if (calendar) {
+    parts.push(`${title(calendar.label)}: ${dayLabel(calendar.fromMs)} to ${dayLabel(calendar.toMs - 1)}.`);
+  }
+  for (const groupRows of groupBy(selected, row => JSON.stringify([row.measure, row.unit])).values()) {
+    const { measure, unit } = groupRows[0];
     const stepDays = measure === 'steps';
-    parts.push(summary(title(measure), entries, unit, stepDays ? entries.length : daysIn(window)));
-    if (measure === 'spend') {
-      for (const [group, purchases] of groupBy(entries, row => row.group)) {
-        parts.push(summary(`${title(group)} spending`, purchases, unit, daysIn(window)));
+    const inRolling = (/** @type {QuantityLedgerRow[]} */ records) => calendar
+      ? records.filter(row => ledgerRowInRange(row, window)) : records;
+    const entries = inRolling(groupRows);
+    /** @param {string} label @param {QuantityLedgerRow[]} rollingRows @param {QuantityLedgerRow[]} records */
+    function appendSummary(label, rollingRows, records) {
+      parts.push(summary(label, rollingRows, unit, stepDays ? Math.max(1, rollingRows.length) : daysIn(window)));
+      if (calendar) {
+        const matching = records.filter(row => ledgerRowInRange(row, calendar));
+        parts.push(summary(`${label}, ${calendar.label}`, matching, unit, stepDays ? Math.max(1, matching.length) : daysIn(calendar)));
       }
     }
-    const categories = groupBy(entries.filter(row => row.category), row => row.category);
-    for (const [category, records] of [...categories].sort((a, b) => total(b[1]) - total(a[1]))) {
-      parts.push(summary(title(category), records, unit, stepDays ? records.length : daysIn(window)));
+    appendSummary(title(measure), entries, groupRows);
+    if (measure === 'spend') {
+      for (const [group, purchases] of groupBy(groupRows, row => row.group)) {
+        appendSummary(`${title(group)} spending`, inRolling(purchases), purchases);
+      }
     }
-    appendSubtotals(parts, entries, unit, window, weekStart, 'Weekly');
-    appendSubtotals(parts, entries, unit, window, monthStart, 'Monthly');
+    const categories = [...groupBy(groupRows.filter(row => row.category), row => row.category)]
+      .map(([category, records]) => ({ category, records, rollingRows: inRolling(records) }));
+    for (const { category, rollingRows, records } of categories.sort((a, b) => total(b.rollingRows) - total(a.rollingRows))) {
+      appendSummary(title(category), rollingRows, records);
+    }
+    if (entries.length) {
+      appendSubtotals(parts, entries, unit, window, weekStart, 'Weekly');
+      appendSubtotals(parts, entries, unit, window, monthStart, 'Monthly');
+    }
   }
   const comparisons = targets.map(goal => compareGoal(goal, distinct, window));
   if (comparisons.length) parts.push('Goals: ' + comparisons.map(result => result.text).join(' '));
-  const sources = new Set([...used, ...targets, ...comparisons.flatMap(result => result.rows)].map(row => row.memoryId));
+  const sources = new Set([...selected, ...targets, ...comparisons.flatMap(result => result.rows)].map(row => row.memoryId));
   return { body: parts.join(' '), sources: [...sources].sort(compareUtf8) };
 }
