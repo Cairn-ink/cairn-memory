@@ -1152,3 +1152,28 @@ fences. Keep the legacy projection until reverse cutover is retired.
    a clean shadow comparison throughout that period.
 5. **Pool operation.** The deployment owner sets transaction-pool capacity, fairness budgets and
    failure signals for the two-backend setup using workload numbers from the orchestrator owner.
+
+## Addendum 21 — Legacy explicit-save read parity
+
+On reads, a legacy edit fact matches by physical `text_hash` equality alone.
+
+A full text suppression fact with origin `forget`, `correct`, or `backfill`
+may persist `explicitSaveExemptAfterUs` as a canonical integer string of epoch
+microseconds or as `-infinity`. On reads, the matcher skips vector matching for
+physical `mcp` or `web` rows with a server creation time strictly later than
+that cutoff.
+Any full text fact may use `infinity` to keep vector matching enabled at every
+timestamp. Exact digests and any containment checks enabled by the caller
+still apply. When the field is absent, full text matching follows the caller's
+existing policy.
+
+On writes, legacy cutoff facts apply the full policy. Write-side parity with
+the hosted explicit-save exemption is deferred. Core can therefore block a
+new save that the read policy would show if the hosted writer had stored it.
+
+The Postgres batch copy merges rows that share a slot and have identical matching
+evidence at the latest cutoff. A slot with differing evidence yields no copied
+fact and returns every affected legacy row ID in `uncopyable`. The host may set
+`legacy_writes_reconciled` only once legacy writes have stopped, all facts are
+copied, and the owner has no uncopyable rows. The live union applies every legacy
+row until reconciliation.

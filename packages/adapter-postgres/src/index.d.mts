@@ -50,6 +50,21 @@ export function applyMigrations(
 export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 /** Snapshot and validate a suppression fact before computing its storage slot. */
 export function factSlot(fact: SuppressionFact): string;
+export type LegacySuppressionRow = {
+  origin: "forget" | "correct" | "backfill" | "edit" | null;
+  created_at_us: string;
+} & (
+  | { kind: "text"; text_hash: string; text_hmac: string | null; key_id: string | null;
+      redaction_version: number; embedding: string; shingles: string[] | null }
+  | { kind: "session"; client: string; session_id: string }
+  | { kind: "window"; client: string | null; start_ms: number | string; end_ms: number | string }
+);
+/** Convert a legacy suppression projection into the same fact used by the live read union. */
+export function legacySuppressionToFact(row: LegacySuppressionRow, owner: string): SuppressionFact;
+/** Merge identical evidence at the latest cutoff and return the legacy row IDs for conflicting slots. */
+export function legacySuppressionsToFacts(
+  rows: readonly (LegacySuppressionRow & { id: string })[], owner: string,
+): { facts: SuppressionFact[]; uncopyable: string[] };
 type SessionHashOptions = Pick<FactMatchPolicy, "hashSessionKey">;
 export function createPostgresSuppressionStore(
   options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed"; allowNonNullNamespace?: boolean },

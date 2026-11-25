@@ -1,13 +1,16 @@
 import {
-  allDigests, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, validateSuppressionFact,
+  allDigests, compareUtf8, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS,
+  validateSuppressionFact,
 } from "../../core/src/index.mjs";
-import { matchesFactSlot } from "./facts.mjs";
-import { CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
+import { factBody } from "../../core/src/suppression-fact.mjs";
+import { factSlot, matchesFactSlot } from "./facts.mjs";
+import { CREATED_AT_US, CREATED_MS, MATCH_COLUMNS, readReceipts, storageHash, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
 
-/** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
+/** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest } from "../../core/src/index.mjs" */
 /** @import { IncomingFactMatchPolicy } from "../../core/src/privacy/fact-match.d.mts" */
 /** @import { CaptureKey, DuplicateQuery, Receipt, Scope, SourceRef } from "../../core/src/ports/index.d.ts" */
 /** @import { CandidateEntry, MemoryEntry, Query } from "./memory-rows.mjs" */
+/** @import { LegacySuppressionRow } from "./index.mjs" */
 
 const SHA256 = /^(?:sha256:)?[0-9a-f]{64}$/u;
 
@@ -31,26 +34,91 @@ function digestAliases({ textHash, legacyHash, digests = [] }) {
   return result;
 }
 
-/** @param {any} row @param {string} owner @returns {StoredFact} */
-function legacyFact(row, owner) {
-  const { id, kind, origin, client, session_id, start_ms, end_ms, text_hash, text_hmac, key_id, shingles, embedding, redaction_version } = row;
+/** @param {LegacySuppressionRow} row @param {string} owner */
+export function legacySuppressionToFact(row, owner) {
+  const { kind, origin } = row;
   const base = { owner, kind, origin: origin ?? "backfill", actionId: "legacy" };
   let body;
   if (kind === "session") {
-    body = { ...base, session: { client, sessionId: session_id } };
+    body = { ...base, session: { client: row.client, sessionId: row.session_id } };
   } else if (kind === "window") {
-    body = { ...base, client, window: { startMs: Number(start_ms), endMs: Number(end_ms) } };
+    body = { ...base, client: row.client, window: { startMs: Number(row.start_ms), endMs: Number(row.end_ms) } };
   } else {
+    const { text_hash, text_hmac, key_id, shingles, embedding, redaction_version, created_at_us } = row;
     /** @type {TextDigest[]} */
     const digests = [];
     const sha = digestValue(text_hash);
-    const hmacs = new Set([text_hash.startsWith("hmac:") ? text_hash.slice(5) : null, text_hmac].filter(Boolean));
+    const hmacs = new Set([text_hash.startsWith("hmac:") ? text_hash.slice(5) : null, text_hmac]);
     const domain = /** @type {const} */ ({ pipeline: "hosted-v1", redactionVersion: redaction_version });
     if (sha) digests.push({ ...domain, alg: "sha256", value: sha, keyId: null });
-    for (const value of hmacs) digests.push({ ...domain, alg: "hmac", label: "hosted-v1", value, keyId: key_id });
-    body = { ...base, mode: "full", text: { digests, embedding: JSON.parse(embedding), shingles, keyId: key_id } };
+    for (const value of hmacs) {
+      if (value) digests.push({ ...domain, alg: "hmac", label: "hosted-v1", value, keyId: key_id });
+    }
+    if (origin === "edit") {
+      body = { ...base, mode: "exact", legacyTextHash: text_hash, text: { digests } };
+    } else {
+      body = { ...base, mode: "full", legacyTextHash: text_hash,
+        text: { digests, embedding: JSON.parse(embedding), shingles, keyId: key_id },
+        explicitSaveExemptAfterUs: origin === null ? "infinity" : created_at_us.toLowerCase() };
+    }
   }
-  return { fact: validateSuppressionFact(body), factId: id, incarnation: "", epoch: 0n, createdAtMs: 0 };
+  return validateSuppressionFact(body);
+}
+
+/** @param {SuppressionFact} fact */
+function legacyCutoff(fact) {
+  const cutoff = fact.kind === "text" ? fact.explicitSaveExemptAfterUs : undefined;
+  if (cutoff === "infinity") return Infinity;
+  if (cutoff === undefined || cutoff === "-infinity") return -Infinity;
+  return BigInt(cutoff);
+}
+
+/** @param {SuppressionFact} fact */
+function legacyMatchingBody(fact) {
+  // The legacy matcher treats non-edit origins alike. The cutoff value can be
+  // merged by taking the maximum only when both facts have a cutoff.
+  const origin = fact.origin === "edit" ? "edit" : "backfill";
+  return factBody(fact.kind === "text" && fact.explicitSaveExemptAfterUs !== undefined
+    ? { ...fact, origin, explicitSaveExemptAfterUs: "infinity" }
+    : { ...fact, origin });
+}
+
+/** @param {readonly (LegacySuppressionRow & { id: string })[]} rows @param {string} owner */
+export function legacySuppressionsToFacts(rows, owner) {
+  /** @type {Map<string, { fact: SuppressionFact | null, rowIds: string[] }>} */
+  const bySlot = new Map();
+  for (const row of rows) {
+    if (typeof row.id !== "string") throw new CoreError("invalid_input");
+    const fact = legacySuppressionToFact(row, owner);
+    const slot = factSlot(fact);
+    const previous = bySlot.get(slot);
+    if (!previous) {
+      bySlot.set(slot, { fact, rowIds: [row.id] });
+      continue;
+    }
+    previous.rowIds.push(row.id);
+    if (previous.fact === null) continue;
+    if (legacyMatchingBody(fact) !== legacyMatchingBody(previous.fact)) {
+      previous.fact = null;
+      continue;
+    }
+    const cutoff = legacyCutoff(fact);
+    const previousCutoff = legacyCutoff(previous.fact);
+    if (cutoff > previousCutoff ||
+      (cutoff === previousCutoff && compareUtf8(factBody(fact), factBody(previous.fact)) < 0)) {
+      previous.fact = fact;
+    }
+  }
+  const facts = [];
+  const uncopyable = [];
+  for (const [, { fact, rowIds }] of [...bySlot].sort(([a], [b]) => compareUtf8(a, b))) {
+    if (fact === null) {
+      for (const id of rowIds) uncopyable.push(id);
+    } else {
+      facts.push(fact);
+    }
+  }
+  return { facts, uncopyable: uncopyable.sort(compareUtf8) };
 }
 
 /** @param {unknown} value @param {bigint} minimum */
@@ -99,8 +167,11 @@ const ROW_EVIDENCE = {
     columns: { source_client: "source_client", source_session_id: "source_session_id" } },
   needs_window: { when: `${FACT_KIND} = 'window'`,
     columns: { created_ms: `${CREATED_MS}::text` } },
-  needs_vector: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN body->>'embedding' IS NOT NULL
+  needs_vector: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN (body->>'origin') IS DISTINCT FROM 'edit' AND body->>'embedding' IS NOT NULL
     ELSE mode = 'full' AND body #>> '{text,embedding}' IS NOT NULL END`, columns: { embedding: "embedding::text" } },
+  needs_physical_source: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN body->>'origin' IN ('forget', 'correct', 'backfill')
+    ELSE body->>'explicitSaveExemptAfterUs' IS NOT NULL END`,
+    columns: { source_kind: "source_kind", created_at_us: `${CREATED_AT_US}::text` } },
 };
 
 const evidence = Object.entries(ROW_EVIDENCE);
@@ -129,7 +200,7 @@ export function visibilityFactsSql({
   hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL", rowEvidence = false,
 } = {}) {
   const liveFacts = `SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
-    trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us, kind, origin, mode, slot
+    ${CREATED_AT_US}::text AS created_at_us, kind, origin, mode, slot
     FROM core_suppression_facts WHERE user_id = $1
       AND (kind IN ('identity', 'text', 'session', 'window') OR (${rawSpans} AND kind = 'rawSpan'))
       AND (NOT ${textOnly} OR kind = 'text') AND NOT ${legacyOnly}
@@ -145,7 +216,8 @@ export function visibilityFactsSql({
       'start_ms', floor(EXTRACT(EPOCH FROM window_start) * 1000),
       'end_ms', ceil(EXTRACT(EPOCH FROM window_end) * 1000),
       'text_hash', text_hash, 'text_hmac', text_hmac, 'key_id', key_id,
-      'embedding', embedding::text, 'redaction_version', redaction_version, 'shingles', shingles), NULL, NULL, NULL, NULL, NULL
+      'embedding', embedding::text, 'redaction_version', redaction_version, 'shingles', shingles),
+    ${CREATED_AT_US}::text, NULL, NULL, NULL, NULL
     FROM suppressions WHERE user_id = $1
       AND (NOT ${textOnly} OR kind = 'text' OR (NOT ${allowPendingLegacy} AND NOT COALESCE((SELECT ready FROM owner_state), false)))
       AND NOT COALESCE((SELECT ready AND reconciled FROM owner_state), false)
@@ -166,7 +238,12 @@ export function visibilityFactsSql({
 /** @param {any[]} rows @param {string} owner @param {boolean} [allowPendingLegacy] */
 export function decodeVisibilityFacts(rows, owner, allowPendingLegacy = false) {
   if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
-  return rows.map(row => row.legacy ? legacyFact(row.body, owner) : decodeCoreFact(row, owner));
+  return rows.map(row => row.legacy ? {
+    fact: legacySuppressionToFact({ ...row.body, created_at_us: row.created_at_us }, owner),
+    factId: row.fact_id, incarnation: "", epoch: 0n,
+    createdAtMs: row.created_at_us === "Infinity" || row.created_at_us === "-Infinity"
+      ? Number(row.created_at_us) : readCreatedAtMs(row.created_at_us),
+  } : decodeCoreFact(row, owner));
 }
 
 const filteredVisibilityFactsSql = visibilityFactsSql({
@@ -187,10 +264,10 @@ export async function readVisibilityFacts(query, owner, {
 }
 
 /** @param {MemoryEntry | CandidateEntry} entry @param {readonly StoredFact[]} facts @returns {Promise<FactMatchRow>} */
-export async function rowFactCandidate({ memory, digests }, facts) {
+export async function rowFactCandidate({ memory, digests, sourceKind, createdAtUs }, facts) {
   const { scope, id, revision, text, textHash, embedding } = memory;
   /** @type {FactMatchRow} */
-  const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector };
+  const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector, sourceKind, createdAtUs };
   if (facts.some(({ fact }) => fact.kind === "text")) {
     const aliases = text !== undefined &&
       facts.some(({ fact }) => fact.kind === "text" && fact.text.digests.some(d => d.alg === "sha256"));
@@ -201,15 +278,22 @@ export async function rowFactCandidate({ memory, digests }, facts) {
 }
 
 /** @param {StoredFact} stored @param {FactMatchRow} row @param {readonly Pick<Receipt, "client" | "sessionId">[]} receipts
- * @param {FactMatchPolicy} policy @param {Pick<CandidateEntry["memory"], "source" | "createdAtMs" | "updatedAtMs">} legacySource */
+ * @param {FactMatchPolicy} policy @param {Pick<CandidateEntry["memory"], "source" | "createdAtMs" | "updatedAtMs" | "textHash">} legacySource */
 export function matchesRowFact(stored, row, receipts, policy, legacySource) {
-  if (stored.fact.kind === "session") {
+  const { fact } = stored;
+  if (fact.kind === "text" && fact.legacyTextHash !== undefined) {
+    if (fact.owner !== row.scope.owner || (fact.namespace ?? null) !== row.scope.namespace) return false;
+    // The logical hash is a reversible projection of the hosted text_hash column.
+    const physicalHit = typeof legacySource.textHash === "string" && storageHash(legacySource.textHash) === fact.legacyTextHash;
+    if (physicalHit || fact.mode === "exact") return physicalHit;
+  }
+  if (fact.kind === "session") {
     const { client, sessionId } = legacySource.source;
     const sources = receipts.length || client == null || sessionId == null ? receipts : [{ client, sessionId }];
     return sources.some(({ client, sessionId }) =>
       factHidesRow(stored, { ...row, source: { client, sessionId } }, policy) !== false);
   }
-  if (stored.fact.kind !== "window") return factHidesRow(stored, row, policy) !== false;
+  if (fact.kind !== "window") return factHidesRow(stored, row, policy) !== false;
   // On receipt-backed memories, windows govern admission only.
   if (receipts.length) return false;
   const { source: { client, sessionId }, createdAtMs, updatedAtMs } = legacySource;
