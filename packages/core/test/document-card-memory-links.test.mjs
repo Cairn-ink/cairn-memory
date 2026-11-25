@@ -23,7 +23,7 @@ const receipt = { ...sourceMessage, role: "user", occurredAtMs: null };
 const memory = (id, revision, ...receipts) => ({ id, revision, receipts });
 
 test("historical memory leaves a message-backed card visible and stale", async () => {
-  const memoryStates = new Map([["memory", { status: "historical", revision: 2 }]]);
+  const memoryStates = new Map([["memory", { status: "historical", revision: 2, correctedRevisions: [] }]]);
   for (const origin of ["router", undefined]) {
     const input = { ...read, card: { ...card, origin }, memoryStates };
     assert.equal(documentCardStaleness(input), true);
@@ -90,7 +90,7 @@ test("malformed link inputs fail even after a matching receipt", () => {
 test("message-backed cards stay visible at any current revision", async () => {
   for (const origin of ["router", undefined]) {
     for (const revision of [1, 2, 3]) {
-      const memoryStates = new Map([["memory", { status: "visible", revision }]]);
+      const memoryStates = new Map([["memory", { status: "visible", revision, correctedRevisions: [] }]]);
       const input = { ...read, card: { ...card, origin }, memoryStates };
       assert.deepEqual(await documentCardVisible(input), visible);
       assert.equal(documentCardStaleness(input), revision !== 2);
@@ -102,8 +102,8 @@ test("a correction keeps the linked card visible with a stale entry and a curren
   const stale = [{ memoryId: "memory", replacementMemoryId: "replacement" }];
   const linked = { ...card, sourceMemories: documentCardMemoryLinks(sourceMessage, [memory("memory", 2, receipt)]), stale };
   const memoryStates = new Map([
-    ["memory", { status: "historical", revision: 2 }],
-    ["replacement", { status: "visible", revision: 1, content: "Corrected guide", date: null }],
+    ["memory", { status: "historical", revision: 2, correctedRevisions: [] }],
+    ["replacement", { status: "visible", revision: 1, correctedRevisions: [], content: "Corrected guide", date: null }],
   ]);
   const input = { ...read, card: linked, memoryStates };
   assert.deepEqual(await documentCardVisible(input), visible);
@@ -118,7 +118,7 @@ test("a correction keeps the linked card visible with a stale entry and a curren
 test("forgetting hides a message-backed card even when another link is historical", async () => {
   const linked = { ...card, sourceMemories: [...sourceMemories, { id: "second", revision: 1 }] };
   const memoryStates = new Map([
-    ["memory", { status: "historical", revision: 2 }],
+    ["memory", { status: "historical", revision: 2, correctedRevisions: [] }],
     ["second", { status: "forgotten" }],
   ]);
   for (const origin of ["router", undefined]) {
@@ -149,9 +149,9 @@ test("import and manual cards still require each linked memory to be visible at 
   for (const origin of ["import", "manual"]) {
     const authored = { ...card, id: "authored", origin, sourceMessage: null };
     for (const [state, expected] of [
-      [{ status: "visible", revision: 2 }, visible],
-      [{ status: "visible", revision: 3 }, hidden("source_memory_not_visible")],
-      [{ status: "historical", revision: 2 }, hidden("source_memory_not_visible")],
+      [{ status: "visible", revision: 2, correctedRevisions: [] }, visible],
+      [{ status: "visible", revision: 3, correctedRevisions: [] }, hidden("source_memory_not_visible")],
+      [{ status: "historical", revision: 2, correctedRevisions: [] }, hidden("source_memory_not_visible")],
       [{ status: "suppressed" }, hidden("source_memory_not_visible")],
       [{ status: "forgotten" }, hidden("source_memory_forgotten")],
       [undefined, hidden("source_memory_missing")],

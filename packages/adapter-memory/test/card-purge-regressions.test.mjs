@@ -261,7 +261,7 @@ test("definite text withholding purges a card with a stale memory link", async (
   const legacy = { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
     value: await legacyExactMac(card.body, legacyKey, labels), keyId: legacyKey.id };
   const input = { card, requestedScope: scope, memoryStates: new Map([[linked.item.id,
-    { status: "visible", revision: linked.item.revision }]]), fingerprintKey: key,
+    { status: "visible", revision: linked.item.revision, correctedRevisions: [] }]]), fingerprintKey: key,
     textFacts: [{ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "fixture",
       text: { digests: [await coreDigest(card.body, key), legacy] } }],
   };

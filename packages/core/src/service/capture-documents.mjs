@@ -283,7 +283,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const memoryStates = new Map();
     for (const { memory } of rows) {
       if (memory?.scope.owner === scope.owner && memory.scope.namespace === scope.namespace) {
-        memoryStates.set(memory.id, { status: memory.historical ? "historical" : "visible", revision: memory.revision });
+        // The adapter's card fence above already checked correction evidence in this Tx.
+        memoryStates.set(memory.id, {
+          status: memory.historical ? "historical" : "visible", revision: memory.revision, correctedRevisions: [],
+        });
       }
     }
     return (await documentCardVisible({

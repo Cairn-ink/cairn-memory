@@ -97,6 +97,10 @@ export async function documentCardVisible(input, { definiteOnly = false } = {}) 
   if (!definiteOnly || verdict.visible) return verdict;
   const evidence = await readCardVisibility(input, true);
   if (evidence.reason === "text_withheld") return evidence;
+  if (verdict.reason === "source_memory_corrected") {
+    return evidence.reason === "source_withheld" || evidence.reason === "source_memory_forgotten" ||
+      evidence.reason === "source_memory_not_visible" ? evidence : hidden("uncertain");
+  }
   if (verdict.reason !== "text_withheld" && verdict.reason !== "source_memory_not_visible") return verdict;
   return evidence.reason === verdict.reason ? verdict : hidden("uncertain");
 }
@@ -139,32 +143,33 @@ async function readCardVisibility(input, definiteOnly) {
     for (const source of card.sourceMemories) {
       if (!nonempty(source?.id) || !natural(source.revision)) return hidden("uncertain");
       const state = memoryStates.get(source.id);
-      if (messageBacked) {
-        if (state === undefined) return hidden("source_memory_missing");
-        if (state === null || typeof state !== "object" || Array.isArray(state)) return hidden("uncertain");
-        switch (state.status) {
-          case "forgotten":
-            return hidden("source_memory_forgotten");
-          case "suppressed":
-            return hidden("source_memory_not_visible");
-          case "unknown":
+      if (state === undefined) return hidden("source_memory_missing");
+      if (state === null || typeof state !== "object" || Array.isArray(state)) return hidden("uncertain");
+      switch (state.status) {
+        case "forgotten":
+          return hidden("source_memory_forgotten");
+        case "suppressed":
+          return hidden("source_memory_not_visible");
+        case "unknown":
+          return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
+        case "historical":
+        case "visible": {
+          const { revision, correctedRevisions, unresolvedCorrection } = state;
+          if (!natural(revision) || !Array.isArray(correctedRevisions) ||
+              (unresolvedCorrection !== undefined && typeof unresolvedCorrection !== "boolean")) return hidden("uncertain");
+          for (const replaced of correctedRevisions) {
+            if (!natural(replaced) || replaced >= revision) return hidden("uncertain");
+          }
+          if (unresolvedCorrection || correctedRevisions.includes(source.revision)) {
+            if (!definiteOnly) return hidden("source_memory_corrected");
+          } else if (!messageBacked && (state.status !== "visible" || revision !== source.revision)) {
             return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
-          case "historical":
-          case "visible":
-            if (!natural(state.revision)) return hidden("uncertain");
-            break;
-          default:
-            return hidden("uncertain");
+          }
+          break;
         }
-        continue;
+        default:
+          return hidden("uncertain");
       }
-      if (!state) return hidden("source_memory_missing");
-      if (state.status === "forgotten") return hidden("source_memory_forgotten");
-      if (state.status !== "visible") {
-        return hidden(definiteOnly && state.status !== "suppressed" ? "uncertain" : "source_memory_not_visible");
-      }
-      if (!natural(state.revision)) return hidden("uncertain");
-      if (state.revision !== source.revision) return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
     }
 
     if (!messageBacked) return textEvidence ?? await authoredTextVisibility(input, false);

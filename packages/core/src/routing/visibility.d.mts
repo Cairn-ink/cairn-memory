@@ -5,11 +5,15 @@ import type { FingerprintKey, FingerprintLabels } from "../privacy/fingerprint.m
 import type { StoredFact, TextFact } from "../suppression-fact.mjs";
 
 export type DocumentCardMemoryState =
-  | { status: "visible"; revision: Revision; content?: string; date?: number | null }
-  | { status: "historical"; revision: Revision }
+  | ({ revision: Revision; correctedRevisions: readonly Revision[]; unresolvedCorrection?: boolean } & (
+    | { status: "visible"; content?: string; date?: number | null }
+    | { status: "historical" }
+  ))
   | { status: "forgotten" | "suppressed" | "unknown" };
 
-/** Current states for one scope, from the card's read snapshot. Absent means missing. */
+/** Current states for one scope, from the card's read snapshot. Absent means missing.
+ * correctedRevisions lists revisions replaced by in-place text edits, or [] if none are known.
+ * unresolvedCorrection signals a replacement fact that cannot be ruled out for a cited revision. */
 export type DocumentCardMemoryStates = ReadonlyMap<string, DocumentCardMemoryState>;
 
 export interface DocumentCardVisibilityInput {
@@ -42,7 +46,7 @@ export interface DocumentCardVisibilityInput {
 
 export type DocumentCardHiddenReason =
   | "scope_mismatch" | "id_mismatch" | "source_withheld" | "text_withheld" | "source_memory_missing"
-  | "source_memory_forgotten" | "source_memory_not_visible" | "uncertain";
+  | "source_memory_forgotten" | "source_memory_not_visible" | "source_memory_corrected" | "uncertain";
 
 export type DocumentCardVisibility =
   | { visible: true; reason: null }
@@ -50,7 +54,7 @@ export type DocumentCardVisibility =
 
 /**
  * Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions.
- * For erasure, definiteOnly classifies ordinary hidden verdicts with missing evidence as uncertain. Supply a null
+ * For erasure, definiteOnly classifies correction-only and indeterminate verdicts as uncertain. Supply a null
  * sourceWithheld or an unknown memory state when that withholding evidence is indeterminate.
  */
 export declare function documentCardVisible(input: DocumentCardVisibilityInput, options?: { definiteOnly?: boolean }): Promise<DocumentCardVisibility>;

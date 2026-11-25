@@ -92,7 +92,8 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
    * Bind sourceMemories for a router card to the memories that capture wrote or
    * touched for its source message, or use documentCardMemoryLinks with receipts.
-   * On recapture, union these bindings by id, keeping the highest revision.
+   * On recapture, union these bindings by id, keeping the highest revision. A
+   * new body revision may replace or drop a citation invalidated by an in-place text edit.
    * Use linkMemories to add bindings for the same content, or implement it within put.
    * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
@@ -114,6 +115,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
   hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string, options?: { purge?: boolean }): Promise<void>;
   /**
    * Uses the live Tx to union links into sourceMemories by id, keeping the highest revision.
+   * Preserve corrected citations for the current body revision so re-linking cannot restore delivery.
    * A change returns "linked" and advances the owner index revision once. A union
    * with no change returns "unchanged". A hidden or tombstoned card returns
    * "tombstoned" without writing. An unknown id returns "not_found".
@@ -153,7 +155,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
     input: DocumentCardVisibilityInput | null;
     amendments: readonly (Pick<DocumentCardAmendment, "amendmentId" | "sourceMessage"> & { sourceWithheld: boolean })[];
   }>>;
-  /** Stores the ids of the changed memory and its replacement. */
+  /** Stores the changed memory and its replacement. Only a new pair advances the card generation and owner index revision. */
   markStale(tx: Tx, scope: Scope, cardId: string, entry: DocumentCardStaleEntry): Promise<void>;
   /**
    * Same read snapshot as the final visibility check. Returns visible cards and amendments only,

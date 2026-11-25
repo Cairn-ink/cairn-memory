@@ -15,6 +15,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @typedef {{row: Row, receipts: StoredReceipt[], inspectReceiptPositions?: Map<Receipt, number>,
  * receiptKeys?: Map<Receipt, string>,
+ * textVersions: {revision: number, factEpoch: bigint}[],
  * proceduralTag?: import("@cairn-ink/core/ports").ProceduralTag,
  * inspectEvidence?: import("./inspect.mjs").StoredInspectEvidence}} Entry */
 /** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
@@ -32,6 +33,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+ * textPredecessors: Map<bigint, {id: string, createdAtMs: number, revision: number}>,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
  * receiptDenials: Set<string>, deletedMessages: Set<string>,
@@ -40,7 +42,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, startIndexRevision: number, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
+/** @typedef {{state: State, run: {readonly ended: boolean}, startIndexRevision: number, startFactEpoch: bigint, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number, cardWrites: number,
  * writeTail?: Promise<void>}} IssuedRun */
 
@@ -144,6 +146,7 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), documentCards: new Map(), cardGenerations: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
+    textPredecessors: new Map(),
     pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
     nextInspectReceiptPosition: 1, receiptDenials: new Set(), deletedMessages: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
@@ -222,7 +225,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         tx = Object.freeze({ owner, readOnly, __adapter: run });
         /** @type {IssuedRun} */
         const issuedRun = {
-          run, state, startIndexRevision: state.indexRevision, pauseLock, indexDirty: false, stateWritten: false, poisoned: false,
+          run, state, startIndexRevision: state.indexRevision, startFactEpoch: state.epoch ?? 0n,
+          pauseLock, indexDirty: false, stateWritten: false, poisoned: false,
           writeErrorCode: "internal_error", finishes: new Set(), writingFinishes: 0, cardWrites: 0,
         };
         issued.set(tx, issuedRun);
@@ -393,7 +397,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       .map(([owner, { committed }]) => ({
         owner,
         rows: [...committed.rows.values()].flatMap((namespace) => [...namespace.values()])
-          .map(entry => ({
+          .map(({ textVersions: _textVersions, ...entry }) => ({
             ...entry,
             receipts: entry.receipts.map(({ captureEventId: _captureEventId, ...receipt }) => receipt),
           }))
