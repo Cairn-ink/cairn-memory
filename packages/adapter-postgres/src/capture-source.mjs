@@ -1,6 +1,7 @@
 import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
 import { CHECK_LINEAGE, LEGACY_EVENTS } from "./raw-lineage-query.mjs";
+import { conversationSessions } from "./raw-session.mjs";
 
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { StoredFact } from "../../core/src/suppression-fact.mjs" */
@@ -50,8 +51,10 @@ export function createCaptureProofs(secret) {
 /** @param {Connection["query"]} query @param {Source} source */
 export async function hasRawFence(query, { scope, client, sessionId }) {
   if (scope.namespace !== null) return false;
+  const sessions = await conversationSessions(query, scope, { client, sessionId });
   const { rows } = await query(`SELECT 1 FROM capture_raw_fences
-    WHERE user_id = $1 AND client = $2 AND session_id = $3`, [scope.owner, client, sessionId]);
+    WHERE user_id = $1 AND client = ANY($2::text[]) AND session_id = $3 LIMIT 1`,
+  [scope.owner, sessions.map(session => session.client), sessionId]);
   return rows.length > 0;
 }
 
@@ -65,11 +68,11 @@ async function readAncestorFacts(query, { scope, client }) {
 }
 
 /**
- * @param {Connection["query"]} query @param {Source} source @param {Signer} signer
+ * @param {Connection["query"]} query @param {Source} source @param {Signer | undefined} signer
  * @param {string} fences @param {boolean} hashes @param {boolean} useCoreLedger
  */
 async function legacyProofs(query, { scope, client, sessionId }, signer, fences, hashes, useCoreLedger) {
-  const keyId = await signer.keyId().catch(() => null);
+  const keyId = signer ? await signer.keyId().catch(() => null) : "";
   if (keyId === null) return null;
   const incoming = [];
   const ancestors = [];
@@ -82,6 +85,7 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
       const own = row.session_id === sessionId && row.core_namespace === scope.namespace;
       // Explicit capture proofs already describe the positions in a Core outbox.
       if (own && !row.untagged && !useCoreLedger) continue;
+      if (!signer) return null;
       try {
         const request = typeof row.raw_request === "string" ? JSON.parse(row.raw_request) : row.raw_request;
         for (const { id } of request.messages) {
@@ -104,7 +108,7 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
 /**
  * @param {Connection["query"]} query @param {Source} source @param {Proof[] | null} proofs
  * @param {{incoming: StoredFact[], ancestors?: StoredFact[]}} facts
- * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ * @param {Signer | undefined} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
  * @param {boolean} raw @param {boolean} [allowEdited] @param {boolean} [allowExactFence]
  * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
  */
@@ -119,7 +123,7 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
     if (applies === true) return "suppressed";
     if (applies !== false) return "session-unknown";
   }
-  if (allowExactFence && await hasRawFence(query, source)) return "allowed";
+  if (allowExactFence) return "allowed";
   if (proofs === null) return "unknown";
 
   // Ancestor matching needs Core session facts in their own namespaces. An
@@ -145,7 +149,8 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
   const legacy = await legacyProofs(query, source, signer, encoded, hasHashes, matchEditedIds || !proofs.length);
   if (!legacy) return "unknown";
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [scope.owner, client, scope.namespace, sessionId,
-    JSON.stringify([...proofs, ...legacy.incoming]), encoded, hasHashes, matchEditedIds, JSON.stringify(legacy.ancestors), raw]);
+    JSON.stringify([...proofs, ...legacy.incoming]), encoded, hasHashes, matchEditedIds, JSON.stringify(legacy.ancestors), raw,
+    !signer]);
   if (!lineage || lineage.exceeded) return "unknown";
   if (lineage.direct || lineage.proven) return "proven";
   if (lineage.fenced) return "id-only";
@@ -165,6 +170,7 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
     }
   }
   if (weak) return "id-only";
+  if (lineage.unresolved_anchors) return "unknown";
   // The hosted Raw gate follows an ID match with proven edges. Evaluate each
   // reachable component under the same bounds, so unrelated weak matches do
   // not consume another component's session budget.
@@ -182,24 +188,34 @@ async function lineageVerdict(query, source, proofs, { incoming, ancestors }, si
 /**
  * @param {Connection["query"]} query @param {Source} source
  * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert" | "raw" | "import"} mode
- * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [allowExactFence]
+ * @param {Signer | undefined} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [allowExactFence]
+ * @param {readonly Pick<CaptureMessage, "id" | "content">[]} [messages]
  */
-export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey, allowExactFence = false) {
-  const { scope, client, sessionId } = source;
-  const facts = await readVisibilityFacts(query, scope.owner, { source });
-  const candidate = { scope, passages: [], session: { client, sessionId } };
+export async function filterSources(query, source, times, proofs, mode, signer, hashSessionKey, allowExactFence = false, messages) {
+  const { scope } = source;
+  const sessions = await conversationSessions(query, scope, source);
+  const cleanup = allowExactFence && await hasRawFence(query, source);
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
-  const windows = facts.filter(({ fact }) => fact.kind === "window");
-  const positions = Array.from(times.keys()).filter((position) => !windows.some((stored) =>
-    factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
-  if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
+  let positions = Array.from(times.keys());
+  for (const session of sessions) {
+    const address = { scope, ...session };
+    const facts = await readVisibilityFacts(query, scope.owner, { source: address });
+    const candidate = { scope, passages: [], session };
+    const windows = facts.filter(({ fact }) => fact.kind === "window");
+    positions = positions.filter(position => !windows.some(stored =>
+      factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
+    if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
-  // Import supplies fresh proofs. A comparable proof for edited content can rule out an ID match.
-  const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey,
-    mode === "raw" || mode === "import", mode === "import", allowExactFence);
-  if (verdict === "allowed") return positions;
-  if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
-  return [];
+    // Content proofs are client-bound. Re-sign when text is available at the other address.
+    const addressProofs = source.client === session.client ? proofs : signer && messages ? await signer(address, messages) : [];
+    // Import supplies fresh proofs. A comparable proof for edited content can rule out an ID match.
+    const verdict = await lineageVerdict(query, address, addressProofs, { incoming: facts }, signer, hashSessionKey,
+      mode === "raw" || mode === "import", mode === "import", cleanup);
+    if (verdict === "allowed") continue;
+    if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
+    return [];
+  }
+  return positions;
 }
 
 /**
@@ -207,8 +223,14 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [raw]
  */
 export async function checkSourceLineage(query, source, signer, hashSessionKey, raw = true) {
-  const incoming = await readVisibilityFacts(query, source.scope.owner, { source });
-  return lineageVerdict(query, source, [], { incoming }, signer, hashSessionKey, raw);
+  const { scope } = source;
+  for (const session of await conversationSessions(query, scope, source)) {
+    const address = { scope, ...session };
+    const incoming = await readVisibilityFacts(query, scope.owner, { source: address });
+    const verdict = await lineageVerdict(query, address, [], { incoming }, signer, hashSessionKey, raw);
+    if (verdict !== "allowed") return verdict;
+  }
+  return "allowed";
 }
 
 const MAX_LINEAGE_SESSIONS = 1_000;

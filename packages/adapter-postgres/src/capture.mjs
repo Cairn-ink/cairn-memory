@@ -7,6 +7,8 @@ import {
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources, hasRawFence } from "./capture-source.mjs";
 import { createPostgresMemoryStore } from "./memory-store.mjs";
+import { conversationSessions } from "./raw-session.mjs";
+import { assertReceiptSource } from "./receipt-source.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { CaptureClaim, CaptureFinish, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
@@ -114,14 +116,15 @@ export async function terminateDirectClaims(query, owner, { client, sessionId })
   return rows.length > 0;
 }
 
-/** @param {Query} query @param {CaptureKey} key @param {CaptureMessage[]} [batch]
- * @returns {Promise<CaptureRow | undefined>}
+/** @param {Query} query @param {CaptureKey} key @param {boolean} fenced @param {CaptureMessage[]} [batch]
+ * @returns {Promise<CaptureRow | null | undefined>} Null when a fence refuses a new event.
  */
-async function reserveEvent(query, key, batch) {
+async function reserveEvent(query, key, fenced, batch) {
   const params = identity(key);
   const select = SELECT_EVENT + " FOR UPDATE";
   const { rows: [existing] } = await query(select, params);
   if (existing) return existing;
+  if (fenced) return null;
   const { raw, metadata } = encodeRequest(key, batch ?? []);
   const { rows } = await query(INSERT_EVENT, [
     ...params, key.sessionId, key.scope.namespace, key.payloadDigest, raw, batch !== undefined, metadata,
@@ -157,7 +160,9 @@ export function createPostgresCapturePorts(options) {
         const batch = copyMessages(messages);
         const leaseMs = readLease(options);
         return async (query) => {
-          const row = await reserveEvent(query, copy);
+          const fenced = await hasRawFence(query, copy);
+          const row = await reserveEvent(query, copy, fenced);
+          if (row === null) return { status: "duplicate" };
           if (row) {
             const retry = storedRetry(row, copy);
             if (retry) return retry;
@@ -168,6 +173,7 @@ export function createPostgresCapturePorts(options) {
 
           const source = row?.core_admitted ? await loadAdmission(query, copy, row.core_namespace) : null;
           if (row?.core_admitted && !source) throw new CoreError("internal_error");
+          if (fenced && !isBlankOutbox(source?.messages)) return { status: "duplicate" };
           const stored = source?.messages ?? batch;
           const times = stored.map(({ occurredAtMs }) => occurredAtMs);
           const proofs = await captureProofs(copy, stored);
@@ -220,12 +226,12 @@ export function createPostgresCapturePorts(options) {
           if (row.status !== "pending" || !row.core_lease_sources) throw new CoreError("stale_admission");
           const scope = { owner: tx.owner, namespace: row.core_namespace };
           const source = { kind: /** @type {const} */ ("capture"), client: row.client, sessionId: row.session_id };
-          const { proofs } = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources);
-          if (row.core_admitted) {
-            const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
+          const { proofs, times } = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources);
+          const current = row.core_admitted ? decodeOutboxMessages(row.raw_request, row.core_outbox_metadata) : null;
+          if (current) {
             const currentProofs = await captureProofs({ scope, client: row.client }, current);
             const blankIds = new Set(current.filter(({ content }) => !content).map(({ id }) => id));
-            if ((batch.length > 0 && blankIds.size > 0 && current.every(({ content }) => !content)) ||
+            if ((batch.length > 0 && isBlankOutbox(current)) ||
                 !proofs || !currentProofs || proofs.length !== currentProofs.length ||
                 currentProofs.some((proof, i) => proof.message_mac !== proofs[i].message_mac || proof.content_mac !== proofs[i].content_mac) ||
                 batch.some(({ receipts }) => receipts.some((receipt) => receipt.client === source.client &&
@@ -233,12 +239,28 @@ export function createPostgresCapturePorts(options) {
               throw new CoreError("suppressed");
             }
           }
-          if (batch.length && await hasRawFence(query, { scope, ...source })) throw new CoreError("lineage_fenced");
-          const receiptSessions = new Map(batch.flatMap(({ receipts }) => receipts.map(({ client, sessionId }) =>
-            [JSON.stringify([client, sessionId]), { scope, client, sessionId }])));
-          for (const receiptSource of receiptSessions.values()) {
-            const fromLease = receiptSource.client === source.client && receiptSource.sessionId === source.sessionId;
-            await filterSources(query, receiptSource, [], fromLease ? proofs : [], "assert", captureProofs, hashSessionKey);
+          const leaseSource = { scope, ...source };
+          if (batch.length || await hasRawFence(query, leaseSource)) {
+            await filterSources(query, leaseSource, [], proofs, "assert", captureProofs, hashSessionKey,
+              !batch.length && isBlankOutbox(current), current ?? undefined);
+          }
+          const receipts = new Map(batch.flatMap(({ receipts }) => receipts.map(receipt =>
+            [JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId, receipt.role]), receipt])));
+          const sessions = receipts.size ? await conversationSessions(query, scope, source) : [];
+          for (const receipt of receipts.values()) {
+            const fromLease = sessions.some(session => session.client === receipt.client && session.sessionId === receipt.sessionId);
+            const evidence = { times: /** @type {(number | null)[]} */ ([]), proofs: /** @type {NonNullable<typeof proofs>} */ ([]) };
+            if (fromLease && !current && proofs) {
+              const mac = await captureProofs.sign(receipt.messageId);
+              for (const [i, proof] of proofs.entries()) {
+                if (proof.message_mac === mac && proof.content_mac !== null && i < times.length) {
+                  evidence.times.push(times[i]);
+                  if (receipt.client === source.client) evidence.proofs.push(proof);
+                }
+              }
+            }
+            await assertReceiptSource(query, scope, receipt, captureProofs, hashSessionKey,
+              fromLease ? current ?? [] : [], evidence);
           }
           return { scope, source, batch, lease, nowMs };
         };
@@ -259,7 +281,9 @@ export function createPostgresCapturePorts(options) {
         const copy = copyKey(tx, key);
         const batch = copyMessages(messages);
         return async (query) => {
-          const row = await reserveEvent(query, copy, batch);
+          const fenced = batch.some(({ content }) => content !== "") && await hasRawFence(query, copy);
+          const row = await reserveEvent(query, copy, fenced, batch);
+          if (row === null) return { status: "duplicate" };
           if (!row) return { status: "admitted" };
           const retry = storedRetry(row, copy);
           if (retry) return retry;
@@ -303,7 +327,7 @@ export function createPostgresCapturePorts(options) {
       requireLiveRun(tx);
       const [copy, batch] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyMessages(messages)]));
       return runOperation(tx, async (query) => filterSources(query, copy, batch.map(({ occurredAtMs }) => occurredAtMs),
-        await captureProofs(copy, batch), "read", captureProofs, hashSessionKey));
+        await captureProofs(copy, batch), "read", captureProofs, hashSessionKey, false, batch));
     },
 
     async assertEligible(tx, key, positions) {
@@ -325,8 +349,9 @@ export function createPostgresCapturePorts(options) {
         });
         const current = row.core_admitted ? decodeOutboxMessages(row.raw_request, row.core_outbox_metadata) : null;
         // An admitted outbox can finish without sources once every message has been withdrawn.
-        const allowExactFence = selected.length === 0 && !!current?.length && current.every(({ content }) => content === "");
-        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey, allowExactFence);
+        const allowExactFence = selected.length === 0 && isBlankOutbox(current);
+        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey,
+          allowExactFence, current ?? undefined);
         if (current && selected.length) {
           const currentSources = selected.map((position) => current[position]);
           if (currentSources.some((message) => !message?.content)) throw new CoreError("suppressed");
@@ -337,6 +362,11 @@ export function createPostgresCapturePorts(options) {
       });
     },
   };
+}
+
+/** @param {CaptureMessage[] | null | undefined} messages */
+function isBlankOutbox(messages) {
+  return !!messages?.length && messages.every(({ content }) => content === "");
 }
 
 /** @param {string} value */

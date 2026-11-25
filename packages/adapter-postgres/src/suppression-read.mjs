@@ -1,10 +1,12 @@
 import { CoreError, factBlocksIncoming, validateSuppressionFact } from "../../core/src/index.mjs";
-import { hasRawFence } from "./capture-source.mjs";
+import { copyMessages } from "./capture-input.mjs";
+import { createCaptureProofs } from "./capture-source.mjs";
 import { copyReceipts, inputText } from "./memory-input.mjs";
 import { readReceipts, selectMemory } from "./memory-rows.mjs";
 import {
   decodeCoreFact, matchesRowFact, readVisibilityFacts, rowFactCandidate, rowVisibilityPolicy, sessionBlocksIncoming, usesSource,
 } from "./memory-visibility.mjs";
+import { assertReceiptSource } from "./receipt-source.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { FactMatchPolicy, StoredFact, TextFact } from "../../core/src/index.mjs" */
@@ -161,10 +163,11 @@ async function legacyFacts(query, scope) {
   return scope.namespace === null ? facts : [];
 }
 
-/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean}} options */
-export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace = false }) {
+/** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean, lineageSecret?: string}} options */
+export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace = false, lineageSecret }) {
   const policy = rowVisibilityPolicy(hashSessionKey);
   const capture = /** @type {const} */ ({ hashSessionKey, mode: "capture" });
+  const captureProofs = lineageSecret === undefined ? undefined : createCaptureProofs(lineageSecret);
 
   /** @type {SuppressionStore["snapshot"]} */
   async function snapshot(tx, scope, candidates) {
@@ -219,21 +222,26 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
   }
 
   /** @type {NonNullable<SuppressionStore["receiptWithheld"]>} */
-  async function receiptWithheld(tx, scope, input) {
+  async function receiptWithheld(tx, scope, input, admitted) {
     const scoped = readScope(tx, scope, allowNonNullNamespace);
-    const [{ client, sessionId, messageId, occurredAtMs }] = copyReceipts([input]);
+    const [receipt] = copyReceipts([input]);
     inputText(input.excerpt);
-    const withheld = await runOperation(tx, async (query) => {
-      if (await hasRawFence(query, { scope: scoped, client, sessionId })) return true;
-      if (scoped.namespace !== null) return false;
-      const { rows } = await query(`SELECT 1 FROM core_memory_receipts
-        WHERE user_id = $1 AND client = $2 AND session_id = $3 AND message_id = $4 AND forgotten_at IS NOT NULL LIMIT 1`,
-      [scoped.owner, client, sessionId, messageId]);
-      return rows.length > 0;
+    const messages = admitted === undefined ? [] : copyMessages([admitted]);
+    if (messages.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
+      return true;
+    }
+    return runOperation(tx, async (query) => {
+      try {
+        await assertReceiptSource(query, scoped, receipt, captureProofs, hashSessionKey, messages);
+        return false;
+      } catch (error) {
+        if (error instanceof CoreError &&
+            (error.code === "suppressed" || error.code === "lineage_fenced" || error.code === "raw_lineage_unavailable")) {
+          return true;
+        }
+        throw error;
+      }
     });
-    if (withheld) return true;
-    const { blockedSession, blockedMessages } = await snapshot(tx, scoped, { client, sessionId, occurredAtMs: [occurredAtMs] });
-    return blockedSession || blockedMessages.length > 0;
   }
 
   /** @type {SuppressionStore["factsFor"]} */

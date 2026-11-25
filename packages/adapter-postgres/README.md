@@ -263,8 +263,15 @@ to `eraseSessions` inside that same transaction. Erasure fences the proven
 sessions, deletes their Raw rows, and blanks their ledger messages. An
 ID-only match withholds admission without joining the erase closure.
 `deleteConversation` fences the conversation, deletes its Raw rows, blanks its
-ledger messages, and retires its direct claims in one transaction. The fence
-withholds later turns and their receipts, including previously unseen message IDs.
+ledger messages, and retires its direct claims in one transaction. A legacy MCP
+explicit save with proven provenance covers both the reported and physical
+addresses. The fence refuses late text admissions and withholds later turns
+and receipts. An already admitted outbox with every slot blank can take a
+cleanup lease and finish with zero items.
+
+Receipt checks use the archived message time and any supplied admitted evidence.
+Give `createPostgresSuppressionStore` the same `lineageSecret` to resolve older
+ledger proofs and sign source evidence that has yet to be anchored.
 
 Supply `fingerprintKeys(owner)` with the current and retained keys and their
 respective fingerprint pipelines to enable keyed Raw purge. Exact evidence

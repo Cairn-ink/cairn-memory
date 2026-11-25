@@ -112,7 +112,7 @@ async function fixture(t, { archiveFirst = true, batch = messages, now, onStage,
     async ledger(event = key) {
       const { rows: [row] } = await pool.query(`SELECT raw_request FROM capture_events
         WHERE user_id = $1 AND client = $2 AND event_id = $3`, [owner, event.client, event.eventId]);
-      return row.raw_request;
+      return row?.raw_request;
     },
     async savedMemory() {
       return (await pool.query("SELECT text FROM memories WHERE user_id = $1", [owner])).rows;
@@ -256,10 +256,8 @@ test("conversation delete makes direct replay terminal and fences a new event", 
   assert.deepEqual(await db.rawRows(), []);
 
   const newEvent = { ...direct, eventId: randomUUID() };
-  const fresh = await claim(newEvent);
-  assert.equal(fresh.status, "claimed");
-  assert.notEqual(fresh.token, first.token);
-  await assert.rejects(finish(newEvent, fresh.token), { code: "lineage_fenced" });
+  assert.deepEqual(await claim(newEvent), { status: "duplicate" });
+  assert.equal(await db.ledger(newEvent), undefined);
   assert.deepEqual(await write((tx) => raw.archive(tx, newEvent, batch)), { archived: 0 });
   assert.deepEqual(await db.savedMemory(), []);
   assert.deepEqual(await db.rawRows(), []);
