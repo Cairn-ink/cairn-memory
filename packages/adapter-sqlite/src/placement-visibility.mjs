@@ -1,7 +1,5 @@
-import { readEntry, readReceipts } from "./memory-rows.mjs";
-import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
+import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
-import { readRawRow } from "./raw-rows.mjs";
 import { scopeKey } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
@@ -9,17 +7,25 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @import { Connection } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
+/** @import { StoredReceipt } from "./receipt-identity.mjs" */
 /** @typedef {ReturnType<typeof createPlacementVisibility>} PlacementVisibility */
 /** @typedef {ReturnType<PlacementVisibility>} ScopedVisibility */
 
 export const exactScope = "owner_id = ? AND namespace_key = ?";
 
-/** @param {SessionHasher} hashSession @param {MigratedRawPolicy} [migratedRaw] */
-export function createPlacementVisibility(hashSession, migratedRaw) {
+/** @param {SessionHasher} hashSession
+ * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} receiptReadSafety
+ * @param {MigratedRawPolicy} [migratedRaw]
+ */
+export function createPlacementVisibility(hashSession, receiptReadSafety, migratedRaw) {
   /** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof scopedSuppression>} [policy] */
   return (db, scope, policy = scopedSuppression(db, scope, hashSession)) => {
     /** @type {Map<string, MemoryRow | undefined>} */
     const seen = new Map();
+    const keys = scopeKey(scope);
+    const receipts = db.prepare(`SELECT r.body, r.legacy_receipt_key, i.excerpt
+      FROM cairn_receipts r LEFT JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
+      WHERE r.owner_id = ? AND r.namespace_key = ? AND r.memory_id = ?`);
     /** @param {string} id */
     return id => {
       if (seen.has(id)) return seen.get(id);
@@ -28,21 +34,14 @@ export function createPlacementVisibility(hashSession, migratedRaw) {
       if (row) {
         const { client, sessionId } = row.source;
         const fenced = client !== null && sessionId !== null && hasRawFence(db, scope, hashSession(scope, client, sessionId));
-        const hiddenExcerpt = policy.facts.some(({ fact }) => fact.kind === "text") &&
-          db.prepare(`SELECT excerpt FROM cairn_inspect_receipts WHERE ${exactScope} AND memory_id = ? AND excerpt IS NOT NULL`)
-            .all(...scopeKey(scope), id).some(({ excerpt }) =>
-              typeof excerpt === "string" && importTextBlocked(policy.facts, excerpt, policy.legacy));
-        const withheld = fenced || hiddenExcerpt || readReceipts(db, scope, id).some(receipt => {
-          const { messageId, occurredAtMs } = receipt;
+        const withheld = fenced || receipts.all(...keys, id).some(({ body, legacy_receipt_key, excerpt }) => {
+          const { client, sessionId, messageId, role, occurredAtMs, receiptKey, legacyRawAncestryEmpty } =
+            /** @type {StoredReceipt} */ (decodeJson(body));
+          const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
+          const receipt = { client, sessionId, messageId, role, occurredAtMs, excerpt: typeof excerpt === "string" ? excerpt : undefined };
           const position = { id: messageId, occurredAtMs };
-          if (policy.withholdsReceipt(receipt, undefined, receipt.legacyReceiptKey) ||
-              hasRawFence(db, scope, hashSession(scope, receipt.client, receipt.sessionId)) ||
-              migratedRaw?.blocks(db, scope, receipt, [position]) ||
-              migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;
-          const session = migratedRaw?.storageSession(db, scope, receipt) ?? receipt;
-          const archived = readRawRow(db, scope, session, messageId);
-          return archived !== undefined && (rawFactPolicy(scope, receipt, policy.facts, hashSession).hides(archived.message) ||
-            importTextBlocked([], archived.message.content, policy.legacy));
+          return migratedRaw?.blocks(db, scope, receipt, [position]) || migratedRaw?.blocksSpan(db, scope, receipt, messageId) ||
+            !receiptReadSafety(db, scope, policy, receipt, receiptKey ?? legacyKey, legacyKey, legacyRawAncestryEmpty);
         });
         if (withheld) row = undefined;
       }

@@ -56,7 +56,8 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const captureControls = controls || localAuthority ? migratedCaptureControls(controls, localAuthority) : undefined;
   const index = createIndexRevisions(uow, port);
   const lineage = createRawLineage(sessionHashKey, hashSessionKey);
-  const visibility = createPlacementVisibility(hashSessionKey, migratedRaw);
+  const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
+  const visibility = createPlacementVisibility(hashSessionKey, receiptReadSafety, migratedRaw);
   const scrubTitles = createTitleScrubber(visibility);
   const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now, topicOptions),
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
@@ -65,7 +66,6 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const conflicts = flags.conflictEdges ? handleWriteRejections(relations.conflicts, ["insert", "invalidate"]) : undefined;
   const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles);
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
-  const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
   const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, flags);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);

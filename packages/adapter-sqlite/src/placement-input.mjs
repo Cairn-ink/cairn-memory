@@ -66,6 +66,7 @@ export function topicPage(rows, { cursor, limit }, { owner, namespace }, method,
     if (!Array.isArray(payload) || encodeCursor(payload) !== cursor) throw new CoreError("invalid_cursor");
     const [kind, tokenOwner, tokenNamespace, tokenFilter, version, start] = payload;
     if (payload.length !== 6 || kind !== method || tokenOwner !== owner || tokenNamespace !== namespace ||
+        (method === "members" && tokenFilter !== filter) ||
         !Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(start) || start < 1) {
       throw new CoreError("invalid_cursor");
     }
