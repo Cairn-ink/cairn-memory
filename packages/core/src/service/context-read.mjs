@@ -14,9 +14,11 @@ import { entry } from "./entry.mjs";
   ContextLedgerDiagnostics, ContextLedgerErrorStage, ContextReadError, ContextReadSet,
   MemoryService, ReadContextInput, ReadContractStorage } from "../ports/index.d.ts" */
 /** @import { PackOptions, Projection } from "./context-read-pack.mjs" */
-/** @import { LedgerCheck, LedgerReading } from "./context-read-assembly-evidence.mjs" */
+/** @import { LedgerCheck, LedgerReading, LedgerSelection } from "./context-read-assembly-evidence.mjs" */
 /** @import { KeylessMemoryServiceDeps } from "./index.d.mts" */
 /** @typedef {KeylessMemoryServiceDeps["storage"] & Partial<Pick<ReadContractStorage, "quantityLedger" | "memories">>} KeylessStorage */
+/** @typedef {Awaited<ReturnType<ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"]>>} AssemblyCandidates */
+/** @typedef {{ witness: string, selection?: LedgerSelection }} RollingWitness */
 
 const MAX_BYTES = 65_536;
 const SNAPSHOT_LIMIT = 16_384;
@@ -108,19 +110,25 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
    * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
-   * @param {{ witness: string, asOfMs: number }} [expectedRolling] */
+   * @param {RollingWitness & { asOfMs: number, candidates: AssemblyCandidates }} [expectedRolling] */
   async function assemble(readSet, input, options, deadline, includeLedger, expectedRolling) {
     const { candidate, budget, policy, representation, raw, lexicalOnly } = input;
-    /** @type {Awaited<ReturnType<typeof find>>} */
+    /** @type {AssemblyCandidates} */
     let found;
     try {
       found = await find(readSet, candidate, { ...options, deadlineAtMs: deadline });
     } catch (error) {
-      // The public entry sanitizes errors. Preserve only the content-free
-      // diagnostic object that this service's find preflight produced.
-      const refused = /** @type {ContextReadError} */ (error);
-      if (refused.diagnostics) return { refused };
-      throw error;
+      if (expectedRolling && error instanceof CoreError && error.code === "evidence_unavailable") {
+        // The index can still name a newly hidden memory. Reuse the prior
+        // ranking and let fetch recheck its generation and fence each ref.
+        found = expectedRolling.candidates;
+      } else {
+        // The public entry sanitizes errors. Preserve only the content-free
+        // diagnostic object that this service's find preflight produced.
+        const refused = /** @type {ContextReadError} */ (error);
+        if (refused.diagnostics) return { refused };
+        throw error;
+      }
     }
     if (!counter || !format) throw new CoreError("token_count_unavailable");
     const { items, channels, coverage, trace } = found.result;
@@ -208,26 +216,37 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     // The ordinary pack establishes whether this read can deliver a ranked item.
     const rankedType = ordinary.assembly.items.some(item => item.ref.type === "memory") ? "memory" :
       ordinary.assembly.items.some(item => item.ref.type === "card") ? "card" : undefined;
-    /** @type {string | undefined} */
+    /** @type {RollingWitness | undefined} */
     let refreshRolling;
+    let scannedLedger = false;
     const enriched = await beforeLedgerDeadline(now, deadline, options.signal, async active => {
       /** @type {NonNullable<ContextLedgerDiagnostics["ledger_digest_error"]>} */
       const errors = {};
       /** @param {ContextLedgerErrorStage} stage */
       const onError = stage => { errors[stage] = (errors[stage] ?? 0) + 1; };
-      const attempt = { active, onError };
       /** @type {ContextLedgerDiagnostics} */
       let counts = {};
+      const attempt = { active, onError, onScan() { scannedLedger = true; } };
       const ledger = await evidence.prepareLedger(attempt, expectedRolling === undefined).catch(error => {
         active();
         if (!staleSnapshot(error)) onError("snapshot");
         return null;
       });
       active();
-      if (!ledger) return withDiagnostics(ordinary, counts, errors);
+      if (!ledger) {
+        if (expectedRolling) counts.ledger_digest_omitted = 1;
+        else if (scannedLedger && !Object.keys(errors).length) counts.ledger_digest_empty = 1;
+        return withDiagnostics(ordinary, counts, errors);
+      }
       const { rolling, calendar: comparison } = ledger;
-      const rollingWitness = () => rolling.project(rolling.lines, false).witness();
-      if (expectedRolling && rollingWitness() !== expectedRolling.witness) {
+      /** @param {LedgerSelection} [selection] */
+      function rollingWitness(selection) {
+        if (!selection) return rolling.project(rolling.lines, false).witness();
+        const keys = new Set(selection.keys);
+        const lines = rolling.lines.filter(line => keys.has(line.key));
+        if (lines.length === keys.size) return rolling.project(lines, selection.trimmed).witness();
+      }
+      if (expectedRolling && rollingWitness(expectedRolling.selection) !== expectedRolling.witness) {
         return withDiagnostics(ordinary, { ledger_digest_omitted: 1 }, errors);
       }
       /** @param {LedgerReading} reading @param {boolean} calendar */
@@ -263,7 +282,11 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
         const snapshot = await deliver(packed, { witness, selection, calendar, ...attempt }).catch(error => {
           active();
           if (staleSnapshot(error)) {
-            if (comparison) refreshRolling = rollingWitness();
+            if (!expectedRolling) {
+              refreshRolling = calendar
+                ? { witness: rolling.project(rolling.lines, false).witness() }
+                : { witness, selection };
+            }
           } else onError("snapshot");
         });
         active();
@@ -276,12 +299,13 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       return withDiagnostics(result ?? ordinary, counts, errors);
     });
     if (options.signal?.aborted) throw new CoreError("snapshot_stale");
-    // Suppression can also advance the namespace generation. Refresh the
-    // ordinary snapshot once and require the original rolling witness.
+    // A stale ranked item or generation can invalidate the pack independently
+    // of the ledger. Refresh ranked evidence once and require the rolling witness.
     if (refreshRolling !== undefined && now() < deadline) {
-      return assemble(readSet, input, options, deadline, true, { witness: refreshRolling, asOfMs: ledgerRequest.asOfMs });
+      return assemble(readSet, input, options, deadline, true,
+        { ...refreshRolling, asOfMs: ledgerRequest.asOfMs, candidates: found });
     }
-    return enriched ?? ordinary;
+    return enriched ?? (scannedLedger ? withDiagnostics(ordinary, { ledger_digest_omitted: 1 }, {}) : ordinary);
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {ReadContextInput} */ request,
     /** @type {CallOptions} */ options) => {

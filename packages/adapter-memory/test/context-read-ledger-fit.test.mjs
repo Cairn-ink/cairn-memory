@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assemblyClock, formatAssembly } from "@cairn-ink/conformance/context-assembly";
+import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { createMemoryService } from "@cairn-ink/core/service";
 import tokenizer from "../../../packaging/core-local/vendor/tiktoken/tiktoken.cjs";
 import { amount, day, dayMs, fixture, readSet, scope, source } from "./fixtures/context-read-quantity-ledger.mjs";
@@ -15,7 +15,9 @@ test("busy persona keeps whole answering evidence and ranked memories", async t 
   const food = [];
   for (const [group, count] of [["food", 28], ["transport", 24]]) {
     for (let i = 1; i <= count; i++) {
-      const category = `${group === "food" ? "market" : "station"} receipt category ${i}`;
+      const category = group === "food"
+        ? `market receipt category ${i} for freshly prepared meals purchased at a neighborhood grocery shop`
+        : `station receipt category ${i}`;
       const memory = await f.capture(`${group}: ${category} cost ${i} USD.`, [amount(category, i, group)],
         { date: day - i % 7 * dayMs });
       records.push(...await f.ledgerRows(memory.id));
@@ -74,15 +76,21 @@ test("busy persona keeps whole answering evidence and ranked memories", async t 
   const foodRows = records.filter(row => food.includes(row.memoryId));
   const total = foodRows.reduce((sum, row) => sum + row.value, 0);
   const answer = `Food spending: total $${total.toFixed(2)} in ${foodRows.length} records, average $${(total / 7).toFixed(2)} per day.`;
-  assert.ok(ledgerDigest.body.endsWith(answer + " More ledger rows not shown."));
-  assert.doesNotMatch(ledgerDigest.body, /transport|subtotals|category/iu);
+  const notice = " More ledger rows not shown.";
+  assert.ok(ledgerDigest.body.includes(answer));
+  assert.ok(ledgerDigest.body.endsWith(notice));
+  assert.match(ledgerDigest.body, /Market receipt category /u);
+  assert.doesNotMatch(ledgerDigest.body, /transport|subtotals/iu);
   assert.deepEqual(citationIds(ledgerDigest), food.sort());
   assert.deepEqual(ledgerDigest.sources.map(entry => entry.index), food.map((_, i) => i));
   const primary = { ...result.assembly, ledgerDigest: { ...ledgerDigest,
-    body: ledgerDigest.body.replace(" More ledger rows not shown.", "") } };
+    body: ledgerDigest.body.slice(0, ledgerDigest.body.indexOf(answer) + answer.length) } };
   const answerCost = digestCost(primary, count);
   t.diagnostic(`answer: ${answerCost}/${maxTokens} tokens`);
   assert.ok(answerCost > 0.30 * maxTokens && answerCost <= 0.60 * maxTokens);
+  const withoutNotice = { ...result.assembly, ledgerDigest: { ...ledgerDigest, body: ledgerDigest.body.slice(0, -notice.length) } };
+  const optionalCost = digestCost(withoutNotice, count) - answerCost;
+  assert.ok(optionalCost > 0 && optionalCost <= 0.30 * maxTokens);
   assert.ok(items.some(item => item.ref.type === "memory"));
   assert.ok(result.diagnostics.ledger.ledger_digest_trimmed > 0);
   assert.equal(result.diagnostics.budget.used, count(formatAssembly(result.assembly)));
@@ -116,6 +124,32 @@ test("ledger catch-all fails closed with a content-free stage and count", async 
   assert.equal(result.assembly.ledgerDigest, undefined);
   assert.deepEqual(result.assembly.items.map(item => item.ref.id), [bread.id]);
   assert.deepEqual(result.diagnostics.ledger, { ledger_digest_error: { scan: 1 } });
+});
+
+test("a matched ledger scan with no deliverable rows reports a content-free reason", async () => {
+  const f = fixture();
+  await f.capture("Food: bread cost 3 USD.", [amount("bread", 3)]);
+  const result = await f.read(f.reader(), { query: "How much food yesterday?" });
+  assert.equal(f.scans.length, 2);
+  assert.equal(result.assembly.ledgerDigest, undefined);
+  assert.deepEqual(result.diagnostics.ledger, { ledger_digest_empty: 1 });
+});
+
+test("a one-slot pack keeps the ranked item even when the digest fits", async () => {
+  const f = fixture();
+  await f.capture("Food: soup cost 4 USD.", [amount("soup", 4)]);
+  for (const raw of [false, true]) {
+    const control = await f.read(f.reader(), { raw });
+    assert.ok(control.assembly.ledgerDigest);
+    assert.equal(control.assembly.items.length, 1);
+    const request = { raw, budget: { maxItems: 1 } };
+    const ordinary = await f.read(f.reader({ enabled: false }), request);
+    const ranked = await f.read(f.reader(), request);
+    assert.equal(ranked.assembly.items.length, 1);
+    assert.deepEqual(ranked.assembly, ordinary.assembly);
+    assert.deepEqual(ranked.diagnostics.coverage, ordinary.diagnostics.coverage);
+    assert.equal(ranked.diagnostics.budget.used, fixtureCount(formatAssembly(ranked.assembly)));
+  }
 });
 
 test("question focus selects groups, categories and matching goals with all rows behind each total", async () => {

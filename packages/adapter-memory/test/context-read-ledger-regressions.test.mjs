@@ -52,7 +52,9 @@ for (const slowCall of [1, 2]) {
     const expected = await f.read(off);
     assert.equal(expected.assembly.items.length, 1);
     assert.equal(expected.diagnostics.stops.deadline, false);
-    assert.deepEqual(await f.read(f.reader()), expected);
+    const result = await f.read(f.reader());
+    if (slowCall === 2) expected.diagnostics.ledger = { ledger_digest_omitted: 1 };
+    assert.deepEqual(result, expected);
     assert.equal(calls, slowCall);
     assert.equal(f.scans.length, slowCall === 1 ? 0 : 2);
   });

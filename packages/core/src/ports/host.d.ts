@@ -408,6 +408,7 @@ export type ContextLedgerErrorStage = "terms" | "scan" | "evidence" | "seal" | "
 export interface ContextLedgerDiagnostics {
   ledger_digest_trimmed?: number;
   digest_line_too_large?: number;
+  ledger_digest_empty?: number;
   ledger_digest_omitted?: number;
   ledger_digest_error?: Partial<Record<ContextLedgerErrorStage, number>>;
 }

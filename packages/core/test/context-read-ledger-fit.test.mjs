@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { fitLedgerDigest, meter } from "../src/service/context-read-pack.mjs";
 
 const notice = "More ledger rows not shown.";
-const line = (key, kind, tokens, answering = false, total) =>
-  ({ key, kind, tokens, answering, total });
+const line = (key, kind, tokens, answering = false, total, sourceIds = [key]) =>
+  ({ key, kind, tokens, answering, total, sourceIds });
 
 function fit(lines, maxTokens = 100, accept = value => value) {
   const diagnostics = {};
@@ -20,7 +20,8 @@ function fit(lines, maxTokens = 100, accept = value => value) {
     lines,
     project(selected, trimmed) {
       const body = selected.map(item => item.key.padEnd(item.tokens - 4)).join("") + (trimmed ? notice : "");
-      const sources = selected.map(({ key }, index) => ({ index, role: "user", memory: { id: key } }));
+      const ids = new Set(selected.flatMap(item => item.sourceIds));
+      const sources = [...ids].map((id, index) => ({ index, role: "user", memory: { id } }));
       return { value: { body, sources }, witness: () => "witness" };
     },
   };
@@ -29,11 +30,12 @@ function fit(lines, maxTokens = 100, accept = value => value) {
 }
 
 for (const tokens of [29, 30, 31]) {
-  test(`the 30% share is inclusive at ${tokens} tokens including citations`, () => {
-    const { result, diagnostics } = fit([line("answer", "measure", 10, true), line("group", "group", tokens - 10)]);
+  test(`the 30% share is inclusive at ${tokens} incremental tokens with a 50-token answer`, () => {
+    const { result, diagnostics } = fit([line("answer", "measure", 50, true),
+      line("group", "group", tokens, false, undefined, ["answer", "receipt"])]);
     if (tokens <= 30) {
       assert.deepEqual(result.selection.keys, ["answer", "group"]);
-      assert.equal(result.packed.sources.length, 2);
+      assert.deepEqual(result.packed.sources.map(({ memory }) => memory.id), ["answer", "receipt"]);
       assert.deepEqual(diagnostics, {});
     } else {
       assert.deepEqual(result.selection.keys, ["answer"]);
@@ -65,7 +67,7 @@ test("trim order removes subtotals, then the smallest category, then larger cate
   assert.deepEqual(result.selection.keys, ["answer", "group", "large"]);
   assert.deepEqual(result.packed.sources.map(({ memory }) => memory.id), result.selection.keys);
   assert.deepEqual(diagnostics, { ledger_digest_trimmed: 2 });
-  assert.deepEqual(fit(lines, 600).result.selection.keys, ["answer"]);
+  assert.deepEqual(fit(lines, 600).result.selection.keys, ["answer", "group"]);
 });
 
 test("an oversized line leaves its complete citation set behind while another answer can fit", () => {

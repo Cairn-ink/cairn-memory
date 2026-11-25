@@ -22,7 +22,7 @@ import { readTokenSigner } from "./context-read-tokens.mjs";
 /** @typedef {{ keys: readonly string[], trimmed: boolean }} LedgerSelection */
 /** @typedef {{ value: ContextLedgerDigest, witness: () => string }} LedgerProjection */
 /** @typedef {{ lines: LedgerLine[], project: (lines: readonly LedgerLine[], trimmed: boolean) => LedgerProjection }} LedgerReading */
-/** @typedef {{ active: () => void, onError: (stage: ContextLedgerErrorStage) => void }} LedgerAttempt */
+/** @typedef {{ active: () => void, onError: (stage: ContextLedgerErrorStage) => void, onScan: () => void }} LedgerAttempt */
 /** @typedef {LedgerAttempt & { witness: string, calendar: boolean, selection: LedgerSelection }} LedgerCheck */
 
 const MIN_EVENT_MS = -8_640_000_000_000_000;
@@ -32,7 +32,7 @@ export const staleLedger = new Error("stale quantity ledger");
  * @param {VisibilityFence} fence @param {Tx} tx @param {Signer} signer @param {ContextReadSet} readSet
  * @param {LedgerRequest} request @param {LedgerAttempt} attempt @param {boolean} includeCalendar
  * @param {LedgerCheck} [check] */
-async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, { active, onError }, includeCalendar, check) {
+async function readLedgerDigest(store, memories, ledger, fence, tx, signer, readSet, { query, asOfMs, calendarReading }, { active, onError, onScan }, includeCalendar, check) {
   /** @type {ContextLedgerErrorStage} */
   let stage = "scan";
   try {
@@ -56,6 +56,7 @@ async function readLedgerDigest(store, memories, ledger, fence, tx, signer, read
       active();
       const beforeWindow = await ledger.list(tx, scope, earlier);
       active();
+      onScan();
       const rows = [...inWindow.filter(row => ledgerRowInRange(row, range)),
         ...beforeWindow.filter(row => ledgerRowInRange(row, earlier) && (row.kind === "goal" || row.date >= start))];
       stage = "evidence";

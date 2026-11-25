@@ -108,7 +108,7 @@ export function fitLedgerDigest(reading, maxTokens, { block, tokens }, active, d
   /** @param {ContextLedgerDigest} ledgerDigest */
   function cost(ledgerDigest) {
     active();
-    return Math.max(0, tokens(block({ framing, ledgerDigest, items: [] })) - emptyCost);
+    return tokens(block({ framing, ledgerDigest, items: [] })) - emptyCost;
   }
   const answerLimit = maxTokens * LEDGER_ANSWER_CEILING;
   const otherLimit = maxTokens * LEDGER_OTHER_SHARE;
@@ -133,19 +133,21 @@ export function fitLedgerDigest(reading, maxTokens, { block, tokens }, active, d
 
   const optional = reading.lines.filter(line => !line.answering).sort((a, b) =>
     ledgerDropOrder[a.kind] - ledgerDropOrder[b.kind] || (a.total ?? 0) - (b.total ?? 0));
+  const answerCost = optional.length && answers.size
+    ? cost(reading.project(reading.lines.filter(line => answers.has(line)), false).value)
+    : 0;
   const selected = new Set([...answers, ...optional]);
   /** @param {LedgerLine[]} lines @param {boolean} includesOptional */
   function trial(lines, includesOptional) {
     const dropped = reading.lines.length - lines.length;
-    const projection = reading.project(lines, dropped > 0);
-    if (includesOptional && cost(projection.value) > otherLimit) return;
+    const untrimmed = reading.project(lines, false);
+    // The formatted difference counts shared citations only in the answer.
+    if (includesOptional && cost(untrimmed.value) - answerCost > otherLimit) return;
+    const projection = dropped ? reading.project(lines, true) : untrimmed;
     if (dropped) diagnostics.ledger_digest_trimmed = dropped;
     const packed = tryPack(projection.value);
     active();
     if (packed) return { packed, witness: projection.witness(), selection: { keys: lines.map(line => line.key), trimmed: dropped > 0 } };
-  }
-  if (optional.length && answers.size && cost(reading.project(reading.lines.filter(line => answers.has(line)), false).value) > otherLimit) {
-    for (const line of optional) selected.delete(line);
   }
   for (let next = 0; selected.size; next++) {
     const lines = reading.lines.filter(line => selected.has(line));

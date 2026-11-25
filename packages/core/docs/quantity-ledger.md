@@ -120,7 +120,9 @@ Apply the limits in this order.
 2. Keep answering lines whole with all their citations. Directly answering
    summaries can use up to 60% of `maxTokens`. Omit a whole answering line
    when that line alone exceeds 60%.
-3. Include other lines only while the digest fits within 30% of `maxTokens`.
+3. Include other lines while their incremental cost fits within 30% of
+   `maxTokens`. This counts their text and any citations they add beyond
+   the answering lines. Shared citations count toward the answering lines.
    Drop subtotals first, then non-answering category lines from the smallest
    total up, then non-answering group lines. Drop remaining optional
    context as needed. If any line was dropped, append
@@ -128,7 +130,8 @@ Apply the limits in this order.
 
 Read diagnostics report `ledger_digest_trimmed` as a count of dropped lines,
 `digest_line_too_large` as a count of individual answering lines above 60%,
-and `ledger_digest_omitted` when a planned digest can't be delivered.
+`ledger_digest_empty` when a matching scan yields no deliverable lines, and
+`ledger_digest_omitted` when a planned digest can't be delivered.
 `ledger_digest_error` counts failures by coarse stage (`terms`, `scan`,
 `evidence`, `seal`, or `snapshot`). A failed check withholds that digest.
 The counters carry no query terms, values or source identifiers.
