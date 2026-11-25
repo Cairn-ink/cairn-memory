@@ -54,6 +54,11 @@ test("missing or malformed correction evidence fails closed", async () => {
   }
 });
 
+test("adapter correction evidence cannot override revision membership", async () => {
+  const correctedRevisions = Object.assign([2], { includes: () => false });
+  assert.deepEqual(await documentCardVisible(visibilityInput("router", { ...corrected, correctedRevisions })), withheld);
+});
+
 test("independent forget evidence still authorizes purge of a correction-withheld card", async () => {
   const input = visibilityInput("router");
   input.card.sourceMemories.push({ id: "forgotten", revision: 1 });

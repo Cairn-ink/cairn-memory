@@ -89,14 +89,16 @@ in the same snapshot.
 | Visible with an invalid revision | Hidden (`uncertain`) | Hidden (`uncertain`) |
 
 For visible and historical memory states, supply `correctedRevisions` from the
-same snapshot. Use an empty array when no replaced revisions are known.
+same snapshot. Include every revision before the newest in-place text edit,
+including earlier metadata and receipt revisions. Use an empty array when no
+replacement is known.
 An `edit` text fact or a legacy `correct` text fact tied to the cited memory
 can establish a replacement. Set `unresolvedCorrection` when a replacement
 fact cannot be ruled out for the citation, including legacy `correct` facts
 without a source memory. Missing or malformed correction evidence hides the
 card with `uncertain`. A correction withholds the cited body and retains its
-stored text. Re-linking preserves the corrected citation for that body
-revision. A new body can cite the current memory or omit the corrected source.
+stored text. Re-linking and writes that leave the body text intact preserve the
+corrected citation. A new body can cite the current memory or omit the corrected source.
 
 For a source-less card, pass the stored `card.title` and `card.body` to
 `documentCardVisible`. Use `null` if the stored title is absent. Supply

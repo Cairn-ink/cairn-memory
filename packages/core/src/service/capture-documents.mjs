@@ -18,7 +18,7 @@ import { validWriteEmbedding } from "./writes.mjs";
 /** @import {CaptureKey, CaptureMessage, DocumentCardEmbedding, DocumentCardRecord, DocumentCardSession, FinishItem, FinishResult, ItemRef,
  * Receipt, Tx} from "../ports/index.d.ts" */
 /** @import {ExtractedQuantity, LedgerReceipt} from "../ledger/index.mjs" */
-/** @import {DocumentCardMemoryState} from "../routing/visibility.mjs" */
+/** @import {DocumentCardMemoryState, DocumentCardVisibilityInput} from "../routing/visibility.mjs" */
 /** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
 /** @typedef {Map<string, DocumentCardEmbedding>} CardVectors */
 /** @typedef {ReturnType<typeof validatePlainExtraction>["items"][number] & {quantities?: ExtractedQuantity[]}} ExtractedCandidate */
@@ -269,6 +269,15 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     return allowed;
   }
 
+  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @param {ItemRef} target
+   * @param {DocumentCardVisibilityInput} [newCard] */
+  async function visibleWithEvidence(tx, scope, target, newCard) {
+    const [input] = cards?.visibilityInputs
+      ? await cards.visibilityInputs(tx, scope, [target], { requireRaw: false, newCard })
+      : [newCard];
+    return input?.card.id === target.id && (await documentCardVisible({ ...input, requestedScope: scope })).visible;
+  }
+
   /** @param {Tx} tx @param {CaptureKey["scope"]} scope @param {DocumentCardRecord} card */
   async function visible(tx, scope, card) {
     const read = readScope(scope);
@@ -277,6 +286,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     if (!shown.some(item => item.type === target.type && item.id === target.id && item.namespace === target.namespace)) {
       return false;
     }
+    if (cards?.visibilityInputs) return visibleWithEvidence(tx, scope, target);
     const refs = card.sourceMemories.map(({ id }) => ref(scope, "memory", id));
     const rows = refs.length ? await hydrate.hydrate(tx, read, refs, "read") : [];
     /** @type {Map<string, DocumentCardMemoryState>} */
@@ -330,45 +340,46 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           (!capabilities.rawArchive || await raw?.archiveAllowed(tx, key) === true);
       }
 
-      /** @param {Tx} tx @param {string} cardId @param {CaptureMessage} message */
-      async function canAmend(tx, cardId, message) {
-        if (!(await screenReceipts(tx, key, [message])).length) return false;
+      /** @param {Tx} tx @param {string} cardId */
+      async function cardStillEligible(tx, cardId) {
         const card = await cards?.get(tx, scope, cardId);
         return !!card?.sourceMessage && card.contentHash === byCard.get(cardId)?.contentHash && await visible(tx, scope, card);
+      }
+
+      /** @param {Tx} tx @param {string} cardId @param {CaptureMessage} message */
+      async function canAmend(tx, cardId, message) {
+        return (await screenReceipts(tx, key, [message])).length > 0 && await cardStillEligible(tx, cardId);
       }
 
       /**
        * @template T
        * @param {AbortSignal | undefined} deadline
        * @param {(signal: AbortSignal) => Promise<T>} send
-       * @param {{eligible: () => Promise<boolean>, skip: () => T}} [verification]
+       * @param {{eligible: () => Promise<boolean>, skip: () => T, afterDispatch?: boolean}} refresh
        */
-      async function guarded(deadline, send, verification) {
+      async function guarded(deadline, send, refresh) {
         const signal = AbortSignal.any([...(caller ? [caller] : []), ...(deadline ? [deadline] : [])]);
-        const transport = verification && transportFor(caller, createCaptureDeadline(timeoutMs, clock));
-        const refreshSignal = transport && AbortSignal.any([signal, transport.signal]);
+        const transport = transportFor(caller, createCaptureDeadline(timeoutMs, clock));
+        const refreshSignal = AbortSignal.any([signal, transport.signal]);
 
         async function stillEligible() {
-          if (!verification || !transport || !refreshSignal) return true;
           const check = () => {
             if (deadline?.aborted && refreshSignal.reason === deadline.reason) throw new CoreError("model_timeout");
             transport.check();
           };
-          return awaitRefresh({ signal: refreshSignal, check }, verification.eligible);
+          return awaitRefresh({ signal: refreshSignal, check }, refresh.eligible);
         }
 
         signal.throwIfAborted();
         await gate.assertOpen(owner, "pre-send");
         await assertSendGeneration();
-        if (verification) {
-          signal.throwIfAborted();
-          if (!await stillEligible()) return verification.skip();
-        }
+        signal.throwIfAborted();
+        if (!await stillEligible()) return refresh.skip();
         await gate.assertOpen(owner, "dispatch");
         try {
           signal.throwIfAborted();
           // A deletion can commit while the dispatch gate is pending.
-          if (verification && !await stillEligible()) return verification.skip();
+          if (refresh.afterDispatch && !await stillEligible()) return refresh.skip();
           signal.throwIfAborted();
           return await untilAborted(signal, send(signal));
         } finally {
@@ -396,7 +407,13 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         model: {
           countTokens: model.countTokens.bind(model),
           detectChanges: async (request, options) => {
-            const result = await guarded(options?.signal, signal => detectChanges.call(model, request, { signal }));
+            const result = await guarded(options?.signal, signal => detectChanges.call(model, request, { signal }), {
+              eligible: () => uow.run(owner, { readOnly: true }, async tx => {
+                for (const { id } of earlier) if (!await cardStillEligible(tx, id)) return false;
+                return true;
+              }),
+              skip: () => ({ changes: [] }),
+            });
             if (Array.isArray(result?.changes)) changes = result.changes;
             return result;
           },
@@ -413,6 +430,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
               buildVerifyRequest({ ...candidate, sessionDate: capture.date }).input === request.input)
               .flatMap(({ quote, newValue }) => [quote, newValue]);
             return guarded(options?.signal, signal => verifyChange.call(model, request, { signal }), {
+              afterDispatch: true,
               eligible: () => uow.run(owner, { pauseLock: true }, async tx => {
                 const state = pauseResult(await pause.get(tx, owner));
                 if (state.paused || state.generation !== generation) throw new CoreError("capture_paused");
@@ -523,17 +541,20 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       // Keep the router's input independent of the send-time payload checks.
       screenedForEmbedding = new Set(screened.map(({ id }) => id));
 
+      const { scope, client, sessionId } = key;
+      const canonicalSessionKey = sessionKey(key);
+      if (!canonicalSessionKey) return;
       // Precompute vectors for all potential cards. The finish may route a different subset.
       /** @type {{message: CaptureMessage, card: import("../routing/index.mjs").DocumentCard}[]} */
       const candidates = [];
       for (const message of screened) {
-        const { card } = await buildDocumentCard(message, { ...key, canonicalSessionKey: key.sessionId });
+        const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card || (card.body.length < 200 && (redactDocumentText(message.content)?.length ?? 0) < 200)) continue;
         candidates.push({ message, card });
       }
       if (!candidates.length) return;
 
-      const { owner } = key.scope;
+      const { owner } = scope;
       await gate.assertOpen(owner, "pre-send");
       await assertSendGeneration();
       const refreshed = await awaitRefresh(transport, () => runAtGeneration(async tx => {
@@ -541,10 +562,21 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         if ("status" in eligible) return eligible;
         const allowed = new Set(eligible);
         if (!allowed.size) return [];
-        const withholds = await readTextWithholding(tx, key.scope, true);
+        const withholds = await readTextWithholding(tx, scope, true);
         const survivors = [];
         for (const { message, card } of candidates) {
           if (!allowed.has(message)) continue;
+          const target = ref(scope, "card", card.id);
+          /** @type {DocumentCardVisibilityInput} */
+          const newCard = {
+            card: { id: card.id, scope, title: card.title, body: card.body, canonicalSessionKey,
+              sourceMessage: { client, sessionId, messageId: message.id }, sourceMemories: [] },
+            requestedScope: scope, memoryStates: new Map(), sourceWithheld: false,
+          };
+          const stored = cards.visibilityInputs ? null : await cards.get(tx, scope, card.id);
+          if (stored
+            ? !stored.sourceMessage || !await visible(tx, scope, { ...stored, sourceMessage: stored.sourceMessage })
+            : !await visibleWithEvidence(tx, scope, target, newCard)) continue;
           const text = documentCardSearchText(card);
           const payload = [text, card.body, ...cardPassageTexts(card)];
           if (!await withholds(payload)) survivors.push({ message, text });

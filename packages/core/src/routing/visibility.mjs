@@ -110,6 +110,7 @@ export async function documentCardVisible(input, { definiteOnly = false } = {}) 
 async function readCardVisibility(input, definiteOnly) {
   try {
     const { card, requestedScope, memoryStates, sourceWithheld } = input;
+    const { field, array } = snapshotReader();
     if (!nonempty(card?.id) || !validScope(card.scope) || !validScope(requestedScope)) return hidden("uncertain");
     if (card.scope.owner !== requestedScope.owner || card.scope.namespace !== requestedScope.namespace) {
       return hidden("scope_mismatch");
@@ -145,7 +146,8 @@ async function readCardVisibility(input, definiteOnly) {
       const state = memoryStates.get(source.id);
       if (state === undefined) return hidden("source_memory_missing");
       if (state === null || typeof state !== "object" || Array.isArray(state)) return hidden("uncertain");
-      switch (state.status) {
+      const status = field(state, "status");
+      switch (status) {
         case "forgotten":
           return hidden("source_memory_forgotten");
         case "suppressed":
@@ -154,15 +156,18 @@ async function readCardVisibility(input, definiteOnly) {
           return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
         case "historical":
         case "visible": {
-          const { revision, correctedRevisions, unresolvedCorrection } = state;
-          if (!natural(revision) || !Array.isArray(correctedRevisions) ||
+          const revision = field(state, "revision");
+          const unresolvedCorrection = field(state, "unresolvedCorrection");
+          if (!natural(revision) ||
               (unresolvedCorrection !== undefined && typeof unresolvedCorrection !== "boolean")) return hidden("uncertain");
-          for (const replaced of correctedRevisions) {
-            if (!natural(replaced) || replaced >= revision) return hidden("uncertain");
-          }
+          const correctedRevisions = array(field(state, "correctedRevisions"), replaced => {
+            if (!natural(replaced) || replaced >= revision) throw new TypeError("Invalid corrected revision");
+            return replaced;
+          });
+          if (!correctedRevisions) return hidden("uncertain");
           if (unresolvedCorrection || correctedRevisions.includes(source.revision)) {
             if (!definiteOnly) return hidden("source_memory_corrected");
-          } else if (!messageBacked && (state.status !== "visible" || revision !== source.revision)) {
+          } else if (!messageBacked && (status !== "visible" || revision !== source.revision)) {
             return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
           }
           break;

@@ -12,7 +12,7 @@ export type DocumentCardMemoryState =
   | { status: "forgotten" | "suppressed" | "unknown" };
 
 /** Current states for one scope, from the card's read snapshot. Absent means missing.
- * correctedRevisions lists revisions replaced by in-place text edits, or [] if none are known.
+ * correctedRevisions lists every revision before the newest in-place text edit, or [] if none are known.
  * unresolvedCorrection signals a replacement fact that cannot be ruled out for a cited revision. */
 export type DocumentCardMemoryStates = ReadonlyMap<string, DocumentCardMemoryState>;
 

@@ -208,7 +208,8 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           const previous = cards.get(copy.id);
           if (previous && !previous.card) return { status: "tombstoned" };
           if (previous?.card?.contentHash === copy.contentHash) return { status: "unchanged" };
-          const bodyChanged = previous?.card?.title !== copy.title || previous?.card?.body !== copy.body;
+          const bodyChanged = previous?.card?.body !== copy.body;
+          const titleChanged = previous?.card?.title !== copy.title;
           if (previous?.card) {
             if (previous.card.origin === undefined) Reflect.deleteProperty(copy, "origin");
             else Object.assign(copy, { origin: previous.card.origin });
@@ -226,7 +227,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           if (previous) dropCardPlacement(state, namespace, copy.id);
           cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex,
             revision: (previous?.revision ?? 0) + 1,
-            bodyRevision: (previous?.bodyRevision ?? 0) + Number(bodyChanged),
+            bodyRevision: (previous?.bodyRevision ?? 0) + Number(bodyChanged || titleChanged),
           });
           state.documentCards.set(namespace, cards);
           recordCardWrite(run, namespace);
@@ -377,7 +378,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
       });
     },
 
-    async visibilityInputs(tx, scope, refs) {
+    async visibilityInputs(tx, scope, refs, { requireRaw = true, newCard } = {}) {
       return port.read(tx, scope, getState => {
         const requestedScope = copyScope(scope);
         const state = getState();
@@ -386,10 +387,13 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
           try {
             if (ref?.type !== "card" || ref.namespace !== requestedScope.namespace ||
                 typeof ref.id !== "string" || !ref.id) return null;
-            const card = cards?.get(ref.id)?.card;
+            const entry = cards?.get(ref.id);
+            if (!entry && newCard?.card.id === ref.id && newCard.card.scope.owner === requestedScope.owner &&
+                newCard.card.scope.namespace === requestedScope.namespace) return structuredClone(newCard);
+            const card = entry?.card;
             if (!card || card.scope.owner !== requestedScope.owner ||
                 card.scope.namespace !== requestedScope.namespace) return null;
-            return structuredClone(await buildVisibilityInput(tx, state, requestedScope, card, true));
+            return structuredClone(await buildVisibilityInput(tx, state, requestedScope, card, requireRaw));
           } catch {
             return null;
           }

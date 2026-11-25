@@ -93,7 +93,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * Bind sourceMemories for a router card to the memories that capture wrote or
    * touched for its source message, or use documentCardMemoryLinks with receipts.
    * On recapture, union these bindings by id, keeping the highest revision. A
-   * new body revision may replace or drop a citation invalidated by an in-place text edit.
+   * changed body may replace or drop a citation invalidated by an in-place text edit.
    * Use linkMemories to add bindings for the same content, or implement it within put.
    * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
@@ -171,8 +171,12 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * message-backed cards or applicable text facts and key for authored cards.
    * Return null for invalid, out-of-scope, unknown, store-hidden, tombstoned, or
    * unresolvable refs. A bad ref does not fail the batch. Reject an ended Tx.
+   * Provider refreshes can set requireRaw to false to allow stores without Raw.
+   * During capture, newCard supplies Core's already screened input for a matching
+   * ref only when no record exists. Existing records use the store's live evidence.
    */
-  visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[]): Promise<Array<DocumentCardVisibilityInput | null>>;
+  visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[],
+    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<DocumentCardVisibilityInput | null>>;
 }
 
 /**

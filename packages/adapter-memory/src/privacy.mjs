@@ -59,10 +59,10 @@ export function recordTextReplacement(state, { row, textVersions }, startFactEpo
     if (epoch <= (current?.factEpoch ?? 0n) || state.textPredecessors.has(epoch)) continue;
     const source = fact.sourceMemory;
     if (source && (source.id !== id || source.createdAtMs !== createdAtMs)) continue;
-    // A sourced predecessor written in this update belongs to the row being replaced.
-    // Exact digests can also associate an unsourced or previously stored predecessor.
+    // A sourced fact written in this update identifies a replacement for this memory.
+    // Exact digests can also associate an unsourced or previously stored fact.
     if ((source && epoch > startFactEpoch) || predecessorTextMatch(fact, row) === true) {
-      state.textPredecessors.set(epoch, { id, createdAtMs, revision });
+      state.textPredecessors.set(epoch, { id, createdAtMs });
     }
   }
   textVersions.push({ revision: revision + 1, factEpoch: state.epoch ?? 0n });
@@ -77,14 +77,15 @@ export function memoryCorrectionEvidence(state, scope, { id, revision }) {
     version = candidate;
   }
   const current = entry?.textVersions.at(-1);
-  const correctedRevisions = [];
+  let hasReplacement = false;
   let unresolvedCorrection = false;
   for (const { fact, epoch } of scopedReplacementFacts(state, scope)) {
     const predecessor = state.textPredecessors.get(epoch);
     const source = predecessor ?? fact.sourceMemory;
     if (source && (source.id !== id || (entry && source.createdAtMs !== entry.row.createdAtMs))) continue;
     if (predecessor) {
-      correctedRevisions.push(predecessor.revision);
+      hasReplacement = true;
+      if (!current) unresolvedCorrection = true;
     } else if ((!version || epoch > version.factEpoch) &&
         (!entry || version !== current || predecessorTextMatch(fact, entry.row) !== false)) {
       // A missing association leaves older cited text uncertain. A later text
@@ -92,6 +93,10 @@ export function memoryCorrectionEvidence(state, scope, { id, revision }) {
       unresolvedCorrection = true;
     }
   }
+  // A replacement invalidates every earlier revision, including revisions that only
+  // changed metadata or receipts. Later metadata and receipt writes leave this cutoff intact.
+  const newestReplacement = hasReplacement ? current?.revision ?? 1 : 1;
+  const correctedRevisions = Array.from({ length: newestReplacement - 1 }, (_, index) => index + 1);
   return { correctedRevisions, unresolvedCorrection };
 }
 

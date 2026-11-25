@@ -33,7 +33,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * textPredecessors: Map<bigint, {id: string, createdAtMs: number, revision: number}>,
+ * textPredecessors: Map<bigint, {id: string, createdAtMs: number}>,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
  * receiptDenials: Set<string>, deletedMessages: Set<string>,

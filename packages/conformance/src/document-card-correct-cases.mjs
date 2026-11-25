@@ -1,12 +1,13 @@
-import { coreDigest, factIncarnationBody } from "@cairn-ink/core";
+import { coreDigest, factIncarnationBody, placePendingCards } from "@cairn-ink/core";
 import { buildDocumentCard, documentCardStaleness } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "./context-assembly-cases.mjs";
 import { captureService, client, firstDay, message, nextDay } from "./capture-documents-support.mjs";
 import { check, equal, readDump, rejects, row, source } from "./support.mjs";
 
-/** @import { ContextCardRef, ContextReadStore, DocumentCardWrite, ItemRef, StorageAdapter,
- * StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, ContextCardRef, ContextReadStore, DetectChangesRequest, DocumentCardSession,
+ * DocumentCardWrite, ItemRef, ModelRequest, StorageAdapter, StoredDocumentCardRecord, Tx,
+ * VerifyChangeRequest } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 /** @import { TextFact } from "@cairn-ink/core" */
 
@@ -14,11 +15,10 @@ const original = "The machine uses brass fasteners.";
 const corrected = "The machine takes polymer rivets.";
 const query = "albatross";
 const sessionId = "maintenance";
-const initial = message("manual", "Albatross field guide\n\nKeep a log of every maintenance visit.");
 const change = message("change", "The new inspection day is Tuesday.", nextDay);
 
-/** @param {CaseContext} ctx */
-async function fixture(ctx) {
+/** @param {CaseContext} ctx @param {CaptureMessage} [initial] */
+async function fixture(ctx, initial = message("manual", "Albatross field guide\n\nKeep a log of every maintenance visit.")) {
   const storage = /** @type {StorageAdapter<StoredDocumentCardRecord> & { contextRead?: ContextReadStore }} */ (ctx.adapter);
   const { documentCards: cards, raw, uow, memories, fence } = storage;
   check(cards, "Expected a document card store");
@@ -113,18 +113,38 @@ async function assertWithheld(ctx, f, before) {
   if (placement) {
     equal(await f.read(tx => placement.pendingCards(tx, scope, { limit: 5 })), [],
       "Topic placement exposed a corrected citation");
+    /** @type {ModelRequest[]} */
+    const classified = [];
+    await placePendingCards({
+      uow: f.storage.uow, scope, placement, documentCards: f.cards, fence: f.storage.fence,
+      gate: { async assertOpen() {} },
+      model: { model: "test", contextWindow: 32_768, countTokens: () => 1,
+        async call(_stage, request) {
+          classified.push(request);
+          return { items: [] };
+        } },
+    });
+    equal(classified, [], "Classification received an ineligible card");
   }
   if (ctx.adapter.capture.admit) {
+    /** @type {DetectChangesRequest[]} */
+    const detected = [];
+    /** @type {VerifyChangeRequest[]} */
+    const verified = [];
     const capture = captureService(ctx, { documentCards: { enabled: true, amendments: true } }, undefined, {
-      async detectChanges({ input }) {
-        check(!input.includes(card.id) && !input.includes(card.body), "Detection received an ineligible card");
+      async detectChanges(request) {
+        detected.push(request);
         return { changes: [{ card_id: card.id, quote: change.content, new_value: change.content }] };
       },
-      async verifyChange() {
-        throw new Error("Verification received an ineligible card");
+      async verifyChange(request) {
+        verified.push(request);
+        return { applies: true, line: change.content };
       },
     });
     await capture.capture("inspection", change.id, [change]);
+    check(!detected.some(({ input }) => input.includes(card.id) || input.includes(card.body)),
+      "Detection received an ineligible card");
+    equal(verified, [], "Verification received an ineligible card");
   }
 }
 
@@ -277,26 +297,128 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
   testCase("9", "correction between amendment detection and verification withdraws the card", async ctx => {
     if (!ctx.adapter.capture.admit) return "needs capture.admit";
     const f = await fixture(ctx);
-    let detected = false;
-    let verified = false;
+    /** @type {DetectChangesRequest[]} */
+    const detected = [];
+    /** @type {VerifyChangeRequest[]} */
+    const verified = [];
     const capture = captureService(ctx, { documentCards: { enabled: true, amendments: true } }, undefined, {
-      async detectChanges({ input }) {
-        detected = input.includes(f.card.id);
+      async detectChanges(request) {
+        detected.push(request);
         await f.correct("none");
         return { changes: [{ card_id: f.card.id, quote: change.content, new_value: change.content }] };
       },
-      async verifyChange() {
-        verified = true;
+      async verifyChange(request) {
+        verified.push(request);
         return { applies: true, line: change.content };
       },
     });
     await capture.capture("inspection", change.id, [change]);
-    equal([detected, verified], [true, false], "Only detection may receive the card before the correction");
+    check(detected.some(({ input }) => input.includes(f.card.id)), "Detection did not receive the card before correction");
+    equal(verified, [], "Verification received the card after correction");
+    equal(await f.visible(), [], "Expected the correction inside detection to commit");
   }),
   testCase("EDIT", "withholds a citation replaced by a stored edit without a core action ID",
     withholdForSourcedFact("edit")),
   testCase("LEGACY-SOURCED", "withholds a citation replaced by a sourced legacy correct fact",
     withholdForSourcedFact("correct")),
+  testCase("LATE-FACT", "a late sourced fact withholds every citation before the replacement", async ctx => {
+    const f = await fixture(ctx);
+    const { memories } = f.storage;
+    const middle = await row(ctx, corrected);
+    const latest = await row(ctx, "The machine takes stainless steel rivets.");
+    const { revision } = await f.write(tx =>
+      memories.replaceContent(tx, f.scope, f.link.id, f.link.revision, middle, null, nextDay));
+    equal(revision, f.link.revision + 1, "Expected the first replacement without a fact");
+    const writeFact = await legacyTextFact(ctx, f, "correct", true);
+    const result = await f.write(async tx => {
+      await writeFact(tx);
+      return memories.replaceContent(tx, f.scope, f.link.id, revision, latest, null, nextDay);
+    });
+    equal(result.revision, revision + 1, "Expected the replacement with the late fact");
+    equal(await Promise.all([
+      f.read(tx => f.cards.get(tx, f.scope, f.card.id)), f.reads.readCard(f.scope, f.card.id), f.visible(),
+    ]), [null, { status: "not_found" }, []], "A late fact exposed a citation older than the latest replacement");
+
+    const body = "Every visit checks the new hardware.";
+    const contentHash = await ctx.hash(body);
+    await f.write(tx => f.cards.put(tx, f.scope, { ...f.card, body, contentHash,
+      sourceMemories: [{ id: f.link.id, revision: result.revision }] }));
+    const metadata = await f.write(tx => memories.touchDuplicate(tx, f.scope, f.link.id, [], { confidence: 0.7 }, nextDay));
+    equal(metadata.revision, result.revision + 1, "Expected a metadata revision after replacement");
+    const read = await f.reads.readCard(f.scope, f.card.id);
+    check(read.status === "found" && read.card.body === body, "A post-replacement metadata revision hid the new body");
+  }),
+  testCase("RECAPTURE-EMBED", "recapturing a corrected card never embeds the stored body", async ctx => {
+    if (!ctx.adapter.capture.admit) return "needs capture.admit";
+    const initial = message("manual", "Remember this Albatross field guide.\n\n" +
+      "Keep a log of every maintenance visit. ".repeat(7).trimEnd());
+    const control = message("control", "Remember this separate safety checklist. " +
+      "Check the flashlight at the supply station. ".repeat(7).trimEnd());
+    const f = await fixture(ctx, initial);
+    await f.correct("none");
+    const before = (await dumpOwner(ctx, f)).documentCards;
+    /** @type {string[][]} */
+    const embeddings = [];
+    /** @type {string[]} */
+    const puts = [];
+    const service = createMemoryService({
+      storage: { ...f.storage, documentCards: { ...f.cards, async put(tx, scope, card, embedding) {
+        const result = await f.cards.put(tx, scope, card, embedding);
+        if (card.id === f.card.id) puts.push(result.status);
+        return result;
+      } } },
+      ...(ctx.harness.hashSessionKey && { documentCardSessionKey: (/** @type {DocumentCardSession} */ { client, sessionId }) =>
+        ctx.harness.hashSessionKey?.(client, sessionId) ?? null }),
+      clock: assemblyClock(), config: { documentCards: { enabled: true } },
+      model: { model: "test", contextWindow: 32_768, countTokens: () => 1, async call() { return { items: [] }; } },
+      embedder: { model: "test", dimensions: ctx.embeddingDimensions ?? 1, async embed(texts) {
+        embeddings.push([...texts]);
+        return texts.map(() => Float32Array.from(ctx.embeddingDimensions ? ctx.vec(0) : [1]));
+      } },
+      gate: { async assertOpen() {} }, tokens: { countTokens: () => 1 },
+    });
+    const selection = { client, sessionId, eventId: "fresh-event" };
+    equal((await service.enqueueCapture(f.scope, { ...selection, messages: [initial, control] })).status,
+      "accepted", "Expected fresh event admission");
+    equal((await service.runCapture(f.scope, selection)).status, "done", "Expected recapture to finish");
+    check(embeddings.flat().some(text => text.includes(control.content)), "Expected the eligible control to reach the embedder");
+    check(!embeddings.flat().some(text => text.includes(f.card.body)), "The embedder received the old card body");
+    equal(puts, ["unchanged"], "Recapture must keep the stored body revision");
+    const after = (await dumpOwner(ctx, f)).documentCards;
+    const storedCard = (/** @type {unknown} */ snapshot) => {
+      check(Array.isArray(snapshot), "Expected a card storage snapshot");
+      return snapshot.flatMap(({ cards }) => cards).find(([id]) => id === f.card.id);
+    };
+    check(storedCard(before), "Expected the old body in storage");
+    equal(storedCard(after), storedCard(before), "Recapture changed the stored card");
+  }, ["rawArchive"]),
+  testCase("SAME-BODY-PUT", "a different content hash and title cannot advance an unchanged body's citation", async ctx => {
+    const f = await fixture(ctx);
+    const { memories } = f.storage;
+    const metadata = await f.write(tx => memories.touchDuplicate(tx, f.scope, f.link.id, [], { confidence: 0.7 }, nextDay));
+    equal(metadata.revision, f.link.revision + 1, "Expected a metadata revision before replacement");
+    const next = await row(ctx, corrected);
+    const writeFact = await legacyTextFact(ctx, f, "edit", true);
+    const { revision } = await f.write(async tx => {
+      await writeFact(tx);
+      return memories.replaceContent(tx, f.scope, f.link.id, metadata.revision, next, null, nextDay);
+    });
+    const sourceMemories = [{ id: f.link.id, revision }];
+    const put = async (/** @type {string} */ body, /** @type {string} */ title) => {
+      const contentHash = await ctx.hash(JSON.stringify([title, body]));
+      return f.write(tx => f.cards.put(tx, f.scope, { ...f.card, body, title, contentHash, sourceMemories }));
+    };
+    equal((await put(f.card.body, f.card.title)).status, "replaced", "Expected a same-body put with a different hash");
+    equal(await f.visible(), [], "Changing only the hash advanced the old citation");
+    equal((await put(f.card.body, "Revised title")).status, "replaced", "Expected a same-body put with a revised title");
+    equal(await f.visible(), [], "Changing the title and hash advanced the old citation");
+    const body = "Every visit checks the new hardware.";
+    await put(body, "Revised title");
+    const read = await f.reads.readCard(f.scope, f.card.id);
+    check(read.status === "found" && read.card.body === body, "Expected delivery of the actual replacement body");
+    const stored = await f.read(tx => f.cards.get(tx, f.scope, f.card.id));
+    equal(stored?.sourceMemories, sourceMemories, "The new body did not advance the citation");
+  }),
   testCase("LEGACY-UNSOURCED", "withholds when a legacy correct fact cannot be excluded from the citation", async ctx => {
     const f = await fixture(ctx);
     const next = await row(ctx, corrected);
