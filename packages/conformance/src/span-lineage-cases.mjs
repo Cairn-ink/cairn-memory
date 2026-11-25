@@ -26,7 +26,10 @@ export const SPAN_LINEAGE_CASES = [
       const claim = await uow.run(owner, { pauseLock: true },
         tx => capture.claim(tx, key, [message], { leaseMs: 60_000 }));
       check(claim.status === "claimed", "The fixture must claim its capture");
-      const { memories } = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, claim.token, [item]));
+      const { memories } = await uow.run(owner, { pauseLock: true }, async tx => {
+        await capture.assertEligible(tx, key, [0]);
+        return capture.finish(tx, claim.token, [item]);
+      });
       const [memory] = memories;
       check(memories.length === 1 && memory?.outcome === "inserted", "The fixture must insert its capture memory");
 

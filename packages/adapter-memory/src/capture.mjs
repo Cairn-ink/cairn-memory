@@ -10,7 +10,7 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("./unit-of-work.mjs").State} State */
-/** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "lineageFenced">} RawLineage */
+/** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "hasRawFence" | "lineageFenced">} RawLineage */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
  * messageIds: readonly string[], occurredAtMs: ReadonlyArray<number | null>,
  * proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
@@ -77,6 +77,8 @@ function copyResult(stored, pending) {
  */
 export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert,
   lineage, { contextRead: retainReceipts, documentCards, inspect }) {
+  /** @type {WeakMap<Tx, Map<string, Set<number>>>} */
+  const selections = new WeakMap();
   return {
     async claim(tx, key, messages, options) {
       const scope = admissionScope(tx, key);
@@ -163,6 +165,19 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const state = getState();
           const { identity, claim } = liveClaim(state, token, nowMs);
           const { scope, client, sessionId, eventId } = claim.key;
+          const selected = selections.get(tx)?.get(identity);
+          /** @type {Map<string, number | null>} */
+          const positions = new Map();
+          for (const [position, id] of claim.messageIds.entries()) {
+            positions.set(id, positions.has(id) ? null : position);
+          }
+          for (const { receipts } of batch) {
+            for (const receipt of receipts) {
+              const position = positions.get(receipt.messageId);
+              if (receipt.client !== client || receipt.sessionId !== sessionId ||
+                  position == null || !selected?.has(position)) throw new CoreError("suppressed");
+            }
+          }
           /** @type {SourceRef} */
           const source = { kind: "capture", client, sessionId };
           const queries = batch.map(({ row }) => ({
@@ -183,7 +198,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             const receipts = sources ? sourceRefs.map(receipt => {
               const { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs } = receipt;
               const retained = sources.get(messageId);
-              const admitted = retained?.content && sourceClient === client && sourceSession === sessionId && role === retained.role;
+              const admitted = retained?.content && role === retained.role;
               if (!retainReceipts) {
                 // Inspect assigns an ID to receipts with excerpts. Preserve their existing lineage rules.
                 return admitted && !receipt.id && !(inspect && receipt.excerpt !== undefined)
@@ -281,7 +296,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         }
         return async (getState) => {
           const state = getState();
-          const claim = state.claims.get(captureIdentity(copy.client, copy.eventId));
+          const identity = captureIdentity(copy.client, copy.eventId);
+          const claim = state.claims.get(identity);
           // Another namespace never holds this lease. Reject it before comparing the key, so the
           // answer does not reveal whether the event exists elsewhere.
           if (claim && claim.key.scope.namespace !== copy.scope.namespace) throw new CoreError("stale_admission");
@@ -305,7 +321,13 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
               if (await messageDeleted(deletedMessages, claim.key, claim.messageIds[position])) throw new CoreError("suppressed");
             }
           }
+          // Core can finish a deleted outbox with no sources after withdrawing every slot.
+          if (selected.size === 0 && claim.messages?.length && claim.messages.every(({ content }) => content === "") &&
+              lineage?.hasRawFence(state, scope, claim.key)) return;
           if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
+          let byClaim = selections.get(tx);
+          if (!byClaim) selections.set(tx, byClaim = new Map());
+          byClaim.set(identity, selected);
         };
       });
     },

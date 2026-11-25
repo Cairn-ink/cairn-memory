@@ -19,11 +19,22 @@ test("F4 capture receipts bind the source message and keep retention time outsid
   assert.equal(claim.status, "claimed");
   await write(tx => adapter.capture.beginDispatch(tx, claim.token));
   const body = "Persisted synthetic Memory";
-  const result = await write(tx => adapter.capture.finish(tx, claim.token, [{
+  const source = { client: key.client, sessionId: key.sessionId, messageId: message.id, role: message.role, occurredAtMs: null };
+  const item = {
     content: body, kind: "fact", confidence: 0.8, embedding: null,
     textHash: "sha256:" + createHash("sha256").update(body.toLowerCase()).digest("hex"),
-    receipts: [{ client: key.client, sessionId: key.sessionId, messageId: message.id, role: message.role, occurredAtMs: null }],
-  }]));
+    receipts: [source],
+  };
+  const before = await adapter.harness.dump();
+  await assert.rejects(write(async tx => {
+    await adapter.capture.assertEligible(tx, key, [0]);
+    return adapter.capture.finish(tx, claim.token, [{ ...item, receipts: [{ ...source, messageId: "missing" }] }]);
+  }));
+  assert.deepEqual(await adapter.harness.dump(), before);
+  const result = await write(async tx => {
+    await adapter.capture.assertEligible(tx, key, [0]);
+    return adapter.capture.finish(tx, claim.token, [item]);
+  });
   const { id, revision } = result.memories[0];
   const inspected = await service.inspect(scope, { memoryId: id });
   const receipt = inspected.receipts[0];

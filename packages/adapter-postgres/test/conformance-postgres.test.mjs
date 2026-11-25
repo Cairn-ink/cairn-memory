@@ -436,6 +436,7 @@ const selected = new Set([
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
+  "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
@@ -453,7 +454,7 @@ const notApplicable = {
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session", "CAPTURE-CARD-1", "CAPTURE-AMEND-1",
-    "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2"],
+    "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2", "T-CARD-PURGE-1", "T-CARD-PURGE-2"],
   quantityLedger: ["CAPTURE-LEDGER-1", "CAPTURE-LEDGER-2", "CAPTURE-FORGET-3"],
   "topics.cards": ["T-TCARD-1", "T-TCARD-2", "T-TCARD-3", "T-TCARD-4", "T-TCARD-5", "T-TCARD-6", "T-TCARD-7", "T-TCARD-8", "T-TCARD-9", "T-TCARD-10"],
   "topics.forCards": ["T-FOR-CARDS-1", "T-FOR-CARDS-2", "T-FOR-CARDS-3", "T-FOR-CARDS-4", "T-FOR-CARDS-5", "T-FOR-CARDS-6", "T-FOR-CARDS-7", "T-FOR-CARDS-8", "T-FOR-CARDS-9"],
@@ -463,6 +464,8 @@ const notApplicable = {
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
   "suppressions.receiptWithheld not implemented yet": ["K-RCPT-W1"],
+  "durable conversation deletion not implemented yet": ["K-RAW-DEL-1"],
+  "finish binding to the asserted selection not implemented yet": ["K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

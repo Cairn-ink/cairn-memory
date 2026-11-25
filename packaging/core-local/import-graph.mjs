@@ -3,14 +3,57 @@
 // candidate's entry points. It is not a sandbox: code written to evade it on purpose,
 // for example through reflection, is out of scope. The runtime check is the builder's
 // installed startup smoke with SQLite disabled.
-import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
+import { adapterImports } from './adapter-imports.mjs';
+import { sha256 } from './engine-id.mjs';
 
 const coreRoot = 'packages/core';
 const coreSource = coreRoot + '/src/';
 const hostEntry = 'packaging/core-local/host.mjs';
 const adapterSlot = 'packaging/core-local/adapter-slot.mjs';
+const adapterSource = 'packages/adapter-sqlite/src/';
+const adapterEntry = adapterSource + 'adapter.mjs';
+const coreEntry = coreSource + 'index.mjs';
+const continuations = 'packaging/core-local/continuations.mjs';
+const wireTools = 'packaging/core-local/wire-tools.mjs';
+const tokenizerRoot = 'packaging/core-local/vendor/tiktoken/';
+const tokenizerEntry = tokenizerRoot + 'tiktoken.cjs';
+const tokenizerLicense = 'licenses/tiktoken-LICENSE';
+const tokenizerAssets = {
+  'package.json': 'aa9ac5822add55718d3f6cff328c2b06e9226db770947575fd4e10868caad02d',
+  'tiktoken.cjs': '0cd4b1d0482281f0afea13558f440af06b8cf329fdd83e3950c504c7684b5e31',
+  'tiktoken_bg.cjs': '85b2bfcc1cab757b81b3ebfd200a188175c20ce9c9f7ccd340dfa479813d1205',
+  'tiktoken_bg.wasm': 'dedd9a7b5d8d98b44448bedb371ade1c5327f7bb5dd9effe159da816473a415f',
+};
+const tokenizerLicenseDigest = '1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b';
+const hostBuiltins = new Map([
+  [hostEntry, { readline: 'createInterface' }],
+  [adapterSlot, { crypto: 'createHash createHmac', perf_hooks: 'performance' }],
+  [continuations, { crypto: 'randomBytes', perf_hooks: 'performance' }],
+  [wireTools, { crypto: 'randomUUID' }],
+]);
+const fileGlobals = new Map([
+  [continuations, new Set(['setTimeout', 'clearTimeout'])],
+  ...['context-lexical.mjs', 'context-raw-read.mjs', 'context-read.mjs', 'context-read-state.mjs',
+    'migrate/raw-privacy.mjs', 'procedural-tags.mjs', 'raw-lineage.mjs', 'uow.mjs'].map(path =>
+    [adapterSource + path, new Set(['Boolean'])]),
+]);
+const adapterMembers = {
+  'adapter.mjs': { performance: ['now'] },
+  'context-lexical.mjs': { Buffer: ['from'] },
+  'context-raw-read.mjs': { Buffer: ['from'] },
+  'memories.mjs': { Buffer: ['from'] },
+  'migrate/raw-privacy.mjs': { Buffer: ['from'] },
+  'placement-input.mjs': { Symbol: ['iterator'] },
+  'port-scope.mjs': { Symbol: ['dispose', 'iterator'] },
+  'raw-lineage.mjs': { Buffer: ['from'] },
+  'raw-read.mjs': { Buffer: ['from'] },
+  'retrieval-snapshot.mjs': { Buffer: ['from'] },
+  'retrieval.mjs': { Buffer: ['from'] },
+  'suppressions.mjs': { Buffer: ['from'] },
+};
 const compositionEntry = 'openLocalService';
 export const cliEntry = 'packaging/core-local/cli.mjs';
 export const coreManifest = coreRoot + '/package.json';
@@ -119,7 +162,8 @@ function allowedAmbient(name, node, parents, path) {
     return webCryptoMembers.get(path)?.has(dotMember(use, method)) &&
       call.type === 'CallExpression' && call.callee === method;
   }
-  return runtimeGlobals.has(name);
+  return runtimeGlobals.has(name) || fileGlobals.get(path)?.has(name) ||
+    path.startsWith(adapterSource) && adapterMembers[path.slice(adapterSource.length)]?.[name]?.includes(property);
 }
 
 function computedString(node) {
@@ -195,18 +239,44 @@ function namedImport(node, name) {
     node.specifiers[0].type === 'ImportSpecifier' && node.specifiers[0].imported.name === name;
 }
 
+function approvedNames(node, names) {
+  return typeof names === 'string' && node.type === 'ImportDeclaration' && node.specifiers.length > 0 &&
+    node.specifiers.every(part => part.type === 'ImportSpecifier' && names.split(' ').includes(part.imported.name));
+}
+
+function adapterApproval(from) {
+  return from.startsWith(adapterSource) ? adapterImports[from.slice(adapterSource.length)] : undefined;
+}
+
+function adapterCoreSpecifier(from) {
+  return posix.relative(posix.dirname(from), coreEntry);
+}
+
 function target(from, specifier, node) {
+  const approved = adapterApproval(from);
   if (specifier === 'node:sqlite') {
-    if (from === adapterSlot) return;
+    if (approvedNames(node, approved?.sqlite) || from === adapterSlot && node.type === 'ExportNamedDeclaration' &&
+        node.specifiers.length === 1 && node.specifiers[0].local.name === 'DatabaseSync') return;
     throw new Error(`sqlite_outside_core_local_adapter: ${from}`);
   }
-  if (specifier === 'node:readline' && from === hostEntry && namedImport(node, 'createInterface')) return;
+  if (typeof specifier === 'string' && specifier.startsWith('node:') &&
+      approvedNames(node, (hostBuiltins.get(from) ?? approved)?.[specifier.slice(5)])) return;
+  if (approvedNames(node, approved?.core) &&
+      (specifier === '@cairn-ink/core' || specifier === adapterCoreSpecifier(from))) return coreEntry;
+  if (from === adapterSlot && specifier === './vendor/tiktoken/tiktoken.cjs' &&
+      node.type === 'ImportDeclaration' && node.specifiers.length === 1 &&
+      node.specifiers[0].type === 'ImportDefaultSpecifier') return tokenizerEntry;
   if (typeof specifier !== 'string' || !/^\.\.?\/(?:[\w.-]+\/)*[\w.-]+\.mjs$/u.test(specifier)) {
     throw new Error(`unsupported_core_local_import: ${from}`);
   }
   const path = posix.join(posix.dirname(from), specifier);
   if (from.startsWith(coreSource)) {
     if (!path.startsWith(coreSource)) throw new Error(`core_import_escapes_package: ${from} -> ${path}`);
+  } else if (from.startsWith(adapterSource) || path.startsWith(adapterSource)) {
+    if (!(from.startsWith(adapterSource) && path.startsWith(adapterSource)) &&
+        !(from === adapterSlot && path === adapterEntry && namedImport(node, 'openSqliteAdapter'))) {
+      throw new Error(`invalid_core_local_sqlite_edge: ${from} -> ${path}`);
+    }
   } else if (!path.startsWith(coreSource) && !path.startsWith('packaging/core-local/')) {
     throw new Error(`core_local_import_escapes_runtime: ${from} -> ${path}`);
   }
@@ -214,6 +284,30 @@ function target(from, specifier, node) {
     throw new Error(`invalid_core_local_host_edge: ${from}`);
   }
   return path;
+}
+
+// Only the immediate awaited call in the guarded stdio request branch may
+// refer to the opener. Alias, wrapper and module-scope references still fail.
+function dispatchedCall(node, parents) {
+  const call = parents.get(node);
+  if (call.type !== 'CallExpression' || call.callee !== node || parents.get(call).type !== 'AwaitExpression') return false;
+  let current = call, guard, inCall;
+  for (let parent = parents.get(current); parent; current = parent, parent = parents.get(current)) {
+    if (parent.type === 'IfStatement' && current === parent.consequent) {
+      const test = parent.test;
+      if (test.type === 'LogicalExpression' && test.operator === '&&' && test.left.name === 'scope' &&
+          test.right.type === 'UnaryExpression' && test.right.operator === '!' && test.right.argument.name === 'error') guard = true;
+    }
+    if (parent.type === 'SwitchCase' && parent.test?.value === 'tools/call') {
+      inCall = parents.get(parent).discriminant?.object?.name === 'request' &&
+        dotMember(parents.get(parent).discriminant.object, parents.get(parent).discriminant) === 'method';
+    }
+    if (functionTypes.has(parent.type)) {
+      return guard && inCall && parent.type === 'FunctionDeclaration' && parent.id.name === 'serveStdio' &&
+        parents.get(parent)?.type === 'ExportNamedDeclaration' && parents.get(parents.get(parent))?.type === 'Program';
+    }
+  }
+  return false;
 }
 
 function imports(root, path) {
@@ -233,10 +327,8 @@ function imports(root, path) {
         node.type === 'Literal' && node.value === 'getBuiltinModule') {
       throw new Error(`unsupported_core_local_loader: ${path}`);
     }
-    // The host cannot call or forward the composition entry. The CLI can
-    // import only serveStdio, including through the rest of the closure.
     if (path === hostEntry && node.type === 'Identifier' && node.name === compositionEntry &&
-        node !== composition?.id) {
+        node !== composition?.id && !dispatchedCall(node, parents)) {
       throw new Error(`eager_core_local_composition_reference: ${path}`);
     }
     const dynamic = node.type === 'ImportExpression';
@@ -252,8 +344,24 @@ function imports(root, path) {
       }
     }
   });
-  if (path !== adapterSlot) auditCapabilities(ast, path, parents);
+  auditCapabilities(ast, path, parents);
   return edges;
+}
+
+export function candidateSourcePath(path) {
+  return path === tokenizerLicense ? 'packaging/core-local/' + path : path;
+}
+
+export function candidateFileBytes(path, bytes) {
+  if (!adapterApproval(path)?.core) return bytes;
+  let source = bytes.toString('utf8');
+  const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
+  for (const node of tree.body.toReversed()) {
+    if (node.source?.value === '@cairn-ink/core' && approvedNames(node, adapterApproval(path).core)) {
+      source = source.slice(0, node.source.start) + JSON.stringify(adapterCoreSpecifier(path)) + source.slice(node.source.end);
+    }
+  }
+  return source;
 }
 
 export function coreRuntimeManifest(root) {
@@ -275,7 +383,7 @@ export function coreRuntimeManifest(root) {
   return { name, version, private: true, type, license, engines, exports: Object.fromEntries(exports) };
 }
 
-export function deriveRuntimeGraph(root) {
+export function deriveRuntimeGraph(root, { checkStartup } = {}) {
   root = realpathSync(root);
   const { exports } = coreRuntimeManifest(root);
   const coreEntries = Object.values(exports).map(({ default: entry }) => posix.join(coreRoot, entry));
@@ -283,14 +391,48 @@ export function deriveRuntimeGraph(root) {
   // entry points contribute to the archive.
   const graph = new Map();
   for (const path of coreModules(root)) graph.set(path, imports(root, path));
-  const required = new Set();
-  const pending = [cliEntry, ...coreEntries];
+  const edges = path => {
+    if (!graph.has(path)) graph.set(path, imports(root, path));
+    return graph.get(path);
+  };
+  const startup = new Set();
+  const eager = [cliEntry, ...coreEntries];
+  let deferred = false;
+  while (eager.length) {
+    const path = eager.pop();
+    if (startup.has(path)) continue;
+    if (path.startsWith(adapterSource) || path === tokenizerEntry || path === adapterSlot) {
+      throw new Error(`eager_core_local_runtime_edge: ${path}`);
+    }
+    startup.add(path);
+    for (const next of edges(path)) {
+      if (path === hostEntry && next === adapterSlot) deferred = true;
+      else eager.push(next);
+    }
+  }
+  if (!deferred) throw new Error('core_local_adapter_slot_missing');
+  checkStartup?.([...startup, adapterSlot].sort());
+
+  const required = new Set(startup);
+  const pending = [adapterSlot];
   while (pending.length) {
     const path = pending.pop();
     if (required.has(path)) continue;
     required.add(path);
-    pending.push(...(graph.get(path) ?? imports(root, path)));
+    if (path === tokenizerEntry) {
+      for (const [name, digest] of Object.entries(tokenizerAssets)) {
+        const file = tokenizerRoot + name;
+        if (sha256(readFileSync(regularFile(root, file))) !== digest) throw new Error(`unverified_core_local_tokenizer: ${file}`);
+        required.add(file);
+      }
+      const license = existsSync(join(root, tokenizerLicense)) ? tokenizerLicense : candidateSourcePath(tokenizerLicense);
+      if (sha256(readFileSync(regularFile(root, license))) !== tokenizerLicenseDigest) {
+        throw new Error('unverified_core_local_tokenizer_license');
+      }
+      required.add(tokenizerLicense);
+      continue;
+    }
+    pending.push(...edges(path));
   }
-  if (!required.has(adapterSlot)) throw new Error('core_local_adapter_slot_missing');
   return [...required].sort();
 }

@@ -161,9 +161,10 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkRepla
 
 /** @param {Port} port @param {SessionHasher} hashSession
  * @param {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} index
+ * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, index) {
+export function createMemoryStore(port, hashSession, index, scrubTitles) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -249,8 +250,9 @@ export function createMemoryStore(port, hashSession, index) {
       });
     },
 
-    erase(tx, scope, id) {
-      return port(tx, scope?.owner, { write: true }, db => {
+    erase(tx, callerScope, id) {
+      return port(tx, callerScope?.owner, { write: true }, db => {
+        const scope = { owner: tx.owner, namespace: callerScope.namespace };
         validateId(id);
         const entry = readEntry(db, scope, id);
         if (!entry) return false;
@@ -258,6 +260,7 @@ export function createMemoryStore(port, hashSession, index) {
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
         suppressReceiptSources(db, scope, id, entry.row.text);
+        scrubTitles?.(db, scope);
         deleteProceduralTag(db, scope, id);
         clearReceipts(db, scope, id);
         index.markDirty(db, tx);

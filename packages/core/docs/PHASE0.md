@@ -1176,10 +1176,11 @@ and its amendment sources omit session IDs.
 
 At the card's rank in the shared whole-item budget, count the complete body,
 suffix, and sources against the remaining tokens. Drop the oldest amendments
-first, keeping the bare card when no suffix fits. With Raw enabled or disabled,
-a selected card occupies one item slot and replaces a cited memory at the
-card's own rank if the resulting pack fits. The citation uses the binding's
-stored revision, and replacement requires an exact qualified ref match.
+first, keeping the bare card when no suffix fits. Under every packing policy,
+with Raw enabled or disabled, a selected card occupies one item slot and
+replaces a cited memory at the card's own rank if the resulting pack fits.
+The citation uses the binding's stored revision, and replacement requires an
+exact qualified ref match.
 
 ## Addendum 22 — Quantity ledger in Context Read (2026-11-25)
 

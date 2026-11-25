@@ -231,7 +231,8 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       return excerpt ? [excerpt] : [];
     });
     if (excerpts.length !== raw.turns.length) return null;
-    const rankWhole = options.policy === "rank-first-whole-v1" && items.some(item => item.evidence.documentCard);
+    const hasDocumentCards = items.some(item => item.evidence.documentCard);
+    const rankWhole = options.policy === "rank-first-whole-v1" && hasDocumentCards;
     const groups = groupContext(items, excerpts, rankWhole);
     const docs = groups.map(group => {
       const unit = projectUnit(group, representation, items.length);
@@ -292,7 +293,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     const availableItems = budget.maxItems - Number(!!ledger);
     while (remaining.length) {
       const full = accepted.value.items.length >= availableItems;
-      if (full && (!rankWhole || !remaining.some(unit => unit.members[0]?.evidence.documentCard))) break;
+      if (full && (!hasDocumentCards || !remaining.some(unit => unit.members[0]?.evidence.documentCard))) break;
       active();
       const score = (/** @type {Unit} */ unit) => unit.bm25 + unit.prior - (unit.cardHit ? 0 : 0.15 * unit.cost / 250)
         + (breadth ? 0.30 : 0.15) * unit.sessions.filter(session => !sessions.has(session)).length

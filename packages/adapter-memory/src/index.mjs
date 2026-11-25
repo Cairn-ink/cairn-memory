@@ -13,7 +13,8 @@ import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
-import { createCardVisibility, createCardVisibilityInput, createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
+import { createCardVisibility, createCardVisibilityInputs,
+  createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
 import { copyCaptureMessages, copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
@@ -55,11 +56,12 @@ export function createMemoryAdapter(options = {}) {
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const cardRawSources = archive && createCardRawSourceChecks(archive, matchFacts, receiptReadSafety);
-  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, cardRawSources?.sourceVisible);
+  const { cardVisibilityInput, amendmentWithheld } = createCardVisibilityInputs(matchFacts, keys, cardRawSources?.sourceVisible,
+    archive?.sourceWithholding);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const documentCards = flags.documentCards ? handleWriteRejections(
-    createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
-    ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) : undefined;
+    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch),
+    ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive, documentCards) : undefined;
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(

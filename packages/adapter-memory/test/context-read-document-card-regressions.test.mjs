@@ -144,22 +144,26 @@ test("stored citation revisions leave an in-place correction available as its ow
   assert.deepEqual((await f.fetch(cardRef)).items[0].triggerMemoryRefs, [memory]);
 });
 
-test("one-slot replacement at the card's own rank agrees with and without Raw", async () => {
-  const f = fixture({ contextRawRead: true });
-  const memory = await f.memory("Trail trail trail.");
-  await f.card("map", { sourceMemories: [memory] });
-  await f.archive("Trail update: " + change);
-  await f.amend("map", change);
-  const types = ["memory", "card"];
-  const options = { types, budget: { maxItems: 1 } };
-  const found = await f.find({ types });
-  assert.deepEqual(found.items.map(({ ref, rank }) => [ref.id, rank]), [[memory.id, 1], ["map", 2]]);
-  const withoutRaw = await f.assemble(options);
-  assert.deepEqual(withoutRaw.assembly.items.map(({ ref, rank }) => [ref.id, rank]), [["map", 2]]);
-  const withRaw = await f.assemble({ ...options, raw: true });
-  assert.equal(withRaw.diagnostics.coverage.raw, "included");
-  assert.deepEqual(withRaw.assembly, withoutRaw.assembly);
-});
+for (const id of ["rank-first-whole-v1", "coverage-first-v1", "rank-first-first-source-v1"]) {
+  test(`one-slot replacement at the card's own rank agrees with and without Raw for ${id}`, async () => {
+    const f = fixture({ contextRawRead: true });
+    const memory = await f.memory("Trail trail trail.");
+    await f.card("map", { sourceMemories: [memory] });
+    await f.archive("Trail update: " + change);
+    await f.amend("map", change);
+    const types = ["memory", "card"];
+    const options = { types, budget: { maxItems: 1 }, policy: { id } };
+    const found = await f.find({ types });
+    assert.deepEqual(found.items.map(({ ref, rank }) => [ref.id, rank]), [[memory.id, 1], ["map", 2]]);
+    const raw = await f.read(tx => f.contextRead.raw.search(tx, readSet, input.query, { limit: 1 }));
+    assert.equal(raw.turns.length, 1);
+    const withoutRaw = await f.assemble(options);
+    assert.deepEqual(withoutRaw.assembly.items.map(({ ref, rank }) => [ref.id, rank]), [["map", 2]]);
+    const withRaw = await f.assemble({ ...options, raw: true });
+    assert.equal(withRaw.diagnostics.coverage.raw, "included");
+    assert.deepEqual(withRaw.assembly, withoutRaw.assembly);
+  });
+}
 
 test("withheld amendment does not consume one of five selection slots", async () => {
   const f = fixture();

@@ -4,6 +4,7 @@ import { importTextBlocked, purgeFacts, rawFactPolicy } from "./raw-facts.mjs";
 import { allowsRawSession } from "./raw-lineage.mjs";
 import { eraseRawSessions, purgeRawMessages } from "./raw-purge.mjs";
 import { copySession, rawWriter, readRawRow } from "./raw-rows.mjs";
+import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { invalidInput, scopeKey } from "./storage-values.mjs";
 import { advanceSuppressionEpoch, readFacts, readLegacyDenials } from "./suppressions.mjs";
 
@@ -47,8 +48,9 @@ function withheldPositions(options, length) {
 /** @param {Port} port @param {SessionHasher} hashSession @param {Lineage} lineage @param {IndexRevisions} index
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {MigratedCaptureControls} [controls]
+ * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  */
-export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls) {
+export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls, scrubTitles) {
   let rawKeyConflict = 0;
 
   /** @type {RawStore & RawCapture} */
@@ -83,18 +85,19 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const { scope, client } = key;
         const facts = readFacts(db, scope);
         const policy = rawFactPolicy(scope, key, facts, hashSession);
-        if (!batch.length || migratedRaw?.blocksEvent(db, key)) return { archived: 0 };
+        if (!batch.length || migratedRaw?.blocksEvent(db, key) ||
+            !allowsRawSession(db, scope, client, policy.sessionKeyHash, facts)) return { archived: 0 };
         if (migratedRaw?.blocks(db, scope, key, batch)) {
           migratedRaw.fenceArrival(db, scope, key, batch);
           return { archived: 0 };
         }
-        if (!allowsRawSession(db, scope, client, policy.sessionKeyHash, facts)) return { archived: 0 };
         const legacy = readLegacyDenials(db, scope);
         const session = migratedRaw?.storageSession(db, scope, key) ?? key;
         const insert = rawWriter(db, scope, session);
         let archived = 0;
         for (const item of batch) {
-          if (policy.refusesSource(item, false) || importTextBlocked([], item.content, legacy) ||
+          if (hasSourceTombstone(legacy, key, item.id, policy.sessionKeyHash) ||
+              policy.refusesSource(item, false) || importTextBlocked([], item.content, legacy) ||
               migratedRaw?.blocksSpan(db, scope, key, item.id) ||
               migratedRaw?.reservesMessage(db, scope, key, item.id)) continue;
           if (insert(item)) archived++;
@@ -117,18 +120,21 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         if (!batch.length) return counts;
         const facts = readFacts(db, selection);
         const policy = rawFactPolicy(selection, session, facts, hashSession);
+        if (!allowsRawSession(db, selection, session.client, policy.sessionKeyHash, facts)) {
+          return { ...counts, withheld: batch.length };
+        }
         if (migratedRaw?.blocks(db, selection, session, batch)) {
           migratedRaw.fenceArrival(db, selection, session, batch);
           return { ...counts, withheld: batch.length };
         }
-        if (!allowsRawSession(db, selection, session.client, policy.sessionKeyHash, facts) ||
-            lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
+        if (lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
           return { ...counts, withheld: batch.length };
         }
         const legacy = readLegacyDenials(db, selection);
         const insert = rawWriter(db, selection, migratedRaw?.storageSession(db, selection, session) ?? session);
         for (const [position, item] of batch.entries()) {
-          if (withheld.has(position) || policy.refusesSource(item, true) || importTextBlocked(facts, item.content, legacy) ||
+          if (withheld.has(position) || hasSourceTombstone(legacy, session, item.id, policy.sessionKeyHash) ||
+              policy.refusesSource(item, true) || importTextBlocked(facts, item.content, legacy) ||
               migratedRaw?.blocksSpan(db, selection, session, item.id) ||
               migratedRaw?.reservesMessage(db, selection, session, item.id)) {
             counts.withheld++;
@@ -147,11 +153,8 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     fenceSession(tx, scope, input) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        const { client, sessionId } = copySession(input);
-        const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
-          VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(selection), hashSession(selection, client, sessionId));
-        if (added.changes) {
-          advanceSuppressionEpoch(db, tx.owner);
+        if (addFence(db, selection, copySession(input))) {
+          scrubTitles?.(db, selection);
           index.advanceRaw(db, tx);
         }
       });
@@ -160,14 +163,17 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     eraseSessions(tx, scope, closure) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, eraseRawSessions(db, selection, eraseAddresses(db, selection, copyBatch(closure).map(copySession))));
+        return changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, copyBatch(closure).map(copySession))));
       });
     },
 
     deleteConversation(tx, scope, input) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        const { rawDeleted } = changed(db, tx, eraseRawSessions(db, selection, eraseAddresses(db, selection, [copySession(input)])));
+        const session = copySession(input);
+        // Keep late turns with previously unseen message IDs from restoring the session.
+        const fenced = addFence(db, selection, session);
+        const { rawDeleted } = changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, [session])), fenced);
         return { rawDeleted };
       });
     },
@@ -175,10 +181,28 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     purgeWithheld(tx, scope, supplied) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession));
+        return changed(db, tx, selection, purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession));
       });
     },
   };
+
+  /** @param {ReadonlySet<string>} legacy @param {import("./raw-rows.mjs").Session} session
+   * @param {string} messageId @param {string} sessionHash */
+  function hasSourceTombstone(legacy, { client, sessionId }, messageId, sessionHash) {
+    if (!legacy.size) return false;
+    // A migrated alias can still own a tombstone after its last Raw row is gone.
+    return legacy.has(receiptAddressDenial({ client, sessionId, messageId })) ||
+      (migratedRaw !== undefined && legacy.has(receiptAddressDenial({ client, sessionId: "legacy-raw:" + sessionHash, messageId })));
+  }
+
+  /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
+   * @param {import("./raw-rows.mjs").Session} session */
+  function addFence(db, scope, { client, sessionId }) {
+    const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
+      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(scope), hashSession(scope, client, sessionId));
+    if (added.changes) advanceSuppressionEpoch(db, scope.owner);
+    return !!added.changes;
+  }
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session[]} sessions */
@@ -191,10 +215,15 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
   }
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Tx} tx
+   * @param {import("@cairn-ink/core/ports").Scope} selection
    * @param {{rawDeleted: number, ledgerBlanked: number}} counts
+   * @param {boolean} [fenced]
    */
-  function changed(db, tx, counts) {
-    if (counts.rawDeleted || counts.ledgerBlanked) index.advanceRaw(db, tx);
+  function changed(db, tx, selection, counts, fenced = false) {
+    if (fenced || counts.rawDeleted || counts.ledgerBlanked) {
+      scrubTitles?.(db, selection);
+      index.advanceRaw(db, tx);
+    }
     return counts;
   }
 
