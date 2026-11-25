@@ -1,10 +1,12 @@
-import { compareSortKey, compareUtf8, tokenizeT1 } from "../../core/src/index.mjs";
+import { compareSortKey, compareUtf8, CoreError, tokenizeT1 } from "../../core/src/index.mjs";
 import { copyReadScope, guardOwner, inputText, invalid } from "./memory-input.mjs";
 import { SUPPRESSION_DISTANCE, SUPPRESSION_DISTANCE_TOLERANCE } from "../../core/src/privacy/fact-match.mjs";
+import { toPostgresError } from "./errors.mjs";
 import { CREATED_AT_US, readCandidate } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { MEMORY_FILTER, memoryScopeParams } from "./retrieval-scope.mjs";
-import { runOperation } from "./uow.mjs";
+import { ANN_SETUP_BATCH, DISABLE_SORT, HNSW_ITERATIVE_SCAN, READ_SORT, RESTORE_SORT } from "./statement-batches.mjs";
+import { queryBatchInRun, runOperation } from "./uow.mjs";
 
 /** @import { LexicalCandidates, VectorCandidates } from "../../core/src/ports/index.d.ts" */
 
@@ -62,7 +64,21 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
         const namespaces = selection.keys.map(key => key === null ? null : JSON.parse(key));
         const params = memoryScopeParams(selection, false);
         return runOperation(tx, async (query, run) => {
-          const visibility = await readVisibility(query, selection.owner, hashSessionKey, run.visibilityFacts);
+          const batched = Boolean(run.connection.queryBatch);
+          let previousSortOn = false;
+          let sortDisabled = false;
+          async function restoreSort() {
+            if (!sortDisabled) return;
+            await query(RESTORE_SORT);
+            sortDisabled = false;
+          }
+          // Receipt queries inside ANN pagination use the caller's original setting.
+          /** @type {typeof query} */
+          const visibilityQuery = batched ? async (text, values) => {
+            await restoreSort();
+            return query(text, values);
+          } : query;
+          const visibility = await readVisibility(visibilityQuery, selection.owner, hashSessionKey, run.visibilityFacts);
           const facts = visibility.selectedFacts(namespaces);
           const { rows: [counts] } = await query(`SELECT count(*)::text AS eligible,
             count(*) FILTER (WHERE $7::boolean AND embedding_model = $8)::text AS embedded
@@ -135,6 +151,10 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
             for (let page = 0; page < MAX_VECTOR_PAGES; page++) {
               const arguments_ = [...params, model, JSON.stringify(values), pageSize, ann ? afterDistance : page * pageSize];
               if (vectors.length) arguments_.push(JSON.stringify(vectors));
+              if (ann && previousSortOn && !sortDisabled) {
+                await query(DISABLE_SORT);
+                sortDisabled = true;
+              }
               const { rows } = await query(`WITH candidates AS MATERIALIZED (
                   SELECT id, updated_at, ${distance} AS distance FROM memories
                   WHERE ${MEMORY_FILTER} AND embedding_model = $7 AND $8::vector IS NOT NULL ${filter}
@@ -176,18 +196,39 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           if (zeroQuery) {
             checkedDepth = await collect("orthogonal");
           } else {
-            await query("SET LOCAL hnsw.iterative_scan = 'strict_order'");
             // Prefer HNSW over sorting a broad owner. For selective scopes the planner can
             // still choose a bounded exact sort on the filtered rows.
             const preferIndex = embedded > pageSize * MAX_VECTOR_PAGES;
-            let restoreSort = false;
-            if (preferIndex) {
-              const { rows: [settings] } = await query("SELECT current_setting('enable_sort') AS enable_sort");
-              restoreSort = settings.enable_sort === "on";
-              if (restoreSort) await query("SET LOCAL enable_sort = off");
+            if (batched && preferIndex) {
+              const [, { rows: [settings] }] = await queryBatchInRun(run, tx.readOnly, ANN_SETUP_BATCH, ["SET", "SELECT", "SET"]);
+              if (settings?.enable_sort !== "on" && settings?.enable_sort !== "off") throw new CoreError("storage_error");
+              previousSortOn = sortDisabled = settings.enable_sort === "on";
+            } else {
+              await query(HNSW_ITERATIVE_SCAN);
+              if (preferIndex) {
+                const { rows: [settings] } = await query(READ_SORT);
+                previousSortOn = settings.enable_sort === "on";
+                if (previousSortOn) {
+                  await query(DISABLE_SORT);
+                  sortDisabled = true;
+                }
+              }
             }
-            checkedDepth = await collect("ann");
-            if (restoreSort) await query("SET LOCAL enable_sort = on");
+            try {
+              checkedDepth = await collect("ann");
+            } catch (error) {
+              // PostgreSQL restores transaction-local settings on rollback after a SQL failure.
+              // If only result processing failed, the setting can still be restored here.
+              if (batched && sortDisabled && !run.statementFailure) {
+                try {
+                  await restoreSort();
+                } catch {
+                  run.failure = toPostgresError(error);
+                }
+              }
+              throw error;
+            }
+            await restoreSort();
             // Zero vectors have no cosine index entry. They rank at distance 1.
             if (result.length < depth || result[depth - 1].distance >= 1) {
               const checkedZeros = await collect("zero");
