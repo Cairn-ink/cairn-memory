@@ -98,11 +98,9 @@ function openUnitOfWork(filename, migration) {
   /** @type {DatabaseSync | undefined} */
   let reservation;
   try {
+    if (!migration) assertServingFilename(filename);
     const path = realpathSync(filename);
-    if (!migration) {
-      assertServingFilename(filename);
-      assertServingFilename(path);
-    }
+    if (!migration) assertServingFilename(path);
     const identity = fileIdentity(path);
     reservation = reserveFile(identity);
     const uri = pathToFileURL(path);
