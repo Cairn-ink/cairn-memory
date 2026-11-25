@@ -9,9 +9,10 @@ import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
-/** @import { CaptureMessage, ContextRawReadStore, ContextRawTurn, ContextReadSet, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore, DocumentCardSourceMessage, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { RawRow } from "./raw-rows.mjs" */
+/** @import { StoredReceipt } from "./receipt-identity.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @typedef {ReturnType<typeof contextEpochs>} Epochs */
@@ -100,8 +101,8 @@ export function exactReceiptTurn(db, scope, memoryId, receipt, row) {
  * @param {ReceiptReadSafety} receiptReadSafety @param {() => number} monotonicMs
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {import("./migrate/capture-controls.mjs").MigratedCaptureControls} [controls]
- * @returns {ContextRawReadStore} */
-export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, controls) {
+ * @param {(source: DocumentCardSourceMessage) => string} [conflictKey] */
+export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, controls, conflictKey) {
   const secret = Buffer.from(storeKey, "hex");
 
   /** @param {Scope} scope @param {RawRow} row @param {string} fence @returns {ContextRawTurn} */
@@ -113,8 +114,8 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     return { ...turn, witness };
   }
 
-  /** @param {Connection} db @param {() => boolean} stopped */
-  function visibility(db, stopped) {
+  /** @param {Connection} db @param {() => boolean} stopped @param {boolean} [amendment] */
+  function visibility(db, stopped, amendment = false) {
     /** @type {Map<Scope["namespace"], ReturnType<typeof scopedSuppression>>} */
     const policies = new Map();
     const possibleReceipts = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
@@ -136,36 +137,62 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     function directlyVisible(scope, row) {
       const { message } = row, policy = policyFor(scope);
       const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
+      const address = { ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs };
       return !stopped() && (!controls || controls.rawReadable(scope)) && Boolean(message.content) &&
         !hasRawFence(db, scope, rawPolicy.sessionKeyHash) &&
-        !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }) &&
+        !policy.withholdsReceipt(address) &&
         !rawPolicy.hides(message) && !importTextBlocked([], message.content, policy.legacy) &&
-        !migratedRaw?.blocks(db, scope, row, [message]);
+        !migratedRaw?.blocks(db, scope, row, [message]) && (!amendment || !sourceDenied(scope, address));
     }
 
-    /** @param {Scope} scope @param {RawRow} row */
-    return (scope, row) => {
-      if (!directlyVisible(scope, row) || !lineage.receiptRootsVisible(db, scope, row, directlyVisible)) return false;
+    /** @param {Scope} scope @param {DocumentCardSourceMessage} source */
+    function sourceDenied(scope, source) {
+      return (conflictKey && policyFor(scope).legacy.has(conflictKey(source))) ||
+        migratedRaw?.blocksSpan(db, scope, source, source.messageId) ||
+        migratedRaw?.reservesMessage(db, scope, source, source.messageId);
+    }
+
+    /** @param {Scope} scope @param {RawRow} row @param {DocumentCardSourceMessage} source */
+    function receiptLinksVisible(scope, row, source) {
       const policy = policyFor(scope), project = receiptProjector(db, scope, policy, receiptReadSafety);
-      const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
+      const sourceKey = JSON.stringify([source.client, source.sessionId, source.messageId]);
       let linkCount = 0;
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
         const id = String(record.memory_id), entry = readEntry(db, scope, id);
-        const safe = project(record);
-        if (!entry || entry.row.historical || policy.hides(entry) || !safe ||
-            !exactReceiptTurn(db, scope, id, safe.receipt, row)) return false;
+        /** @type {Receipt | undefined} */
+        let receipt = project(record)?.receipt;
+        if (!entry || entry.row.historical || policy.hides(entry)) return false;
+        if (amendment && record.excerpt == null) {
+          // A capture may retain only the address. Prove it against the finished capture below.
+          const stored = /** @type {StoredReceipt} */ (decodeJson(record.body));
+          const legacy = typeof record.legacy_receipt_key === "string" ? record.legacy_receipt_key : undefined;
+          if (!receiptReadSafety(db, scope, policy, stored, stored.receiptKey ?? legacy, legacy,
+            stored.legacyRawAncestryEmpty)) return false;
+          receipt = stored;
+        }
+        if (!receipt || (amendment && (receipt.client !== source.client || receipt.sessionId !== source.sessionId ||
+            receipt.messageId !== source.messageId)) || !exactReceiptTurn(db, scope, id, receipt, row)) return false;
       }
       return true;
+    }
+
+    return { policyFor, sourceDenied, receiptLinksVisible,
+      /** @param {Scope} scope @param {RawRow} row */
+      visible(scope, row) {
+        return directlyVisible(scope, row) && lineage.receiptRootsVisible(db, scope, row, directlyVisible) &&
+          receiptLinksVisible(scope, row, { ...row, messageId: row.message.id });
+      },
     };
   }
 
-  return {
+  /** @type {ContextRawReadStore} */
+  const raw = {
     async search(tx, readSet, query, { limit, ...options }) {
       return port(tx, readSet.owner, {}, db => {
         const stopped = contextDeadline(options, monotonicMs), fence = inventoryFence(contextEpochs(db, readSet));
         const published = publishedInventory(db, readSet, fence);
-        const visible = visibility(db, stopped);
+        const { visible } = visibility(db, stopped);
         const documents = [], df = new Map(), terms = tokenizeT1(query);
         let examined = 0, textUnits = 0, complete = true, totalLength = 0;
         inventory: for (const namespace of readSet.namespaces) {
@@ -204,7 +231,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     async revalidate(tx, readSet, turns) {
       return port(tx, readSet.owner, {}, db => {
         const fence = inventoryFence(contextEpochs(db, readSet));
-        const visible = visibility(db, () => false);
+        const { visible } = visibility(db, () => false);
         for (const turn of turns) {
           const { scope } = turn;
           if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace)) return false;
@@ -223,4 +250,31 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       });
     },
   };
+
+  /** @type {NonNullable<ContextReadStore["documentCardAmendmentSource"]>} */
+  async function documentCardAmendmentSource(tx, readSet, scope, { sourceMessage, quote }) {
+    if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace) ||
+        typeof quote !== "string" || !quote) return null;
+    return port(tx, readSet.owner, {}, db => {
+      const session = migratedRaw?.storageSession(db, scope, sourceMessage) ?? sourceMessage;
+      const row = readRawRow(db, scope, session, sourceMessage.messageId);
+      if (row?.message.role !== "user" || !row.message.content.includes(quote)) return null;
+      const { visible, policyFor, sourceDenied, receiptLinksVisible } = visibility(db, () => false, true);
+      if (!visible(scope, row)) return null;
+      const policy = policyFor(scope);
+      if (session !== sourceMessage && (sourceDenied(scope, sourceMessage) ||
+          !receiptReadSafety(db, scope, policy, { ...sourceMessage, role: row.message.role,
+            occurredAtMs: row.message.occurredAtMs }, undefined, undefined) ||
+          !receiptLinksVisible(scope, row, sourceMessage))) return null;
+      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
+      const { sessionKeyHash } = rawPolicy;
+      return {
+        sourceIdentity: { sessionKeyHash, messageKey: sourceMessage.messageId },
+        source: { rawRows: [rawPolicy.evidence(row.message)], sourceLengthUtf16: row.message.content.length,
+          facts: policy.facts, sourceExcluded: false, policy: { rowShingles: false } },
+      };
+    });
+  }
+
+  return { raw, documentCardAmendmentSource };
 }
