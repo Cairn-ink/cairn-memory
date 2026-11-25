@@ -22,7 +22,10 @@ import { readTokenSigner } from "./context-read-tokens.mjs";
 /** @typedef {{ keys: readonly string[], trimmed: boolean }} LedgerSelection */
 /** @typedef {{ value: ContextLedgerDigest, witness: () => string }} LedgerProjection */
 /** @typedef {{ lines: LedgerLine[], project: (lines: readonly LedgerLine[], trimmed: boolean) => LedgerProjection }} LedgerReading */
-/** @typedef {{ active: () => void, onError: (stage: ContextLedgerErrorStage) => void, onScan: () => void }} LedgerAttempt */
+/** @typedef {{ selected: readonly AssemblyEvidence[], rawTurns: readonly ContextRawTurn[],
+ * current: boolean }} OrdinaryFence */
+/** @typedef {{ active: () => void, onError: (stage: ContextLedgerErrorStage) => void,
+ * onScan: () => void, ordinary: OrdinaryFence }} LedgerAttempt */
 /** @typedef {LedgerAttempt & { witness: string, calendar: boolean, selection: LedgerSelection }} LedgerCheck */
 
 const MIN_EVENT_MS = -8_640_000_000_000_000;
@@ -246,19 +249,49 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       generations: canonicalGenerations(expected, selected.some(({ item }) => item.type === "card")),
       access: readSet.accessGenerations, fences: selected.map(row => row.fence),
     });
+    /** @param {Tx} tx @param {Signer} signer @param {readonly AssemblyEvidence[]} selected
+     * @param {readonly ContextRawTurn[]} rawTurns */
+    async function checkDelivery(tx, signer, selected, rawTurns) {
+      const delivered = selected.map(({ item }) => item.ref);
+      const current = await evidence(tx, signer, delivered);
+      if (selected.some((row, i) => row.fence !== current[i]?.fence || row.witness !== current[i]?.witness)) {
+        throw new CoreError("snapshot_stale");
+      }
+      await assertContextVisible(fence, tx, readSet,
+        selected.flatMap(({ item, documentCard }) => documentCard ? [] : [item.ref]), intent, "snapshot_stale");
+      if (!rawTurns.length) return true;
+      try {
+        return await readStore.raw?.revalidate(tx, readSet, rawTurns) === true;
+      } catch {
+        return false;
+      }
+    }
+    /** @param {Tx} tx @param {Signer} signer @param {OrdinaryFence} ordinary */
+    async function fenceOrdinary(tx, signer, ordinary) {
+      try {
+        ordinary.current = await checkDelivery(tx, signer, ordinary.selected, ordinary.rawTurns);
+      } catch (error) {
+        if (!(error instanceof CoreError) || error.code !== "snapshot_stale") throw error;
+      }
+    }
     return {
       rows: prepared.rows,
       payload,
       /** @param {LedgerAttempt} attempt @param {boolean} includeCalendar */
       prepareLedger(attempt, includeCalendar) {
-        const { active } = attempt;
+        const { active, ordinary } = attempt;
         return uow.run(readSet.owner, { readOnly: true }, async tx => {
           active();
+          ordinary.current = false;
           await checkState(tx);
           active();
           const signer = readTokenSigner(await readStore.identity(tx));
           active();
           if (await signer.bind("snapshot-scope", readSetBinding(readSet)) !== prepared.scope) return null;
+          // Fence the ordinary response before any optional store call can
+          // hold a serialized reader past the ledger deadline.
+          await fenceOrdinary(tx, signer, ordinary);
+          active();
           return ledgerFor(tx, signer, attempt, includeCalendar);
         });
       },
@@ -268,6 +301,9 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       async deliver(selected, rawTurns, signal, ledgerCheck) {
         // Legacy context-read-facade.mjs:918–937. All final predicates share
         // this snapshot, after the host formatter and counter have finished.
+        // A deadline can race this transaction, so retire the earlier fallback
+        // before asking for the final snapshot.
+        if (ledgerCheck) ledgerCheck.ordinary.current = false;
         return uow.run(readSet.owner, { readOnly: true }, async tx => {
           ledgerCheck?.active();
           await checkState(tx);
@@ -276,26 +312,18 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
           if (await signer.bind("snapshot-scope", readSetBinding(readSet)) !== prepared.scope) {
             throw new CoreError("snapshot_stale");
           }
-          const delivered = selected.map(({ item }) => item.ref);
-          const current = await evidence(tx, signer, delivered);
-          if (selected.some((row, i) => row.fence !== current[i]?.fence || row.witness !== current[i]?.witness)) {
-            throw new CoreError("snapshot_stale");
-          }
-          await assertContextVisible(fence, tx, readSet,
-            selected.flatMap(({ item, documentCard }) => documentCard ? [] : [item.ref]), intent, "snapshot_stale");
-          if (rawTurns.length) {
-            let rawCurrent = false;
-            try {
-              rawCurrent = await store.raw?.revalidate(tx, readSet, rawTurns) === true;
-            } catch {
-              // A failed Raw check invalidates the Raw pack.
-            }
-            if (!rawCurrent) {
-              if (signal?.aborted) throw new CoreError("snapshot_stale");
-              return undefined;
-            }
+          if (!await checkDelivery(tx, signer, selected, rawTurns)) {
+            if (signal?.aborted) throw new CoreError("snapshot_stale");
+            return undefined;
           }
           if (ledgerCheck) {
+            const { ordinary } = ledgerCheck;
+            if ((rawTurns === ordinary.rawTurns || !rawTurns.length && !ordinary.rawTurns.length) &&
+                selected.length === ordinary.selected.length && selected.every((row, i) => row === ordinary.selected[i])) {
+              ordinary.current = true;
+            } else {
+              await fenceOrdinary(tx, signer, ordinary);
+            }
             const current = await ledgerFor(tx, signer, ledgerCheck, false, ledgerCheck);
             const reading = current?.rolling;
             if (reading?.project(reading.lines, ledgerCheck.selection.trimmed).witness() !== ledgerCheck.witness) return staleLedger;

@@ -25,9 +25,11 @@ function ledgerFixture() {
 
   function reader({ enabled = true, calendarReading, capable = true, afterFormatting } = {}) {
     const scans = [];
+    const rejected = [];
+    let searches = 0;
     let beforeRead;
-    let mutate = afterFormatting;
-    let ledgerItems;
+    const mutations = [afterFormatting].flat();
+    let formattedItems;
     const api = createMemoryService({
       profile: "keyless-local",
       config: { quantityLedger: { enabled, calendarReading } },
@@ -48,11 +50,19 @@ function ledgerFixture() {
         } }),
         fence: {
           async assertVisible(...args) {
-            return (await f.base.fence.assertVisible(...args)).filter(ref => !hidden.has(ref.id));
+            return (await f.base.fence.assertVisible(...args)).filter(ref => {
+              if (!hidden.has(ref.id)) return true;
+              rejected.push(ref.id);
+              return false;
+            });
           },
         },
         contextRead: {
           ...f.base.contextRead,
+          lexical(...args) {
+            searches++;
+            return f.base.contextRead.lexical(...args);
+          },
           // Freeze generations by default and allow the forget probe to advance one.
           ...(afterFormatting && { async snapshotState(_tx, { namespaces }) {
             return namespaces.map(() => ({ memory: generation, card: 1 }));
@@ -71,16 +81,18 @@ function ledgerFixture() {
       },
       contextReadCounter: { count: fixtureCount },
       contextReadFormat(value) {
-        if (value.ledgerDigest) ledgerItems = value.items;
-        if (value.ledgerDigest && mutate) {
-          const callback = mutate;
-          beforeRead = () => callback(ledgerItems);
-          mutate = undefined;
+        if (Boolean(value.ledgerDigest) === capable) {
+          formattedItems = value.items;
+          if (!beforeRead && mutations[0]) {
+            const callback = mutations.shift();
+            beforeRead = () => callback(formattedItems);
+          }
         }
         return formatAssembly(value);
       },
     });
-    return { scans, read: (query = month.query, namespaces) => api.readContext(readSet(namespaces), { ...month, query }) };
+    return { scans, rejected, get searches() { return searches; },
+      read: (query = month.query, namespaces) => api.readContext(readSet(namespaces), { ...month, query }) };
   }
 
   async function forget(id) {
@@ -172,6 +184,59 @@ test("confirm probe: rolling aliases admit coffee and transit and deliver like e
   const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
   await assertRollingAliasParity(f, earlier, true);
 });
+
+for (const hideOnRetry of [true, false]) {
+  test(hideOnRetry ? "rolling retry fails closed when its ranked fence rejects July 31" :
+    "rolling retry delivers when its ranked fence passes", async t => {
+    let id = 0;
+    t.mock.method(crypto, "randomUUID", () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`);
+    const f = ledgerFixture();
+    const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
+    const later = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
+    const transit = await f.capture("Transit cost 12 USD.", amount("bus", 12, "transport"), lastDay, project);
+    const query = "本週coffee和交通總共多少？";
+    const namespaces = [scope.namespace, project.namespace];
+    const ids = items => items.map(({ ref }) => ref.id);
+    const attempts = [];
+    const reader = f.reader({ afterFormatting: [
+      items => {
+        attempts.push(ids(items));
+        f.hide(earlier.id);
+      },
+      items => {
+        attempts.push(ids(items));
+        if (hideOnRetry) f.hide(later.id);
+      },
+    ] });
+    const result = await reader.read(query, namespaces).then(value => ({ value }), error => ({ error }));
+    assert.equal(reader.searches, 2);
+    assert.equal(attempts.length, 2);
+    assert.ok(attempts[0].includes(earlier.id));
+    assert.ok(!attempts[1].includes(earlier.id));
+    assert.ok(attempts[1].includes(later.id));
+
+    if (hideOnRetry) {
+      assert.ok(reader.rejected.includes(later.id));
+      f.show(earlier.id);
+      f.show(later.id);
+      const noLedger = f.reader({ capable: false, afterFormatting(items) {
+        assert.ok(ids(items).includes(later.id));
+        f.hide(later.id);
+      } });
+      const expected = await noLedger.read(query, namespaces).catch(error => error);
+      assert.equal(expected.code, "snapshot_stale");
+      assert.equal(noLedger.searches, 1);
+      assert.ok(noLedger.rejected.includes(later.id));
+      const delivered = result.value && ids(result.value.assembly.items);
+      assert.ok(!delivered?.includes(later.id), "July 31 was delivered after its fence rejected it");
+      assert.deepEqual(result.error, expected);
+    } else {
+      const { assembly } = result.value;
+      assert.deepEqual(ids(assembly.items), attempts[1]);
+      assert.deepEqual(sourceIds(assembly.ledgerDigest), [later.id, transit.id].sort());
+    }
+  });
+}
 
 test("witness-only probe: unused earlier evidence leaves both rolling digests intact", async () => {
   const f = ledgerFixture();
