@@ -1,7 +1,7 @@
 import { documentCardVisible } from "@cairn-ink/core/routing";
 import { exactReceiptTurn } from "./context-raw-read.mjs";
 import { receiptProjector } from "./inspect.mjs";
-import { readEntry } from "./memory-rows.mjs";
+import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { exactScope } from "./placement-visibility.mjs";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
@@ -20,6 +20,7 @@ import { readFacts, scopedSuppression } from "./suppressions.mjs";
 /** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @import { PlacementVisibility } from "./placement-visibility.mjs" */
 /** @import { RawRow } from "./raw-rows.mjs" */
+/** @import { StoredReceipt } from "./receipt-identity.mjs" */
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
 
 /** @param {DocumentCardSourceMessage} source */
@@ -75,8 +76,20 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         if (++count > maxLinks) return true;
         const memoryId = String(record.memory_id), current = visibleMemory(memoryId);
         if (!current || current.historical) return true;
-        const safe = project(record);
-        if (!safe || !exactReceiptTurn(db, scope, memoryId, safe.receipt, row)) return true;
+        let receipt;
+        if (record.excerpt == null) {
+          // Capture retains the address without copying an excerpt. Prove the
+          // address and the exact admitted turn before using that lineage.
+          const stored = /** @type {StoredReceipt} */ (decodeJson(record.body));
+          const legacy = typeof record.legacy_receipt_key === "string" ? record.legacy_receipt_key : undefined;
+          if (!receiptReadSafety(db, scope, policy, stored, stored.receiptKey ?? legacy, legacy,
+            stored.legacyRawAncestryEmpty)) return true;
+          receipt = stored;
+        } else {
+          receipt = project(record)?.receipt;
+        }
+        if (!receipt || receipt.client !== source.client || receipt.sessionId !== source.sessionId ||
+            receipt.messageId !== source.messageId || !exactReceiptTurn(db, scope, memoryId, receipt, row)) return true;
       }
       return false;
     }

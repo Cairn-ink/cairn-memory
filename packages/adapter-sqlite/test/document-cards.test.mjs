@@ -145,40 +145,35 @@ test("card generations track effective operations, rollback and a concurrent wri
     throw new Error("rollback");
   }), /rollback/);
 
-  const reader = await openSqliteAdapter(path, { capabilities: { documentCards: true } });
+  const live = imported("live", "Live text");
+  await write(tx => cards.put(tx, scope, live));
+  const liveRef = { ...ref, id: live.id };
+  let started, resume;
+  const ready = new Promise(resolve => { started = resolve; });
+  const committed = new Promise(resolve => { resume = resolve; });
+  const original = run(adapter, async tx => {
+    assert.equal((await cards.visibilityInputs(tx, scope, [liveRef]))[0].card.id, live.id);
+    started();
+    await committed;
+    assert.equal((await cards.visibilityInputs(tx, scope, [liveRef]))[0].card.id, live.id);
+    return tx;
+  }, true);
   try {
-    const live = imported("live", "Live text");
-    await write(tx => cards.put(tx, scope, live));
-    const liveRef = { ...ref, id: live.id };
-    let started, resume;
-    const ready = new Promise(resolve => { started = resolve; });
-    const committed = new Promise(resolve => { resume = resolve; });
-    const original = run(reader, async tx => {
-      assert.equal((await reader.documentCards.visibilityInputs(tx, scope, [liveRef]))[0].card.id, live.id);
-      started();
-      await committed;
-      assert.equal((await reader.documentCards.visibilityInputs(tx, scope, [liveRef]))[0].card.id, live.id);
-      return tx;
-    }, true);
     await Promise.race([ready, original]);
-    try {
-      await write(async tx => {
-        await cards.hide(tx, scope, live.id, "forget");
-        await cards.put(tx, foreign, imported("other", "Independent", foreign));
-      });
-    } finally {
-      resume();
-    }
-    const ended = await original;
-    await assert.rejects(reader.documentCards.visibilityInputs(ended, scope, [liveRef]), { code: "internal_error" });
-    assert.deepEqual(await run(reader, tx => reader.documentCards.visibilityInputs(tx, scope, [liveRef]), true), [null]);
-    await run(adapter, async tx => {
-      assert.equal(await generation(tx), 8);
-      assert.equal(await generation(tx, foreign), 1);
-    }, true);
+    await write(async tx => {
+      await cards.hide(tx, scope, live.id, "forget");
+      await cards.put(tx, foreign, imported("other", "Independent", foreign));
+    });
   } finally {
-    await reader.close();
+    resume();
   }
+  const ended = await original;
+  await assert.rejects(cards.visibilityInputs(ended, scope, [liveRef]), { code: "internal_error" });
+  assert.deepEqual(await run(adapter, tx => cards.visibilityInputs(tx, scope, [liveRef]), true), [null]);
+  await run(adapter, async tx => {
+    assert.equal(await generation(tx), 8);
+    assert.equal(await generation(tx, foreign), 1);
+  }, true);
 });
 
 test("hashed capture amends an archived card and forget erases the card and amendment", async t => {
@@ -207,7 +202,13 @@ test("hashed capture amends an archived card and forget erases the card and amen
     assert.equal(detected, 1);
     const read = () => fixture.read(tx => adapter.documentCards.get(tx, scope, cardId));
     assert.deepEqual((await read()).amendments.map(({ quote, sentence }) => [quote, sentence]), [[update, update]]);
-    assert.equal((await fixture.service.forget(scope, first.memories[0].id, source)).status, "forgotten");
+    const memoryId = first.memories[0].id;
+    const delivered = await fixture.service.read(scope, { type: "memory", id: memoryId });
+    assert.equal(delivered.status, "found");
+    assert.equal(delivered.receipts.length, 1);
+    assert.equal("sessionKeyHash" in delivered.receipts[0], false);
+    assert.equal("messageKey" in delivered.receipts[0], false);
+    assert.equal((await fixture.service.forget(scope, memoryId, source)).status, "forgotten");
     assert.equal(await read(), null);
     await fixture.read(tx => {
       const ref = { id: cardId, type: "card", namespace: scope.namespace };

@@ -111,10 +111,18 @@ export function rankLexical(documents, terms, depth) {
   return rankScores(scored).slice(0, depth);
 }
 
-/** @param {Connection} db @param {Entry} entry @returns {HydratedItem} */
-function hydrateRow(db, { row }) {
-  const receipts = readReceipts(db, row.scope, row.id).map(({ client, sessionId, messageId, role, occurredAtMs }) =>
-    ({ client, sessionId, messageId, role, occurredAtMs }));
+/** @param {Connection} db @param {Entry} entry @param {SessionHasher} [lineageHash] @returns {HydratedItem} */
+function hydrateRow(db, { row }, lineageHash) {
+  const receipts = readReceipts(db, row.scope, row.id).flatMap(receipt => {
+    const { client, sessionId, messageId, role, occurredAtMs, legacyReceiptKey, legacy } = receipt;
+    const address = { client, sessionId, messageId, role, occurredAtMs };
+    if (!lineageHash) return [address];
+    // Forget joins opaque span keys to the retained clear source selectors.
+    const sessions = legacyReceiptKey !== undefined && legacy?.spans?.length
+      ? new Set(legacy.spans.map(span => span.sessionId)) : [sessionId];
+    return Array.from(sessions, spanSession => ({ ...address, messageKey: messageId,
+      sessionKeyHash: lineageHash(row.scope, client, spanSession) }));
+  });
   let firstMs = null;
   let lastMs = null;
   for (const { occurredAtMs } of receipts) {
@@ -222,7 +230,8 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
         return port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") invalidInput();
-          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), entry => hydrateRow(db, entry));
+          const lineageHash = visibleCardRefs && intent === "read" && !tx.readOnly ? hashSession : undefined;
+          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), entry => hydrateRow(db, entry, lineageHash));
         });
       },
     },
