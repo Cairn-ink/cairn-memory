@@ -402,6 +402,17 @@ export interface ContextAssemblyValue {
   items: readonly ContextAssemblyItem[];
 }
 
+export type ContextLedgerErrorStage = "terms" | "scan" | "evidence" | "seal" | "snapshot";
+
+/** Content-free counters for optional ledger work. Absent when none were recorded. */
+export interface ContextLedgerDiagnostics {
+  ledger_digest_trimmed?: number;
+  digest_line_too_large?: number;
+  ledger_digest_empty?: number;
+  ledger_digest_omitted?: number;
+  ledger_digest_error?: Partial<Record<ContextLedgerErrorStage, number>>;
+}
+
 export interface ContextAssemblyDiagnostics {
   version: "context-read-v1";
   policy: { id: ContextAssemblyPolicy };
@@ -424,6 +435,7 @@ export interface ContextAssemblyDiagnostics {
   trace: { timings: { assemblyMs: number }; counterCalls: number };
   coverage: { raw: ContextRawCoverage };
   candidates: ContextCandidateDiagnostics & { count: number };
+  ledger?: ContextLedgerDiagnostics;
 }
 
 export interface ReadContextResult {

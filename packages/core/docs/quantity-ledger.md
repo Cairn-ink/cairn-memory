@@ -79,6 +79,21 @@ uncertain state excludes the row.
 
 `readIntent` checks the query against the store's terms before listing
 rows. English cues and the fixed Chinese aliases work with stored terms.
+The same matching selects the summaries. A food question limits the reading
+to food, including its categories. A coffee question includes the coffee
+category, its group and the measure total. A question that names only the
+measure includes its total and group summaries. Goals follow the same scope.
+`readIntent` also checks the terms of visible rows in each namespace.
+
+Every delivered number uses the full set of eligible rows for its summary.
+For example, a measure total shown with a coffee line counts all eligible
+rows for that measure and unit in the window. Their sources are cited even
+when their group or category lines are absent. A removed line releases its
+rows only when no surviving line uses them. The citation list is the union
+of the contributing memory refs. Delivery rechecks the exact contributing
+ledger row keys and the evidence fence for each cited memory. This includes
+an earlier record when it contributes to a delivered goal.
+
 `parseWindow` uses UTC days. “This week” and 這週 or 本週 use the last 7 days.
 “This month” and 這個月 use the last 30 days. Both include the as-of day and
 end at the next UTC midnight. The digest states the rolling reading in its
@@ -91,8 +106,35 @@ follows each summary with its calendar total, count and daily average. Calendar
 weeks start on Monday and calendar months start on the first. A reading with no
 records for a summary shows a zero total, zero records and a zero average. The
 optional comparison extends the checked source range to cover both readings.
-If a stale calendar contribution shares a memory with a rolling source, the digest is withheld for that read.
-The digest and its sources use one item slot and count toward the formatted read.
+A stale cited row withholds the affected digest. A calendar change may still
+allow the rolling digest when its cited evidence remains valid.
+
+The digest uses one item slot. If the ordinary pack can deliver ranked memory,
+the digest must leave at least one ranked memory in the pack. The pack
+measures the incremental token cost of the formatted digest, including the
+body and all citations, using the same formatter and tokenizer as the read.
+Apply the limits in this order.
+
+1. Keep a ranked item when the ordinary pack has one. Trim or omit the digest
+   if it cannot fit alongside one.
+2. Keep answering lines whole with all their citations. Directly answering
+   summaries can use up to 60% of `maxTokens`. Omit a whole answering line
+   when that line alone exceeds 60%.
+3. Include other lines while their incremental cost fits within 30% of
+   `maxTokens`. This counts their text and any citations they add beyond
+   the answering lines. Shared citations count toward the answering lines.
+   Drop subtotals first, then non-answering category lines from the smallest
+   total up, then non-answering group lines. Drop remaining optional
+   context as needed. If any line was dropped, append
+   `More ledger rows not shown.` to a delivered digest.
+
+Read diagnostics report `ledger_digest_trimmed` as a count of dropped lines,
+`digest_line_too_large` as a count of individual answering lines above 60%,
+`ledger_digest_empty` when a matching scan yields no deliverable lines, and
+`ledger_digest_omitted` when a planned digest can't be delivered.
+`ledger_digest_error` counts failures by coarse stage (`terms`, `scan`,
+`evidence`, `seal`, or `snapshot`). A failed check withholds that digest.
+The counters carry no query terms, values or source identifiers.
 
 Supply checked rows to `digest` for totals, counts, daily averages and weekly
 or monthly subtotals. Units stay separate. Currency displays two decimals,
@@ -104,14 +146,3 @@ goals use the requested window, including the rolling days for “this week”
 and “this month”. Each comparator has its own latest goal. Goal status
 compares the total and limit at the unit's display precision. A goal with no
 matching records in the requested window reports that absence.
-
-In a synthetic Saturday read with one Sunday transit record and one Saturday
-food record, `tiktoken` `o200k_base` `encode_ordinary` measured these counts.
-The formatted-read cost is the token difference between the same JSON read
-with and without the digest, including its generated source refs.
-
-| Reading | Body tokens | Formatted-read tokens |
-| --- | ---: | ---: |
-| Calendar week on core-next | 90 | 156 |
-| Rolling week, default | 170 | 294 |
-| Rolling week with calendar comparisons | 318 | 442 |

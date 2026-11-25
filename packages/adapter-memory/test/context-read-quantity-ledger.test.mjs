@@ -95,27 +95,31 @@ test("forget and stale row gates exclude hidden, historical, corrected, unretain
   assert.deepEqual(item.sources.map(({ memory }) => memory.id), [keep.id]);
 });
 
-test("a whole digest uses one slot and yields to normal items when it exceeds the token budget", async () => {
+test("a whole digest yields to normal items when it exceeds the token budget", async () => {
   const f = fixture({ monotonicMs: () => performance.now() });
   await f.capture("Food: soup cost 4 USD.", Array.from({ length: 12 }, (_, i) =>
     amount("category " + i + " with additional detail", 4)));
+  for (let i = 0; i < 8; i++) {
+    await f.capture(`Herbal tea receipt ${i} cost 5 USD.`, [amount("tea", 5)]);
+  }
   await f.card();
   for (const raw of [false, true]) {
     const request = { types: ["memory", "card"], raw };
     const api = f.reader();
-    const only = await f.read(api, { ...request, budget: { maxItems: 1 } });
+    const only = await f.read(api, { ...request, query: "今天餐費多少？" });
     assert.equal(only.assembly.items.length, 0);
     assert.ok(only.assembly.ledgerDigest);
     assert.equal(only.diagnostics.budget.used, fixtureCount(formatAssembly(only.assembly)));
-    if (raw) assert.equal(only.diagnostics.coverage.raw, "included");
 
     const off = f.reader({ enabled: false });
     const maxTokens = (await f.read(off, request)).diagnostics.budget.used + 8;
+    assert.equal(maxTokens, raw ? 129 : 100);
     assert.ok(maxTokens >= 64 && only.diagnostics.budget.used > maxTokens);
     const baseline = await f.read(off, { ...request, budget: { maxTokens } });
     assert.deepEqual(new Set(baseline.assembly.items.map(({ ref }) => ref.type)), new Set(["memory", "card"]));
     const bounded = await f.read(api, { ...request, budget: { maxTokens } });
     assert.deepEqual(bounded.assembly, baseline.assembly);
+    assert.ok(bounded.diagnostics.ledger.digest_line_too_large);
     assert.equal(bounded.diagnostics.budget.used, fixtureCount(formatAssembly(bounded.assembly)));
   }
 });

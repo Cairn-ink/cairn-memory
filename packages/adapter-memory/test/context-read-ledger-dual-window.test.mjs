@@ -6,7 +6,7 @@ import { amount, fixture, project, readSet, scope } from "./fixtures/context-rea
 
 const firstDay = Date.UTC(2026, 6, 1);
 const lastDay = Date.UTC(2026, 6, 31);
-const month = { query: "How much did I spend this month?", types: ["memory"], intent: "current", raw: false, budget: { maxItems: 1 } };
+const month = { query: "How much did I spend this month?", types: ["memory"], intent: "current", raw: false, budget: { maxItems: 2 } };
 const sourceIds = digest => digest.sources.map(({ memory }) => memory.id).sort();
 const monthlyGoal = (category, value) => ({ ...amount(category, value), kind: "goal", period: "month", comparator: "at_most" });
 const rollingBody = body => body.replace(/(?:Calendar month so far: [^.]+|[A-Z][a-z ]*, calendar month so far: .*? per day)\. /gu, "");
@@ -25,8 +25,11 @@ function ledgerFixture() {
 
   function reader({ enabled = true, calendarReading, capable = true, afterFormatting } = {}) {
     const scans = [];
+    const rejected = [];
+    let searches = 0;
     let beforeRead;
-    let mutate = afterFormatting;
+    const mutations = [afterFormatting].flat();
+    let formattedItems;
     const api = createMemoryService({
       profile: "keyless-local",
       config: { quantityLedger: { enabled, calendarReading } },
@@ -47,11 +50,19 @@ function ledgerFixture() {
         } }),
         fence: {
           async assertVisible(...args) {
-            return (await f.base.fence.assertVisible(...args)).filter(ref => !hidden.has(ref.id));
+            return (await f.base.fence.assertVisible(...args)).filter(ref => {
+              if (!hidden.has(ref.id)) return true;
+              rejected.push(ref.id);
+              return false;
+            });
           },
         },
         contextRead: {
           ...f.base.contextRead,
+          lexical(...args) {
+            searches++;
+            return f.base.contextRead.lexical(...args);
+          },
           // Freeze generations by default and allow the forget probe to advance one.
           ...(afterFormatting && { async snapshotState(_tx, { namespaces }) {
             return namespaces.map(() => ({ memory: generation, card: 1 }));
@@ -70,14 +81,18 @@ function ledgerFixture() {
       },
       contextReadCounter: { count: fixtureCount },
       contextReadFormat(value) {
-        if (value.ledgerDigest && mutate) {
-          beforeRead = mutate;
-          mutate = undefined;
+        if (Boolean(value.ledgerDigest) === capable) {
+          formattedItems = value.items;
+          if (!beforeRead && mutations[0]) {
+            const callback = mutations.shift();
+            beforeRead = () => callback(formattedItems);
+          }
         }
         return formatAssembly(value);
       },
     });
-    return { scans, read: (query = month.query, namespaces) => api.readContext(readSet(namespaces), { ...month, query }) };
+    return { scans, rejected, get searches() { return searches; },
+      read: (query = month.query, namespaces) => api.readContext(readSet(namespaces), { ...month, query }) };
   }
 
   async function forget(id) {
@@ -158,12 +173,78 @@ test("review probe: off-path delivery agrees with explicit day counts when unuse
       outcomes.push({ window, delivered: !!assembly.ledgerDigest });
     }
   }
-  assert.deepEqual(outcomes, ["this week", "last 7 days", "this month", "last 30 days"].map(window => ({ window, delivered: false })));
+  assert.deepEqual(outcomes, ["this week", "last 7 days", "this month", "last 30 days"].map(window => ({ window, delivered: true })));
 });
 
-test("confirm probe: rolling aliases admit coffee and transit and deliver like explicit days", async () => {
+test("confirm probe: rolling aliases admit coffee and transit and deliver like explicit days", async t => {
+  // The two coffee memories tie on coffee alone. Put the earlier ID first.
+  let id = 0;
+  t.mock.method(crypto, "randomUUID", () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`);
   const f = ledgerFixture();
   const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
+  await assertRollingAliasParity(f, earlier, true);
+});
+
+for (const hideOnRetry of [true, false]) {
+  test(hideOnRetry ? "rolling retry fails closed when its ranked fence rejects July 31" :
+    "rolling retry delivers when its ranked fence passes", async t => {
+    let id = 0;
+    t.mock.method(crypto, "randomUUID", () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`);
+    const f = ledgerFixture();
+    const earlier = await f.capture("Coffee cost 18 USD.", amount("coffee", 18), firstDay);
+    const later = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
+    const transit = await f.capture("Transit cost 12 USD.", amount("bus", 12, "transport"), lastDay, project);
+    const query = "本週coffee和交通總共多少？";
+    const namespaces = [scope.namespace, project.namespace];
+    const ids = items => items.map(({ ref }) => ref.id);
+    const attempts = [];
+    const reader = f.reader({ afterFormatting: [
+      items => {
+        attempts.push(ids(items));
+        f.hide(earlier.id);
+      },
+      items => {
+        attempts.push(ids(items));
+        if (hideOnRetry) f.hide(later.id);
+      },
+    ] });
+    const result = await reader.read(query, namespaces).then(value => ({ value }), error => ({ error }));
+    assert.equal(reader.searches, 2);
+    assert.equal(attempts.length, 2);
+    assert.ok(attempts[0].includes(earlier.id));
+    assert.ok(!attempts[1].includes(earlier.id));
+    assert.ok(attempts[1].includes(later.id));
+
+    if (hideOnRetry) {
+      assert.ok(reader.rejected.includes(later.id));
+      f.show(earlier.id);
+      f.show(later.id);
+      const noLedger = f.reader({ capable: false, afterFormatting(items) {
+        assert.ok(ids(items).includes(later.id));
+        f.hide(later.id);
+      } });
+      const expected = await noLedger.read(query, namespaces).catch(error => error);
+      assert.equal(expected.code, "snapshot_stale");
+      assert.equal(noLedger.searches, 1);
+      assert.ok(noLedger.rejected.includes(later.id));
+      const delivered = result.value && ids(result.value.assembly.items);
+      assert.ok(!delivered?.includes(later.id), "July 31 was delivered after its fence rejected it");
+      assert.deepEqual(result.error, expected);
+    } else {
+      const { assembly } = result.value;
+      assert.deepEqual(ids(assembly.items), attempts[1]);
+      assert.deepEqual(sourceIds(assembly.ledgerDigest), [later.id, transit.id].sort());
+    }
+  });
+}
+
+test("witness-only probe: unused earlier evidence leaves both rolling digests intact", async () => {
+  const f = ledgerFixture();
+  const earlier = await f.capture("Morning espresso cost 18 USD.", amount("coffee", 18), firstDay);
+  await assertRollingAliasParity(f, earlier, false);
+});
+
+async function assertRollingAliasParity(f, earlier, rankedCoffee) {
   const coffee = await f.capture("Coffee cost 7 USD.", amount("coffee", 7), lastDay);
   const transit = await f.capture("Transit cost 12 USD.", amount("bus", 12, "transport"), lastDay, project);
   const namespaces = [scope.namespace, project.namespace];
@@ -177,11 +258,14 @@ test("confirm probe: rolling aliases admit coffee and transit and deliver like e
     ["How much coffee and transport this month? I mean this month.",
       "How much coffee and transport last 30 days? I mean last 30 days.", 30],
   ];
+  const outcomes = [];
   for (const [alias, explicit, days] of pairs) {
     const aliasReader = f.reader({ calendarReading: false });
     const explicitReader = f.reader({ calendarReading: false });
-    const rolling = (await aliasReader.read(alias, namespaces)).assembly.ledgerDigest;
-    const trailing = (await explicitReader.read(explicit, namespaces)).assembly.ledgerDigest;
+    const aliasControl = (await aliasReader.read(alias, namespaces)).assembly;
+    const explicitControl = (await explicitReader.read(explicit, namespaces)).assembly;
+    const rolling = aliasControl.ledgerDigest;
+    const trailing = explicitControl.ledgerDigest;
     for (const [query, digest] of [[alias, rolling], [explicit, trailing]]) {
       assert.match(digest?.body ?? "", /Spend: total \$19\.00 in 2 records/u, query);
       assert.deepEqual(sourceIds(digest), [coffee.id, transit.id].sort(), query);
@@ -193,18 +277,27 @@ test("confirm probe: rolling aliases admit coffee and transit and deliver like e
     }, alias);
     assert.deepEqual(aliasReader.scans, explicitReader.scans, alias);
 
-    for (const query of [alias, explicit]) {
+    for (const [query, before] of [[alias, aliasControl], [explicit, explicitControl]]) {
       let hides = 0;
-      const { assembly } = await f.reader({ calendarReading: false, afterFormatting() {
+      let selected;
+      const hasEarlier = items => items.some(item => item.ref.id === earlier.id);
+      const { assembly } = await f.reader({ calendarReading: false, afterFormatting(items) {
         hides++;
+        selected = hasEarlier(items);
         f.hide(earlier.id);
       } }).read(query, namespaces);
       f.show(earlier.id);
       assert.equal(hides, 1, query);
-      assert.equal(assembly.ledgerDigest, undefined, query);
+      const expectedSelection = rankedCoffee && (query === alias || days === 30);
+      assert.equal(hasEarlier(before.items), expectedSelection, query);
+      assert.equal(selected, expectedSelection, query);
+      outcomes.push({ query, delivered: !!assembly.ledgerDigest, hiddenDelivered: hasEarlier(assembly.items) });
+      if (assembly.ledgerDigest) assert.deepEqual(assembly.ledgerDigest, before.ledgerDigest, query);
     }
   }
-});
+  assert.deepEqual(outcomes, pairs.flatMap(([alias, explicit]) =>
+    [alias, explicit].map(query => ({ query, delivered: true, hiddenDelivered: false }))));
+}
 
 test("confirm probe: rolling labels add no ledger terms to a repeated alias", async () => {
   const f = ledgerFixture();
@@ -252,7 +345,7 @@ test("review probe: July 1 is a rolling goal source only when the monthly goal m
       assert.ok(assembly.ledgerDigest.body.includes(matching ? "actual $30.00 per month" : "no records in this window"));
       assert.deepEqual(sourceIds(assembly.ledgerDigest), [budget.id, last.id, ...(matching || calendarReading ? [first.id] : [])].sort());
       const { assembly: delivered } = await f.reader({ calendarReading, afterFormatting: () => f.hide(first.id) }).read();
-      if (!matching && calendarReading) {
+      if (!matching) {
         const clean = await f.reader().read();
         assert.deepEqual(delivered.ledgerDigest, clean.assembly.ledgerDigest);
         assert.deepEqual(sourceIds(delivered.ledgerDigest), [budget.id, last.id].sort());
