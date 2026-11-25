@@ -78,6 +78,15 @@ export function validateSuppressionFact(fact) {
   const f = /** @type {Record<string, any>} */ (fact);
   if (!str(f.owner) || !str(f.actionId, 128) || !FACT_KINDS.includes(f.kind) || !FACT_ORIGINS.includes(f.origin)) fail();
   if (f.namespace !== undefined && f.namespace !== null && !str(f.namespace)) fail();
+  if (f.legacyTextHash !== undefined && (f.kind !== "text" || !str(f.legacyTextHash) ||
+    (f.mode === "exact" ? f.origin !== "edit" : f.origin === "edit"))) fail();
+  const exemptAfterUs = f.explicitSaveExemptAfterUs;
+  if (exemptAfterUs !== undefined && (f.kind !== "text" || f.mode !== "full" ||
+    (exemptAfterUs !== "infinity" && (
+      (f.origin !== "forget" && f.origin !== "correct" && f.origin !== "backfill") ||
+      (exemptAfterUs !== "-infinity" &&
+        (typeof exemptAfterUs !== "string" || !/^(?:0|-?[1-9][0-9]*)$/u.test(exemptAfterUs)))
+    )))) fail();
   switch (f.kind) {
     case "identity":
       if (!str(f.memoryId, 512)) fail();
