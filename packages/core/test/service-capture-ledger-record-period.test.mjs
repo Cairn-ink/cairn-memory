@@ -7,7 +7,7 @@ const event = { client: 'client', sessionId: 'session', eventId: 'event' };
 const occurredAtMs = 100;
 const messages = [{
   id: 'user', role: 'user', occurredAtMs,
-  content: 'I just spent $7.98 on coffee earlier this morning, a small but regular part of my daily routine.',
+  content: 'I paid $4.25 for tea this morning, as I do most days.',
 }];
 
 async function capture(comparator) {
@@ -26,10 +26,10 @@ async function capture(comparator) {
   storage.capture.retainedReceiptIds = async (_tx, _scope, _id, receipts) =>
     receipts.map(({ messageId }) => `canonical-${messageId}`);
   hooks.model = () => ({
-    items: [{ kind: 'fact', confidence: 1, content: 'I spent $7.98 on coffee this morning.', sourceIndices: [0] }],
+    items: [{ kind: 'fact', confidence: 1, content: 'I paid $4.25 for tea this morning.', sourceIndices: [0] }],
     quantities: [{
-      item: 0, kind: 'record', measure: 'spend', value: 7.98, unit: 'USD',
-      category: 'coffee', group: 'food', period: 'day', comparator,
+      item: 0, kind: 'record', measure: 'spend', value: 4.25, unit: 'USD',
+      category: 'tea', group: 'food', period: 'day', comparator,
     }],
   });
   const service = createMemoryService(deps);
@@ -41,7 +41,7 @@ async function capture(comparator) {
 test('capture stores a grounded record returned with a day period as a dated row', async () => {
   const { rows, diagnostics } = await capture('none');
   assert.deepEqual(rows.map(({ kind, value, period, date }) => ({ kind, value, period, date })), [
-    { kind: 'record', value: 7.98, period: 'none', date: occurredAtMs },
+    { kind: 'record', value: 4.25, period: 'none', date: occurredAtMs },
   ]);
   assert.deepEqual(diagnostics, []);
 });
