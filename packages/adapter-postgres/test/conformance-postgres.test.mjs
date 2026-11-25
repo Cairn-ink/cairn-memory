@@ -464,6 +464,7 @@ const notApplicable = {
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
   "suppressions.receiptWithheld not implemented yet": ["K-RCPT-W1"],
+  "finish binding to the asserted selection not implemented yet": ["K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

@@ -42,6 +42,7 @@ function fixture({ fingerprintKey = true } = {}) {
         const { token, status } = await adapter.capture.claim(tx, key, [message], { leaseMs: 1000 });
         assert.equal(status, "claimed");
         assert.deepEqual(await raw.archive(tx, key, [message]), { archived });
+        await adapter.capture.assertEligible(tx, key, [0]);
         return adapter.capture.finish(tx, token, [{
           content: claim, kind: "fact", confidence: 0.8, textHash: "sha256:" + digest.value,
           embedding: null, receipts: [receipt],
