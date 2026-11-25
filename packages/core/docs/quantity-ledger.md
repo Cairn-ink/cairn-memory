@@ -30,8 +30,9 @@ with one count and preserves the items. Goals require a period and a comparator.
 Default validation drops records with a period or comparator other than `none`.
 Capture opts in to retaining valid period tags through validation. After numeric
 grounding, it clears the tag to `none` only when a cited user message containing
-the matching value has an occasion verb and no rate marker. Each grounded tagged
-record that fails this check emits one content-free
+the matching value has an occasion verb and no rate marker. Each record whose tag
+is cleared emits one content-free `extract/core_validation/dated_extraction_quantity`
+diagnostic. Each grounded tagged record that fails this check emits one content-free
 `extract/core_validation/periodic_extraction_quantity` diagnostic and is dropped.
 
 Before reconciliation, capture keeps a record only if a number in one of the

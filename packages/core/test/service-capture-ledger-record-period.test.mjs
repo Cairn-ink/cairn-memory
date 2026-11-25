@@ -39,11 +39,11 @@ async function capture(contents, { value = 8, period = 'day', comparator = 'none
   return { rows, diagnostics };
 }
 
-function assertDatedRow({ rows, diagnostics }) {
+function assertDatedRow({ rows, diagnostics }, expectedDiagnostics) {
   assert.deepEqual(rows.map(({ kind, value, period, date }) => ({ kind, value, period, date })), [
     { kind: 'record', value: 8, period: 'none', date: occurredAtMs },
   ]);
-  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(diagnostics, expectedDiagnostics);
 }
 
 function assertDropped({ rows, diagnostics }, reason) {
@@ -52,8 +52,11 @@ function assertDropped({ rows, diagnostics }, reason) {
 }
 
 test('capture stores a day-tagged record as a dated row when a cited occasion states its value', async () => {
-  assertDatedRow(await capture([occasion]));
-  assertDatedRow(await capture([occasion, rate]));
+  const expectedDiagnostics = [{
+    version: 1, stage: 'extract', layer: 'core_validation', reason: 'dated_extraction_quantity',
+  }];
+  assertDatedRow(await capture([occasion]), expectedDiagnostics);
+  assertDatedRow(await capture([occasion, rate]), expectedDiagnostics);
 });
 
 test('capture drops a grounded day-tagged spending rate', async () => {
@@ -77,5 +80,5 @@ test('capture drops a record with a day period and a comparator', async () => {
 });
 
 test('capture still stores a grounded untagged record in a rate message', async () => {
-  assertDatedRow(await capture([rate], { period: 'none' }));
+  assertDatedRow(await capture([rate], { period: 'none' }), []);
 });

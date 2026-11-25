@@ -245,6 +245,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           } else if (userReceipts.some(({ messageId }) => recordValues.get(messageId)?.has(rounded) &&
             isLedgerOccasion(byMessage.get(messageId)?.content ?? ""))) {
             quantities.push({ ...quantity, period: "none" });
+            emitDiagnostic(diagnostics, "extract", "core_validation", "dated_extraction_quantity");
           } else {
             emitDiagnostic(diagnostics, "extract", "core_validation", "periodic_extraction_quantity");
           }
