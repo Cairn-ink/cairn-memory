@@ -23,9 +23,12 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {import("@cairn-ink/core/ports").DocumentCardAmendment} DocumentCardAmendment */
+/** @typedef {DocumentCardAmendment | { hidden: DocumentCardAmendment } | { hiddenReason: string } | null} AmendmentEntry */
 /** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number, revision: number, bodyRevision: number,
+ * hiddenReason?: string,
  * updatedAtUs?: bigint, embedding?: {model: string, vector: number[], textVersion: number},
- * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
+ * hiddenCard?: import("./document-cards.mjs").CardWrite, amendments?: Map<string, AmendmentEntry> }} CardEntry */
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,

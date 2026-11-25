@@ -113,6 +113,44 @@ function tableDigest(tuples) {
   return sha256(JSON.stringify(encoded.sort()));
 }
 
+/** @param {LegacyInput} source @param {Plan} plan @param {string} target */
+function reportCutoverEvidence(source, plan, target) {
+  const db = new DatabaseSync(target, { readOnly: true });
+  try {
+    db.exec("PRAGMA query_only = ON; PRAGMA trusted_schema = OFF; BEGIN");
+    const record = checkRecord(migrationRecord(db), source, plan);
+    if (record.checkpoint !== 3) refuse("legacy_incomplete");
+    for (const [table, tuples] of phases(plan, source)[1]) {
+      if (!["cairn_raw_fences", "cairn_migrated_raw_privacy", "cairn_pause"].includes(table)) continue;
+      const query = db.prepare(`SELECT * FROM "${table}"`);
+      query.setReadBigInts(true);
+      if (tableDigest(query.all().map(row => Object.values(row))) !== tableDigest(tuples)) refuse("legacy_integrity_mismatch");
+    }
+    const raw = source.rawPrivacy;
+    const rules = raw?.rules ?? [];
+    return {
+      rawDeletionEvidence: {
+        sessionFences: raw?.fences.length ?? 0,
+        hideWindows: rules.filter(row => row[3] === "window").length,
+        uuidFences: rules.filter(row => row[3] === "uuid").length,
+        excludedSpans: rules.filter(row => row[3] === "span").length,
+        rawDeletionActions: raw?.actions.length ?? 0,
+        rawDeletionEffects: raw?.effects.length ?? 0,
+      },
+      captureControls: {
+        namespaces: source.episodeControls.map(row => ({
+          ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null,
+          generation: row.generation, paused: row.paused === 1n, enabled: row.enabled === 1n,
+        })),
+        disabledAutomaticCapture: source.consent.filter(row => row.automatic_capture_enabled === 0n).length,
+        rawControls: source.rawControls.length,
+        pausedOwners: plan.pausedOwners,
+        digest: sha256(encodeEvidence([source.episodeControls, source.consent, source.rawControls])),
+      },
+    };
+  } finally { db.close(); }
+}
+
 /**
  * Verify the schema, complete row populations, identity, and database
  * integrity in the very transaction that makes the file eligible to open.
@@ -142,7 +180,7 @@ function verify(db, source, plan, record, schema) {
  * Convert the current cold source into a sibling CNXT file. Keep the host's
  * quiescence barrier held until this call returns. The backup proves freshness
  * and is never the conversion source. The caller owns activation.
- * @param {MigrationInput & { onCheckpoint?: (name: Checkpoint, migrationId: string) => void }} input
+ * @param {MigrationInput & { onCheckpoint?: (name: Checkpoint, migrationId: string) => void, reportCutoverEvidence?: boolean }} input
  */
 export async function migrateLegacyStore(input) {
   const source = readMigrationInput(input);
@@ -183,10 +221,14 @@ export async function migrateLegacyStore(input) {
     archived: source.archive.counts, ledger: plan.ledger, safetyFacts: source.safety?.facts.length ?? 0,
     identityReservations: source.safety?.reservations.length ?? 0, dropped: source.dropped,
   };
-  if (observed.checkpoint === 3) return { ...result, attestation: String(observed.attestation) };
+  /** @param {string} attestation */
+  const completed = attestation => ({ ...result, attestation,
+    ...(input.reportCutoverEvidence ? reportCutoverEvidence(source, plan, target) : {}) });
+  if (observed.checkpoint === 3) return completed(String(observed.attestation));
 
   const connection = openMigrationUnitOfWork(target);
   const { migrationId } = result;
+  let attestation;
   try {
     if (observed.checkpoint === 0) input.onCheckpoint?.("initialized", migrationId);
     const steps = phases(plan, source);
@@ -207,7 +249,7 @@ export async function migrateLegacyStore(input) {
       if (advanced) input.onCheckpoint?.(name, migrationId);
     }
     source.checkSource();
-    const [attestation, advanced] = await migrationWrite(connection, db => {
+    const [proof, advanced] = await migrationWrite(connection, db => {
       const record = checkRecord(migrationRecord(db), source, plan);
       if (record.migrationId !== migrationId || record.checkpoint < 2) return refuse("legacy_incomplete");
       if (record.checkpoint === 3) return [String(record.attestation), false];
@@ -218,8 +260,10 @@ export async function migrateLegacyStore(input) {
       return [proof, true];
     });
     if (advanced) input.onCheckpoint?.("verified", migrationId);
-    return { ...result, attestation };
+    attestation = proof;
   } finally {
     await connection.close();
   }
+  // Close the migration connection before reopening the target for the cutover proof.
+  return completed(attestation);
 }

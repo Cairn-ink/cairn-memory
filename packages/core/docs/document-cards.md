@@ -134,6 +134,24 @@ During forget, the host's `dependents.invalidate` step calls
 The selector hides linked cards in the forget transaction. The linked memory
 state check in `documentCardVisible` is the read-time backstop.
 
+Purge-aware hosts implement `listForPurge` and `purgeById`. Within the
+forget transaction, Core keeps the existing source hides and asks the store
+for read inputs using only the current forget action's facts. The
+`definiteOnly` option to `documentCardVisible` classifies an ordinary
+hidden verdict. Core calls `purgeById(tx, scope, cardId, reason)` when the
+withhold is definite. Indeterminate evidence leaves the payload intact.
+
+With `purge: true`, the store erases title, body, and sentence payloads and
+retains the ID and hidden reason. Reads exclude the tombstone and `put` of
+the same ID returns `"tombstoned"`. Amendments with a definitely withheld or
+deleted source lose their sentence and quote, and their IDs stay reserved.
+On conversation deletion, proven session erasure, or withholding-based Raw
+purge, hosts erase bound payloads in the same transaction. Card sources and
+sentence sources identify cards to erase. Amendment sources identify
+amendments to erase. Bindings to blanked ledger messages count even without
+a Raw row. The store uses these bindings for every stored card, including
+cards the reader rejects.
+
 To forget a source-less card, use the store's scoped
 `hide(tx, scope, cardId, reason)` by ID and apply text withholding as for
 memories. The store excludes hidden and tombstoned IDs from reads and keeps
