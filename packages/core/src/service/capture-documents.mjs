@@ -5,6 +5,7 @@ import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extr
 import { reconcileLedgerQuantities } from "../ledger/index.mjs";
 import { QUANTITY_TEXT_FIELDS } from "../ledger/quantities.mjs";
 import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
+import { legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { withholdsAnyPassage } from "../privacy/withholds.mjs";
 import {
@@ -127,15 +128,18 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
   /**
    * @param {Tx} tx @param {CaptureKey["scope"]} scope @param {boolean} [allOrigins]
-   * @returns {Promise<(texts: readonly string[]) => Promise<boolean>>}
+   * @returns {Promise<(texts: readonly string[], legacyTexts?: readonly string[]) => Promise<boolean>>}
    */
   async function readTextWithholding(tx, scope, allOrigins = false) {
-    const facts = (await suppressions.snapshot(tx, scope, {})).passages
-      .map(({ fact }) => fact).filter(({ origin }) => allOrigins || origin === "forget");
+    const scoped = (await suppressions.snapshot(tx, scope, {})).passages
+      .map(({ fact }) => fact).filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
+    const legacyWithholds = legacyPassageMatcher(scope, scoped);
+    const facts = scoped.filter(({ origin }) => allOrigins || origin === "forget");
     const fingerprintKey = facts.length && capabilities.fingerprintKey
       ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
     const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
-    return async texts => {
+    return async (texts, legacyTexts = texts) => {
+      if (legacyWithholds && legacyTexts.some(legacyWithholds)) return true;
       if (!facts.length) return false;
       const passages = await Promise.all([...new Set(texts)].map(text =>
         fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey, undefined, digesters)));
@@ -185,7 +189,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         if (!card) continue;
         // Whole-source and extracted-memory checks can miss an exact forget of the title or a sentence.
         const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
-        if (await withholds(cardPassageTexts(card))) continue;
+        if (await withholds(cardPassageTexts(card), card.title ? [card.body, card.title] : [card.body])) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         // A card that passes the stored-state checks can still have its embedding withheld.

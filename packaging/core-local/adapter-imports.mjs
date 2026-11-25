@@ -30,7 +30,7 @@ export const adapterImports = {
   "schema/inspect.mjs": { crypto: "randomBytes", core: "CoreError receiptExcerpt" },
   "schema/open.mjs": { fs: "chmodSync realpathSync statSync", sqlite: "DatabaseSync", core: "CoreError" },
   "storage-values.mjs": { crypto: "createHash", core: "boundedText cleanContent CoreError normalizeForHash prepareCoreText receiptExcerpt PRIVACY_REDACTION_VERSIONS redactV1 validateSuppressionFact" },
-  "suppressions.mjs": { crypto: "createHmac", core: "compareUtf8 CoreError factBlocksIncoming factBody factHidesRow validateSuppressionFact" },
+  "suppressions.mjs": { crypto: "createHmac", core: "compareUtf8 CoreError factBlocksIncoming factBody factHidesRow hasLegacyPassageDigest validateSuppressionFact" },
   "topics.mjs": { crypto: "randomUUID", core: "coalesceNewTopics compareCatalogTopics compareSortKey compareUtf8 CoreError ERROR_CODES isErrorCode titleKey" },
   "uow.mjs": { async_hooks: "AsyncLocalStorage", fs: "realpathSync statSync", sqlite: "DatabaseSync", url: "pathToFileURL", util: "types", core: "CoreError" },
 };

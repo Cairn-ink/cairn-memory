@@ -105,7 +105,7 @@ export function importMethod(deps) {
         digesters ??= await keys.retainedDigesters?.(owner) ?? [];
         const prepared = await Promise.all(batch.map(async ({ raw, ...item }) => {
           const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text), digesters);
-          return { ...item, query, passages };
+          return { ...item, raw, query, passages };
         }));
         const embeddings = await embedImport(owner, prepared.map(({ text }) => text), key);
         if (embeddings === null) return paused();
@@ -218,7 +218,7 @@ export function importRawMethod({ storage }) {
           const { passages } = await suppressions.snapshot(tx, scope, {
             ...session, occurredAtMs: messages.map(({ message }) => message.occurredAtMs),
           });
-          const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+          const { legacyKeyUnavailable, matches } = captureTextWithholding(passages, scope);
           const prepared = messages.map(({ message }) => message);
           /** @type {number[]} */
           let withheld = [];
