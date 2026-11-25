@@ -436,6 +436,7 @@ const selected = new Set([
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
+  "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
@@ -463,6 +464,7 @@ const notApplicable = {
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
   "suppressions.receiptWithheld not implemented yet": ["K-RCPT-W1"],
+  "durable conversation deletion not implemented yet": ["K-RAW-DEL-1"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

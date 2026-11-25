@@ -9,6 +9,7 @@ import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
 export { CAPTURE_CONTAINMENT_CASES } from "./capture-containment-cases.mjs";
 export { CAPTURE_LATE_FORGET_CASES } from "./capture-late-forget-cases.mjs";
+export { CAPTURE_DELETE_CASES } from "./capture-delete-cases.mjs";
 export { ADMISSION_CASES } from "./admission-cases.mjs";
 export { IMPORT_TIME_CASES } from "./import-time-cases.mjs";
 export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
@@ -37,6 +38,7 @@ export { CAPTURE_DOCUMENT_FORGET_CASES } from "./capture-document-forget-cases.m
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
 export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
+export { DURABLE_DELETE_CASES } from "./durable-delete-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
