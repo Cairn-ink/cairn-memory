@@ -151,6 +151,7 @@ test("SQLite uses admitted Raw ancestry to group a turn with its retained Memory
       await sqlite.capture.beginDispatch(tx, claim.token);
       await sqlite.raw.recordLineage(tx, key, [turn]);
       assert.equal((await sqlite.raw.archive(tx, key, [turn])).archived, 1);
+      await sqlite.capture.assertEligible(tx, key, [0]);
       const finished = await sqlite.capture.finish(tx, claim.token, [{
         content: body, kind: "fact", confidence: 0.8, embedding: null, textHash: row(body).textHash,
         receipts: [{ ...session, messageId: turn.id, role: "user", occurredAtMs: null, excerpt: body }],

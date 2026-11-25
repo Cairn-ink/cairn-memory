@@ -5,12 +5,8 @@ import { rawWriter } from "../src/raw-rows.mjs";
 import { fixture, seedFact, testAccess } from "./storage-fixtures.mjs";
 
 const rawCapabilities = new Set(["rawArchive", "spanLineage"]);
-const excluded = new Set([
-  // finish binding to the asserted selection not implemented yet
-  "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
-  // Capture routing requires a DocumentCardStore.
-  "K-LEG-PASS-7-router",
-]);
+// Capture routing requires a DocumentCardStore.
+const excluded = new Set(["K-LEG-PASS-7-router"]);
 const rawCases = Object.values(kit).filter(Array.isArray).flat()
   .filter(({ id, needs, followUp }) => !excluded.has(id) && (needs.some(flag => rawCapabilities.has(flag)) ||
     followUp?.needs.some(flag => rawCapabilities.has(flag))));
