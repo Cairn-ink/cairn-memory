@@ -67,7 +67,7 @@ test("K-CAP-DEL cases reject flushing the deleted batch to Raw on the next succe
     const adapter = createMemoryAdapter(options);
     const { capture, raw } = adapter;
     const { admit } = capture;
-    const { archive, deleteConversation } = raw;
+    const { archive } = raw;
     let admitted;
     let pending;
     capture.admit = async (tx, key, messages) => {
@@ -80,7 +80,9 @@ test("K-CAP-DEL cases reject flushing the deleted batch to Raw on the next succe
         pending = admitted;
         admitted = undefined;
       }
-      return deleteConversation(tx, scope, session);
+      // Model a store without the durable fence: erase without fencing the conversation.
+      const { rawDeleted } = await raw.eraseSessions(tx, scope, [session]);
+      return { rawDeleted };
     };
     raw.archive = async (tx, key, messages) => {
       const result = await archive(tx, key, messages);
@@ -100,7 +102,7 @@ test("K-CAP-DEL cases reject a delayed flush that a repeated delete would clear"
     const adapter = createMemoryAdapter(options);
     const { capture, raw } = adapter;
     const { admit } = capture;
-    const { archive, deleteConversation } = raw;
+    const { archive } = raw;
     let admitted;
     let pending;
     capture.admit = async (tx, key, messages) => {
@@ -115,7 +117,9 @@ test("K-CAP-DEL cases reject a delayed flush that a repeated delete would clear"
         pending = admitted;
         admitted = undefined;
       }
-      return deleteConversation(tx, scope, session);
+      // Model a store without the durable fence: erase without fencing the conversation.
+      const { rawDeleted } = await raw.eraseSessions(tx, scope, [session]);
+      return { rawDeleted };
     };
     raw.archive = async (tx, key, messages) => {
       const result = await archive(tx, key, messages);
@@ -134,12 +138,13 @@ test("K-CAP-DEL cases reject a delete that blanks and fences Raw rows", async ()
   await rejectsCaptureDelete(options => {
     const adapter = createMemoryAdapter(options);
     const { raw } = adapter;
-    const { deleteConversation } = raw;
     raw.deleteConversation = async (tx, scope, session) => {
       const { items } = await raw.listRaw(tx, { owner: scope.owner, namespaces: [scope.namespace] }, { cursor: null, limit: 20 });
       const messages = items.filter(row => row.client === session.client && row.sessionId === session.sessionId)
         .map(({ messageId, role, occurredAtMs }) => ({ id: messageId, role, occurredAtMs, content: "" }));
-      const result = await deleteConversation(tx, scope, session);
+      // Model a store without the durable fence: erase without fencing, then re-insert blanked rows.
+      const { rawDeleted } = await raw.eraseSessions(tx, scope, [session]);
+      const result = { rawDeleted };
       if (messages.length > 0) {
         const key = { scope, ...session, eventId: crypto.randomUUID(), payloadDigest: "a".repeat(64) };
         assert.equal((await raw.archive(tx, key, messages)).archived, messages.length);
