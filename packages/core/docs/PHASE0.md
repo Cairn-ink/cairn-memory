@@ -1233,3 +1233,31 @@ It consumes one item slot. Include the complete body and all sources only
 when they fit the budget. Each `memory` is a distinct qualified compact ref
 for attribution. The `items` array retains ordinary refs and ranks, and
 snapshot tokens cover the selected ordinary Memory and Card evidence.
+
+## Addendum 24 — Legacy SHA passage withholding
+
+At write time, full-mode text facts with a keyless hosted-v1 SHA-256 digest
+and no usable shingles match every contiguous run of whole sentences in
+the incoming text. Use the writing owner's scoped facts and the historical
+hosted hash normalization and redaction spellings. Sentence boundaries
+include line breaks and terminal punctuation in Latin and CJK text. When
+closing quotes or brackets immediately follow a terminator, boundaries fall
+both after the terminator and after the closing marks.
+A fullwidth period always marks a boundary. A lone ASCII period immediately
+before an ASCII letter or digit stays inside the sentence, as in `3.14` and
+`v1.2`.
+If the NFKC text contains Greek capital sigma (Σ), also match the spelling lowercased in whole-text context using the same boundaries.
+
+A match has the same outcome as a whole-text digest match on explicit save,
+capture, import, document routing and correction. Apply this check before
+the explicit-save shingle exemption. With an applicable fact, suppress
+texts over 2,000 sentences or 200,000 UTF-16 code units even when the vector
+is distant. With no applicable fact, skip sentence processing.
+
+SHA-only matching has limited coverage for substrings inside a sentence,
+bullet-prefixed lines and paraphrases. Keyed shingle containment and
+exact-mode matching keep their existing rules.
+
+Capture re-screens after admission use the prepared text. If preparation
+changed the spelling of a secret-bearing passage that was forgotten after
+admission, detection at finish depends on the stored source checks.

@@ -442,6 +442,8 @@ const selected = new Set([
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
   "CAPTURE-LEDGER-1", "CAPTURE-FORGET-3",
+  "K-LEG-PASS-1", "K-LEG-PASS-2", "K-LEG-PASS-3", "K-LEG-PASS-4", "K-LEG-PASS-5", "K-LEG-PASS-6",
+  "K-LEG-PASS-7", "K-LEG-PASS-7-raw-import", "K-LEG-PASS-8", "K-LEG-PASS-9", "K-LEG-PASS-10", "K-LEG-PASS-N1", "K-LEG-PASS-N2",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
@@ -459,7 +461,8 @@ const notApplicable = {
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session", "CAPTURE-CARD-1", "CAPTURE-AMEND-1",
-    "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2", "T-CARD-PURGE-1", "T-CARD-PURGE-2", "CAPTURE-LEDGER-2"],
+    "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2", "T-CARD-PURGE-1", "T-CARD-PURGE-2", "CAPTURE-LEDGER-2",
+    "K-LEG-PASS-7-router"],
   "topics.cards": ["T-TCARD-1", "T-TCARD-2", "T-TCARD-3", "T-TCARD-4", "T-TCARD-5", "T-TCARD-6", "T-TCARD-7", "T-TCARD-8", "T-TCARD-9", "T-TCARD-10"],
   "topics.forCards": ["T-FOR-CARDS-1", "T-FOR-CARDS-2", "T-FOR-CARDS-3", "T-FOR-CARDS-4", "T-FOR-CARDS-5", "T-FOR-CARDS-6", "T-FOR-CARDS-7", "T-FOR-CARDS-8", "T-FOR-CARDS-9"],
   rationaleEdges: ["T-RAT-content", "T-RAT-correct", "T-RAT-currentness", "T-RAT-degree", "T-RAT-duplicate", "T-RAT-forget",

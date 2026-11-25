@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, validateSuppressionFact } from "@cairn-ink/core";
+import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, hasLegacyPassageDigest, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { legacyRawHash, opaqueSessionHash } from "./migrate/raw-privacy.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
@@ -279,7 +279,8 @@ export function scopedSuppression(db, scope, hashSession) {
             text.digests.every(digest => digest.keyId === null) ? capture : capturePassages;
           const result = factBlocksIncoming(stored, { scope, passages }, rules);
           // Let core handle legacy-only digest domains even on a comparable miss.
-          return result !== false || (text.digests.every(digest => digest.keyId !== null) &&
+          return result !== false || (passages.length > 0 && hasLegacyPassageDigest(stored.fact)) ||
+            (text.digests.every(digest => digest.keyId !== null) &&
             text.digests.some(digest => (digest.label ?? digest.pipeline) !== "core"));
         }),
       };

@@ -3,6 +3,7 @@ import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
+import { legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -273,10 +274,10 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
 }
 
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
- * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
+ * @param {string} raw @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
  * @param {TextFact["sourceMemory"]} [edit]
  */
-async function withheld(suppressions, tx, scope, source, passages, key, edit) {
+async function withheld(suppressions, tx, scope, source, raw, passages, key, edit) {
   const snapshot = await writeSnapshot(suppressions, tx, scope, source, { passages });
   if (snapshot.blockedSession || snapshot.blockedMessages.length) return true;
   const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
@@ -288,21 +289,25 @@ async function withheld(suppressions, tx, scope, source, passages, key, edit) {
     }
   }
   const facts = scopedPassageFacts(scope, passagesInSnapshot);
-  return facts === null || blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
+  // The explicit-save shingle exemption does not apply to legacy SHA passages.
+  return facts === null || legacyPassageMatcher(scope, passagesInSnapshot)?.(raw) ||
+    blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
 }
 
 /** @param {SuppressionStore} suppressions @param {Tx} tx @param {Scope} scope @param {SourceRef} source
- * @param {readonly {passages: PassageFingerprint[], createdAtMs?: number}[]} batch
+ * @param {readonly {raw: string, passages: PassageFingerprint[], createdAtMs?: number}[]} batch
  */
 export async function fullWriteWithholds(suppressions, tx, scope, source, batch) {
   // A scoped snapshot also supplies containment facts omitted by adapters without row shingles.
   const snapshot = await writeSnapshot(suppressions, tx, scope, source, {
     occurredAtMs: batch.map(({ createdAtMs }) => createdAtMs ?? null),
   });
-  const facts = scopedPassageFacts(scope, snapshot.passages.map(({ fact }) => fact));
+  const stored = snapshot.passages.map(({ fact }) => fact);
+  const facts = scopedPassageFacts(scope, stored);
+  const legacyWithholds = legacyPassageMatcher(scope, stored);
   const blocked = new Set(snapshot.blockedMessages);
-  return batch.map(({ passages }, i) => snapshot.blockedSession || blocked.has(i) ||
-    facts === null || withholdsAnyPassage(passages, facts));
+  return batch.map(({ raw, passages }, i) => snapshot.blockedSession || blocked.has(i) ||
+    facts === null || legacyWithholds?.(raw) || withholdsAnyPassage(passages, facts));
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps
@@ -408,7 +413,7 @@ export function writeMethods(deps) {
           throw new CoreError("fingerprint_key_mismatch");
         }
         if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
-            await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
+            await withheld(suppressions, tx, scope, source, raw, passages, key)) return suppressed();
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
         const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
         if (decision.status === "suppressed") return suppressed();
@@ -504,7 +509,7 @@ export function writeMethods(deps) {
             throw new CoreError("fingerprint_key_mismatch");
           }
           if ((receipts?.length && await withheldReceipt(tx, scope, receipts[0])) ||
-              await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
+              await withheld(suppressions, tx, scope, source, raw, passages, key, { id, createdAtMs: current.createdAtMs })) {
             return /** @type {const} */ ({ status: "suppressed" });
           }
           const policy = await memories.readWritePolicy(tx, scope, [query], source, "full", id);
