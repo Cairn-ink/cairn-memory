@@ -27,12 +27,10 @@ function readIndexRevision(tx, committed) {
   return runOperation(tx, async (query, run) => {
     // The owner lock or the read-only snapshot keeps the revision stable before the first advance.
     let value = run.indexStart;
-    if (value === undefined) {
+    if (value === undefined || committed) {
       const { rows: [row] } = await query("SELECT index_revision::text FROM core_owner_state WHERE user_id = $1",
         [tx.owner]);
       value = BigInt(row?.index_revision ?? "0");
-    } else if (committed) {
-      value += 1n;
     }
     const revision = Number(value);
     if (!Number.isSafeInteger(revision) || revision < 0) throw new CoreError("internal_error");

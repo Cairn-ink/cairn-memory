@@ -1,4 +1,5 @@
 import { CoreError, factBlocksIncoming, validateSuppressionFact } from "../../core/src/index.mjs";
+import { finishedReceiptMessages } from "./capture-finish.mjs";
 import { copyMessages } from "./capture-input.mjs";
 import { createCaptureProofs } from "./capture-source.mjs";
 import { copyReceipts, inputText } from "./memory-input.mjs";
@@ -225,13 +226,15 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
   async function receiptWithheld(tx, scope, input, admitted) {
     const scoped = readScope(tx, scope, allowNonNullNamespace);
     const [receipt] = copyReceipts([input]);
-    inputText(input.excerpt);
-    const messages = admitted === undefined ? [] : copyMessages([admitted]);
-    if (messages.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
+    const excerpt = inputText(input.excerpt);
+    const supplied = admitted === undefined ? undefined : copyMessages([admitted]);
+    if (supplied?.some(message => message.id !== receipt.messageId || message.role !== receipt.role || !message.content)) {
       return true;
     }
     return runOperation(tx, async (query) => {
       try {
+        // The transaction-local outbox can supply proof only while Raw would accept it.
+        const messages = supplied ?? await finishedReceiptMessages(query, tx, scoped, receipt, excerpt);
         await assertReceiptSource(query, scoped, receipt, captureProofs, hashSessionKey, messages);
         return false;
       } catch (error) {

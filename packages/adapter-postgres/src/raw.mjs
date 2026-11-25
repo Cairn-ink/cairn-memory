@@ -1,6 +1,6 @@
 import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
 import {
-  copyArray, copyKey, copyMessages, copyScope, decodeOutboxMessages, decodeRequest, hostedTime, identifier, pgText, readInput,
+  copyArray, copyKey, copyMessages, copyScope, decodeOutboxMessages, hostedTime, identifier, readInput,
 } from "./capture-input.mjs";
 import { refreshFinishRevisions } from "./capture-finish.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
@@ -9,9 +9,10 @@ import { terminateDirectClaims } from "./capture.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
+import { archiveCandidates, rawMessageStorable } from "./raw-archive.mjs";
 import { createImportTextFilter, copyWithheldPositions, rawSpanFilter } from "./raw-import.mjs";
 import { LATE_PROVEN_CLOSURE, MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
-import { purgeRawText, scrubLedger } from "./raw-purge.mjs";
+import { dropSourceQuantities, purgeRawText, scrubLedger } from "./raw-purge.mjs";
 import { conversationSessions, rawSession } from "./raw-session.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
@@ -61,10 +62,6 @@ const DELETE = `DELETE FROM raw_messages r
   WHERE r.user_id = $1
     AND (r.client, r.session_id) = (target.client, target.session_id) RETURNING 1`;
 
-const LOCK_ARCHIVE_OUTBOX = `SELECT raw_request, core_outbox_metadata FROM capture_events
-  WHERE user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
-    AND core_namespace IS NULL AND (core_admitted OR core_payload_digest IS NULL) FOR UPDATE`;
-
 /** @param {Session} session */
 function copySession(session) {
   return { client: identifier(session?.client), sessionId: identifier(session?.sessionId) };
@@ -83,9 +80,10 @@ async function erase(query, run, scope, sessions) {
   const fenced = await changeSessions(query, scope, sessions, FENCE);
   const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
   const rawDeleted = await changeSessions(query, scope, sessions, DELETE);
+  const quantitiesDeleted = await dropSourceQuantities(query, scope, sessions);
   const { ledgerBlanked, ledgerChanged } = sessions.length ? await scrubLedger(query, scope, sessions) :
     { ledgerBlanked: 0, ledgerChanged: false };
-  if (fenced || suppressed || rawDeleted || ledgerChanged) await advanceIndex(query, scope.owner, run);
+  if (fenced || suppressed || rawDeleted || quantitiesDeleted || ledgerChanged) await advanceIndex(query, scope.owner, run);
   return { rawDeleted, ledgerBlanked };
 }
 
@@ -111,10 +109,7 @@ function rawScope(scope) {
 /** @param {readonly CaptureMessage[]} messages */
 function copyArchiveMessages(messages) {
   const batch = copyMessages(messages);
-  for (const { id, content } of batch) {
-    identifier(id);
-    if (!pgText(content)) throw new CoreError("invalid_input");
-  }
+  if (!batch.every(rawMessageStorable)) throw new CoreError("invalid_input");
   return batch;
 }
 
@@ -190,35 +185,10 @@ export function createPostgresRawPorts(options) {
         rawScope(capture.scope);
         const batch = copyArchiveMessages(messages);
         return async (query, run) => {
-          const times = batch.map(({ occurredAtMs }) => occurredAtMs);
-          // An unrepresentable time cannot be archived as an unknown time.
-          const hostedTimes = times.map((time) => time === null ? null : hostedTime(time) ?? undefined);
-          const withheld = hostedTimes.filter((time) => time === undefined).length;
-          const result = { archived: 0, ...(withheld > 0 && { withheld }) };
-          if (!times.length) return result;
-          let positions = await filterSources(query, capture, times, await captureProofs(capture, batch),
-            "raw", captureProofs, hashSessionKey, false, batch);
-          if (!positions.length) return result;
-          const { scope, client, sessionId, eventId } = capture;
-          const { rows: [outbox] } = await query(LOCK_ARCHIVE_OUTBOX, [scope.owner, client, sessionId, eventId]);
-          if (outbox) {
-            const { messages: stored } = decodeRequest(outbox.raw_request);
-            const metadata = decodeRequest(outbox.core_outbox_metadata);
-            const eligible = new Set(stored.flatMap((/** @type {{id: string, content: string}} */ { id, content }, /** @type {number} */ index) =>
-              content ? [JSON.stringify([metadata?.[index]?.id ?? id, content])] : []));
-            positions = positions.filter((index) => {
-              const { id, content } = batch[index];
-              return eligible.has(JSON.stringify([id, content]));
-            });
-          }
-          const facts = await readVisibilityFacts(query, scope.owner, { rawSpans: true });
-          const spanBlocked = rawSpanFilter(facts, capture, hashSessionKey);
-          const records = positions.flatMap((index) => {
-            const occurred_at = hostedTimes[index];
-            if (occurred_at === undefined || spanBlocked(batch[index])) return [];
-            return [archiveRecord(batch[index], occurred_at)];
-          });
-          return { ...result, archived: await archiveRecords(tx, query, run, capture, records) };
+          if (!batch.length) return { archived: 0 };
+          const { candidates, withheld } = await archiveCandidates(query, capture, batch, captureProofs, hashSessionKey);
+          const records = candidates.map(({ message, occurredAt }) => archiveRecord(message, occurredAt));
+          return { archived: await archiveRecords(tx, query, run, capture, records), ...(withheld > 0 && { withheld }) };
         };
       });
     },
@@ -319,8 +289,11 @@ export function createPostgresRawPorts(options) {
             if (await terminateDirectClaims(query, target.owner, session)) claimsTerminated = true;
           }
           const rawDeleted = await changeSessions(query, target, sessions, DELETE);
+          const quantitiesDeleted = await dropSourceQuantities(query, target, sessions);
           const { ledgerChanged } = await scrubLedger(query, target, sessions);
-          if (fenced || claimsTerminated || rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
+          if (fenced || claimsTerminated || rawDeleted || quantitiesDeleted || ledgerChanged) {
+            await advanceIndex(query, target.owner, run);
+          }
           return { rawDeleted };
         };
       });

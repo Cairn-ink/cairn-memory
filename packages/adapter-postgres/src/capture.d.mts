@@ -11,7 +11,7 @@ export interface CaptureOptions {
   allowNonNullNamespace?: boolean;
 }
 
-export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter & CaptureFinish;
+export function createPostgresCapturePorts(options: CaptureOptions): Required<CaptureClaim> & SourceFilter & Required<CaptureFinish>;
 
 export function terminateDirectClaims(
   query: Connection["query"], owner: string, source: { client: string; sessionId: string },

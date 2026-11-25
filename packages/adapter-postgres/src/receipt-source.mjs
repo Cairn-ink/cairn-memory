@@ -1,5 +1,7 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { filterSources, hasRawFence } from "./capture-source.mjs";
+import { readRawSpanFacts } from "./memory-visibility.mjs";
+import { rawSpanFilter } from "./raw-import.mjs";
 import { conversationSessions } from "./raw-session.mjs";
 
 /** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
@@ -26,14 +28,19 @@ export async function assertReceiptSource(query, scope, receipt, signer, hashSes
     WHERE ${address} AND forgotten_at IS NOT NULL LIMIT 1`, params);
   if (tombstones.length) throw new CoreError("suppressed");
   if (scope.namespace === null) {
-    const { rows } = await query(`SELECT role, content, floor(EXTRACT(EPOCH FROM occurred_at) * 1000)::text AS occurred_at_ms
+    const { rows } = await query(`SELECT client, role, content, floor(EXTRACT(EPOCH FROM occurred_at) * 1000)::text AS occurred_at_ms
       FROM raw_messages WHERE ${address}`, params);
+    const facts = rows.length ? await readRawSpanFacts(query, scope, messageId) : [];
     for (const row of rows) {
       const occurredAtMs = row.occurred_at_ms === null ? null : Number(row.occurred_at_ms);
       if (row.role !== role || !row.content || (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs))) {
         throw new CoreError("suppressed");
       }
-      messages.push({ id: messageId, role, occurredAtMs, content: row.content });
+      const message = { id: messageId, role, occurredAtMs, content: row.content };
+      const spanBlocked = rawSpanFilter(facts, { ...source, client: row.client }, hashSessionKey);
+      // The receipt cites the stored message regardless of the excerpt it carries.
+      if (spanBlocked(message, row.content.length)) throw new CoreError("suppressed");
+      messages.push(message);
     }
   }
   const times = [...messages.map(message => message.occurredAtMs), ...(lease?.times ?? [])];
