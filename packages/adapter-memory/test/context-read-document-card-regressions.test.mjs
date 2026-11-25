@@ -65,6 +65,7 @@ test("receipt ancestry withholds only the amendment when its capture memory is f
     const claim = await f.capture.claim(tx, admission, [message], { leaseMs: 1000 });
     assert.equal(claim.status, "claimed");
     assert.deepEqual(await f.raw.archive(tx, admission, [message]), { archived: 1 });
+    await f.capture.assertEligible(tx, admission, [0]);
     const { memories } = await f.capture.finish(tx, claim.token, [{
       content: change, textHash: "sha256:" + admission.payloadDigest, kind: "fact",
       confidence: 1, embedding: null, receipts: [receipt],

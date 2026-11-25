@@ -48,7 +48,14 @@ interface FactMatchRowFields {
 }
 
 export type FactMatchRow = FactMatchRowFields & (
-  | { type?: "memory"; memoryId: string; revision?: number }
+  | {
+    type?: "memory";
+    memoryId: string;
+    revision?: number;
+    /** Physical row metadata used by full text facts with an explicit-save exemption. */
+    sourceKind?: string;
+    createdAtUs?: bigint | "-Infinity" | "Infinity";
+  }
   | { type: "raw"; sessionKeyHash: string; messageKey: string; startUtf16: number; endUtf16: number }
 );
 

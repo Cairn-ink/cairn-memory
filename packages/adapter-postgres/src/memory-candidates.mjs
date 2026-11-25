@@ -1,7 +1,7 @@
 import { compareSortKey, compareUtf8, tokenizeT1 } from "../../core/src/index.mjs";
 import { copyReadScope, guardOwner, inputText, invalid } from "./memory-input.mjs";
 import { SUPPRESSION_DISTANCE, SUPPRESSION_DISTANCE_TOLERANCE } from "../../core/src/privacy/fact-match.mjs";
-import { readCandidate } from "./memory-rows.mjs";
+import { CREATED_AT_US, readCandidate } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { MEMORY_FILTER, memoryScopeParams } from "./retrieval-scope.mjs";
 import { runOperation } from "./uow.mjs";
@@ -98,6 +98,7 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
             // Normalize before the float32 cast so narrow but nonzero facts retain their direction.
             const norm = Math.hypot(...vector);
             return [{ namespace: fact.namespace == null ? null : JSON.stringify(fact.namespace),
+              exempt_after_us: fact.explicitSaveExemptAfterUs ?? null,
               embedding: vector.length === VECTOR_DIMENSION && norm > 0 && Number.isFinite(norm)
                 ? JSON.stringify(vector.map(x => x / norm)) : null }];
           });
@@ -119,11 +120,13 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
             const boundary = ann ? `ORDER BY ${distance} FETCH FIRST $9 ROWS WITH TIES`
               : `ORDER BY ${NEWEST} LIMIT $9 OFFSET $10`;
             const vectorFacts = vectors.length ? `, vector_facts AS MATERIALIZED (
-              SELECT * FROM jsonb_to_recordset($11::jsonb) AS f(namespace text, embedding vector(1536))
+              SELECT * FROM jsonb_to_recordset($11::jsonb) AS f(namespace text, embedding vector(1536), exempt_after_us numeric)
             )` : "";
             const suppression = vectors.length ? `EXISTS (
               SELECT 1 FROM vector_facts f
               WHERE f.namespace IS NOT DISTINCT FROM m.core_namespace
+                AND NOT (f.exempt_after_us IS NOT NULL AND m.source_kind IN ('mcp', 'web')
+                  AND ${CREATED_AT_US} > f.exempt_after_us)
                 AND (f.embedding IS NULL OR NOT ((m.embedding <=> f.embedding) > ${SUPPRESSION_CUTOFF}
                   AND (m.embedding <=> f.embedding) <> 'NaN'::float8))
             )` : "false";
