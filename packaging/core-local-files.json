@@ -33,6 +33,7 @@
   "packages/adapter-sqlite/src/retrieval-snapshot.mjs",
   "packages/adapter-sqlite/src/retrieval.mjs",
   "packages/adapter-sqlite/src/schema/context-read.mjs",
+  "packages/adapter-sqlite/src/schema/document-cards.mjs",
   "packages/adapter-sqlite/src/schema/inspect.mjs",
   "packages/adapter-sqlite/src/schema/layout.mjs",
   "packages/adapter-sqlite/src/schema/open.mjs",

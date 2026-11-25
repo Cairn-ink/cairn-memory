@@ -27,6 +27,7 @@ export const adapterImports = {
   "receipt-read-safety.mjs": { core: "receiptExcerpt" },
   "retrieval-snapshot.mjs": { crypto: "createHmac", core: "compareUtf8 CoreError" },
   "retrieval.mjs": { core: "compareSortKey compareUtf8 CoreError createBM25 rankScores scoreBM25 termFrequencies tokenizeT1" },
+  "schema/document-cards.mjs": {},
   "schema/inspect.mjs": { crypto: "randomBytes", core: "CoreError receiptExcerpt" },
   "schema/open.mjs": { fs: "chmodSync realpathSync statSync", sqlite: "DatabaseSync", core: "CoreError" },
   "storage-values.mjs": { crypto: "createHash", core: "boundedText cleanContent CoreError normalizeForHash prepareCoreText receiptExcerpt PRIVACY_REDACTION_VERSIONS redactV1 validateSuppressionFact" },

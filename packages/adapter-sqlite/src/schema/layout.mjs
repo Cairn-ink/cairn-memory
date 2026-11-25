@@ -1,11 +1,13 @@
+import { DOCUMENT_CARD_SCHEMA } from "./document-cards.mjs";
 import { PLACEMENT_RELATION_SCHEMA } from "./placement-relations.mjs";
 
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
 // separate schema version sequence from the legacy engine. Version 5 adds
 // migration compatibility tables to the inspect and Context Read layout.
 // Version 6 adds procedural tags. Version 7 adds memory placement and relations.
+// Version 8 adds document cards and their source bindings.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 7;
+export const SQLITE_PHYSICAL_VERSION = 8;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -225,6 +227,7 @@ export const STORAGE_SCHEMA = `
       REFERENCES cairn_raw_messages ON DELETE CASCADE
   ) STRICT, WITHOUT ROWID;
 ${PLACEMENT_RELATION_SCHEMA}
+${DOCUMENT_CARD_SCHEMA}
 `;
 
 export const INITIALIZE_STORE = `
