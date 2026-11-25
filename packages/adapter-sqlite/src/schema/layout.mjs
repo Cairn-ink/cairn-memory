@@ -1,9 +1,11 @@
+import { PLACEMENT_RELATION_SCHEMA } from "./placement-relations.mjs";
+
 // ASCII "CNXT" identifies core-next stores. Their user_version starts a
 // separate schema version sequence from the legacy engine. Version 5 adds
 // migration compatibility tables to the inspect and Context Read layout.
-// Version 6 adds procedural tags.
+// Version 6 adds procedural tags. Version 7 adds memory placement and relations.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 6;
+export const SQLITE_PHYSICAL_VERSION = 7;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';
@@ -222,6 +224,7 @@ export const STORAGE_SCHEMA = `
     FOREIGN KEY (owner_id, namespace_key, client_key, session_key, message_key)
       REFERENCES cairn_raw_messages ON DELETE CASCADE
   ) STRICT, WITHOUT ROWID;
+${PLACEMENT_RELATION_SCHEMA}
 `;
 
 export const INITIALIZE_STORE = `

@@ -46,6 +46,7 @@ const adapterMembers = {
   'context-raw-read.mjs': { Buffer: ['from'] },
   'memories.mjs': { Buffer: ['from'] },
   'migrate/raw-privacy.mjs': { Buffer: ['from'] },
+  'placement-input.mjs': { Symbol: ['iterator'] },
   'port-scope.mjs': { Symbol: ['dispose', 'iterator'] },
   'raw-lineage.mjs': { Buffer: ['from'] },
   'raw-read.mjs': { Buffer: ['from'] },
