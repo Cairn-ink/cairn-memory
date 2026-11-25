@@ -174,8 +174,7 @@ function prepareRawMessage(value) {
       (role !== "user" && role !== "assistant") || typeof content !== "string" ||
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs) ||
         occurredAtMs < firstTimestampMs || occurredAtMs > lastTimestampMs))) return null;
-  const originalContent = cleanContent(content);
-  return { message: { id, role, content: prepareMessageContent(originalContent), occurredAtMs }, originalContent };
+  return { message: { id, role, content: prepareMessageContent(cleanContent(content)), occurredAtMs }, originalContent: content };
 }
 
 /** @param {unknown} input */

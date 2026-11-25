@@ -5,7 +5,7 @@ import { detach, identifier, isWellFormedText, validateDenseArray, validateObjec
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
 import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
-import { legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
+import { hasLegacyPassageDigest, legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -61,6 +61,7 @@ function prepareMessage(raw) {
 /** @param {SuppressionSnapshot["passages"]} passages @param {Scope} [scope] */
 export function captureTextWithholding(passages, scope) {
   const textFacts = passages.map(({ fact }) => fact);
+  if (!scope && textFacts.some(hasLegacyPassageDigest)) throw new CoreError("internal_error");
   const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
   const legacyWithholds = scope && legacyPassageMatcher(scope, textFacts);
   // Historical aliases are used for suppression only.

@@ -1240,14 +1240,23 @@ At write time, full-mode text facts with a keyless hosted-v1 SHA-256 digest
 and no usable shingles match every contiguous run of whole sentences in
 the incoming text. Use the writing owner's scoped facts and the historical
 hosted hash normalization and redaction spellings. Sentence boundaries
-include line breaks and terminal punctuation in Latin and CJK text.
+include line breaks and terminal punctuation in Latin and CJK text. Closing
+quotes and brackets immediately after a terminator belong to that sentence.
+A fullwidth period always marks a boundary. A lone ASCII period immediately
+before an ASCII letter or digit stays inside the sentence, as in `3.14` and
+`v1.2`.
+If the NFKC text contains Greek capital sigma (Σ), also match the spelling lowercased in whole-text context using the same boundaries.
 
 A match has the same outcome as a whole-text digest match on explicit save,
 capture, import, document routing and correction. Apply this check before
 the explicit-save shingle exemption. With an applicable fact, suppress
-texts over 2,000 sentences even when the vector is distant. With no
-applicable fact, skip sentence processing.
+texts over 2,000 sentences or 200,000 UTF-16 code units even when the vector
+is distant. With no applicable fact, skip sentence processing.
 
 SHA-only matching has limited coverage for substrings inside a sentence,
 bullet-prefixed lines and paraphrases. Keyed shingle containment and
 exact-mode matching keep their existing rules.
+
+Capture re-screens after admission use the prepared text. If preparation
+changed the spelling of a secret-bearing passage that was forgotten after
+admission, detection at finish depends on the stored source checks.

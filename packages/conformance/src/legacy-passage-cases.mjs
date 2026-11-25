@@ -1,6 +1,6 @@
 import { factIncarnationBody, hostedV1Digest } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { captureService, extract, message } from "./capture-documents-support.mjs";
+import { captureService, client, extract, message } from "./capture-documents-support.mjs";
 import { assemblyClock, fixtureCount, formatAssembly } from "./context-assembly-cases.mjs";
 import { check, equal, source } from "./support.mjs";
 
@@ -159,6 +159,21 @@ export const LEGACY_PASSAGE_CASES = [
     },
   },
   {
+    id: "K-LEG-PASS-7-raw-import", title: "withholds a quoted passage during Raw import", needs: ["rawArchive"],
+    async run(ctx) {
+      await seed(ctx);
+      const { raw } = ctx.adapter;
+      check(raw, "Expected the Raw archive");
+      const { service, scope, read } = fixture(ctx);
+      const imported = await service.importRawMessages(scope, [{ client, sessionId: "raw-import",
+        messages: [message("quoted", `${prefix} ${quote}`), message("unrelated", prefix)],
+      }]);
+      equal(imported, { imported: 1, duplicate: 0, suppressed: 1, invalid: 0 }, "Raw import suppresses only the quote");
+      const { items } = await read(tx => raw.listRaw(tx, { owner: scope.owner, namespaces: [scope.namespace] }, page));
+      equal(items.map(({ content }) => content), [prefix], "Only the unrelated message is readable");
+    },
+  },
+  {
     id: "K-LEG-PASS-7-router", title: "withholds a routed card when the passage fact arrives at finish",
     needs: ["documentCards", "rawArchive"],
     async run(ctx) {
@@ -169,6 +184,7 @@ export const LEGACY_PASSAGE_CASES = [
       const incarnation = (await ctx.hash(factIncarnationBody(fact))).slice(7);
       let puts = 0;
       let writeFactAtFinish = false;
+      let misScopeDocumentFacts = false;
       const f = fixture({ ...ctx, adapter: { ...ctx.adapter,
         capture: { ...capture, async finish(tx, token, items) {
           const result = await capture.finish(tx, token, items);
@@ -179,6 +195,13 @@ export const LEGACY_PASSAGE_CASES = [
           puts++;
           return documentCards.put(...args);
         } },
+        suppressions: { ...suppressions, async snapshot(tx, scope, candidates) {
+          const snapshot = await suppressions.snapshot(tx, scope, candidates);
+          if (!misScopeDocumentFacts || Object.keys(candidates).length) return snapshot;
+          return { ...snapshot, passages: snapshot.passages.map(stored => ({
+            ...stored, fact: { ...stored.fact, namespace: "wrong-namespace" },
+          })) };
+        } },
       } }, { documentCards: { enabled: true } });
       const introduction = "Remember this maintenance plan. " + (prefix + " ").repeat(7);
       await f.capture("route-control", "route-unrelated", [message("control", introduction.trim())]);
@@ -188,6 +211,16 @@ export const LEGACY_PASSAGE_CASES = [
       equal(puts, 1, "The router never writes the card that quotes the passage");
       equal((await f.read(tx => documentCards.list(tx, f.scope))).map(card => card.sourceMessage?.messageId),
         ["control"], "Only the control card is listed");
+
+      writeFactAtFinish = false;
+      misScopeDocumentFacts = true;
+      const selection = { client, sessionId: "route-mis-scoped", eventId: "mis-scoped-fact" };
+      const unrelated = message("mis-scoped", introduction.trim());
+      equal((await f.service.enqueueCapture(f.scope, { ...selection, messages: [unrelated] })).status,
+        "accepted", "An unrelated source reaches document screening");
+      equal(await f.service.runCapture(f.scope, selection), { status: "failed", code: "internal_error" },
+        "Document screening rejects a mis-scoped fact");
+      equal(puts, 1, "A mis-scoped fact prevents the router from writing another card");
     },
   },
   {

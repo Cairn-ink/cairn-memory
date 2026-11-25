@@ -131,10 +131,12 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    * @returns {Promise<(texts: readonly string[], legacyTexts?: readonly string[]) => Promise<boolean>>}
    */
   async function readTextWithholding(tx, scope, allOrigins = false) {
-    const scoped = (await suppressions.snapshot(tx, scope, {})).passages
-      .map(({ fact }) => fact).filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-    const legacyWithholds = legacyPassageMatcher(scope, scoped);
-    const facts = scoped.filter(({ origin }) => allOrigins || origin === "forget");
+    const textFacts = (await suppressions.snapshot(tx, scope, {})).passages.map(({ fact }) => fact);
+    if (textFacts.some(fact => fact?.owner !== scope.owner || (fact.namespace ?? null) !== scope.namespace)) {
+      throw new CoreError("internal_error");
+    }
+    const legacyWithholds = legacyPassageMatcher(scope, textFacts);
+    const facts = textFacts.filter(({ origin }) => allOrigins || origin === "forget");
     const fingerprintKey = facts.length && capabilities.fingerprintKey
       ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
     const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;

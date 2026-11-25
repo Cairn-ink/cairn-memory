@@ -439,7 +439,7 @@ const selected = new Set([
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
   "K-LEG-PASS-1", "K-LEG-PASS-2", "K-LEG-PASS-3", "K-LEG-PASS-4", "K-LEG-PASS-5", "K-LEG-PASS-6",
-  "K-LEG-PASS-7", "K-LEG-PASS-8", "K-LEG-PASS-9", "K-LEG-PASS-10", "K-LEG-PASS-N1", "K-LEG-PASS-N2",
+  "K-LEG-PASS-7", "K-LEG-PASS-7-raw-import", "K-LEG-PASS-8", "K-LEG-PASS-9", "K-LEG-PASS-10", "K-LEG-PASS-N1", "K-LEG-PASS-N2",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
