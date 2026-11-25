@@ -51,24 +51,22 @@ function checkpointSeal(storeKey, projection, fence) {
     /** @param {unknown} stored @returns {InventoryPosition | undefined} */
     decode(stored) {
       if (typeof stored !== "string" || !stored.startsWith(CHECKPOINT_PREFIX)) return undefined;
-      const bytes = Buffer.from(stored.slice(CHECKPOINT_PREFIX.length), "base64url");
+      const encoded = stored.slice(CHECKPOINT_PREFIX.length);
+      const bytes = Buffer.from(encoded, "base64url");
       const tagEnd = CHECKPOINT_IV_BYTES + CHECKPOINT_TAG_BYTES;
-      if (bytes.length <= tagEnd) return undefined;
+      if (bytes.length <= tagEnd || bytes.toString("base64url") !== encoded) return undefined;
       try {
         const decipher = createDecipheriv("aes-256-gcm", key, bytes.subarray(0, CHECKPOINT_IV_BYTES)).setAAD(binding);
         decipher.setAuthTag(bytes.subarray(CHECKPOINT_IV_BYTES, tagEnd));
-        return JSON.parse(Buffer.concat([decipher.update(bytes.subarray(tagEnd)), decipher.final()]).toString("utf8"));
+        const position = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(tagEnd)), decipher.final()]).toString("utf8"));
+        if (Array.isArray(position) && position.length === 4 && position.every(value => typeof value === "string")) {
+          return /** @type {InventoryPosition} */ (position);
+        }
       } catch {
         return undefined;
       }
     },
   };
-}
-
-/** @param {Connection} db */
-export function discardPlaintextRawCheckpoints(db) {
-  db.prepare("DELETE FROM cairn_context_raw_checkpoints WHERE published = 0 AND last_key NOT LIKE ?")
-    .run(CHECKPOINT_PREFIX + "%");
 }
 
 /**
@@ -86,10 +84,10 @@ export function reconcileRawInventory(db, readSet, epochs, storeKey, stopped, fo
   if (!force && !prior && epochs.suppression === "0" && !db.prepare(
     "SELECT 1 FROM cairn_raw_fences WHERE owner_id = ? LIMIT 1").get(readSet.owner)) return false;
   const current = prior?.fence === captured ? prior : undefined;
-  if (current?.published === 1) return true;
-  if (stopped()) return false;
   const seal = checkpointSeal(storeKey, key, captured);
   const position = seal.decode(current?.last_key);
+  if (position && current?.published === 1) return true;
+  if (stopped()) return false;
   let after = position ?? START_OF_INVENTORY;
   let examined = position ? Number(current?.examined) : 0, scanned = 0, complete = true;
   const namespaceKeys = readSet.namespaces.map(namespace => scopeKey({ owner: readSet.owner, namespace })[1]);
@@ -110,7 +108,7 @@ export function reconcileRawInventory(db, readSet, epochs, storeKey, stopped, fo
   db.prepare(`INSERT INTO cairn_context_raw_checkpoints VALUES (?, ?, ?, ?, ?)
     ON CONFLICT (projection) DO UPDATE SET fence = excluded.fence, last_key = excluded.last_key,
     examined = excluded.examined, published = excluded.published`)
-    .run(key, captured, complete ? "" : seal.encode(after), examined, Number(complete));
+    .run(key, captured, seal.encode(complete ? START_OF_INVENTORY : after), examined, Number(complete));
   return complete;
 }
 

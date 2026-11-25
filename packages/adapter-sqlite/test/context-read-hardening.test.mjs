@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { createSqliteAdapter } from "../src/adapter.mjs";
@@ -33,7 +34,7 @@ async function fixture(t) {
     adapters.push(adapter);
     return { adapter, port: storage.port };
   }
-  return { ...await open(), open };
+  return { ...await open(), open, path: file.path };
 }
 
 async function insert(adapter, text, receipts = [], now = 1) {
@@ -99,7 +100,7 @@ test("erase and forget remove lexical terms in the erasing transaction", async t
   assert.deepEqual(await retained(keep.id), [2, 4]);
 });
 
-test("an opaque Raw checkpoint resumes after reopen", async t => {
+test("Raw checkpoints resume after reopen and plaintext is replaced only by upkeep", async t => {
   const db = await fixture(t);
   const address = session("checkpoint-session");
   await archive(db.adapter, scope, address,
@@ -125,10 +126,22 @@ test("an opaque Raw checkpoint resumes after reopen", async t => {
   await testAccess(reopened, scope, { write: true }, connection =>
     connection.prepare("UPDATE cairn_context_raw_checkpoints SET last_key = ?, examined = 1024, published = 0").run(plaintext));
   await reopened.adapter.close();
-  const upgraded = await db.open();
-  assert.equal(await checkpoint(upgraded), undefined);
-  assert.equal(await upgraded.adapter.maintainContextRaw(readSet), false);
-  assert.equal(await upgraded.adapter.maintainContextRaw(readSet), true);
+  const bytes = readFileSync(db.path);
+  const readOnlyOpen = await db.open();
+  await readOnlyOpen.adapter.close();
+  assert.ok(readFileSync(db.path).equals(bytes), "Opening a store with a plaintext checkpoint changed database bytes");
+
+  const upkeep = await db.open();
+  assert.equal(await upkeep.adapter.maintainContextRaw(readSet), false);
+  const restarted = await checkpoint(upkeep);
+  assert.equal(restarted.examined, 1024);
+  assert.equal(restarted.published, 0);
+  assert.match(restarted.last_key, /^v1\.[A-Za-z0-9_-]+$/u);
+  assert.equal(await upkeep.adapter.maintainContextRaw(readSet), true);
+  const completed = await checkpoint(upkeep);
+  assert.equal(completed.examined, 1025);
+  assert.equal(completed.published, 1);
+  assert.match(completed.last_key, /^v1\.[A-Za-z0-9_-]+$/u);
 });
 
 test("fenced Raw rows do not spend the row or text caps", async t => {
