@@ -1,6 +1,7 @@
 import { chmodSync, realpathSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
+import { discardPlaintextRawCheckpoints } from "../context-raw-read.mjs";
 import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
 import { readMigratedControls } from "../migrate/capture-controls.mjs";
@@ -107,6 +108,8 @@ export async function openStorage(filename) {
           db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
           installInspectSchema(db);
           installContextReadSchema(db);
+        } else {
+          discardPlaintextRawCheckpoints(db);
         }
         return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false, controls: undefined };
       }));

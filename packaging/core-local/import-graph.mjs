@@ -43,7 +43,7 @@ const fileGlobals = new Map([
 const adapterMembers = {
   'adapter.mjs': { performance: ['now'] },
   'context-lexical.mjs': { Buffer: ['from'] },
-  'context-raw-read.mjs': { Buffer: ['from'] },
+  'context-raw-read.mjs': { Buffer: ['concat', 'from'] },
   'memories.mjs': { Buffer: ['from'] },
   'migrate/raw-privacy.mjs': { Buffer: ['from'] },
   'placement-input.mjs': { Symbol: ['iterator'] },

@@ -130,7 +130,7 @@ export function createRawLineage(storeKey, hashSession) {
         if (hasRawFence(db, target, root.sessionHash)) return false;
         const rows = rowsForMessage.all(...scopeKey(target), JSON.stringify(client), JSON.stringify(message.id))
           .map(decodeRawRow).filter(row => hashSession(target, client, row.sessionId) === root.sessionHash);
-        if (rows.length !== 1 || !visible(target, rows[0])) return false;
+        if (rows.length !== 1 || rows[0].message.role !== message.role || !visible(target, rows[0])) return false;
       }
       return true;
     },

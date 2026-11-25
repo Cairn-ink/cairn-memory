@@ -2,7 +2,7 @@ import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
 import { advanceInspectEpoch } from "./unit-of-work.mjs";
 
 /** @import { ContextReadFields, InspectItemEvidence, InspectMemoryMetadata, InspectReceipt, InspectStore,
- * Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports" */
+ * Scope, StorageAdapter, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @typedef {Pick<InspectItemEvidence, "procedural" | "qualification">} StoredInspectEvidence */
@@ -15,16 +15,27 @@ const encoder = new TextEncoder();
  * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>["receiptReadSafety"]} receiptReadSafety
  */
 export function createInspectStore(related, { port, runSeed, readTokenIdentity }, matchFacts, receiptReadSafety) {
-  /** @param {State} state @param {Scope} scope @param {number} [expectedEpoch] */
-  function epochOf(state, scope, expectedEpoch) {
-    const epoch = (state.inspectEpochs.get(scope.namespace) ?? 1) + state.rawInspectEpoch;
+  /** @param {Tx} tx @param {State} state @param {Scope} scope
+   * @param {number | undefined} expectedEpoch @param {number[]} [withheldPositions]
+   */
+  async function epochOf(tx, state, scope, expectedEpoch, withheldPositions = []) {
+    let epoch = state.inspectEpochs.get(scope.namespace) ?? 1;
     if (!Number.isSafeInteger(epoch)) throw new CoreError("internal_error");
+    if (withheldPositions.length) {
+      const { cursorKey } = await readTokenIdentity(tx);
+      const data = encoder.encode(JSON.stringify(["inspect-receipt-safety-v1", scope.owner, scope.namespace, epoch,
+        withheldPositions.sort((a, b) => a - b)]));
+      const mac = await crypto.subtle.sign("HMAC", cursorKey, data);
+      epoch = Number(new DataView(mac).getBigUint64(0) >> 12n) + 1;
+    }
     if (expectedEpoch !== undefined && expectedEpoch !== epoch) throw new CoreError("cursor_stale");
     return epoch;
   }
 
-  /** @param {State} state @param {Scope} scope @param {Entry} entry @param {Policy} policy */
-  async function visibleReceipts(state, scope, { receipts, inspectReceiptPositions, receiptKeys }, policy) {
+  /** @param {State} state @param {Scope} scope @param {Entry} entry @param {Policy} policy
+   * @param {number[]} [withheldPositions]
+   */
+  async function visibleReceipts(state, scope, { receipts, inspectReceiptPositions, receiptKeys }, policy, withheldPositions) {
     /** @type {(InspectReceipt & { position: number })[]} */
     const visible = [];
     for (const receipt of receipts) {
@@ -32,6 +43,7 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
       if (position === undefined) continue;
       const safe = await receiptReadSafety(state, scope, receipt, receiptKeys?.get(receipt), policy);
       if (safe) visible.push({ ...safe, position });
+      else withheldPositions?.push(position);
     }
     return visible;
   }
@@ -69,33 +81,42 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
 
     async list(tx, scope, { states, limit, after, expectedEpoch }) {
       return port(tx, scope, false, async state => {
-        const epoch = epochOf(state, scope, expectedEpoch);
         const policy = matchFacts(state.facts, scope);
-        const entries = Array.from(state.rows.get(scope.namespace)?.values() ?? []);
+        const entries = Array.from(state.rows.get(scope.namespace)?.values() ?? []).filter(entry =>
+          states.includes(entry.row.historical ? "historical" : "active") && !policy.hides(entry)
+        ).sort(({ row: a }, { row: b }) => compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(a.id, b.id));
         const rows = entries.filter(entry => {
           const { row } = entry;
-          return states.includes(row.historical ? "historical" : "active") &&
-            (!after || row.updatedAtUs < after.updatedAtUs ||
-              row.updatedAtUs === after.updatedAtUs && compareUtf8(row.id, after.id) > 0) && !policy.hides(entry);
-        }).sort(({ row: a }, { row: b }) => compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(a.id, b.id));
+          return !after || row.updatedAtUs < after.updatedAtUs ||
+            row.updatedAtUs === after.updatedAtUs && compareUtf8(row.id, after.id) > 0;
+        }).slice(0, limit + 1);
+        const pageEntries = new Set(rows);
+        /** @type {number[]} */
+        const withheld = [];
         const page = [];
-        for (const entry of rows.slice(0, limit + 1)) {
+        for (const entry of expectedEpoch !== undefined || rows.length > limit ? entries : rows) {
+          const retained = await visibleReceipts(state, scope, entry, policy, withheld);
+          if (!pageEntries.has(entry)) continue;
           page.push({
-            ...metadata(state, entry, (await visibleReceipts(state, scope, entry, policy)).length),
+            ...metadata(state, entry, retained.length),
             updatedAtUs: entry.row.updatedAtUs,
           });
         }
-        return { epoch, rows: page };
+        return { epoch: await epochOf(tx, state, scope, expectedEpoch, withheld), rows: page };
       });
     },
 
     async item(tx, scope, memoryId, { limit, after, expectedEpoch, includeQualification }) {
       const snapshot = await port(tx, scope, false, async state => {
-        const epoch = epochOf(state, scope, expectedEpoch);
         const entry = state.rows.get(scope.namespace)?.get(memoryId);
         const policy = matchFacts(state.facts, scope);
-        if (!entry || policy.hides(entry)) return { epoch, item: null, nextAnchor: null };
-        const retained = await visibleReceipts(state, scope, entry, policy);
+        if (!entry || policy.hides(entry)) {
+          return { epoch: await epochOf(tx, state, scope, expectedEpoch), item: null, nextAnchor: null };
+        }
+        /** @type {number[]} */
+        const withheld = [];
+        const retained = await visibleReceipts(state, scope, entry, policy, withheld);
+        const epoch = await epochOf(tx, state, scope, expectedEpoch, withheld);
         retained.sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.id, b.id));
 
         let offset = 0;

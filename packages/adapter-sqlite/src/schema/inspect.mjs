@@ -85,8 +85,8 @@ function epochTriggers(table) {
 const triggers = ["cairn_memories", "cairn_receipts", "cairn_suppression_facts", "cairn_legacy_denials",
   "cairn_inspect_evidence", "cairn_topic_memberships", "cairn_supersessions", "cairn_conflicts"].map(epochTriggers).join("");
 
-// An empty namespace key is reserved for Raw changes that can affect forks
-// in other namespaces. Ordinary inspect epochs retain their existing binding.
+// The Raw inventory and its witnesses account for forks across namespaces.
+// Inspect continuations use the namespace epoch and receipt safety instead.
 export const RAW_INSPECT_EPOCH_KEY = "";
 
 /** @param {string} table @param {boolean} crossScopeOnly */
