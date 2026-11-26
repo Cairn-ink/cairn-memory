@@ -43,7 +43,13 @@ export interface VectorCandidates {
   /** coverage.complete must be true for core to use semantic ranking; otherwise core falls back to lexical. */
   vector(tx: Tx, scope: RetrievalScope, query: Float32Array, model: string, depth: number): Promise<{
     rows: VectorRow[];
-    coverage: { eligible: number; embedded: number; complete: boolean };
+    coverage: {
+      eligible: number;
+      embedded: number;
+      complete: boolean;
+      /** Sum of ANN statement limits and row counts before JavaScript filtering. */
+      pool?: { requested: number; returned: number };
+    };
   }>;
 }
 

@@ -274,16 +274,39 @@ function sessionMatches(session, source, policy) {
   }
 }
 
-/** @param {WindowFact} fact @param {string | undefined} client @param {number | null | undefined} time @returns {FactMatchResult} */
-function windowMatches(fact, client, time) {
+/**
+ * @param {WindowFact} fact @param {string | undefined} client @param {number | null | undefined} time
+ * @param {boolean} includeUnknownTime @returns {FactMatchResult}
+ */
+function windowMatches(fact, client, time, includeUnknownTime) {
   if (fact.client !== null && nonempty(client) && fact.client !== client) return false;
   let inside;
-  if (time === null) inside = fact.unknownTime === true;
+  if (time === null) inside = includeUnknownTime && fact.unknownTime === true;
   else if (!integer(time)) return "ineligible";
   else inside = time >= fact.window.startMs && time < fact.window.endMs;
   if (!inside) return false;
   // Inside a client-specific window, an item whose client is unknown cannot be ruled out (fail closed).
   return fact.client !== null && !nonempty(client) ? "ineligible" : true;
+}
+
+/**
+ * Identifies the local host's explicit-save receipt by the legacy rule for its session and null event time.
+ * Adapters may use it to skip only the unknown-time part of window facts for the receipt's own position.
+ * Raw archived for the cited message is still checked in full.
+ * @param {unknown} receipt
+ */
+export function placeholderReceipt(receipt) {
+  if (receipt === null || typeof receipt !== "object") return false;
+  try {
+    const prototype = Object.getPrototypeOf(receipt);
+    if (Array.isArray(receipt) || (prototype !== Object.prototype && prototype !== null)) return false;
+    const time = Object.getOwnPropertyDescriptor(receipt, "occurredAtMs");
+    const session = Object.getOwnPropertyDescriptor(receipt, "sessionId");
+    return time !== undefined && Object.hasOwn(time, "value") && time.value === null &&
+      session !== undefined && Object.hasOwn(session, "value") && session.value === "explicit-tool";
+  } catch {
+    return false;
+  }
 }
 
 /** @param {bigint | "-Infinity" | "Infinity" | undefined} createdAtUs @param {string} cutoff */
@@ -314,7 +337,8 @@ function hidesRow(fact, row, policy) {
     case "session":
       return sessionMatches(fact.session, row.source, policy);
     case "window":
-      return windowMatches(fact, row.source?.client, row.source?.occurredAtMs);
+      if (fact.anchor === "pm30min" && row.type === "memory") return false;
+      return windowMatches(fact, row.source?.client, row.source?.occurredAtMs, row.type !== "memory");
     case "rawSpan":
       if (row.type === "memory" && nonempty(row.memoryId)) return false;
       if (row.type !== "raw") return "ineligible";
@@ -338,7 +362,7 @@ function blocksIncoming(fact, incoming, policy) {
     case "session":
       return sessionMatches(fact.session, incoming.session, policy);
     case "window":
-      return windowMatches(fact, incoming.session?.client, incoming.occurredAtMs);
+      return windowMatches(fact, incoming.session?.client, incoming.occurredAtMs, policy.mode === "capture");
     case "identity":
     case "rawSpan":
       return false;

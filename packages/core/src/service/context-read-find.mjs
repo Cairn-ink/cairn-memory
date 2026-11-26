@@ -22,7 +22,7 @@ import { embedRecallQuery } from "./recall.mjs";
 /** @typedef {{v: 1, r: string, b: string, c: string, a: string, g: string, e: number, p: number, q?: string}} Cursor */
 /** @typedef {ReturnType<typeof readTokenSigner>} Signer */
 /** @typedef {Awaited<ReturnType<EmbedQuery["embedQuery"]>>} Embedding */
-/** @typedef {{ result?: Promise<EmbeddingAttempt> }} QueryEmbedding */
+/** @typedef {{ result?: Promise<EmbeddingAttempt>, attempt?: EmbeddingAttempt }} QueryEmbedding */
 /** @typedef {{ embedding: Embedding, elapsed: number } | { cause: "unavailable" | "timeout", elapsed: number }} EmbeddingAttempt */
 /** @typedef {{ ref: ItemRef, score: number, qualified: ContextMemoryRef }} SemanticRow */
 /** @typedef {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities" | "documentCards"> &
@@ -179,6 +179,34 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
   const cardsEnabled = hasContextCardLoader(documentCards);
   const documentCardsOnly = storage.capabilities.documentCards && !storage.capabilities.cards;
   const now = () => clock.monotonicMs();
+  /** @param {FindCandidatesInput} input */
+  function semanticSelection({ semantic, intent, types }) {
+    const hasVector = storage.capabilities.semanticRetrieval === true && !!storage.vector;
+    const semanticRequested = semantic ?? (!!embedQuery && hasVector);
+    const queryEmbedder = semanticRequested && hasVector && intent === "current" && types.includes("memory") ? embedQuery : undefined;
+    return { semanticRequested, queryEmbedder };
+  }
+
+  /** @param {QueryEmbedding} memo @param {EmbedQuery} queryEmbedder @param {string} owner
+   * @param {string} query @param {CallOptions & {deadlineAtMs: number}} options */
+  function startEmbedding(memo, queryEmbedder, owner, query, options) {
+    return memo.result ??= attemptEmbedding(queryEmbedder, gate, owner, query, now, options)
+      .then(attempt => { memo.attempt = attempt; return attempt; });
+  }
+
+  /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input
+   * @param {CallOptions & {deadlineAtMs: number}} options */
+  function startAssemblyEmbedding(readSet, input, options) {
+    if (!store || storage.capabilities.contextRead !== true) return;
+    const { queryEmbedder } = semanticSelection(input);
+    if (!queryEmbedder) return;
+    /** @type {QueryEmbedding} */
+    const memo = {};
+    // Lexical preflight can fail before find needs to join the embedding.
+    void startEmbedding(memo, queryEmbedder, readSet.owner, input.query, options).catch(() => {});
+    return memo;
+  }
+
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadRef} ref
    * @param {FindCandidatesInput["intent"]} intent @param {Generations | undefined} generations */
   async function visibleCard(tx, readSet, ref, intent, generations) {
@@ -204,9 +232,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     if (!store || storage.capabilities.contextRead !== true) throw new CoreError("capability_unavailable");
     const { query, types, intent, semantic, cursor, limit } = input;
     const selection = { types, intent };
-    const hasVector = storage.capabilities.semanticRetrieval === true && !!storage.vector;
-    const semanticRequested = semantic ?? (!!embedQuery && hasVector);
-    const queryEmbedder = semanticRequested && hasVector && intent === "current" && types.includes("memory") ? embedQuery : undefined;
+    const { semanticRequested, queryEmbedder } = semanticSelection(input);
     const deadlineAtMs = Math.min(clock.monotonicMs() + input.deadlineMs, options.deadlineAtMs ?? Infinity);
     const stopped = () => options.signal?.aborted || clock.monotonicMs() >= deadlineAtMs;
     const diagnostics = preflight(types, semanticRequested, store.maintenanceAvailable);
@@ -221,7 +247,11 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
 
     async function prepareSemantic() {
       if (!queryEmbedder) return;
-      const attempt = await (memo.result ??= attemptEmbedding(queryEmbedder, gate, readSet.owner, query, now, portOptions));
+      recordEmbedding(await startEmbedding(memo, queryEmbedder, readSet.owner, query, portOptions));
+    }
+
+    /** @param {EmbeddingAttempt} attempt */
+    function recordEmbedding(attempt) {
       diagnostics.trace.timings.embeddingMs = attempt.elapsed;
       if ("cause" in attempt) diagnostics.channels.semantic = { state: "unavailable", causes: [attempt.cause] };
       else diagnostics.trace.embedder = attempt.embedding.model;
@@ -229,9 +259,8 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
 
     /** @param {Tx} tx */
     async function readSemantic(tx) {
-      if (!memo.result) return;
-      const attempt = await memo.result;
-      if ("cause" in attempt) return;
+      const attempt = memo.attempt;
+      if (!attempt || "cause" in attempt) return;
       try {
         const result = await semanticCandidates(storage, tx, readSet, attempt.embedding);
         if (result?.coverage.complete === true && result.rows.length) diagnostics.channels.semantic = { state: "ready", causes: [] };
@@ -241,21 +270,26 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       }
     }
 
-    if (cursor === undefined) {
-      if (semanticRequested && !embedQuery) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
-      if (stopped()) return unavailable();
+    const prepareLexical = async () => {
+      if (stopped()) return false;
       if (store.prepareLexical) {
         const started = clock.monotonicMs();
         try {
           diagnostics.trace.maintenance = await store.prepareLexical(readSet, selection, portOptions);
         } catch (error) {
-          if (error instanceof CoreError && error.code === "index_unavailable") return unavailable();
+          if (error instanceof CoreError && error.code === "index_unavailable") return false;
           throw error;
         } finally {
-          diagnostics.trace.timings.maintenanceMs = clock.monotonicMs() - started;
+          diagnostics.trace.timings.maintenanceMs += clock.monotonicMs() - started;
         }
       }
-      if (queryEmbedder) await prepareSemantic();
+      return true;
+    };
+
+    if (cursor === undefined) {
+      if (semanticRequested && !embedQuery) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
+      if (!await prepareLexical()) return unavailable();
+      if (queryEmbedder && (!forAssembly || !memo.result)) await prepareSemantic();
     }
 
     const rank = () => uow.run(readSet.owner, { readOnly: true }, async tx => {
@@ -313,6 +347,12 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       }
       if (stopped()) return unavailable();
 
+      if (forAssembly && memo.result) {
+        // Release the read transaction before waiting on the model. If the
+        // attempt is pending, repeat lexical and vector in a shared snapshot.
+        if (!memo.attempt) return { embed: true };
+        recordEmbedding(memo.attempt);
+      }
       const semanticResult = semanticRequested ? await readSemantic(tx) : undefined;
       const fusionStarted = clock.monotonicMs();
       const lexicalRows = lexical.rows.map(({ ref, score }) => {
@@ -371,6 +411,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     const ranked = await rank();
     if (!("embed" in ranked)) return ranked;
     await prepareSemantic();
+    if (forAssembly && !await prepareLexical()) return unavailable();
     const continued = await rank();
     if ("embed" in continued) throw new CoreError("internal_error");
     return continued;
@@ -387,6 +428,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     return result;
   }
   return {
+    startAssemblyEmbedding,
     /** @type {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
     findCandidates: async (readSet, input, options = {}) => (await search(readSet, input, options, false)).result,
     /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options @param {QueryEmbedding} memo */

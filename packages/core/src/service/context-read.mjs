@@ -17,8 +17,10 @@ import { entry } from "./entry.mjs";
 /** @import { LedgerCheck, LedgerReading, LedgerSelection } from "./context-read-assembly-evidence.mjs" */
 /** @import { KeylessMemoryServiceDeps } from "./index.d.mts" */
 /** @typedef {KeylessMemoryServiceDeps["storage"] & Partial<Pick<ReadContractStorage, "quantityLedger" | "memories">>} KeylessStorage */
-/** @typedef {Awaited<ReturnType<ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"]>>} AssemblyCandidates */
+/** @typedef {ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>} CandidateMethods */
+/** @typedef {Awaited<ReturnType<CandidateMethods["findForAssembly"]>>} AssemblyCandidates */
 /** @typedef {{ witness: string, selection?: LedgerSelection }} RollingWitness */
+/** @typedef {{ started: number, result?: ReturnType<typeof readRawChannel> }} OverlappingRaw */
 
 const MAX_BYTES = 65_536;
 const SNAPSHOT_LIMIT = 16_384;
@@ -100,23 +102,28 @@ async function beforeLedgerDeadline(now, deadline, signal, attempt) {
 }
 
 /** @param {{ storage: KeylessStorage | ReadContractStorage, clock: ClockAndHash,
- * find: ReturnType<typeof import("./context-read-find.mjs").findCandidatesMethod>["findForAssembly"],
+ * find: CandidateMethods["findForAssembly"], startEmbedding?: CandidateMethods["startAssemblyEmbedding"],
  * fetch: ReturnType<typeof import("./context-read-assembly-evidence.mjs").fetchForAssembly>,
  * calendarReading?: boolean,
  * counter?: KeylessMemoryServiceDeps["contextReadCounter"], format?: KeylessMemoryServiceDeps["contextReadFormat"] }} deps
  * @returns {NonNullable<MemoryService["readContext"]>} */
-export function readContextMethod({ storage, clock, find, fetch, counter, format, calendarReading = false }) {
+export function readContextMethod({ storage, clock, find, startEmbedding, fetch, counter, format, calendarReading = false }) {
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
    * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
-   * @param {Parameters<typeof find>[3]} embedding
+   * @param {Parameters<typeof find>[3]} embedding @param {OverlappingRaw | undefined} overlappingRaw
    * @param {RollingWitness & { asOfMs: number, candidates: AssemblyCandidates }} [expectedRolling] */
-  async function assemble(readSet, input, options, deadline, includeLedger, embedding, expectedRolling) {
+  async function assemble(readSet, input, options, deadline, includeLedger, embedding, overlappingRaw, expectedRolling) {
     const { candidate, budget, policy, representation, raw, lexicalOnly } = input;
+    const readRaw = () => readRawChannel(raw ? storage.contextRead?.raw : undefined,
+      storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline, overlappingRaw?.started);
+    const pendingRaw = overlappingRaw && (overlappingRaw.result ??= readRaw());
     /** @type {AssemblyCandidates} */
     let found;
     try {
-      found = await find(readSet, candidate, { ...options, deadlineAtMs: deadline }, embedding);
+      const pendingFind = find(readSet, candidate, { ...options, deadlineAtMs: deadline }, embedding);
+      if (pendingRaw) [found] = await Promise.all([pendingFind, pendingRaw]);
+      else found = await pendingFind;
     } catch (error) {
       if (expectedRolling && error instanceof CoreError && error.code === "evidence_unavailable") {
         // The index can still name a newly hidden memory. Reuse the prior
@@ -136,8 +143,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
       ...(channels.semantic.state === "ready" && { ranks: items.map(({ channels }) => ({
         lexical: channels.lexical?.rank ?? null, semantic: channels.semantic?.rank ?? null,
       })) }) };
-    const rawRead = await readRawChannel(raw ? storage.contextRead?.raw : undefined,
-      storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
+    const rawRead = await (pendingRaw ?? readRaw());
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
       candidate.types.includes("memory") && hasLedgerCue(candidate.query)
       ? { query: candidate.query, asOfMs: expectedRolling?.asOfMs ?? clock.nowMs(), calendarReading } : undefined;
@@ -318,7 +324,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     // A stale ranked item or generation can invalidate the pack independently
     // of the ledger. Refresh ranked evidence once and require the rolling witness.
     if (refreshRolling !== undefined && now() < deadline) {
-      return assemble(readSet, input, options, deadline, true, embedding,
+      return assemble(readSet, input, options, deadline, true, embedding, overlappingRaw,
         { ...refreshRolling, asOfMs: ledgerRequest.asOfMs, candidates: found });
     }
     return enriched ?? fallback(scannedLedger ? { ledger_digest_omitted: 1 } : {}, {});
@@ -327,13 +333,22 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     /** @type {CallOptions} */ options) => {
     const readSet = contextReadSet(value);
     const input = readInput(request);
-    const deadline = Math.min(now() + input.candidate.deadlineMs, options.deadlineAtMs ?? Infinity);
-    const embedding = {};
+    const started = now();
+    const deadline = Math.min(started + input.candidate.deadlineMs, options.deadlineAtMs ?? Infinity);
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    const call = { signal, deadlineAtMs: deadline };
     try {
-      return await assemble(readSet, input, options, deadline, true, embedding);
-    } catch (error) {
-      if (error !== refreshAssembly) throw error;
-      return assemble(readSet, input, options, deadline, false, embedding);
+      const earlyEmbedding = !signal.aborted && started < deadline
+        ? startEmbedding?.(readSet, input.candidate, call) : undefined;
+      const embedding = earlyEmbedding ?? {};
+      const overlappingRaw = earlyEmbedding ? { started } : undefined;
+      return await assemble(readSet, input, call, deadline, true, embedding, overlappingRaw).catch(error => {
+        if (error !== refreshAssembly) throw error;
+        return assemble(readSet, input, call, deadline, false, embedding, overlappingRaw);
+      });
+    } finally {
+      controller.abort();
     }
   }, undefined, snapshotContextCall);
   return async (readSet, request, options = {}) => {

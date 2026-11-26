@@ -1369,3 +1369,31 @@ Known limits:
   conversation where the explicit save happened.
 - Where explicit receipts carry finite times, a window also withholds explicit
   saves whose receipts fall inside it.
+
+## Addendum 29 — Query embedding alongside lexical and Raw work
+
+A Context Read that attempts query embedding starts one memoized recall
+embedding at the read's start alongside lexical maintenance, lexical search
+and Raw search. For that read, the Raw cutoff is the earlier of 50 ms before
+the read deadline and the point 40% of the way from read start to deadline.
+Find joins the embedding before semantic ranking and fusion, and
+an embedding error or timeout leaves lexical and Raw evidence available.
+Reads without a query embedding run Raw after find and measure its window
+from the start of Raw work.
+
+## Addendum 32 — Explicit window fences never hide memories
+
+This amends Addendum 28. A window with `anchor: "pm30min"` never hides a
+memory row, whatever the memory's times. Only `config.explicitWindowFence`
+writes such windows, on forget and on correct. A correction therefore keeps its
+replacement visible at the same ID, as Addendum 20 requires. Memories saved
+near a forgotten one also stay visible.
+
+These windows still fence Raw rows, router cards, receipt excerpts for turns
+inside them, and capture and import admission inside them. The forgotten
+memory stays hidden by its identity fact, and its text by its text fact.
+Windows without the anchor keep their existing matching.
+
+Known limit: an adapter that decides placement reads from a memory's receipts
+can still drop that memory from a placement read when one of its receipts
+falls inside such a window. Direct reads still return the memory.

@@ -3,7 +3,7 @@ import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 
 /** @import { InspectReceipt, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { State } from "./unit-of-work.mjs" */
-/** @typedef {Receipt & { createdAtMs?: number, captureEventId?: string }} StoredReceipt */
+/** @typedef {Receipt & { createdAtMs?: number, captureEventId?: string, includeUnknownTime?: true }} StoredReceipt */
 /** @typedef {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} Policy */
 
 /** @param {Pick<Receipt, "client" | "sessionId" | "messageId" | "role" | "excerpt">} receipt */
@@ -26,7 +26,7 @@ export function receiptExcerptDenial(namespace, excerpt) {
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["receiptSourcesVisible"]} [rawSourcesVisible]
  */
 export function createReceiptReadSafety(ringKeys, rawSourcesVisible) {
-  /** @param {State} state @param {Scope} scope @param {Receipt & { excerpt: string }} receipt
+  /** @param {State} state @param {Scope} scope @param {StoredReceipt & { excerpt: string }} receipt
    * @param {Policy} policy @param {string} [key] @param {string} [admittedContent]
    */
   async function receiptWithheld(state, scope, receipt, policy, key, admittedContent) {
