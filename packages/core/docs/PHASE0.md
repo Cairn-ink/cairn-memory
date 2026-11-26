@@ -966,7 +966,8 @@ advances the index.
 - `affectedSessions`, a list of scoped `{ client, sessionId, effect }` with `effect: "hide" | "erase"`.
   Only proven closure authorizes session erasure. Identity-only links and unknown proofs are hide-only.
   `affectedMessages` lists exact scoped `{ client, sessionId, messageId }` selectors for resolved Raw or
-  card sources. `affectedSpans` lists resolved `{ sessionKeyHash, messageKey, start, end }` with
+  card sources and includes Raw deletion metadata for forget as defined in Addendum 30 §5.
+  `affectedSpans` lists resolved `{ sessionKeyHash, messageKey, start, end }` with
   store-defined half-open offsets. These lists identify the resolved evidence. A text fact can affect
   additional rows. Use the same transaction to apply a fact to those wider results; never infer an
   unbounded purge from an empty list.
@@ -1456,3 +1457,19 @@ predecessor ID and exact creation time inside `onCorrect`. The engine conformanc
 synthetic host table so they can verify callback order, metadata, the shared transaction and
 rollback. Hosted cutover qualification covers switch-back of reads, writes and queued capture,
 including legacy matching, retained signing domains and suppression of superseded evidence.
+
+### 5. Raw deletions in the forget context
+
+`onForget` receives every Raw row physically deleted by the current forget in
+`affectedMessages`, including text or containment purges, session erasure through a proven
+closure, and any span purge that physically deletes a row. Core document cards can be disabled.
+Each deleted source is projected as `{ client, sessionId, messageId, role, occurredAtMs }`.
+`occurredAtMs` may be `null`. The tuple carries no text. A deleted source replaces an existing
+selector at the same address. The resulting list is deduplicated by address and ordered
+by its serialized `[client, sessionId, messageId]` address. `affectedSessions` continues to
+report proven erasure with `effect: "erase"`.
+
+The current span step writes suppression facts and leaves Raw rows in storage. Correct
+writes suppression facts and replaces the memory without purging Raw, so `onCorrect` keeps
+its predecessor selectors. Memory and Postgres project tuples from the rows already deleted
+in the write. With hooks omitted, the Raw purge uses its existing results and queries.

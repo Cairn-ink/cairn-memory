@@ -8,7 +8,7 @@ import { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
 import { conversationSessions } from "./raw-session.mjs";
 
 /** @import { Scope } from "../../core/src/ports/common.d.ts" */
-/** @import { PassageFingerprint } from "../../core/src/ports/privacy.d.ts" */
+/** @import { PassageFingerprint, RawSourceTuple } from "../../core/src/ports/privacy.d.ts" */
 /** @import { StoredFact, TextFact, TextDigest } from "../../core/src/suppression-fact.mjs" */
 /** @import { Connection } from "./driver.mjs" */
 /** @import { RawOptions } from "./raw-options.d.mts" */
@@ -19,6 +19,8 @@ import { conversationSessions } from "./raw-session.mjs";
  *   legacy_fingerprint?: {text_hmac: string, key_id: string, shingles: string[]}, document_ill_formed?: true}} LedgerMessage */
 
 const HOSTED_TIME = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+export const RAW_SOURCE_COLUMNS = `r.client, r.session_id AS "sessionId", r.message_id AS "messageId", r.role,
+  (EXTRACT(EPOCH FROM r.occurred_at) * 1000)::double precision AS "occurredAtMs"`;
 
 /** @param {unknown} value */
 function validHostedTime(value) {
@@ -107,8 +109,8 @@ export async function dropSourceQuantities(query, scope, addresses) {
 }
 
 /** @param {Query} query @param {Scope} scope @param {readonly StoredFact<TextFact>[]} facts
- * @param {RawOptions["fingerprintKeys"]} fingerprintKeys */
-export async function purgeRawText(query, scope, facts, fingerprintKeys) {
+ * @param {RawOptions["fingerprintKeys"]} fingerprintKeys @param {RawSourceTuple[]} [deletedSources] */
+export async function purgeRawText(query, scope, facts, fingerprintKeys, deletedSources) {
   if (!facts.length) return { rawDeleted: 0, ledgerBlanked: 0, ledgerChanged: false };
   const keys = await fingerprintKeys?.(scope.owner) ?? [];
   /** @param {LedgerMessage} message */
@@ -124,11 +126,12 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys) {
     const ids = [];
     for (const row of rows) if (await matches(row)) ids.push(row.id);
     if (ids.length) {
-      const { rows: deleted } = await query(`DELETE FROM raw_messages
+      const { rows: deleted } = await query(`DELETE FROM raw_messages${deletedSources ? " r" : ""}
         WHERE user_id = $1 AND id = ANY($2::text[])
-        RETURNING client, session_id AS "sessionId", message_id AS "messageId"`,
+        RETURNING ${deletedSources ? RAW_SOURCE_COLUMNS : 'client, session_id AS "sessionId", message_id AS "messageId"'}`,
       [scope.owner, ids]);
       rawDeleted += deleted.length;
+      deletedSources?.push(...deleted);
       await dropSourceQuantities(query, scope, deleted);
     }
     after = rows.at(-1).id;

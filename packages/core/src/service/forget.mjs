@@ -4,12 +4,13 @@ import { CoreError } from "../errors.mjs";
 import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
 import { documentCardVisible } from "../routing/visibility.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
+import { compareUtf8 } from "../utf8.mjs";
 import { entry, entryError, scopeOf, factReference, predecessorOf, spanReference, writeHookResult } from "./entry.mjs";
 import { predecessorFact, scopedRow, sourceOf, sourceWindowFacts } from "./writes.mjs";
 
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
-/** @import {DocumentCardHideSelector, DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
+/** @import {DocumentCardHideSelector, DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, RawSourceTuple, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
 /** @import {RawSpanFact} from "../suppression-fact.mjs" */
 
 /** @typedef {MemoryService["forget"]} Forget */
@@ -210,6 +211,9 @@ export function forgetMethod({ storage, clock, config, hooks }) {
 
       const predecessor = hooks && predecessorOf(row);
       const evidence = hooks && await hooks.port.predecessorEvidence(tx, scope, id);
+      /** @type {Map<string, DocumentCardSourceMessage | RawSourceTuple> | undefined} */
+      const affectedMessages = evidence && new Map([...evidence.affectedMessages, ...messages]
+        .map(message => [sourceBinding(message), message]));
       /** @type {import("../ports/index.d.ts").HostFactRef[] | undefined} */
       const hookFacts = hooks ? [] : undefined;
       // suppression.write
@@ -234,9 +238,21 @@ export function forgetMethod({ storage, clock, config, hooks }) {
       // raw.purge
       /** @type {Set<string>} */
       const deletedSources = new Set();
+      const purgeSourceOptions = hooks ? { includeDeletedSources: true } : undefined;
+      /** @param {readonly RawSourceTuple[] | undefined} sources */
+      function collectPurgedMessages(sources) {
+        if (!affectedMessages || !sources) return;
+        for (const { client, sessionId, messageId, role, occurredAtMs } of sources) {
+          const source = { client, sessionId, messageId, role, occurredAtMs };
+          affectedMessages.set(sourceBinding(source), source);
+        }
+      }
       if (enabled(capabilities, "raw.purge", "rawArchive")) {
         if (!raw) throw new CoreError("capability_unavailable");
-        if (closure?.length) await raw.eraseSessions(tx, scope, closure);
+        if (closure?.length) {
+          const erased = await raw.eraseSessions(tx, scope, closure, purgeSourceOptions);
+          if (hooks) collectPurgedMessages(erased.deletedSources);
+        }
         if (fact.kind === "text") {
           const facts = created ? [{ fact, incarnation, factId, epoch, createdAtMs }]
             : await suppressions.factsFor(tx, scope, { memoryId: id });
@@ -244,11 +260,11 @@ export function forgetMethod({ storage, clock, config, hooks }) {
             candidate.incarnation === incarnation && candidate.fact.kind === "text" &&
             candidate.fact.owner === owner && (candidate.fact.namespace ?? null) === namespace);
           if (!stored) throw new CoreError("ineligible");
-          if (assessCardPurge) {
-            await raw.purgeWithheld(tx, scope, [stored], { onDelete: source => { deletedSources.add(sourceBinding(source)); } });
-          } else {
-            await raw.purgeWithheld(tx, scope, [stored]);
-          }
+          const purgeOptions = assessCardPurge ? {
+            ...purgeSourceOptions, onDelete: (/** @type {DocumentCardSourceMessage} */ source) => { deletedSources.add(sourceBinding(source)); },
+          } : purgeSourceOptions;
+          const purged = await raw.purgeWithheld(tx, scope, [stored], purgeOptions);
+          if (hooks) collectPurgedMessages(purged.deletedSources);
         }
       }
 
@@ -316,9 +332,7 @@ export function forgetMethod({ storage, clock, config, hooks }) {
         if (!forgetLog) throw new CoreError("capability_unavailable");
         await forgetLog.record(tx, owner, id, clock.nowMs());
       }
-      if (hooks && predecessor && evidence && hookFacts) {
-        const resolvedMessages = new Map([...evidence.affectedMessages, ...messages]
-          .map(message => [sourceBinding(message), message]));
+      if (hooks && predecessor && evidence && hookFacts && affectedMessages) {
         const erased = new Set(closure?.map(session => session.sessionId));
         await hooks.invoke("onForget", tx, {
           scope, predecessor, priorReceipts: evidence.priorReceipts,
@@ -326,7 +340,8 @@ export function forgetMethod({ storage, clock, config, hooks }) {
           affectedSessions: [...sessions.values()].map(session => ({
             ...session, effect: erased.has(session.sessionId) ? "erase" : "hide",
           })),
-          affectedMessages: [...resolvedMessages.values()], affectedSpans: spans.map(spanReference),
+          affectedMessages: [...affectedMessages].sort(([a], [b]) => compareUtf8(a, b)).map(([, message]) => message),
+          affectedSpans: spans.map(spanReference),
         }, writeHookResult);
       }
       // epoch.advance is owned by each writeFact call.

@@ -1,6 +1,7 @@
 import type { Receipt, Scope, SourceRef } from "./common.d.ts";
 import type { FinishResult, CaptureMessage, CaptureKey } from "./capture.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
+import type { RawSourceTuple } from "./privacy.d.ts";
 import type { SuppressionFact } from "../suppression-fact.mjs";
 import type { CoreError } from "../errors.mjs";
 
@@ -27,6 +28,7 @@ export type SaveRequestDecision = HostAdmissionDecision | Readonly<{ status: "co
   Readonly<{ status: "replay"; result: HostSaveResult }>;
 
 type Scoped = Readonly<{ scope: Readonly<Scope> }>;
+type MessageSelector = Pick<RawSourceTuple, "client" | "sessionId" | "messageId">;
 export type SaveRequestContext = Scoped & Readonly<{ source: Readonly<SourceRef>; request: HostSaveRequest | null }>;
 export type SaveContext = SaveRequestContext & Omit<HostSaveResult, "indexRevision"> &
   Readonly<{ receipts: readonly HostAttachment[] }>;
@@ -43,10 +45,14 @@ type PrivacyContext = CorrectRequestContext & Readonly<{
   priorReceipts: readonly HostReceipt[];
   facts: readonly HostFactRef[];
   affectedSessions: readonly Readonly<{ client: string; sessionId: string; effect: "hide" | "erase" }>[];
-  affectedMessages: readonly Readonly<{ client: string; sessionId: string; messageId: string }>[];
+  affectedMessages: readonly MessageSelector[];
   affectedSpans: readonly Readonly<{ sessionKeyHash: string; messageKey: string; start: number; end: number }>[];
 }>;
-export type ForgetContext = PrivacyContext & Readonly<{ status: "forgotten"; removedSimilar: number }>;
+export type ForgetContext = Omit<PrivacyContext, "affectedMessages"> & Readonly<{
+  status: "forgotten";
+  removedSimilar: number;
+  affectedMessages: readonly (RawSourceTuple | (MessageSelector & { role?: never; occurredAtMs?: never }))[];
+}>;
 export type CorrectContext = PrivacyContext & Readonly<{
   status: "saved";
   replacement: HostMemoryBinding & Readonly<{ source: Readonly<SourceRef> }>;
