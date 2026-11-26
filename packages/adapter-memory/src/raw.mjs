@@ -12,7 +12,7 @@ import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { withinWindow } from "./retrieval-window.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
 import { advanceRawInspectEpoch, recordCardWrite } from "./unit-of-work.mjs";
-import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, snapshotArray, validateLimit,
+import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, isPlaceholderReceipt, snapshotArray, validateLimit,
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
@@ -397,7 +397,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return true;
   }
 
-  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt
+  /** @param {State} state @param {Scope} scope @param {import("./receipt-read-safety.mjs").StoredReceipt} receipt
    * @param {string} [admittedContent] */
   async function receiptSourcesVisible(state, scope, receipt, admittedContent) {
     const { client, sessionId, messageId, role } = receipt;
@@ -410,7 +410,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         const source = { ...receipt, content: admittedContent };
         const facts = scopedFacts(state, scope);
         const candidate = await readEvidence(scope, facts)(source);
-        return facts.every(stored => factHidesRow(stored, candidate, policy) === false) &&
+        const placeholder = isPlaceholderReceipt(receipt);
+        return facts.every(stored =>
+          (placeholder && stored.fact.kind === "window" && stored.fact.unknownTime === true) ||
+          factHidesRow(stored, candidate, policy) === false) &&
           sourceLineageVisible(state, scope, source);
       }
       if (roots?.has(slot)) return false;

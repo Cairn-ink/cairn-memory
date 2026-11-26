@@ -1381,7 +1381,24 @@ an embedding error or timeout leaves lexical and Raw evidence available.
 Reads without a query embedding run Raw after find and measure its window
 from the start of Raw work.
 
-## Addendum 31 — memory-compact-v1 (opt-in)
+## Addendum 32 — Explicit window fences never hide memories
+
+This amends Addendum 28. A window with `anchor: "pm30min"` never hides a
+memory row, whatever the memory's times. Only `config.explicitWindowFence`
+writes such windows, on forget and on correct. A correction therefore keeps its
+replacement visible at the same ID, as Addendum 20 requires. Memories saved
+near a forgotten one also stay visible.
+
+These windows still fence Raw rows, router cards, receipt excerpts for turns
+inside them, and capture and import admission inside them. The forgotten
+memory stays hidden by its identity fact, and its text by its text fact.
+Windows without the anchor keep their existing matching.
+
+Known limit: an adapter that decides placement reads from a memory's receipts
+can still drop that memory from a placement read when one of its receipts
+falls inside such a window. Direct reads still return the memory.
+
+## Addendum 33 — memory-compact-v1 (opt-in)
 
 `readContext` accepts `representation: "memory-compact-v1"` as an engine API opt-in for `types: ["memory"]` with explicit `raw: false`.
 Compact reads reject source selection and cursors, and discovery and tool schemas retain their existing representation lists.

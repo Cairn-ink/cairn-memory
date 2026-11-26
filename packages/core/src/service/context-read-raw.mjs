@@ -4,7 +4,7 @@ import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { COMPACT_MEMORY_REPRESENTATION, CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
 import { fitCardAmendments } from "./context-read-pack.mjs";
-import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey,
+import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, isDateTime, minute, sourceDate, turnKey,
   wireItem } from "./context-read-projection.mjs";
 
 /** @import { CallOptions, ContextAssemblyRawExcerpt, ContextAssemblyRepresentation, ContextRawCoverage,
@@ -136,7 +136,7 @@ function excerptFor(turn, i, readSet, terms, representation, count, check) {
   const { scope, conversationId, messageId, role, occurredAtMs } = turn;
   return { key: turnKey(turn), session: JSON.stringify([scope.namespace, conversationId]), rank: i + 1,
     wire: { ref: { ns: namespaceSlot(readSet, scope), type: "raw", conversationId, messageId }, role,
-      ...(occurredAtMs !== null && { occurredAt: new Date(occurredAtMs).toISOString(),
+      ...(isDateTime(occurredAtMs) && { occurredAt: new Date(occurredAtMs).toISOString(),
         ...(representation === "representation-v2-dated" && { date: minute(occurredAtMs) }) }),
       start: span.start, end: span.end, body: span.body } };
 }

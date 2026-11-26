@@ -78,7 +78,10 @@ export async function dropSourceQuantities(query, scope, addresses) {
     let resolved = sessions.get(key);
     if (!resolved) {
       try {
-        resolved = await conversationSessions(query, scope, { client, sessionId });
+        // The reverse lookup can omit clients with mixed save provenance.
+        resolved = client === "mcp" && sessionId.startsWith("mcp-save:")
+          ? [{ client: null, sessionId }]
+          : await conversationSessions(query, scope, { client, sessionId });
       } catch (error) {
         if (!(error instanceof CoreError) || error.code !== "raw_lineage_unavailable" ||
             !sessionId.startsWith("mcp-save:")) throw error;

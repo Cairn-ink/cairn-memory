@@ -29,7 +29,10 @@ async function claimBatch(t) {
   assert.deepEqual(await admit(), { status: "admitted" });
   const fresh = await claim();
   assert.equal(fresh.status, "claimed");
-  const finish = () => run((tx) => capture.finish(tx, fresh.token, items));
+  const finish = () => run(async (tx) => {
+    await capture.assertEligible(tx, key, [0, 1, 2]);
+    return capture.finish(tx, fresh.token, items);
+  });
   return { pool, owner, items, run, finish, claim, admit };
 }
 

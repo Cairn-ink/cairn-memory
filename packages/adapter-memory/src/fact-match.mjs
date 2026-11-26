@@ -1,6 +1,6 @@
 import { CoreError, factBlocksIncoming, factHidesRow, hasLegacyPassageDigest, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
-import { readEmbedding, snapshotArray } from "./validation.mjs";
+import { isPlaceholderReceipt, readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, PassageFingerprint, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
@@ -215,13 +215,14 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
         });
       },
 
-      /** @param {import("@cairn-ink/core/ports").Receipt} receipt @param {readonly TextDigest[]} digests */
+      /** @param {import("./receipt-read-safety.mjs").StoredReceipt} receipt @param {readonly TextDigest[]} digests */
       withholdsRaw(receipt, digests) {
         // A RawSpan fact without span-lineage proof is uncertain in this adapter.
         const passages = [{ digests, shingles: null, keyId: null }];
         return scoped.some(stored => stored.fact.kind === "rawSpan") ||
           blocksSession(receipt.client, receipt.sessionId) ||
-          blockedMessages(receipt.client, receipt.sessionId, [receipt.occurredAtMs]).length > 0 ||
+          (!isPlaceholderReceipt(receipt) &&
+            blockedMessages(receipt.client, receipt.sessionId, [receipt.occurredAtMs]).length > 0) ||
           texts.some((stored) => factBlocksIncoming(stored, { scope, passages }, capture) !== false);
       },
 
