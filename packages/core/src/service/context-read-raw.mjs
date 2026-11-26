@@ -37,6 +37,7 @@ export async function readRawChannel(store, uow, readSet, query, lexicalOnly, op
   let onAbort = () => {};
   try {
     const search = uow.run(readSet.owner, { readOnly: true }, async tx => {
+      if (signal.aborted) return partial;
       const result = await store.search(tx, readSet, query, { limit: CONTEXT_HORIZON, lexicalOnly, deadlineAtMs: cutoff, signal });
       if (now() >= cutoff || signal.aborted) return partial;
       if (result.coverage !== "included" && result.coverage !== "partial") {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { setTimeout as delay } from "node:timers/promises";
+import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 import { createMemoryService } from "../src/service/index.mjs";
 import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fake.mjs";
 
@@ -18,7 +18,7 @@ const evidence = { type: "memory", ref: { type: "memory", scope, id: retained.id
 const identity = { storeId: "fixture", cursorKey: new TextEncoder().encode("fixture signing material") };
 const embedded = { vector: Float32Array.of(1), model: "fixture" };
 
-function fixture({ now, embed, search, lexical, keyless = false }) {
+function fixture({ now, embed, search, lexical, gate, firstRead, indexReady = true, keyless = false }) {
   const { storage, deps, hooks } = serviceFake({ rows: [retained], recall: true, semantic: true });
   const events = [];
   const mark = (name, detail) => events.push({ name, at: performance.now(), detail });
@@ -26,12 +26,17 @@ function fixture({ now, embed, search, lexical, keyless = false }) {
   let lastLexicalTx;
   let lexicalActive = false;
   const { run } = storage.uow;
-  storage.uow.run = (owner, options, work) => run(owner, options, async tx => {
-    try { return await work(tx); }
-    finally {
-      if (tx === lastLexicalTx) lexicalActive = false;
-    }
-  });
+  storage.uow.run = async (owner, options, work) => {
+    const pending = firstRead;
+    firstRead = undefined;
+    if (pending) await pending;
+    return run(owner, options, async tx => {
+      try { return await work(tx); }
+      finally {
+        if (tx === lastLexicalTx) lexicalActive = false;
+      }
+    });
+  };
   const { vector } = storage.vector;
   storage.vector.vector = (tx, ...args) => {
     assert.equal(tx, lastLexicalTx, "vector and lexical share the ranking transaction");
@@ -46,7 +51,7 @@ function fixture({ now, embed, search, lexical, keyless = false }) {
     async identity() { return identity; },
     async prepareLexical() { mark("maintenance"); },
     async observeIndex() {
-      return { indexState: "current", ready: true, byType: { memory: { eligible: 1, indexed: 1 } },
+      return { indexState: "current", ready: indexReady, byType: { memory: { eligible: 1, indexed: 1 } },
         maintenance: { available: true, state: "ready", buildState: "ready", reason: null, progress: null } };
     },
     async lexical(tx) {
@@ -61,7 +66,7 @@ function fixture({ now, embed, search, lexical, keyless = false }) {
     raw: {
       async search(_tx, _set, _query, options) {
         mark("raw", { deadline: options.deadlineAtMs, lexicalOnly: options.lexicalOnly });
-        await search?.();
+        await search?.(options);
         mark("raw-end");
         return { coverage: "included", turns: [turn] };
       },
@@ -75,7 +80,7 @@ function fixture({ now, embed, search, lexical, keyless = false }) {
   const host = { storage, clock: { ...deps.clock, nowMs: () => 100, monotonicMs: now },
     contextReadCounter: { count: text => Math.ceil(Buffer.byteLength(text) / 8) }, contextReadFormat: JSON.stringify };
   const service = keyless ? createMemoryService({ profile: "keyless-local", ...host }) :
-    createMemoryService({ ...deps, ...host, embedQuery: embed && { async embedQuery(owner, query, options) {
+    createMemoryService({ ...deps, ...host, ...(gate && { gate }), embedQuery: embed && { async embedQuery(owner, query, options) {
       mark("embed", options.deadlineAtMs);
       assert.deepEqual([owner, query, options.budgetClass], [scope.owner, input.query, "recall"]);
       const result = await embed(options);
@@ -136,21 +141,70 @@ test("Raw and lexical search run during query embedding and Raw uses the read's 
 for (const cause of ["timeout", "unavailable"]) {
   test(`keeps lexical and Raw evidence when embedding is ${cause}`, async t => {
     let signal;
+    let abortedAtSettlement;
     const { service, names } = fixture({ now: () => performance.now(), async embed(options) {
       signal = options.signal;
-      await delay(cause === "timeout" ? 1000 : 20, undefined, { signal });
-      throw new Error("fixture provider failure");
+      try {
+        await delay(cause === "timeout" ? 1000 : 20, undefined, { signal });
+        throw new Error("fixture provider failure");
+      } finally {
+        abortedAtSettlement = signal.aborted;
+      }
     } });
     const result = await service.readContext(readSet, input);
     assertEvidence(result);
     assert.deepEqual(result.diagnostics.candidates.channels.semantic, { state: "unavailable", causes: [cause] });
     assert.equal(result.diagnostics.candidates.trace.effective, "lexical");
-    assert.equal(signal.aborted, cause === "timeout");
+    assert.equal(abortedAtSettlement, cause === "timeout");
+    assert.equal(signal.aborted, true);
     assert.equal(names().filter(name => name === "embed").length, 1);
     assert.ok(!names().includes("vector"));
     t.diagnostic(JSON.stringify({ cause, embedMs: result.diagnostics.candidates.trace.timings.embeddingMs }));
   });
 }
+
+test("a refused find cancels Raw and prevents a gated embedding dispatch", async () => {
+  const gate = Promise.withResolvers();
+  const raw = Promise.withResolvers();
+  const caller = new AbortController();
+  let gateEntered = false;
+  let rawSignal;
+  let rawCancelled = false;
+  const { service, names } = fixture({ now: () => 0, indexReady: false,
+    gate: { async assertOpen() { gateEntered = true; await gate.promise; } },
+    embed: async () => embedded,
+    async search({ signal }) {
+      rawSignal = signal;
+      signal.addEventListener("abort", () => { rawCancelled = true; raw.resolve(); }, { once: true });
+      await raw.promise;
+    },
+  });
+  try {
+    await assert.rejects(service.readContext(readSet, input, { signal: caller.signal }), { code: "index_unavailable" });
+    gate.resolve();
+    await nextTurn();
+    assert.equal(gateEntered, true);
+    assert.deepEqual({ dispatches: names().filter(name => name === "embed").length, rawAborted: rawSignal?.aborted, rawCancelled },
+      { dispatches: 0, rawAborted: true, rawCancelled: true });
+    assert.equal(caller.signal.aborted, false);
+  } finally {
+    gate.resolve();
+    raw.resolve();
+  }
+});
+
+test("a refused find prevents queued Raw from starting", async () => {
+  const queued = Promise.withResolvers();
+  const { service, names } = fixture({ now: () => 0, indexReady: false,
+    firstRead: queued.promise, embed: async () => embedded });
+  try {
+    await assert.rejects(service.readContext(readSet, input), { code: "index_unavailable" });
+  } finally {
+    queued.resolve();
+  }
+  await nextTurn();
+  assert.ok(!names().includes("raw"));
+});
 
 test("reads without a query embedding keep the sequential call order and response bytes", async t => {
   const unexpected = () => assert.fail("unexpected embedding");

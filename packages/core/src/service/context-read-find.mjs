@@ -270,20 +270,25 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       }
     }
 
-    if (cursor === undefined) {
-      if (semanticRequested && !embedQuery) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
-      if (stopped()) return unavailable();
+    const prepareLexical = async () => {
+      if (stopped()) return false;
       if (store.prepareLexical) {
         const started = clock.monotonicMs();
         try {
           diagnostics.trace.maintenance = await store.prepareLexical(readSet, selection, portOptions);
         } catch (error) {
-          if (error instanceof CoreError && error.code === "index_unavailable") return unavailable();
+          if (error instanceof CoreError && error.code === "index_unavailable") return false;
           throw error;
         } finally {
-          diagnostics.trace.timings.maintenanceMs = clock.monotonicMs() - started;
+          diagnostics.trace.timings.maintenanceMs += clock.monotonicMs() - started;
         }
       }
+      return true;
+    };
+
+    if (cursor === undefined) {
+      if (semanticRequested && !embedQuery) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
+      if (!await prepareLexical()) return unavailable();
       if (queryEmbedder && (!forAssembly || !memo.result)) await prepareSemantic();
     }
 
@@ -406,6 +411,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     const ranked = await rank();
     if (!("embed" in ranked)) return ranked;
     await prepareSemantic();
+    if (forAssembly && !await prepareLexical()) return unavailable();
     const continued = await rank();
     if ("embed" in continued) throw new CoreError("internal_error");
     return continued;
