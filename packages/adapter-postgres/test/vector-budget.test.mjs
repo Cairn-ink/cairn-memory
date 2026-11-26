@@ -98,5 +98,5 @@ test("an ANN extension re-ranks tied IDs from both pools", async () => {
   assert.equal(annPools[1].length, 400);
   assert.deepEqual(new Set(annPools[1]), new Set([first.id, ...hidden.map(row => row.id)]));
   assert.deepEqual(result.rows.map(({ ref }) => ref.id), [newest.id, first.id]);
-  assert.deepEqual(result.coverage, { eligible: 3, embedded: 3, complete: true });
+  assert.deepEqual(result.coverage, { eligible: 3, embedded: 3, complete: true, pool: { requested: 800, returned: 402 } });
 });

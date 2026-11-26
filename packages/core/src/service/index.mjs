@@ -187,11 +187,13 @@ function freezeDeps(input) {
  * @returns {Required<Pick<import("../ports/index.d.ts").MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>}
  */
 function readContractMethods(storage, clock, host, quantityLedger) {
-  const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock, embedQuery: host.embedQuery, gate: host.gate });
+  const { findCandidates, findForAssembly, startAssemblyEmbedding } =
+    findCandidatesMethod({ storage, clock, embedQuery: host.embedQuery, gate: host.gate });
   return {
     findCandidates,
     fetchEvidence: fetchEvidenceMethod(storage),
-    readContext: readContextMethod({ storage, clock, find: findForAssembly, fetch: fetchForAssembly(storage),
+    readContext: readContextMethod({ storage, clock, find: findForAssembly, startEmbedding: startAssemblyEmbedding,
+      fetch: fetchForAssembly(storage),
       counter: host.contextReadCounter, format: host.contextReadFormat,
       calendarReading: quantityLedger?.enabled === true && quantityLedger.calendarReading === true }),
     inspect: inspectMethod(storage, clock),
