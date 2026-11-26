@@ -89,7 +89,11 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
           return metrics;
         });
         if (!cards || !selection.types.includes("card")) return metrics;
-        const cardMetrics = await index.reconcileCards(tx, readSet, selection, stopped);
+        // Leave time to commit the checkpoint and serve the memory results.
+        const deadline = options.deadlineAtMs ?? Infinity;
+        const reserve = Math.min(250, Math.max(0, deadline - monotonicMs()) / 2);
+        const cardStopped = contextDeadline({ ...options, deadlineAtMs: deadline - reserve }, monotonicMs);
+        const cardMetrics = await index.reconcileCards(tx, readSet, selection, cardStopped);
         return {
           canonicalRows: metrics.canonicalRows + cardMetrics.canonicalRows,
           sidecarRows: metrics.sidecarRows + cardMetrics.sidecarRows,

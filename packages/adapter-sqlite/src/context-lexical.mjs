@@ -214,16 +214,17 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       const state = startGeneration(prior, captured);
       const rows = db.prepare(`SELECT id, revision, title, body FROM cairn_document_cards
         WHERE ${exactScope} AND state = 'active' AND id > ? ORDER BY id LIMIT ?`);
-      /** @type {{scope: Scope, candidates: CardDocument[]}[]} */
+      /** @type {{scope: Scope, phase: number, afterId: string, rows: CardDocument[]}[]} */
       const pages = [];
       let textUnits = 0;
       while (state.phase < readSet.namespaces.length && !stopped() && textUnits < MAX_TEXT_UNITS) {
         const limit = MAX_ROWS - metrics.canonicalRows - metrics.removed;
         if (limit === 0) break;
         const namespace = readSet.namespaces[state.phase], scope = { owner: readSet.owner, namespace };
+        const afterId = state.last_id;
         const candidates = [];
         let examined = 0, ended = true;
-        for (const row of rows.iterate(...scopeKey(scope), state.last_id, limit)) {
+        for (const row of rows.iterate(...scopeKey(scope), afterId, limit)) {
           examined++;
           metrics.canonicalRows++;
           if (stopped() || textUnits >= MAX_TEXT_UNITS) {
@@ -237,7 +238,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
           state.last_id = id;
           textUnits += text.length;
         }
-        if (candidates.length) pages.push({ scope, candidates });
+        if (candidates.length) pages.push({ scope, phase: state.phase, afterId, rows: candidates });
         if (!ended || examined === limit) break;
         state.phase++;
         state.last_id = "";
@@ -246,14 +247,13 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
     });
     if (!batch) return metrics;
     const { state, pages } = batch;
-    /** @type {{scope: Scope, rows: CardDocument[]}[]} */
-    const eligible = [];
-    for (const { scope, candidates } of pages) {
+    for (const page of pages) {
       if (stopped()) return metrics;
+      const { scope, rows: candidates } = page;
       const inputs = await loadCards(tx, scope, candidates.map(({ ref }) => ref));
       const byId = new Map(candidates.map(({ ref }, i) => [ref.id, inputs[i]]));
       const { rows } = await visibleDocumentCardRows(candidates, ref => stopped() ? null : byId.get(ref.id) ?? null);
-      eligible.push({ scope, rows });
+      page.rows = rows;
     }
     if (stopped()) return metrics;
     // The same write transaction pins both the scan and the visibility inputs.
@@ -261,9 +261,19 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       state.checkpoint++;
       saveGeneration(db, key, state);
       const documents = documentWriter(db, key, state);
-      for (const { scope, rows } of eligible) {
+      for (const { scope, phase, afterId, rows } of pages) {
         const [, ns] = scopeKey(scope);
-        for (const { ref, revision, text } of rows) indexText(documents, state, metrics, ns, ref.id, revision, text);
+        let lastId = afterId;
+        for (const { ref, revision, text } of rows) {
+          if (stopped()) {
+            state.phase = phase;
+            state.last_id = lastId;
+            saveGeneration(db, key, state);
+            return;
+          }
+          indexText(documents, state, metrics, ns, ref.id, revision, text);
+          lastId = ref.id;
+        }
       }
       if (state.phase === readSet.namespaces.length && !stopped()) sweep(documents, state, metrics);
       saveGeneration(db, key, state);

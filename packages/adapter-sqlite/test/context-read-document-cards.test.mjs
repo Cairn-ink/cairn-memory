@@ -21,22 +21,23 @@ const selection = { types: ["card"], intent: "current" };
 const search = { ...selection, query: "petrel" };
 const read = (storage, work) => storage.uow.run(scope.owner, { readOnly: true }, work);
 const write = (storage, work, target = scope) => storage.uow.run(target.owner, { pauseLock: true }, work);
-const open = (path, capabilities) => openSqliteAdapter(path, { capabilities, now, monotonicMs });
+const open = (path, capabilities, monotonic = monotonicMs) =>
+  openSqliteAdapter(path, { capabilities, now, monotonicMs: monotonic });
 
-function service(storage) {
+function service(storage, monotonic = monotonicMs) {
   return createMemoryService({ profile: "keyless-local", storage,
-    clock: { ...assemblyClock(monotonicMs), nowMs: now },
+    clock: { ...assemblyClock(monotonic), nowMs: now },
     contextReadCounter: { count: fixtureCount }, contextReadFormat: formatAssembly });
 }
 
-async function fixture(t, capabilities = {}) {
+async function fixture(t, capabilities = {}, monotonic = monotonicMs) {
   const file = scratch();
   let storage;
   t.after(async () => {
     try { await storage?.close(); }
     finally { file.remove(); }
   });
-  storage = await open(file.path, { contextRead: true, documentCards: true, ...capabilities });
+  storage = await open(file.path, { contextRead: true, documentCards: true, ...capabilities }, monotonic);
   return storage;
 }
 
@@ -330,6 +331,58 @@ test("mixed reads keep serving memories and publish cards across unrelated saves
       embeddedFraction: null, scannedFraction: 0 });
     assert.ok(found.items.some(({ ref }) => ref.type === "card" && ref.id === "matching-card"));
   }
+});
+
+test("mixed reads checkpoint long card postings within the default deadline", async t => {
+  const monotonic = () => performance.now();
+  const storage = await fixture(t, {}, monotonic);
+  const insert = (tx, content) => storage.memories.insert(tx, scope, memoryRow(content), [], now());
+  const cardCount = 320;
+  const termsPerCard = 700;
+  await write(storage, async tx => {
+    await insert(tx, "A petrel dives for fish.");
+    for (let i = 1; i < 768; i++) await insert(tx, `Wind measurement ${i}`);
+    for (let i = 0; i < cardCount; i++) {
+      const body = Array.from({ length: termsPerCard }, (_, j) =>
+        (i * termsPerCard + j).toString(36).padStart(4, "0")).join(" ");
+      const card = { ...authored(`card-${i}`), title: i === 0 ? "Petrel Notes" : "Weather", body };
+      await storage.documentCards.put(tx, scope, card);
+    }
+  });
+  const api = service(storage, monotonic);
+  const mixed = { ...search, types: ["memory", "card"] };
+  const memoryOnly = { ...search, types: ["memory"] };
+  await storage.contextRead.prepareLexical(readSet, mixed, {});
+  assert.equal((await api.findCandidates(readSet, mixed)).coverage.byType.card.indexed, cardCount);
+
+  async function findWithinDeadline(label) {
+    const start = monotonic();
+    try {
+      return await api.findCandidates(readSet, mixed);
+    } finally {
+      const elapsed = monotonic() - start;
+      t.diagnostic(`${label}: ${elapsed.toFixed(1)} ms`);
+      assert.ok(elapsed < 1500, `mixed read took ${elapsed.toFixed(1)} ms`);
+    }
+  }
+
+  let found;
+  for (let i = 0; i < 2; i++) {
+    await write(storage, tx => insert(tx, `An unrelated weather observation ${i}`));
+    found = await findWithinDeadline(`read after save ${i + 1}`);
+    assert.deepEqual(found.items, (await api.findCandidates(readSet, memoryOnly)).items);
+    assert.equal(found.items.length, 1);
+    assert.equal(found.coverage.status, "partial");
+    assert.equal(found.coverage.byType.card.eligible, null);
+    assert.equal(found.coverage.byType.card.indexed, null);
+    assert.deepEqual(found.channels.lexical, { state: "ready", causes: ["card_index_rebuilding"] });
+  }
+  for (let i = 1; i <= 30 && found.coverage.status === "partial"; i++) {
+    found = await findWithinDeadline(`continuation ${i}`);
+  }
+  assert.equal(found.coverage.status, "complete");
+  assert.equal(found.coverage.byType.card.indexed, cardCount);
+  assert.ok(found.items.some(({ ref }) => ref.type === "card" && ref.id === "card-0"));
 });
 
 test("an unpublished card projection leaves mixed find and assembly partially covered", async t => {
