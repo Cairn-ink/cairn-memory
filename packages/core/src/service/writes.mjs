@@ -14,10 +14,11 @@ import { pauseResult } from "./pause.mjs";
 
 /** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Receipt, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
-/** @import {IdentityFact, TextDigest, TextFact} from "../suppression-fact.mjs" */
+/** @import {IdentityFact, TextDigest, TextFact, WindowFact} from "../suppression-fact.mjs" */
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
+const HALF_WINDOW_MS = 30 * 60 * 1_000;
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
 
 /** @param {number | undefined} indexRevision */
@@ -181,6 +182,23 @@ export async function predecessorFact({ owner, namespace }, row, key, clock, ori
   return { fact, incarnation };
 }
 
+/** @param {MemoryRow} row @param {string} actionId @returns {WindowFact[]} */
+export function sourceWindowFacts(row, actionId) {
+  const { source, scope, createdAtMs, updatedAtMs } = row;
+  if ((source.kind !== "mcp" && source.kind !== "web") || source.sessionId !== null) return [];
+
+  const { owner, namespace } = scope;
+  return Array.from(new Set([createdAtMs, updatedAtMs]), time => {
+    const fact = /** @satisfies {WindowFact} */ ({
+      kind: "window", owner, namespace, actionId, origin: "forget", client: null,
+      window: { startMs: time - HALF_WINDOW_MS, endMs: time + HALF_WINDOW_MS },
+      anchor: "pm30min",
+    });
+    validateSuppressionFact(fact);
+    return fact;
+  });
+}
+
 /** @param {import("../ports/index.d.ts").MemoryStore} memories @param {Scope} scope @param {string} id @param {Tx} tx */
 export async function scopedRow(memories, scope, id, tx) {
   const row = await memories.get(tx, scope, id);
@@ -314,7 +332,7 @@ export async function fullWriteWithholds(suppressions, tx, scope, source, batch)
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "save" | "correct">}
  */
 export function writeMethods(deps) {
-  const { storage, gate, clock, embedder } = deps;
+  const { storage, gate, clock, embedder, config } = deps;
   const { uow, pause, memories, suppressions, keys, fence, capabilities, proceduralTags } = storage;
   const { embed } = writeEmbedding(deps);
   /** @param {string} text */
@@ -491,6 +509,11 @@ export function writeMethods(deps) {
       const source = previous.source;
 
       const predecessor = unchanged ? undefined : await predecessorFact(scope, previous, key, clock, "edit");
+      const windows = predecessor && config.explicitWindowFence?.enabled === true
+        ? await Promise.all(sourceWindowFacts(previous, predecessor.fact.actionId).map(async fact => ({
+          fact, incarnation: await sha256Hex(factIncarnationBody(fact)),
+        })))
+        : [];
 
       let result, start;
       if (!unchanged) await gate.assertOpen(owner, "post-send");
@@ -523,6 +546,9 @@ export function writeMethods(deps) {
           const { kind, origin, confidence, textHash } = plan;
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
+          for (const { fact, incarnation } of windows) {
+            await suppressions.writeFact(tx, fact, incarnation);
+          }
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
             { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, receipts, now);
           if (replaced.outcome !== "changed") throw new CoreError("internal_error");
