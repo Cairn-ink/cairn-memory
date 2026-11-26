@@ -5,7 +5,7 @@ export const adapterImports = {
   "capture-finish.mjs": { core: "CoreError decideWrite planDuplicateMerge" },
   "capture.mjs": { core: "CoreError isErrorCode" },
   "context-lexical.mjs": { crypto: "createHmac randomUUID", core: "compareCanonical CoreError scoreBM25 termFrequencies tokenizeT1" },
-  "context-raw-read.mjs": { crypto: "createHmac", core: "rankScores scoreBM25 termFrequencies tokenizeT1" },
+  "context-raw-read.mjs": { crypto: "createCipheriv createDecipheriv createHmac randomBytes", core: "rankScores scoreBM25 termFrequencies tokenizeT1" },
   "context-read.mjs": { core: "CoreError" },
   "errors.mjs": { core: "CoreError toCoreError" },
   "index-revisions.mjs": { core: "CoreError" },
