@@ -82,6 +82,7 @@ test("a mid-finish statement failure rolls back memory rows, receipts, revision 
       FOR EACH ROW WHEN (NEW.text = 'Second memory') EXECUTE FUNCTION reject_second_finish_item()`);
   const first = item("First memory", key, source);
   await assert.rejects(run(async (tx) => {
+    await capture.assertEligible(tx, key, [0]);
     await assert.rejects(capture.finish(tx, token, [first, item("Second memory", key, source)]), { code: "storage_busy" });
   }), { code: "storage_busy" });
   assert.deepEqual(await writeCounts(db), { memories: 0, receipts: 0, revision: 0 });
@@ -89,7 +90,10 @@ test("a mid-finish statement failure rolls back memory rows, receipts, revision 
   assert.equal(pending.status, "pending");
   assert.equal(pending.core_lease_token, token);
   assert.equal(pending.core_result, null);
-  assert.equal((await run((tx) => capture.finish(tx, token, [first]))).memories.length, 1);
+  assert.equal((await run(async (tx) => {
+    await capture.assertEligible(tx, key, [0]);
+    return capture.finish(tx, token, [first]);
+  })).memories.length, 1);
 });
 
 test("a finish cache cannot supply a receipt for a Raw-withheld span", migrationDbTest, async t => {
@@ -103,6 +107,7 @@ test("a finish cache cannot supply a receipt for a Raw-withheld span", migration
   const withheld = tx => suppressions.receiptWithheld(tx, key.scope, receipt);
   assert.equal(await run(withheld), true);
   await run(async tx => {
+    await capture.assertEligible(tx, key, [0]);
     assert.equal((await capture.finish(tx, token, [finished])).memories.length, 1);
     assert.equal(await withheld(tx), false);
     const fact = { ...key.scope, actionId: randomUUID(), origin: "forget", kind: "rawSpan",
@@ -125,6 +130,7 @@ test("an existing Raw row cannot supply a receipt for a Raw-withheld span", migr
   const receipt = { ...finished.receipts[0], excerpt: source.content };
   const withheld = (tx, input = receipt) => suppressions.receiptWithheld(tx, key.scope, input);
   await run(async tx => {
+    await capture.assertEligible(tx, key, [0]);
     assert.equal((await capture.finish(tx, token, [finished])).memories.length, 1);
     assert.deepEqual(await raw.archive(tx, key, [source, other]), { archived: 2 });
     assert.equal(await withheld(tx), false);
@@ -181,7 +187,10 @@ test("finish persists lossless replay and the completed status and count read by
     { ...retained, alg: "test-algorithm", redactionVersion: 2 }];
   const blocked = item("Memory with evidence from a different signing domain", key, messages[0]);
   blocked.digests = [{ ...comparable, label: retained.label }];
-  const result = await run((tx) => capture.finish(tx, token, [first, blocked, first]));
+  const result = await run(async (tx) => {
+    await capture.assertEligible(tx, key, [0]);
+    return capture.finish(tx, token, [first, blocked, first]);
+  });
   const expected = structuredClone(result);
   assert.equal(result.indexRevision, 2);
   assert.equal(result.suppressedCount, 1);
@@ -223,7 +232,10 @@ test("finish applies the memory store namespace option to labelled digests", mig
         alg: "hmac", keyId: randomUUID(), label: "test-domain", pipeline: "core",
         redactionVersion: 1, value: randomBytes(32).toString("hex"),
       }];
-      const finish = () => run((tx) => capture.finish(tx, token, [candidate]));
+      const finish = () => run(async (tx) => {
+        await capture.assertEligible(tx, key, [0]);
+        return capture.finish(tx, token, [candidate]);
+      });
 
       if (!allowNonNullNamespace) {
         await assert.rejects(finish, { code: "invalid_input" });
@@ -251,6 +263,7 @@ test("finish and replay use the revision committed with the Raw archive", migrat
       const token = await acquire([source]);
       const batch = firstWrite === "finish" ? [item("An extracted memory", key, source)] : [];
       const result = await run(async (tx) => {
+        if (batch.length) await capture.assertEligible(tx, key, [0]);
         const finished = await capture.finish(tx, token, batch);
         assert.equal(finished.indexRevision, firstWrite === "finish" ? 1 : 0);
         assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 1 });

@@ -156,7 +156,7 @@ for (const deleteClient of ["coding-client", "mcp"]) {
     assert.equal(unrelatedClaim.status, "claimed");
     await assert.rejects(write(tx => capture.finish(tx, unrelatedClaim.token, [
       finishItem("A derived memory.", [receipt(reported, original)]),
-    ])), { code: "lineage_fenced" });
+    ])), { code: "suppressed" }); // Finish binding refuses a receipt outside the claim's own address.
 
     assert.deepEqual((await pool.query(`SELECT source_client, source_session_id, source_message_id
       FROM core_quantity_ledger WHERE memory_id = $1 ORDER BY source_client`, [memoryId])).rows,
