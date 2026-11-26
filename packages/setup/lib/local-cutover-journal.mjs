@@ -9,6 +9,8 @@ const prefix = '.cairn-cutover-';
 const storeTag = source => createHash('sha256').update(source).digest('hex');
 export const legacyTargetFor = (source, id) => join(dirname(source), prefix + id + '.sqlite');
 export const targetFor = (source, id) => join(dirname(source), prefix + storeTag(source) + '-' + id + '.sqlite');
+const capturePrefix = 'cairn-capture-';
+export const captureTargetFor = (source, id) => join(dirname(source), capturePrefix + storeTag(source) + '-' + id + '.sqlite');
 export function taggedCutoverAttemptForName(source, name) {
   const match = /^\.cairn-cutover-([a-f0-9]{64})-([a-f0-9-]{36})\.sqlite(?:\.stale)?(?:-wal|-shm|-journal)?$/u.exec(name);
   if (match?.[0] !== name || !cutoverId(match[2]) || match[1] !== storeTag(source)) return undefined;

@@ -1,0 +1,127 @@
+// Read the native qualification evidence produced by setup. This entry has
+// no provider or subprocess launch path.
+import { readFile, readlink, stat, lstat, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
+import { privateRead, checkedPath } from '../../integrations/client/private-state.mjs';
+
+const sha = value => createHash('sha256').update(value).digest('hex');
+const canonical = value => JSON.stringify(sort(value));
+function sort(value) {
+  if (Array.isArray(value)) return value.map(sort);
+  return value && typeof value==='object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,sort(value[key])])) : value;
+}
+// Native 0.160.1–0.167.2 evidence, with transitive $refs and the section 18
+// marker profile. Equal snapshots share an entry; versions do not grant access.
+// Refreshing this registry also invalidates old qualified AND changed verdicts.
+export const KNOWN_FORMATS = Object.freeze([
+  '6325ee9b3e97378b2ddfbb5a8a763e89f183df78850b74a702570c1fd364ce71',
+  'f3ea8d1075a12ed48be85664d221d146f02423a90cfeb0ebcbbd8fd0e42cc01d',
+  '79214a75034e013259c75a074b7de1173785d5a879281022f4cc1586d9a8d1c0',
+  'd6b9a0c5e2e89207703eb4b3cc66c02d26f473425a89c4cad0be5a7a67fbdd36',
+  '890210284588c18252a66d89afd99cbbf94f697b6137ee2c7ea7ea247af6a285',
+]);
+const policy = sha(canonical(KNOWN_FORMATS));
+export const validVersion = value => typeof value==='string' && /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(value) && value.length<=100;
+export async function binaryIdentity(binaryPath) {
+  if (typeof binaryPath!=='string' || !binaryPath.startsWith('/') || binaryPath.includes('\0')) throw new Error('invalid_binary');
+  const info = await stat(binaryPath,{bigint:true});
+  if (!info.isFile() || info.size<=0n || info.size>1073741824n || (info.mode&0o022n)) throw new Error('unsafe_binary');
+  return sha(canonical([process.platform,info.dev.toString(),info.ino.toString(),info.size.toString(),
+    info.mtimeNs.toString(),info.ctimeNs.toString()]));
+}
+
+// The shell/env trampoline is below the actual host. Walk upward, never fall
+// back to the install-time CLI. The closest native Codex process wins.
+export function execInvocation(args) {
+  const values = new Set(['-c','--config','--enable','--disable','-m','--model','-p','--profile',
+    '-C','--cd','-a','--ask-for-approval','-s','--sandbox','--local-provider','--add-dir']);
+  for(let index=1;index<args.length;index++) {
+    const arg=args[index];
+    if(arg==='--')return false;
+    if(values.has(arg)){index++;continue;}
+    if(arg.startsWith('-'))continue;
+    return ['exec','e'].includes(arg);
+  }
+  return false;
+}
+export async function detectRunningHost({pid=process.ppid,proc='/proc',read=readFile,link=readlink,identity=binaryIdentity}={}) {
+  if (process.platform!=='linux') return undefined;
+  const visited=new Set();
+  let host, execSession=false;
+  for(let depth=0;depth<24 && pid>1 && !visited.has(pid);depth++) {
+    visited.add(pid);
+    try {
+      const executable=await link(join(proc,String(pid),'exe'));
+      const args=(await read(join(proc,String(pid),'cmdline'))).toString().split('\0').filter(value => value.length > 0);
+      if (basename(executable.replace(/ \(deleted\)$/u,''))==='codex') {
+        const binaryPath=executable.replace(/ \(deleted\)$/u,''),processPath=join(proc,String(pid),'exe');
+        host ??= {identity:await identity(processPath),binaryPath,processPath,kind:args.includes('app-server')?'app-server':'cli',pid};
+        execSession ||= execInvocation(args);
+      }
+      const status=(await read(join(proc,String(pid),'stat'))).toString();
+      pid=Number(status.slice(status.lastIndexOf(')')+2).split(' ')[1]);
+    } catch {break;}
+  }
+  // Keep the closest host's identity; an outer exec launcher only narrows its
+  // eligible sessions, including an app-server child resuming an old cli file.
+  return host && {...host,...(execSession?{execSession:true}:{})};
+}
+
+const directory = configPath => join(dirname(configPath),'qualification');
+async function safeCache(configPath) {
+  const parent=dirname(configPath),home=dirname(parent);
+  const info=await lstat(home);
+  if(!info.isDirectory() || info.isSymbolicLink() || info.uid!==process.getuid() || (info.mode&0o022))throw new Error('unsafe_home');
+  await checkedPath(parent,{directory:true});
+  await checkedPath(directory(configPath),{directory:true});
+}
+const verdictPath = (configPath,host) => join(directory(configPath),host.identity+'.json');
+export function validHost(host) {
+  return host && /^[a-f0-9]{64}$/u.test(host.identity) && ['cli','app-server'].includes(host.kind) &&
+    (host.execSession===undefined || typeof host.execSession==='boolean') &&
+    typeof host.binaryPath==='string' && host.binaryPath.startsWith('/') && !host.binaryPath.includes('\0') &&
+    (host.processPath===undefined || /^\/proc\/\d+\/exe$/u.test(host.processPath));
+}
+// /proc pins the executable that is actually running even if its on-disk path
+// was replaced. After that process exits, a detached worker may use the stable
+// native path only if it still has the exact same identity.
+export async function boundBinary(host) {
+  if(!validHost(host))return undefined;
+  if(host.processPath) {
+    try {return await binaryIdentity(host.processPath)===host.identity?host.processPath:undefined;}
+    catch(error) {if(!['ENOENT','ESRCH'].includes(error.code))return undefined;}
+  }
+  try {return await binaryIdentity(host.binaryPath)===host.identity?host.binaryPath:undefined;}
+  catch {return undefined;}
+}
+export async function cachedQualification(configPath,host) {
+  if(!validHost(host)) return {status:'pending'};
+  try {
+    await safeCache(configPath);
+    const value=JSON.parse(await privateRead(verdictPath(configPath,host),{missing:true})??'null');
+    if(value?.policy!==policy || value.identity!==host.identity || !validVersion(value.version) ||
+      !['qualified','changed','unavailable'].includes(value.status)) return {status:'pending'};
+    if(value.status==='qualified' && !KNOWN_FORMATS.includes(value.fingerprint)) return {status:'pending'};
+    return value;
+  } catch {return {status:'pending'};}
+}
+// Creator evidence survives host updates and binary removal. Only current-policy
+// qualified verdicts count; current host qualification remains identity-bound.
+// This is read-only, runs only for unseeded creators, and never generates schemas.
+export async function hasQualifiedCreator(configPath,version,{signal}={}) {
+  if(!validVersion(version) || signal?.aborted)return false;
+  try {
+    await safeCache(configPath);
+    for(const name of await readdir(directory(configPath))) {
+      if(signal?.aborted)return false;
+      if(!/^[a-f0-9]{64}\.json$/u.test(name))continue;
+      try {
+        const value=JSON.parse(await privateRead(join(directory(configPath),name)));
+        if(value?.identity===name.slice(0,-5) && value.policy===policy &&
+          value.status==='qualified' && value.version===version && KNOWN_FORMATS.includes(value.fingerprint))return true;
+      } catch {/* unsafe/corrupt verdicts never grant creator qualification */}
+    }
+  } catch {/* missing/unsafe cache is retryable uncertainty */}
+  return false;
+}

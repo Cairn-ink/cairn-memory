@@ -128,6 +128,14 @@ export async function canonicalPath(path) {
     return join(await canonicalPath(parent), path.slice(parent.length));
   }
 }
+// The cutover owns both names in one private store directory. This moves the
+// closed SQLite file without opening an independent filesystem descriptor.
+export async function publishCaptureStore(staged, serving) {
+  if (dirname(staged) !== dirname(serving) || await canonicalPath(staged) !== staged ||
+      await canonicalPath(serving) !== serving) throw new Error('cutover_target_changed');
+  await rename(staged, serving);
+}
+
 export function requestedRoot(env = process.env) {
   const path = env.CAIRN_MEMORY_HOME ?? join(env.HOME || homedir(), '.cairn-memory');
   if (!validPath(path)) throw new SetupError('local_root_invalid', 2);

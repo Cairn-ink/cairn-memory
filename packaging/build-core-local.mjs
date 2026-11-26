@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { command } from './build.mjs';
 import { engineIdForCoreLocal, sha256 } from './core-local/engine-id.mjs';
-import { candidateFileBytes, candidateSourcePath, cliEntry, coreManifest,
+import { candidateFileBytes, candidateSourcePath, captureInventoryPath, cliEntry, coreManifest,
   coreRuntimeManifest, deriveRuntimeGraph } from './core-local/import-graph.mjs';
 
 const repo = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
@@ -85,13 +85,13 @@ function verifyInstalledStartup(install, installed, scratch) {
   throw new Error('core_local_startup_handshake_mismatch');
 }
 
-function reportInventoryMismatch(missing, extra) {
+function reportInventoryMismatch(missing, extra, inventory = inventoryPath) {
   const code = 'core_local_inventory_graph_mismatch';
   const error = new Error([
     code,
     `Missing from inventory: ${JSON.stringify(missing)}`,
     `Extra in inventory: ${JSON.stringify(extra)}`,
-    `Update ${inventoryPath} to match the sorted runtime graph.`,
+    `Update ${inventory} to match the sorted runtime graph.`,
   ].join('\n'));
   error.code = code;
   throw error;
@@ -99,21 +99,31 @@ function reportInventoryMismatch(missing, extra) {
 
 export function buildCoreLocalCandidate(output) {
   const dest = resolve(output);
-  const runtime = readJSON(join(repo, inventoryPath));
-  const listed = Array.isArray(runtime) ? runtime : [];
-  const graph = deriveRuntimeGraph(repo, { checkStartup(startup) {
+  const baseInventory = readJSON(join(repo, inventoryPath));
+  const captureInventory = join(repo, captureInventoryPath);
+  const includeCapture = existsSync(captureInventory);
+  const extraInventory = includeCapture ? readJSON(captureInventory) : [];
+  const baseFiles = Array.isArray(baseInventory) ? baseInventory : [];
+  const captureFiles = Array.isArray(extraInventory) ? extraInventory : [];
+  const base = deriveRuntimeGraph(repo, { includeCapture: false, checkStartup(startup) {
     // Report known startup inventory errors even if the deferred input tree
     // is incomplete. A valid startup inventory still requires the full audit.
-    const missing = startup.filter(path => !listed.includes(path));
+    const missing = startup.filter(path => !baseFiles.includes(path));
     if (!missing.length) return;
-    const extra = listed.filter(path => typeof path === 'string' &&
+    const extra = baseFiles.filter(path => typeof path === 'string' &&
       /^(?:[\w-][\w.-]*\/)*[\w-][\w.-]*$/u.test(path) && !existsSync(join(repo, candidateSourcePath(path))));
     reportInventoryMismatch(missing, extra);
   } });
-  if (!isDeepStrictEqual(runtime, graph)) {
-    reportInventoryMismatch(graph.filter(path => !listed.includes(path)), listed.filter(path => !graph.includes(path)));
+  if (!isDeepStrictEqual(baseInventory, base)) {
+    reportInventoryMismatch(base.filter(path => !baseFiles.includes(path)), baseFiles.filter(path => !base.includes(path)));
   }
-  const copied = [...runtime, 'LICENSE'];
+  const graph = includeCapture ? deriveRuntimeGraph(repo, { includeCapture: true }) : base;
+  const capture = graph.filter(path => !base.includes(path));
+  if (!isDeepStrictEqual(extraInventory, capture)) {
+    reportInventoryMismatch(capture.filter(path => !captureFiles.includes(path)), captureFiles.filter(path => !capture.includes(path)),
+      captureInventoryPath);
+  }
+  const copied = [...graph, 'LICENSE'];
   const files = [...copied, 'package.json', coreManifest].sort();
   const generated = {
     'package.json': json({
@@ -160,13 +170,13 @@ export function buildCoreLocalCandidate(output) {
     const extracted = join(extract, 'package');
     const archiveDigests = treeDigests(extracted);
     if (!isDeepStrictEqual(archiveDigests, sourceDigests)) throw new Error('core_local_archive_digest_mismatch');
-    if (!isDeepStrictEqual(deriveRuntimeGraph(extracted), graph)) throw new Error('core_local_archive_graph_mismatch');
+    if (!isDeepStrictEqual(deriveRuntimeGraph(extracted, { includeCapture }), graph)) throw new Error('core_local_archive_graph_mismatch');
 
     command('npm', ['install', ...npmFlags, '--no-package-lock', archive], install, npmrc);
     const installed = join(install, 'node_modules', name);
     const installedDigests = treeDigests(installed);
     if (!isDeepStrictEqual(installedDigests, archiveDigests)) throw new Error('core_local_install_digest_mismatch');
-    if (!isDeepStrictEqual(deriveRuntimeGraph(installed), graph)) throw new Error('core_local_install_graph_mismatch');
+    if (!isDeepStrictEqual(deriveRuntimeGraph(installed, { includeCapture }), graph)) throw new Error('core_local_install_graph_mismatch');
     verifyInstalledStartup(install, installed, scratch);
 
     const archiveBytes = readFileSync(archive);
