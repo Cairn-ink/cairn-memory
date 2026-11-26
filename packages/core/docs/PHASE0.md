@@ -1322,3 +1322,50 @@ privacy, pause, lineage, changed inputs, key mismatch, storage or commit
 uncertainty. If the fallback itself fails, the claim is abandoned with the
 original failure, as without the option. A source withdrawn between the
 model failure and the fallback finish is not archived.
+
+## Addendum 28 — Window fence for session-less explicit memories
+
+`config.explicitWindowFence = { enabled: true }` opts a service into this
+fence. Unset or `false` leaves forget and correct byte-identical. The option
+takes the same validation as `rawCapture`: one own boolean key, `enabled`.
+
+With the option on, forget and correct of a session-less explicit memory
+write durable window suppression facts in the same transaction as the rest of
+the operation.
+
+A memory is session-less explicit when its source kind is `"mcp"` or `"web"`
+and its source session is `null`. An explicit tool never learns which
+conversation it serves, so its saves name no session, and migrated explicit
+memories carry the same source. Captured, imported and migrated captured
+memories keep the existing session fence and add no window. The trigger reads
+only the memory row.
+
+The anchors are the memory's `createdAtMs` and `updatedAtMs`. For each
+distinct anchor `t`, the operation writes:
+
+```
+{ kind: "window", owner, namespace, actionId, origin: "forget",
+  client: null, window: { startMs: t - 1800000, endMs: t + 1800000 },
+  anchor: "pm30min" }
+```
+
+`client: null` covers every client, because an explicit tool's client name
+is not the captured client's name. Every window uses the origin `"forget"`,
+so a correction and a later forget of the same memory reuse the same window.
+`actionId` is the operation's action. The facts carry no text. Correct
+computes its windows from the row it reads before its write transaction
+begins, as it does for its predecessor fact. An unchanged correction writes
+nothing.
+
+Windows are durable. Raw, router cards and captures that arrive later inside
+a window are withheld, as are rows already stored inside it. A store that
+cannot write a window fact fails the whole operation.
+
+Known limits:
+
+- Messages whose time is unknown are not covered by these windows.
+- An explicit save that only touched an existing captured memory leaves that
+  memory's source unchanged. Its forget fences the captured session, not the
+  conversation where the explicit save happened.
+- Where explicit receipts carry finite times, a window also withholds explicit
+  saves whose receipts fall inside it.
