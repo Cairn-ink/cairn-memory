@@ -104,3 +104,5 @@ export function createPostgresSupersessionStore(options?: SessionHashOptions & {
 export function createPostgresConflictEdgeStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): ConflictEdgeStore;
 export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
 export { createPostgresTopicStore } from "./topics.mjs";
+export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";
+export type { PostgresHostOperation } from "./host-write-hooks.mjs";

@@ -7,7 +7,7 @@ export type Capability =
   | "contextRead" | "contextRawRead" | "inspect";
 
 type OptionalReadCapability = "contextRead" | "contextRawRead" | "inspect";
-type WriteParityCapability = "proceduralTags" | "receiptAttachAdvancesRevision";
+type WriteParityCapability = "proceduralTags" | "receiptAttachAdvancesRevision" | "hostWriteHooks";
 type WriteParityCapabilities = Readonly<Partial<Record<WriteParityCapability, boolean>>>;
 export type Capabilities = Readonly<Record<Exclude<Capability, OptionalReadCapability>, boolean> &
   Partial<Record<OptionalReadCapability, boolean>>>;
