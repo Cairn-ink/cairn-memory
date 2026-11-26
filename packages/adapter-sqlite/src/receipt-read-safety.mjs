@@ -36,7 +36,7 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
       ? readEntry(db, scope, memoryId) : undefined;
     const retirement = historical?.row.historical && historical.row.text === excerpt &&
       historical.legacyHash === "sha256:" + historical.historyHash ? historical.historyHash : undefined;
-    if (policy.withholdsReceipt(receipt, key, legacyKey) || (excerpt !== undefined &&
+    if (policy.withholdsReceipt(receipt, key, legacyKey, { ownPosition: true }) || (excerpt !== undefined &&
         ((excerpt.length >= 799 && policy.legacy.has(receiptExcerptDenial(excerpt))) ||
         importTextBlocked(policy.facts, excerpt, policy.legacy, retirement)))) return false;
     if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return false;
