@@ -77,7 +77,8 @@ export const DOCUMENT_CARD_CORRECTION_PRIVACY_CASE = {
 
     /** @param {unknown} value @param {string} surface */
     const excludesWithheldReceipt = (value, surface) => {
-      const text = typeof value === "string" ? value : JSON.stringify(value);
+      const text = typeof value === "string" ? value : JSON.stringify(value, (_key, item) =>
+        item instanceof Map ? [...item] : item);
       check(!text.includes(original), surface + " exposed the replaced text");
       check(!text.includes(hiddenId), surface + " exposed the withheld receipt ID");
     };
