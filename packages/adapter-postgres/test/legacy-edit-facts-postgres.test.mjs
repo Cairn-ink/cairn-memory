@@ -459,7 +459,10 @@ test("a capture finishing after the forget still withholds vector-close text", m
   const item = { content: nearSentence, kind: "fact", confidence: 1, textHash: `sha256:${digest.value}`,
     embedding: { model, vector: close }, receipts: [{ client: key.client, sessionId: key.sessionId,
       messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }] };
-  const result = await run(tx => capture.finish(tx, claim.token, [item]));
+  const result = await run(async tx => {
+    await capture.assertEligible(tx, key, [0]);
+    return capture.finish(tx, claim.token, [item]);
+  });
   assert.deepEqual(result.suppressedItems, [0]);
   assert.deepEqual(result.memories, []);
 });

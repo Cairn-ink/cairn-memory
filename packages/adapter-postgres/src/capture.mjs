@@ -26,7 +26,8 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
  *   core_admitted: boolean | null, core_failure_code: string | null, core_result: FinishResult | null,
  *   legacy_failed: boolean, raw_archive_from: number | null,
  *   core_lease_expires_at_ms: string | null, core_lease_sources: {
- *     times: (number | null)[], proofs: Awaited<ReturnType<ReturnType<typeof createCaptureProofs>>>
+ *     times: (number | null)[], proofs: Awaited<ReturnType<ReturnType<typeof createCaptureProofs>>>,
+ *     unmatchableIdPositions?: number[]
  *   } | null
  * }} CaptureRow */
 
@@ -45,7 +46,7 @@ const SELECT_EVENT = `SELECT session_id, status, raw_archive_from, core_namespac
 const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
   WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
 const LOCK_LEASE_SOURCE = `SELECT session_id, core_namespace, core_payload_digest, core_admitted,
-    core_lease_expires_at_ms::text, core_lease_sources, raw_request, core_outbox_metadata
+    core_lease_token, core_lease_expires_at_ms::text, core_lease_sources, raw_request, core_outbox_metadata
   FROM capture_events WHERE ${IDENTITY} FOR UPDATE`;
 const STATUS = `SELECT core_failure_code,
     CASE WHEN status = 'completed' THEN 2
@@ -81,6 +82,11 @@ const COMPLETE = `UPDATE capture_events SET status = 'completed', memory_count =
 /** @param {Pick<CaptureKey, "scope" | "client" | "eventId">} key */
 function identity({ scope, client, eventId }) {
   return [scope.owner, client, eventId];
+}
+
+/** @param {CaptureKey} key */
+function selectionIdentity(key) {
+  return JSON.stringify([...identity(key), key.scope.namespace, key.sessionId, key.payloadDigest]);
 }
 
 /** @param {Pick<CaptureRow, "core_payload_digest" | "session_id">} row @param {CaptureKey} key */
@@ -155,6 +161,8 @@ export function createPostgresCapturePorts(options) {
   const { now = Date.now, lineageSecret, hashSessionKey, nearDuplicate, allowNonNullNamespace } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
   const memories = createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace, hashSessionKey });
+  /** @type {WeakMap<Tx, Map<string, { lease: string, positions: Set<number> }>>} */
+  const selections = new WeakMap();
 
   return {
     async retainedReceiptIds(tx, scope, memoryId, receipts) {
@@ -198,9 +206,14 @@ export function createPostgresCapturePorts(options) {
           const stored = source?.messages ?? batch;
           const times = stored.map(({ occurredAtMs }) => occurredAtMs);
           const proofs = await captureProofs(copy, stored);
+          // UTF-8 signing replaces unpaired surrogates. For a direct claim, retain only the
+          // positions with lossy IDs so their proofs cannot match a different receipt ID.
+          const unmatchableIdPositions = source ? undefined :
+            stored.flatMap(({ id }, position) => id.isWellFormed() ? [] : [position]);
           const token = crypto.randomUUID();
           await query(SET_LEASE, [
-            ...identity(copy), token, (current + BigInt(leaseMs)).toString(), JSON.stringify({ times, proofs }),
+            ...identity(copy), token, (current + BigInt(leaseMs)).toString(),
+            JSON.stringify({ times, proofs, unmatchableIdPositions }),
           ]);
           return { status: "claimed", token };
         };
@@ -237,17 +250,19 @@ export function createPostgresCapturePorts(options) {
     },
 
     async finish(tx, token, items) {
-      const { scope, source, batch, lease, nowMs, current } = await pauseLockedWrite(tx, () => {
+      const { scope, source, batch, lease, nowMs, current, bound } = await pauseLockedWrite(tx, () => {
         const lease = readToken(token);
         const batch = copyFinishItems(items);
         return async (query) => {
           if (lease === null) throw new CoreError("stale_admission");
           const { row, nowMs } = await requireLiveToken(query, tx.owner, lease, now,
-            `, status, core_namespace, client, session_id, core_admitted, core_lease_sources, raw_request, core_outbox_metadata`);
+            `, status, core_namespace, client, session_id, event_id, core_payload_digest,
+              core_admitted, core_lease_sources, raw_request, core_outbox_metadata`);
           if (row.status !== "pending" || !row.core_lease_sources) throw new CoreError("stale_admission");
           const scope = { owner: tx.owner, namespace: row.core_namespace };
           const source = { kind: /** @type {const} */ ("capture"), client: row.client, sessionId: row.session_id };
-          const { proofs, times } = /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources);
+          const { proofs, times, unmatchableIdPositions } =
+            /** @type {NonNullable<CaptureRow["core_lease_sources"]>} */ (row.core_lease_sources);
           const current = row.core_admitted ? decodeOutboxMessages(row.raw_request, row.core_outbox_metadata) : null;
           if (current) {
             const currentProofs = await captureProofs({ scope, client: row.client }, current);
@@ -267,6 +282,29 @@ export function createPostgresCapturePorts(options) {
           }
           const receipts = new Map(batch.flatMap(({ receipts }) => receipts.map(receipt =>
             [JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId, receipt.role]), receipt])));
+          /** @type {{ key: string, binding: { lease: string, positions: Set<number> } } | null} */
+          let bound = null;
+          if (receipts.size) {
+            const key = selectionIdentity({ ...leaseSource, eventId: row.event_id, payloadDigest: row.core_payload_digest });
+            const binding = selections.get(tx)?.get(key);
+            if (binding?.lease !== lease || !binding.positions.size) throw new CoreError("suppressed");
+            bound = { key, binding };
+            const ids = current?.map(({ id }) => id) ?? proofs?.map(({ message_mac }) => message_mac) ?? [];
+            const unmatchable = new Set(unmatchableIdPositions);
+            /** @type {Map<string, number | null>} */
+            const positions = new Map();
+            for (const [position, id] of ids.entries()) {
+              if (!current && unmatchable.has(position)) continue;
+              positions.set(id, positions.has(id) ? null : position);
+            }
+            for (const { client, sessionId, messageId } of receipts.values()) {
+              if (client !== source.client || sessionId !== source.sessionId) throw new CoreError("suppressed");
+              // Older direct leases cannot distinguish a literal replacement character from a lossy ID.
+              if (!current && !unmatchableIdPositions && messageId.includes("\uFFFD")) throw new CoreError("suppressed");
+              const position = positions.get(current ? messageId : await captureProofs.sign(messageId));
+              if (position == null || !binding.positions.has(position)) throw new CoreError("suppressed");
+            }
+          }
           const sessions = receipts.size ? await conversationSessions(query, scope, source) : [];
           for (const receipt of receipts.values()) {
             const fromLease = sessions.some(session => session.client === receipt.client && session.sessionId === receipt.sessionId);
@@ -283,12 +321,15 @@ export function createPostgresCapturePorts(options) {
             await assertReceiptSource(query, scope, receipt, captureProofs, hashSessionKey,
               fromLease ? current ?? [] : [], evidence);
           }
-          return { scope, source, batch, lease, nowMs, current };
+          return { scope, source, batch, lease, nowMs, current, bound };
         };
       });
 
       const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories);
       return runOperation(tx, async (query) => {
+        // An assertEligible queued after the binding check replaces or clears the selection, even for the
+        // same positions. Refusing here fails the transaction, so the writeback above rolls back too.
+        if (bound && selections.get(tx)?.get(bound.key) !== bound.binding) throw new CoreError("suppressed");
         result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
@@ -354,10 +395,21 @@ export function createPostgresCapturePorts(options) {
 
     async assertEligible(tx, key, positions) {
       requireLiveRun(tx, true);
-      const [copy, selected] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyPositions(positions)]));
+      const copy = readInput(() => copyKey(tx, key));
+      const bindingKey = selectionIdentity(copy);
+      let selected;
+      try {
+        selected = readInput(() => copyPositions(positions));
+      } catch (error) {
+        // Keep validation non-poisoning and invalidate in the same order as queued assertions.
+        await runOperation(tx, async () => { selections.get(tx)?.delete(bindingKey); });
+        throw error;
+      }
       return runOperation(tx, async (query) => {
+        selections.get(tx)?.delete(bindingKey);
         /** @type {{rows: (Pick<CaptureRow, "session_id" | "core_namespace" | "core_payload_digest" | "core_admitted" |
-         *   "core_lease_expires_at_ms" | "core_lease_sources"> & {raw_request: unknown, core_outbox_metadata: unknown})[]}} */
+         *   "core_lease_expires_at_ms" | "core_lease_sources"> & {core_lease_token: string,
+         *   raw_request: unknown, core_outbox_metadata: unknown})[]}} */
         const { rows: [row] } = await query(LOCK_LEASE_SOURCE, identity(copy));
         if (!row || row.core_namespace !== copy.scope.namespace || row.core_payload_digest === null) {
           throw new CoreError("stale_admission");
@@ -381,6 +433,10 @@ export function createPostgresCapturePorts(options) {
           if (!currentProofs || selected.some((position, index) =>
             currentProofs[index].content_mac !== proofs?.[position]?.content_mac)) throw new CoreError("suppressed");
         }
+        if (allowExactFence) return;
+        let byClaim = selections.get(tx);
+        if (!byClaim) selections.set(tx, byClaim = new Map());
+        byClaim.set(bindingKey, { lease: row.core_lease_token, positions: new Set(selected) });
       });
     },
   };

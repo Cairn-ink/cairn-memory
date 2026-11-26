@@ -440,6 +440,7 @@ const selected = new Set([
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
+  "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
   "CAPTURE-LEDGER-1", "CAPTURE-FORGET-3",
   "K-LEG-PASS-1", "K-LEG-PASS-2", "K-LEG-PASS-3", "K-LEG-PASS-4", "K-LEG-PASS-5", "K-LEG-PASS-6",
@@ -470,7 +471,6 @@ const notApplicable = {
     "T-RAT-receipt-private", "T-RAT-receipt-remove", "T-RAT-receipt-update", "T-RAT-revision", "T-RAT-scope", "T-RAT-stale"],
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
-  "finish binding to the asserted selection not implemented yet": ["K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;
