@@ -6,9 +6,8 @@ import { openStorage } from "../src/schema/open.mjs";
 import { scratch, seedFact, setWriteTime } from "./storage-fixtures.mjs";
 import { waitForVectorCache } from "./vector-fixtures.mjs";
 
-const usesVector = spec => !spec.needs.includes("vectorSuppression") &&
-  (spec.needs.includes("semanticRetrieval") || spec.needsOff?.includes("semanticRetrieval") ||
-    spec.requests?.semanticRetrieval === true);
+const usesVector = spec => spec.needs.includes("semanticRetrieval") || spec.needsOff?.includes("semanticRetrieval") ||
+  spec.requests?.semanticRetrieval === true;
 
 for (const { followUp, ...kitCase } of [
   ...CASES, ...CAPTURE_CASES, ...PRIVACY_MATCH_CASES, ...RELATION_CASES, ...RETRIEVAL_WINDOW_CASES,
@@ -51,6 +50,11 @@ function register(kitCase, name) {
       caseOwner = context.owner;
       return kitCase.run(context);
     } });
-    assert.equal(reason, null);
+    if (kitCase.needs.includes("vectorSuppression")) {
+      assert.equal(reason, "needs vectorSuppression");
+      t.skip("local forget is exact + identity/span, as 0.6.x");
+    } else {
+      assert.equal(reason, null);
+    }
   });
 }
