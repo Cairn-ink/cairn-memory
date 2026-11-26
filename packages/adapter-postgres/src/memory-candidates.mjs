@@ -127,6 +127,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           const seen = new Set();
           let checkedHidden = 0;
           let zerosExhausted = false;
+          let poolRequested = 0;
+          let poolReturned = 0;
           /** @type {Awaited<ReturnType<VectorCandidates["vector"]>>["rows"]} */
           const result = [];
 
@@ -178,6 +180,10 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
                   SELECT ${columns}, ${suppression} AS vector_hidden FROM memories m WHERE m.id = c.id AND m.user_id = $1
                   OFFSET 0
                 ) page ORDER BY ${rankDistance}, c.updated_at DESC, c.id COLLATE "C" DESC`, arguments_);
+              if (ann) {
+                poolRequested += size;
+                poolReturned += rows.length;
+              }
               const pending = rows.filter(row => !seen.has(row.id) && Number.isFinite(row.distance));
               const checked = await visibility.check(pending.map(row => readCandidate(row, selection.owner)));
               for (const [i, { memory, hidden }] of checked.entries()) {
@@ -268,7 +274,13 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           const complete = eligible === embedded && (preferIndex && !zeroQuery
             ? annFilled || annExhausted
             : checkedDepth && result.length >= Math.min(depth, embedded));
-          return { coverage: { eligible, embedded, complete }, rows: result };
+          return {
+            coverage: {
+              eligible, embedded, complete,
+              ...(poolRequested > 0 && { pool: { requested: poolRequested, returned: poolReturned } }),
+            },
+            rows: result,
+          };
         });
       },
     },
