@@ -6,14 +6,19 @@ import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
 import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
-import { scopeKey, sha256 } from "./storage-values.mjs";
+import { receiptIdentityKey } from "./receipt-identity.mjs";
+import { archivedReceiptExcerpt, scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
-/** @import { CaptureMessage, ContextRawReadStore, ContextRawTurn, ContextReadSet, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, ContextRawReadStore, ContextRawTurn, ContextEvidenceRow, ContextReadSet, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { RawRow } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
+/** @import { StoredReceipt } from "./receipt-identity.mjs" */
+/** @import { Policy } from "./receipt-read-safety.mjs" */
+/** @import { SQLOutputValue } from "node:sqlite" */
+/** @typedef {Extract<ContextEvidenceRow, {type: "memory"}>["receipts"][number]} EvidenceReceipt */
 /** @typedef {ReturnType<typeof contextEpochs>} Epochs */
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} RawLineage */
@@ -135,6 +140,38 @@ export function exactReceiptTurn(db, scope, memoryId, receipt, row) {
   return false;
 }
 
+/** @param {Scope} scope @param {EvidenceReceipt} receipt @param {RawRow} archived @returns {EvidenceReceipt} */
+export function withRawEvidence(scope, receipt, { client, sessionId, message }) {
+  return { ...receipt, rawTurns: [{ scope, conversationId: JSON.stringify([client, sessionId]), messageId: message.id }],
+    ...(message.occurredAtMs !== null && { sourceTimesMs: [message.occurredAtMs] }) };
+}
+
+/** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {Policy} policy
+ * @param {ReceiptReadSafety} receiptReadSafety @param {Record<string, SQLOutputValue>} row
+ */
+export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, legacy_receipt_key, id, time }) {
+  if (typeof id !== "string" || !id) return;
+  const stored = /** @type {StoredReceipt} */ (decodeJson(body));
+  if (stored.receiptKey !== undefined || stored.excerpt !== undefined) return;
+  const { client, sessionId, messageId, role, occurredAtMs } = stored;
+  const address = { client, sessionId, messageId, role, occurredAtMs };
+  const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
+  /** @type {RawRow | undefined} */
+  let archived;
+  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, row => { archived = row; }) ||
+      !archived || !exactReceiptTurn(db, scope, memoryId, address, archived)) return;
+  const excerpt = archivedReceiptExcerpt(archived.message.content);
+  if (!excerpt) return;
+  const receipt = { ...address, excerpt };
+  /** @type {RawRow | undefined} */
+  let checkedArchive;
+  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId,
+    row => { checkedArchive = row; }) || !checkedArchive || checkedArchive.client !== archived.client ||
+    checkedArchive.sessionId !== archived.sessionId || checkedArchive.message.id !== archived.message.id) return;
+  return withRawEvidence(scope, { ...receipt, id, eventId: messageId,
+    createdAtMs: Number(BigInt(String(time)) / 1000n) }, archived);
+}
+
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey @param {RawLineage} lineage
  * @param {ReceiptReadSafety} receiptReadSafety @param {() => number} monotonicMs
  * @param {MigratedRawPolicy} [migratedRaw]
@@ -191,9 +228,10 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
         const id = String(record.memory_id), entry = readEntry(db, scope, id);
-        const safe = project(record);
-        if (!entry || entry.row.historical || policy.hides(entry) || !safe ||
-            !exactReceiptTurn(db, scope, id, safe.receipt, row)) return false;
+        if (!entry || entry.row.historical || policy.hides(entry)) return false;
+        const receipt = record.excerpt === null
+          ? addressReceipt(db, scope, id, policy, receiptReadSafety, record) : project(record)?.receipt;
+        if (!receipt || !exactReceiptTurn(db, scope, id, receipt, row)) return false;
       }
       return true;
     };
