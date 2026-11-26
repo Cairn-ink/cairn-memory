@@ -1294,3 +1294,31 @@ embedder, extraction or the quantity ledger. The result is `done` with no
 memories and the finish's index revision. Pause, generation, lease and
 durable-deletion rules are the same as for model-backed capture. A source
 withdrawn between admission and finish is not archived.
+
+## Addendum 27 — Raw fallback when model-stage capture fails
+
+`config.rawCapture` accepts `enabled` and `onModelFailure`, each an optional
+boolean. At least one must be present, and no other key is allowed.
+`enabled: true` keeps the Addendum 26 rules and requires no model.
+`onModelFailure: true` requires a model; registration without one throws
+`invalid_input`. Unset or `false` leaves model-backed capture byte-identical.
+
+With `onModelFailure: true`, a `runCapture` failure whose code is
+`model_timeout`, `extraction_failed`, `provider_error`,
+`invalid_model_output`, `token_count_unavailable`,
+`context_budget_exceeded`, `embedding_failed`, `qualification_failed`,
+`reconciliation_failed`, `classification_failed` or `rationale_failed`
+does not abandon the claim. The event instead finishes on the Addendum 26
+Raw-only path in a new transaction: withdraw blank or changed slots,
+`assertEligible` on the survivors, re-read the passages, apply the core
+source filter, `finish(tx, token, [])`, `archiveAllowed`, and `archive` of
+the admitted copies of the allowed positions. The fallback checks the
+caller's signal but not the expired extraction deadline. It writes no
+memories. The result is `done` with no memories, the finish's index
+revision and `code` set to the original failure code.
+
+The fallback never runs when the host's signal aborted, or for any other code:
+privacy, pause, lineage, changed inputs, key mismatch, storage or commit
+uncertainty. If the fallback itself fails, the claim is abandoned with the
+original failure, as without the option. A source withdrawn between the
+model failure and the fallback finish is not archived.

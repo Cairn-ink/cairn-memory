@@ -37,8 +37,13 @@ export interface MemoryServiceConfig {
    * no provider call, no extraction, no memories. Valid only without a model; registration with a
    * model throws invalid_input. Capture still requires rawArchive storage and capture.admit.
    * With documentCards enabled, the existing keyless card path runs instead.
+   *
+   * Addendum 27. `onModelFailure: true` is valid only with a model (without one, registration throws
+   * invalid_input). When model-backed capture fails with a model-stage code, the event finishes on the
+   * Addendum 26 Raw-only path instead of being abandoned: no memories, admitted text archived, result
+   * `done` carrying the failure code. Unset or false keeps model-backed capture byte-identical.
    */
-  readonly rawCapture?: { readonly enabled: boolean };
+  readonly rawCapture?: { readonly enabled?: boolean; readonly onModelFailure?: boolean };
 }
 
 export interface MemoryServiceDeps {
