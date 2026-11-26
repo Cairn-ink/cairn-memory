@@ -120,12 +120,35 @@ for (const { id, title, run } of HOST_WRITE_HOOK_CASES) {
   test(`postgres ${id} ${title}`, migrationDbTest, async t => run(await fixture(t)));
 }
 
+test("Postgres checks finalization authorization before inspecting the save queue", migrationDbTest, async t => {
+  const { deps, port, table } = await fixture(t);
+  let refused;
+  const api = createMemoryService({ ...deps, hostWriteHooks: syntheticHooks({
+    async onSave(tx, ctx) {
+      refused = await port.finalizeSave(tx, ctx, 0).then(() => false, error => error.code);
+      await table.stageSave(tx, ctx.scope, "envelope", ctx.memory);
+    },
+  }) });
+  const saved = await api.save(scope, "The trail ends at a stone bench.", explicit, "fact", { hostRequest: requested });
+  assert.equal(saved.status, "saved");
+  assert.deepEqual(await table.inspect(scope, "envelope"), {
+    indexRevision: saved.indexRevision, value: { id: saved.item.id, revision: saved.item.revision },
+  });
+  assert.equal(refused, "storage_transaction_active");
+});
+
 test("Postgres hook reads the completed ledger and archived Raw on the pinned READ COMMITTED writer", migrationDbTest, async t => {
-  const { deps, port } = await fixture(t);
+  let finishing = false;
+  let revisionReads = 0;
+  const { deps, port } = await fixture(t, { intercept(connection, sql, values) {
+    if (finishing && sql.startsWith("SELECT index_revision::text FROM core_owner_state")) revisionReads++;
+    return connection.query(sql, values);
+  } });
   const coreBackend = new WeakMap();
   const { finish } = deps.storage.capture;
   deps.storage.capture.finish = async (tx, ...args) => {
     coreBackend.set(tx, (await query(tx, "SELECT pg_backend_pid() AS pid")).rows[0].pid);
+    finishing = true;
     return finish(tx, ...args);
   };
   let calls = 0;
@@ -141,6 +164,7 @@ test("Postgres hook reads the completed ledger and archived Raw on the pinned RE
   }) });
   await api.enqueueCapture(scope, { ...captureIdentity, messages });
   assert.equal((await api.runCapture(scope, captureIdentity)).status, "done");
+  assert.equal(revisionReads, 1);
   assert.equal(calls, 1);
 });
 

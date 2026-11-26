@@ -112,6 +112,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     },
 
     async captureWrites(tx, key, result) {
+      assertOutsideHostWriteHook();
       requireWrite(tx, key.scope);
       requireHostFinish(tx, key, result);
       const effects = hostCaptureEffects.get(tx);
@@ -167,6 +168,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     },
 
     async finalizeSave(tx, { scope }, indexRevision) {
+      assertOutsideHostWriteHook();
       requireWrite(tx, scope);
       const pending = staged.get(tx);
       if (!pending) return;

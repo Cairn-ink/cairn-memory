@@ -93,8 +93,13 @@ export function isHostWriteHookFailure(error) {
  */
 export function hostOperation(context, tx, scope, mode, start) {
   const run = context.getStore();
-  const pending = Promise.resolve().then(() => {
-    if (!run?.active || run.tx !== tx || tx.readOnly || scope?.owner !== run.scope.owner ||
+  if (!run) {
+    const denied = Promise.reject(new CoreError("host_write_hook_failed"));
+    void denied.catch(() => {});
+    return denied;
+  }
+  return run.track(() => {
+    if (run.tx !== tx || tx.readOnly || scope?.owner !== run.scope.owner ||
         scope.namespace !== run.scope.namespace ||
         (mode !== "read" && (run.phase === "beforeSave" || run.phase === "beforeCorrect")) ||
         (mode === "finalizeSave" && !run.keyedSave)) {
@@ -102,10 +107,6 @@ export function hostOperation(context, tx, scope, mode, start) {
     }
     return start(run.scope);
   });
-  run?.pending.add(pending);
-  const remove = () => run?.pending.delete(pending);
-  void pending.then(remove, remove);
-  return pending;
 }
 
 /** @template T @param {T} value @returns {T} */
@@ -188,24 +189,40 @@ export function bindHostWriteHooks(input, port) {
    */
   async function invoke(phase, tx, ctx, validate) {
     const context = freeze(structuredClone(ctx));
+    let active = true;
+    /** @type {Set<Promise<unknown>>} */
+    const pending = new Set();
     /** @type {HostHookRun} */
-    const run = { tx, scope: context.scope, phase, active: true, pending: new Set(),
-      keyedSave: phase === "onSave" && "request" in context && context.request !== null };
+    const run = Object.freeze({
+      tx, scope: context.scope, phase,
+      keyedSave: phase === "onSave" && "request" in context && context.request !== null,
+      /** @template U @param {() => Promise<U>} start */
+      track(start) {
+        const operation = Promise.resolve().then(() => {
+          if (!active) throw new CoreError("host_write_hook_failed");
+          return start();
+        });
+        pending.add(operation);
+        const remove = () => pending.delete(operation);
+        void operation.then(remove, remove);
+        return operation;
+      },
+    });
     let failed = false;
     let result;
     try {
       const callback = /** @type {(tx: Tx, ctx: typeof context) => Promise<unknown>} */ (hooks[phase]);
       result = await adapter.context.run(run, async () => {
         const decision = await callback(tx, context);
-        run.active = false;
-        if (run.pending.size) throw new CoreError("host_write_hook_failed");
+        active = false;
+        if (pending.size) throw new CoreError("host_write_hook_failed");
         return validate(structuredClone(decision));
       });
     } catch {
       failed = true;
     } finally {
-      run.active = false;
-      if (run.pending.size) await Promise.allSettled(run.pending);
+      active = false;
+      if (pending.size) await Promise.allSettled(pending);
     }
     const native = adapter.statementFailure(tx);
     if (native || failed) {

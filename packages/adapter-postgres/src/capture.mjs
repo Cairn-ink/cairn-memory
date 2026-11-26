@@ -6,6 +6,7 @@ import {
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources, hasRawFence } from "./capture-source.mjs";
+import { hostCaptureEffects } from "./host-write-context.mjs";
 import { copyReceipts, guardOwner, inputText, namespaceKey } from "./memory-input.mjs";
 import { canonicalReceiptId, decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
 import { createPostgresMemoryStore } from "./memory-store.mjs";
@@ -330,7 +331,8 @@ export function createPostgresCapturePorts(options) {
         // An assertEligible queued after the binding check replaces or clears the selection, even for the
         // same positions. Refusing here fails the transaction, so the writeback above rolls back too.
         if (bound && selections.get(tx)?.get(bound.key) !== bound.binding) throw new CoreError("suppressed");
-        result.indexRevision = await readIndexRevision(query, tx.owner);
+        // The hook path stamps the ledger with the revision after host effects.
+        if (!hostCaptureEffects.has(tx)) result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
         trackFinish(tx, { scope, client: completed.client, sessionId: source.sessionId,

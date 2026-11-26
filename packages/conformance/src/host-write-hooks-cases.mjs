@@ -478,4 +478,33 @@ export const HOST_WRITE_HOOK_CASES = [
       equal(await f.snapshot(), before, "Pending operation rolled back core state");
     },
   },
+  {
+    id: "HWH-EXECUTOR-2",
+    title: "callback authorization fields are immutable and run bookkeeping is private",
+    async run(f) {
+      const { scope, table, deps } = f;
+      const port = deps.storage.hostWriteHookPort;
+      check(port, "Expected a host write hook port");
+      const before = await f.snapshot();
+      for (const field of /** @type {const} */ (["scope", "phase", "tx", "keyedSave"])) {
+        /** @type {{run?: object}} */
+        const observed = {};
+        const api = service(f, {
+          async onSave(tx, ctx) {
+            const run = port.context.getStore();
+            check(run, "Expected a live callback context");
+            observed.run = run;
+            await table.put(tx, ctx.scope, "effect", true);
+            Object.assign(run, { [field]: run[field] });
+          },
+        });
+        await rejects(() => api.save(scope, initialText, source), "host_write_hook_failed");
+        check(observed.run && Object.isFrozen(observed.run), "The authorization record is frozen");
+        check(!("active" in observed.run) && !("pending" in observed.run), "Run bookkeeping is private");
+        check("scope" in observed.run && Object.isFrozen(observed.run.scope), "The authorized scope is frozen");
+        equal(await table.inspect(scope, "effect"), undefined, "Host write rolled back");
+        equal(await f.snapshot(), before, "Core write rolled back");
+      }
+    },
+  },
 ];

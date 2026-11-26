@@ -73,11 +73,10 @@ export function createMemoryHostWriteHooks({ uow, port, hostRead, hostWrite }, r
     },
 
     async finalizeSave(tx, { scope }, indexRevision) {
-      if (nodeHostWriteContext.getStore()) throw new CoreError("storage_transaction_active");
-      const pending = finalizers.get(tx);
-      if (!pending) return;
-      finalizers.delete(tx);
-      await hostWrite(tx, scope, "conditional", () => (getState, _markDirty, run) => {
+      await port.write(tx, scope, "conditional", () => (getState, _markDirty, run) => {
+        const pending = finalizers.get(tx);
+        if (!pending) return;
+        finalizers.delete(tx);
         for (const finalize of pending) finalize(getState(), indexRevision);
         run.stateWritten = true;
       }, true);

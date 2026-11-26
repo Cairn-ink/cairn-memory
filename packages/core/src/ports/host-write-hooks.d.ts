@@ -65,11 +65,10 @@ export interface HostWriteHooks {
 /** Adapter context tracks only the live callback, including its asynchronous continuations. */
 export interface HostHookRun {
   readonly tx: Tx;
-  readonly scope: Scope;
+  readonly scope: Readonly<Scope>;
   readonly phase: keyof HostWriteHooks;
   readonly keyedSave: boolean;
-  active: boolean;
-  readonly pending: Set<Promise<unknown>>;
+  readonly track: <T>(start: () => Promise<T>) => Promise<T>;
 }
 
 /** Engine-side adapter port. Host callbacks use the adapter's scoped transaction executor. */
