@@ -71,7 +71,11 @@ export interface FactMatchIncoming {
   sourceMemory?: { id: string; createdAtMs: number } | null;
 }
 
-/** Identifies the local host's explicit-save receipt by the legacy rule for its session and null event time. */
+/**
+ * Identifies the local host's explicit-save receipt by the legacy rule for its session and null event time.
+ * Adapters may use it to skip only the unknown-time part of window facts for the receipt's own position.
+ * Raw archived for the cited message is still checked in full.
+ */
 export declare function placeholderReceipt(receipt: unknown): boolean;
 
 /** An ineligible comparison provides no permission to reveal the row. */

@@ -2,7 +2,6 @@ import { identifier, isWellFormedText, revision, validateDenseArray, validateObj
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { placeholderReceipt } from "../privacy/fact-match.mjs";
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
 import { legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
@@ -348,9 +347,7 @@ export function writeMethods(deps) {
   async function withheldReceipt(tx, scope, receipt) {
     if (suppressions.receiptWithheld) return suppressions.receiptWithheld(tx, scope, receipt);
     const { client, sessionId, occurredAtMs } = receipt;
-    const snapshot = await suppressions.snapshot(tx, scope, {
-      client, sessionId, occurredAtMs: placeholderReceipt(receipt) ? [] : [occurredAtMs],
-    });
+    const snapshot = await suppressions.snapshot(tx, scope, { client, sessionId, occurredAtMs: [occurredAtMs] });
     return snapshot.blockedSession || snapshot.blockedMessages.length > 0;
   }
 

@@ -291,6 +291,8 @@ function windowMatches(fact, client, time, includeUnknownTime) {
 
 /**
  * Identifies the local host's explicit-save receipt by the legacy rule for its session and null event time.
+ * Adapters may use it to skip only the unknown-time part of window facts for the receipt's own position.
+ * Raw archived for the cited message is still checked in full.
  * @param {unknown} receipt
  */
 export function placeholderReceipt(receipt) {
