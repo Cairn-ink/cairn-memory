@@ -50,7 +50,7 @@ test("ANN emits a materialized 400-row pool and the same exact SQL with and with
     const result = await uow.run(owner, { readOnly: true },
       tx => createPostgresMemoryCandidates().vector.vector(tx, { owner, namespaces: [null] }, axis, "test", 50));
     assert.equal(result.rows.length, 50);
-    assert.deepEqual(result.coverage, { eligible: 2000, embedded: 2000, complete: true });
+    assert.deepEqual(result.coverage, { eligible: 2000, embedded: 2000, complete: true, pool: { requested: 400, returned: 400 } });
 
     const start = batched ? [[[begin, lock, timeout].join("; ")]] : [[begin, undefined], [lock, undefined], [timeout, undefined]];
     assert.deepEqual(statements.splice(0, start.length), start);
@@ -123,7 +123,7 @@ test("ANN coverage distinguishes filled, exhausted, and cut-off pools", async t 
         tx => createPostgresMemoryCandidates().vector.vector(tx, { owner, namespaces: [null] }, axis, "test", 2));
       assert.deepEqual(observed, calls);
       assert.equal(result.rows.length, 2);
-      assert.deepEqual(result.coverage, { eligible: embedded, embedded, complete });
+      assert.deepEqual(result.coverage, { eligible: embedded, embedded, complete, pool: { requested: 400, returned: ann } });
     });
   }
 });
