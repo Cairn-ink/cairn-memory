@@ -197,7 +197,8 @@ test("Postgres publication counts coverage only for the publishing owner", migra
   const { pool, uow, write } = await setup(t);
   const provider = createPostgresFingerprintKeyProvider("key-a", { uow });
   const key = await userFingerprintKey("key-a", owner, HOSTED_FINGERPRINT_LABELS);
-  await write({ ...base, kind: "text", mode: "exact", text: { digests: [await coreDigest("protected", key)] } });
+  const otherKey = await userFingerprintKey("key-x", owner, HOSTED_FINGERPRINT_LABELS);
+  await write({ ...base, kind: "text", mode: "exact", text: { digests: [await coreDigest("protected", otherKey)] } });
   await provider.publish(other, key.id);
   await assert.rejects(provider.publish(owner, key.id), { code: "fingerprint_key_mismatch" });
   assert.equal((await provider.userKey(other)).id, key.id);
