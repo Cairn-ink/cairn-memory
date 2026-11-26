@@ -44,7 +44,9 @@ function freezeConfig(input) {
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
     rowShingles: true,
   };
-  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger", "rawCapture"]);
+  validateObject(input, [
+    ...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger", "rawCapture", "explicitWindowFence",
+  ]);
   const {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
@@ -55,6 +57,7 @@ function freezeConfig(input) {
     documentCards,
     quantityLedger,
     rawCapture,
+    explicitWindowFence,
   } = input;
   for (const weight of [nearDuplicateDistance, lexicalWeight, vectorWeight]) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
@@ -80,17 +83,36 @@ function freezeConfig(input) {
   }
   let raw;
   if (rawCapture !== undefined) {
-    const fields = validateObject(rawCapture, ["enabled"]);
+    const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
+    // Read enabled as in the base validator, and read the fallback option only when own.
+    const { enabled } = fields;
+    const onModelFailure = Object.hasOwn(fields, "onModelFailure") ? fields.onModelFailure : undefined;
+    const keys = Reflect.ownKeys(fields);
+    if (!keys.length || keys.some(key => key !== "enabled" && key !== "onModelFailure") ||
+        keys.some(key => !Object.hasOwn(fields, key))) {
+      throw new CoreError("invalid_input");
+    }
+    const hasEnabled = keys.includes("enabled");
+    const hasOnModelFailure = keys.includes("onModelFailure");
+    if ((hasEnabled && typeof enabled !== "boolean") || (hasOnModelFailure && typeof onModelFailure !== "boolean")) {
+      throw new CoreError("invalid_input");
+    }
+    raw = Object.freeze({ enabled: hasEnabled && enabled === true, onModelFailure: hasOnModelFailure && onModelFailure === true });
+  }
+  let windowFence;
+  if (explicitWindowFence !== undefined) {
+    const fields = validateObject(explicitWindowFence, ["enabled"]);
     const { enabled } = fields;
     if (Reflect.ownKeys(fields).length !== 1 || !Object.hasOwn(fields, "enabled") || typeof enabled !== "boolean") {
       throw new CoreError("invalid_input");
     }
-    raw = Object.freeze({ enabled });
+    windowFence = Object.freeze({ enabled });
   }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
     documentCards: cards, quantityLedger: freezeQuantityLedger(quantityLedger), rawCapture: raw,
+    explicitWindowFence: windowFence,
   });
 }
 
@@ -199,6 +221,7 @@ export function createMemoryService(input) {
     }
     const deps = freezeDeps(input);
     if (deps.model !== null && deps.config.rawCapture?.enabled === true) throw new CoreError("invalid_input");
+    if (deps.model === null && deps.config.rawCapture?.onModelFailure === true) throw new CoreError("invalid_input");
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),

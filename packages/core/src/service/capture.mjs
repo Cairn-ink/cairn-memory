@@ -33,6 +33,11 @@ const HOSTED_EXTRACT_OUTPUT_TOKENS = 32_768;
 // The provider budget allows 1,024 tokens for schema and framing above the local count.
 const EXTRACT_FRAMING_TOKENS = 1024;
 const MAX_EXTRACT_OUTPUT_UNITS = 80_000;
+const RAW_FALLBACK_FAILURE_CODES = new Set([
+  "model_timeout", "extraction_failed", "provider_error", "invalid_model_output",
+  "token_count_unavailable", "context_budget_exceeded", "embedding_failed",
+  "qualification_failed", "reconciliation_failed", "classification_failed", "rationale_failed",
+]);
 
 /** @param {unknown} raw @returns {CaptureMessage} */
 function validateMessage(raw) {
@@ -118,9 +123,9 @@ async function filterScopedCaptureSources(scope, sources, positions, passages, p
   return positions.filter((_, index) => allowed[index]);
 }
 
-/** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */
+/** @param {AbortSignal | undefined} signal @param {CaptureDeadline} [deadline] */
 function checkCaptureAbort(signal, deadline) {
-  deadline.check();
+  deadline?.check();
   if (signal?.aborted) throw new CoreError("model_cancelled");
 }
 
@@ -464,11 +469,11 @@ export function captureMethods(deps) {
         if (await uow.run(owner, lock, pauseChanged)) throw new CoreError("capture_paused");
       }
 
-      /** @template T @param {(tx: Tx) => Promise<T>} work */
-      function runAtGeneration(work) {
+      /** @template T @param {(tx: Tx) => Promise<T>} work @param {boolean} [abandonOnPause] */
+      function runAtGeneration(work, abandonOnPause = true) {
         return uow.run(owner, lock, async tx => {
           if (!await pauseChanged(tx)) return work(tx);
-          await capture.abandon(tx, token, { code: "capture_paused", retryable: false });
+          if (abandonOnPause) await capture.abandon(tx, token, { code: "capture_paused", retryable: false });
           return null;
         });
       }
@@ -510,6 +515,10 @@ export function captureMethods(deps) {
       }
 
       let retryableExtraction = false;
+      /** @type {((positions: number[], checkDeadline: boolean) => Promise<
+       * {status: "done", result: Awaited<ReturnType<typeof finish>>} |
+       * Awaited<ReturnType<typeof abandonKeyMismatch>> | null>) | undefined} */
+      let finishRaw;
       try {
         if (positions.length === 0) {
           const result = await runAtGeneration(tx => finish(tx, []));
@@ -529,6 +538,36 @@ export function captureMethods(deps) {
           });
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
+        };
+        finishRaw = (positions, checkDeadline) => {
+          if (!archive) throw new CoreError("capability_unavailable");
+          const deadline = checkDeadline ? createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock)
+            : undefined;
+          return runAtGeneration(async tx => {
+            checkCaptureAbort(options?.signal, deadline);
+            const stillCurrent = await unchangedPositions(tx, positions);
+            await capture.assertEligible(tx, key, stillCurrent);
+            const sourcePassages = await readSourcePassages(tx, stillCurrent);
+            let currentSourceKey = null;
+            if (capabilities.fingerprintKey && sourcePassages.length) {
+              currentSourceKey = await selectWriteKey(tx);
+              if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) {
+                if (checkDeadline) return abandonKeyMismatch(tx);
+                throw new CoreError("fingerprint_key_mismatch");
+              }
+            }
+            const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
+              null, sourceEvidence, currentSourceKey);
+            if (!checkDeadline) checkCaptureAbort(options?.signal);
+            const result = await finish(tx, []);
+            const rawMessages = allowedPositions.map(position => admittedMessages[position])
+              .filter(({ id }) => !excludedSources.has(id));
+            if (rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
+              await archive.archive(tx, key, rawMessages);
+            }
+            if (!checkDeadline) checkCaptureAbort(options?.signal);
+            return { status: "done", result };
+          }, checkDeadline);
         };
         /** @param {Tx} tx @param {number[]} requestedPositions */
         async function screenSourcePositions(tx, requestedPositions) {
@@ -570,25 +609,7 @@ export function captureMethods(deps) {
           if (supplemental && documents?.skipExtraction) return await supplemental.finishWithoutExtraction(positions,
             createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock));
           if (rawOnly) {
-            const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
-            const completed = await runAtGeneration(async tx => {
-              checkCaptureAbort(options?.signal, deadline);
-              const stillCurrent = await unchangedPositions(tx, positions);
-              await capture.assertEligible(tx, key, stillCurrent);
-              const sourcePassages = await readSourcePassages(tx, stillCurrent);
-              let currentSourceKey = null;
-              if (capabilities.fingerprintKey && sourcePassages.length) {
-                currentSourceKey = await selectWriteKey(tx);
-                if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
-              }
-              const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
-                null, sourceEvidence, currentSourceKey);
-              const result = await finish(tx, []);
-              if (archive && allowedPositions.length && await archive.archiveAllowed(tx, key) === true) {
-                await archive.archive(tx, key, allowedPositions.map(position => admittedMessages[position]));
-              }
-              return /** @type {const} */ ({ status: "done", result });
-            });
+            const completed = await finishRaw(positions, true);
             return completed === null ? { status: "paused" } : completed;
           }
           if (model === null) throw new CoreError("capability_unavailable");
@@ -725,6 +746,16 @@ export function captureMethods(deps) {
       } catch (error) {
         const failure = entryError(error);
         if (failure.code === "commit_outcome_unknown") return resolveUnknownCommit();
+        if (config.rawCapture?.onModelFailure === true && RAW_FALLBACK_FAILURE_CODES.has(failure.code) &&
+            !options?.signal?.aborted) {
+          try {
+            const completed = await finishRaw?.(positions, false);
+            if (completed?.status === "done") return { ...completed, code: failure.code };
+          } catch (fallbackError) {
+            if (entryError(fallbackError).code === "commit_outcome_unknown") return resolveUnknownCommit();
+            // Abandon with the original capture failure when the fallback rolls back.
+          }
+        }
         let paused = failure.kind === "paused";
         try {
           await uow.run(owner, lock, async tx => {

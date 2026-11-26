@@ -1294,3 +1294,78 @@ embedder, extraction or the quantity ledger. The result is `done` with no
 memories and the finish's index revision. Pause, generation, lease and
 durable-deletion rules are the same as for model-backed capture. A source
 withdrawn between admission and finish is not archived.
+
+## Addendum 27 — Raw fallback when model-stage capture fails
+
+`config.rawCapture` accepts `enabled` and `onModelFailure`, each an optional
+boolean. At least one must be present, and no other key is allowed.
+`enabled: true` keeps the Addendum 26 rules and requires no model.
+`onModelFailure: true` requires a model; registration without one throws
+`invalid_input`. Unset or `false` leaves model-backed capture byte-identical.
+
+With `onModelFailure: true`, a `runCapture` failure whose code is
+`model_timeout`, `extraction_failed`, `provider_error`,
+`invalid_model_output`, `token_count_unavailable`,
+`context_budget_exceeded`, `embedding_failed`, `qualification_failed`,
+`reconciliation_failed`, `classification_failed` or `rationale_failed`
+does not abandon the claim. The event instead finishes on the Addendum 26
+Raw-only path in a new transaction: withdraw blank or changed slots,
+`assertEligible` on the survivors, re-read the passages, apply the core
+source filter, `finish(tx, token, [])`, `archiveAllowed`, and `archive` of
+the admitted copies of the allowed positions. The fallback checks the
+caller's signal but not the expired extraction deadline. It writes no
+memories. The result is `done` with no memories, the finish's index
+revision and `code` set to the original failure code.
+
+The fallback never runs when the host's signal aborted, or for any other code:
+privacy, pause, lineage, changed inputs, key mismatch, storage or commit
+uncertainty. If the fallback itself fails, the claim is abandoned with the
+original failure, as without the option. A source withdrawn between the
+model failure and the fallback finish is not archived.
+
+## Addendum 28 — Window fence for session-less explicit memories
+
+`config.explicitWindowFence = { enabled: true }` opts a service into this
+fence. Unset or `false` leaves forget and correct byte-identical. The option
+takes the same validation as `rawCapture`: one own boolean key, `enabled`.
+
+With the option on, forget and correct of a session-less explicit memory
+write durable window suppression facts in the same transaction as the rest of
+the operation.
+
+A memory is session-less explicit when its source kind is `"mcp"` or `"web"`
+and its source session is `null`. An explicit tool never learns which
+conversation it serves, so its saves name no session, and migrated explicit
+memories carry the same source. Captured, imported and migrated captured
+memories keep the existing session fence and add no window. The trigger reads
+only the memory row.
+
+The anchors are the memory's `createdAtMs` and `updatedAtMs`. For each
+distinct anchor `t`, the operation writes:
+
+```
+{ kind: "window", owner, namespace, actionId, origin: "forget",
+  client: null, window: { startMs: t - 1800000, endMs: t + 1800000 },
+  anchor: "pm30min" }
+```
+
+`client: null` covers every client, because an explicit tool's client name
+is not the captured client's name. Every window uses the origin `"forget"`,
+so a correction and a later forget of the same memory reuse the same window.
+`actionId` is the operation's action. The facts carry no text. Correct
+computes its windows from the row it reads before its write transaction
+begins, as it does for its predecessor fact. An unchanged correction writes
+nothing.
+
+Windows are durable. Raw, router cards and captures that arrive later inside
+a window are withheld, as are rows already stored inside it. A store that
+cannot write a window fact fails the whole operation.
+
+Known limits:
+
+- Messages whose time is unknown are not covered by these windows.
+- An explicit save that only touched an existing captured memory leaves that
+  memory's source unchanged. Its forget fences the captured session, not the
+  conversation where the explicit save happened.
+- Where explicit receipts carry finite times, a window also withholds explicit
+  saves whose receipts fall inside it.

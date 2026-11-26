@@ -148,6 +148,11 @@ export function validateBatch(batch) {
   });
 }
 
+/** @param {string} content */
+export function archivedReceiptExcerpt(content) {
+  return receiptExcerpt(cleanContent(content));
+}
+
 /** @param {readonly Receipt[]} receipts */
 export function copyReceipts(receipts) {
   if (!Array.isArray(receipts)) invalidInput();
