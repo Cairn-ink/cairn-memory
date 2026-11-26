@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { setTimeout } from "node:timers/promises";
+import { runInNewContext } from "node:vm";
 import { PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { createMemoryAdapter } from "../../adapter-memory/src/index.mjs";
 import { createSqliteAdapter, openSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { scopeKey } from "../src/storage-values.mjs";
@@ -151,6 +153,56 @@ function service(storage, embedQuery, diagnostics) {
   return createMemoryService({ storage, embedQuery, diagnostics, clock, config: {}, embedder: null,
     gate: { assertOpen() {} }, tokens: { countTokens: () => 1 } });
 }
+
+for (const kind of ["SQLite", "memory"]) {
+  test(`incomplete vector coverage preserves lexical ties in ${kind}`, async t => {
+    const ids = ["alpha", "bravo", "charlie", "delta"];
+    let nextId = 0;
+    const opened = kind === "SQLite" ? await open(t) : null;
+    const adapter = opened?.adapter ?? createMemoryAdapter({ ...semantic, newId: () => ids[nextId++] });
+
+    for (const [index, id] of ids.entries()) {
+      const saved = await insert(adapter, `clover ${id}`, null, { time: index + 1 });
+      if (opened) {
+        await testAccess(opened, scope, { write: true }, db => {
+          assert.equal(db.prepare("UPDATE cairn_memories SET id = ? WHERE owner_id = ? AND namespace_key = ? AND id = ?")
+            .run(id, ...scopeKey(scope), saved.id).changes, 1);
+        });
+      }
+    }
+    if (opened) await waitForVectorCache(adapter, scope.owner);
+    assert.deepEqual((await search(adapter)).coverage, { eligible: 4, embedded: 0, complete: false });
+
+    const embedQuery = { async embedQuery() { return { vector: axis, model: "test" }; } };
+    const lexical = service({ ...adapter, capabilities: { ...adapter.capabilities, semanticRetrieval: false }, vector: undefined },
+      { async embedQuery() { assert.fail("Semantic retrieval is disabled"); } });
+    const hybrid = service(adapter, embedQuery);
+    await t.test("recall", async () => {
+      const recall = api => api.recall(scope, "clover", { mode: "search", limit: 1 });
+      const baseline = await recall(lexical);
+      assert.equal(baseline.items[0].id, "bravo");
+      assert.ok(baseline.nextCursor);
+      assert.deepEqual(await recall(hybrid), baseline);
+    });
+    await t.test("find", async () => {
+      const find = api => api.find(scope, "clover", { kinds: ["memory"], limit: 1 });
+      const baseline = await find(lexical);
+      assert.equal(baseline.memories[0].id, "bravo");
+      assert.deepEqual(await find(hybrid), baseline);
+    });
+  });
+}
+
+test("vector search accepts a Float32Array from another realm", async t => {
+  const { adapter } = await open(t);
+  const saved = await insert(adapter, "orchard", axis);
+  await waitForVectorCache(adapter, scope.owner);
+  const query = runInNewContext("Float32Array.of(1, 0, 0)");
+  assert.deepEqual(await search(adapter, { query }), {
+    rows: [{ ref: ref(scope, saved.id), distance: 0, updatedAtUs: saved.updatedAtUs }],
+    coverage: { eligible: 1, embedded: 1, complete: true },
+  });
+});
 
 test("recall falls back with incomplete vector coverage and reorders with complete coverage", async t => {
   const { adapter } = await open(t);

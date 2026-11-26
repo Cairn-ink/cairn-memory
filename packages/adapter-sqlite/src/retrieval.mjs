@@ -18,6 +18,8 @@ import { scheduleVectorWarmup } from "./uow.mjs";
  * slabs: Uint8Array[], allocated: number, used: number }} CacheGeneration */
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
+const typedArrayPrototype = Object.getPrototypeOf(Float32Array.prototype);
+const typedArrayTag = Object.getOwnPropertyDescriptor(typedArrayPrototype, Symbol.toStringTag)?.get;
 const maxSqlInteger = 9223372036854775807n;
 const vectorPoolSize = 400;
 const vectorReadMs = 800;
@@ -523,7 +525,7 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       return port(tx, scope?.owner, {}, db => {
         const selection = readSet(tx.owner, scope);
         validateLimit(depth);
-        if (!(query instanceof Float32Array) || !query.length || typeof model !== "string" || !model) invalidInput();
+        if (typedArrayTag?.call(query) !== "Float32Array" || !query.length || typeof model !== "string" || !model) invalidInput();
         const values = Array.from(new Float32Array(query));
         const scale = vectorScale(values);
         if (!Number.isFinite(scale)) invalidInput();
