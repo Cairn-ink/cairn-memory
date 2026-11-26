@@ -65,6 +65,40 @@ async function writeCounts({ pool, owner }) {
   return row;
 }
 
+test("finish refuses a selection rechecked before writeback", migrationDbTest, async (t) => {
+  // A recheck that fails inside the transaction fails it first, and finish reports that first failure.
+  for (const { label, positions, error, finishError = "suppressed" } of [
+    { label: "different positions", positions: [1] },
+    { label: "same positions", positions: [0] },
+    { label: "invalid position input", positions: [-1], error: "invalid_input" },
+    { label: "out-of-range position", positions: [2], error: "invalid_input", finishError: "invalid_input" },
+  ]) {
+    await t.test(label, async (t) => {
+      const db = await fixture(t);
+      const { key, capture, acquire, run } = db;
+      const source = message("A source for the memory.");
+      const token = await acquire([source, message("Another eligible source.")]);
+      let outcomes;
+      const [transaction] = await Promise.allSettled([run(async (tx) => {
+        await capture.assertEligible(tx, key, [0]);
+        const finish = capture.finish(tx, token, [item("A derived memory.", key, source)]);
+        const recheck = capture.assertEligible(tx, key, positions);
+        outcomes = await Promise.allSettled([finish, recheck]);
+      })]);
+      assert.equal(outcomes[0].status, "rejected");
+      assert.equal(outcomes[0].reason.code, finishError);
+      assert.equal(outcomes[1].status, error ? "rejected" : "fulfilled");
+      if (error) assert.equal(outcomes[1].reason.code, error);
+      assert.equal(transaction.status, "rejected");
+      assert.deepEqual(await writeCounts(db), { memories: 0, receipts: 0, revision: 0 });
+      const pending = await ledger(db);
+      assert.equal(pending.status, "pending");
+      assert.equal(pending.core_lease_token, token);
+      assert.equal(pending.core_result, null);
+    });
+  }
+});
+
 test("a mid-finish statement failure rolls back memory rows, receipts, revision and lease retirement", migrationDbTest, async (t) => {
   const db = await fixture(t);
   const { pool, key, capture, acquire, run } = db;

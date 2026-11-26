@@ -154,9 +154,12 @@ for (const deleteClient of ["coding-client", "mcp"]) {
     assert.equal(await withheld(reported, original), true);
     const unrelatedClaim = await claim(unrelated, [original]);
     assert.equal(unrelatedClaim.status, "claimed");
-    await assert.rejects(write(tx => capture.finish(tx, unrelatedClaim.token, [
-      finishItem("A derived memory.", [receipt(reported, original)]),
-    ])), { code: "suppressed" }); // Finish binding refuses a receipt outside the claim's own address.
+    await assert.rejects(write(async tx => {
+      await capture.assertEligible(tx, unrelated, [0]);
+      return capture.finish(tx, unrelatedClaim.token, [
+        finishItem("A derived memory.", [receipt(reported, original)]),
+      ]);
+    }), { code: "suppressed" }); // Finish binding refuses a receipt outside the claim's own address.
 
     assert.deepEqual((await pool.query(`SELECT source_client, source_session_id, source_message_id
       FROM core_quantity_ledger WHERE memory_id = $1 ORDER BY source_client`, [memoryId])).rows,
@@ -243,7 +246,10 @@ test("finish refuses forgotten addresses and checks windows with stored and leas
     VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
   [scope.owner, randomUUID(), external.client, external.sessionId, forgotten.id, forgotten.role]);
   await suppressWindow(db, event.client);
-  const finish = source => write(tx => capture.finish(tx, lease.token, [finishItem("A derived detail.", [source])]));
+  const finish = source => write(async tx => {
+    await capture.assertEligible(tx, event, [0]);
+    return capture.finish(tx, lease.token, [finishItem("A derived detail.", [source])]);
+  });
   await assert.rejects(finish(receipt(external, forgotten)), { code: "suppressed" });
   await assert.rejects(finish({ ...receipt(event, archived), occurredAtMs: 300 }), { code: "suppressed" });
   await assert.rejects(finish({ ...receipt(event, admitted), occurredAtMs: 300 }), { code: "suppressed" });

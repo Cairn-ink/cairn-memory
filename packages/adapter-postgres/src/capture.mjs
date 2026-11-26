@@ -250,7 +250,7 @@ export function createPostgresCapturePorts(options) {
     },
 
     async finish(tx, token, items) {
-      const { scope, source, batch, lease, nowMs, current } = await pauseLockedWrite(tx, () => {
+      const { scope, source, batch, lease, nowMs, current, bound } = await pauseLockedWrite(tx, () => {
         const lease = readToken(token);
         const batch = copyFinishItems(items);
         return async (query) => {
@@ -282,11 +282,13 @@ export function createPostgresCapturePorts(options) {
           }
           const receipts = new Map(batch.flatMap(({ receipts }) => receipts.map(receipt =>
             [JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId, receipt.role]), receipt])));
+          /** @type {{ key: string, binding: { lease: string, positions: Set<number> } } | null} */
+          let bound = null;
           if (receipts.size) {
-            const binding = selections.get(tx)?.get(selectionIdentity({
-              ...leaseSource, eventId: row.event_id, payloadDigest: row.core_payload_digest,
-            }));
+            const key = selectionIdentity({ ...leaseSource, eventId: row.event_id, payloadDigest: row.core_payload_digest });
+            const binding = selections.get(tx)?.get(key);
             if (binding?.lease !== lease || !binding.positions.size) throw new CoreError("suppressed");
+            bound = { key, binding };
             const ids = current?.map(({ id }) => id) ?? proofs?.map(({ message_mac }) => message_mac) ?? [];
             const unmatchable = new Set(unmatchableIdPositions);
             /** @type {Map<string, number | null>} */
@@ -319,12 +321,15 @@ export function createPostgresCapturePorts(options) {
             await assertReceiptSource(query, scope, receipt, captureProofs, hashSessionKey,
               fromLease ? current ?? [] : [], evidence);
           }
-          return { scope, source, batch, lease, nowMs, current };
+          return { scope, source, batch, lease, nowMs, current, bound };
         };
       });
 
       const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories);
       return runOperation(tx, async (query) => {
+        // An assertEligible queued after the binding check replaces or clears the selection, even for the
+        // same positions. Refusing here fails the transaction, so the writeback above rolls back too.
+        if (bound && selections.get(tx)?.get(bound.key) !== bound.binding) throw new CoreError("suppressed");
         result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
