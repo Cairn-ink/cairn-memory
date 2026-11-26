@@ -81,18 +81,18 @@ function freezeConfig(input) {
   let raw;
   if (rawCapture !== undefined) {
     const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
+    // Read accessors once, before checking the resulting own keys.
+    const { enabled, onModelFailure } = fields;
     const keys = Reflect.ownKeys(fields);
-    if (!keys.length) throw new CoreError("invalid_input");
-    let enabled = false;
-    let onModelFailure = false;
-    for (const key of keys) {
-      if (key !== "enabled" && key !== "onModelFailure") throw new CoreError("invalid_input");
-      const value = fields[key];
-      if (typeof value !== "boolean") throw new CoreError("invalid_input");
-      if (key === "enabled") enabled = value;
-      else onModelFailure = value;
+    if (!keys.length || keys.some(key => (key !== "enabled" && key !== "onModelFailure") || !Object.hasOwn(fields, key))) {
+      throw new CoreError("invalid_input");
     }
-    raw = Object.freeze({ enabled, onModelFailure });
+    const hasEnabled = keys.includes("enabled");
+    const hasOnModelFailure = keys.includes("onModelFailure");
+    if ((hasEnabled && typeof enabled !== "boolean") || (hasOnModelFailure && typeof onModelFailure !== "boolean")) {
+      throw new CoreError("invalid_input");
+    }
+    raw = Object.freeze({ enabled: hasEnabled && enabled === true, onModelFailure: hasOnModelFailure && onModelFailure === true });
   }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,

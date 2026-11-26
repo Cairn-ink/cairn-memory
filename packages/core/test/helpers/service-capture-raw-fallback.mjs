@@ -177,7 +177,10 @@ export async function assertUnavailableArchive(t, storage) {
 const registrationShapes = {
   "cross-realm objects": key => runInNewContext("({ [key]: true })", { key }),
   "class instances": key => new (class { [key] = true; })(),
-  "boolean accessors": key => ({ get [key]() { return true; } }),
+  "boolean accessors": key => {
+    let reads = 0;
+    return { get [key]() { assert.equal(++reads, 1); return true; } };
+  },
 };
 
 export const scenarios = {
@@ -320,6 +323,23 @@ export const scenarios = {
     }],
     [`registers model fallback with ${shape}`, (_t, storage) => {
       createMemoryService({ ...deps(storage), config: { rawCapture: makeFields("onModelFailure") } });
+    }],
+  ])),
+  ...Object.fromEntries([
+    ["an inherited option listed by ownKeys", key => new Proxy(Object.create({ [key]: true }), {
+      ownKeys: () => [key],
+    })],
+    ["an accessor that adds an extra own key", key => ({
+      get [key]() { this.extra = true; return true; },
+    })],
+  ].flatMap(([shape, makeFields]) => [
+    [`rejects Raw-only capture with ${shape}`, (_t, storage) => {
+      assert.throws(() => createMemoryService({ ...deps(storage), model: null,
+        config: { rawCapture: makeFields("enabled") } }), { code: "invalid_input" });
+    }],
+    [`rejects model fallback with ${shape}`, (_t, storage) => {
+      assert.throws(() => createMemoryService({ ...deps(storage),
+        config: { rawCapture: makeFields("onModelFailure") } }), { code: "invalid_input" });
     }],
   ])),
   "rejects invalid fallback registrations and non-boolean options": (_t, storage) => {
