@@ -248,20 +248,21 @@ test("forget blanks a conflicting ledger copy while preserving the surviving Raw
 });
 
 test("definite text withholding purges a card with a stale memory link", async () => {
-  const { cards, fence, keys, service, read, write, snapshot } = fixture(undefined, { fingerprintKey: true });
+  const { cards, fence, keys, memories, service, read, write, snapshot } = fixture(undefined, { fingerprintKey: true });
   const card = authored("stale-link", "The bronze compass rests in a wooden case.");
   const linked = await service.save(scope, "The blue gauge measures the outlet.", source, "fact");
   const saved = await service.save(scope, card.body, source, "fact");
   assert.equal(linked.status, "saved");
   assert.equal(saved.status, "saved");
-  card.sourceMemories = [{ id: linked.item.id, revision: linked.item.revision + 1 }];
+  const { revision } = await write(tx => memories.touchDuplicate(tx, scope, linked.item.id, [], { confidence: 0.7 }, 1));
+  card.sourceMemories = [{ id: linked.item.id, revision: linked.item.revision }];
   const key = await keys.userKey(scope.owner);
   const labels = Object.freeze({ keyIdDomain: "legacy-id", shingleKeyPrefix: "legacy-shingle:", legacyExactPrefix: "legacy-exact:" });
   const legacyKey = await userFingerprintKey("fixture legacy secret", scope.owner, labels);
   const legacy = { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
     value: await legacyExactMac(card.body, legacyKey, labels), keyId: legacyKey.id };
   const input = { card, requestedScope: scope, memoryStates: new Map([[linked.item.id,
-    { status: "visible", revision: linked.item.revision }]]), fingerprintKey: key,
+    { status: "visible", revision, correctedRevisions: [] }]]), fingerprintKey: key,
     textFacts: [{ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "fixture",
       text: { digests: [await coreDigest(card.body, key), legacy] } }],
   };

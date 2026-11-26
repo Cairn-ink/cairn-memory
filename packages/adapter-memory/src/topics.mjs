@@ -5,6 +5,7 @@ import {
 import { documentCardStaleness } from "@cairn-ink/core/routing";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
+import { hasReplacedCitation, memoryCorrectionEvidence } from "./privacy.mjs";
 import { dropMemoryPlacement } from "./unit-of-work.mjs";
 import { snapshotArray, validateCardId, validateLimit, validateMemoryId, validateTime, writeNamespace } from "./validation.mjs";
 
@@ -121,13 +122,15 @@ export function dropCardPlacement(state, namespace, cardId) {
 }
 
 /** @param {Pick<StoredDocumentCardRecord, "sourceMemories" | "stale">} card
- * @param {ReturnType<typeof visibility>["current"]} current */
-function cardIsStale(card, current) {
+ * @param {ReturnType<typeof visibility>["current"]} current @param {State} state */
+function cardIsStale(card, current, state) {
   /** @type {Map<string, DocumentCardMemoryState>} */
   const memoryStates = new Map();
   for (const source of card.sourceMemories) {
     const row = source && current(source.id);
-    if (row) memoryStates.set(source.id, { status: "visible", revision: row.revision });
+    if (row) memoryStates.set(source.id, {
+      status: "visible", revision: row.revision, ...memoryCorrectionEvidence(state, row.scope, source),
+    });
   }
   return documentCardStaleness({ card, memoryStates });
 }
@@ -178,7 +181,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   async function visibleCardAt(tx, state, scope, cardId, contentHash, current) {
     const card = state.documentCards.get(scope.namespace)?.get(cardId)?.card;
     return card?.contentHash === contentHash &&
-      !cardIsStale(card, current) &&
+      !cardIsStale(card, current, state) &&
       await cardVisible(tx, state, scope, card);
   }
 
@@ -217,27 +220,34 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     },
 
     async pendingCards(tx, scope, query) {
-      return port.read(tx, scope, (getState) => {
+      return port.read(tx, scope, async (getState) => {
         const namespace = writeNamespace(scope);
         const { limit } = query;
         validateLimit(limit);
         if (limit > placementBatchLimit) throw new CoreError("invalid_input");
         if (!flags.documentCards) return [];
+        const selection = { owner: tx.owner, namespace };
         const state = getState();
         const scoped = state.topics.get(namespace);
         const { current } = view(state, tx.owner, namespace);
         /** @type {number | undefined} */
         let nowMs;
-        return [...(state.documentCards.get(namespace)?.values() ?? [])]
+        const candidates = [...(state.documentCards.get(namespace)?.values() ?? [])]
           .flatMap(({ card, createdAtMs }) => {
             if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash ||
-                cardIsStale(card, current)) return [];
+                cardIsStale(card, current, state)) return [];
             const failure = scoped?.cardFailures.get(card.id);
             return failure?.contentHash !== card.contentHash || mayRetry(failure, () => nowMs ??= now())
-              ? [{ cardId: card.id, contentHash: card.contentHash, createdAtMs }] : [];
+              ? [{ card, createdAtMs }] : [];
           })
-          .sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.cardId, b.cardId))
-          .slice(0, limit).map(({ cardId, contentHash }) => ({ cardId, contentHash }));
+          .sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.card.id, b.card.id));
+        const pending = [];
+        for (const { card } of candidates) {
+          if (pending.length >= limit) break;
+          if (hasReplacedCitation(state, card) && !await cardVisible(tx, state, selection, card)) continue;
+          pending.push({ cardId: card.id, contentHash: card.contentHash });
+        }
+        return pending;
       });
     },
 

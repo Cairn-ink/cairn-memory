@@ -1,4 +1,5 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
+import { eraseContextDocuments } from "./context-lexical.mjs";
 import { attachReceipts, clearReceipts, decodeEntry, insertMemory, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
@@ -263,6 +264,8 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
         db.prepare(`UPDATE cairn_memories
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
+        // Memory IDs are allocated as UUIDs or preserved from the legacy global primary key.
+        eraseContextDocuments(db, scopeKey(scope)[1], id);
         suppressReceiptSources(db, scope, id, entry.row.text);
         scrubTitles?.(db, scope);
         deleteProceduralTag(db, scope, id);

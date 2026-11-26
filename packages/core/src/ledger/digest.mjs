@@ -1,7 +1,11 @@
 import { compareUtf8 } from '../utf8.mjs';
+import { readIntent } from './terms.mjs';
 import { DAY_MS, dayLabel, dayStart, ledgerRowInRange, monthStart, weekStart, yearStart } from './window.mjs';
 
-/** @import { LedgerDigest, LedgerWindow, QuantityLedgerRow } from './index.mjs' */
+/** @import { LedgerDigest, LedgerWindow, ParsedLedgerWindow, QuantityLedgerRow } from './index.mjs' */
+/** @typedef {{ key: string, kind: 'measure' | 'group' | 'category' | 'subtotal' | 'goal',
+ * text: string, rows: readonly QuantityLedgerRow[], answering: boolean, calendar?: boolean, total?: number }} LedgerLine */
+/** @typedef {{ header: string, calendarHeader?: string, lines: LedgerLine[] }} LedgerPlan */
 
 const numbers = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 });
 const currencyNumbers = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -77,14 +81,14 @@ function summary(label, rows, unit, days) {
 }
 
 /**
- * @param {string[]} parts @param {readonly QuantityLedgerRow[]} rows @param {string} unit
+ * @param {readonly QuantityLedgerRow[]} rows @param {string} unit
  * @param {LedgerWindow} window @param {(ms: number) => number} bucket @param {string} label
  */
-function appendSubtotals(parts, rows, unit, window, bucket, label) {
+function subtotal(rows, unit, window, bucket, label) {
   if (bucket(window.fromMs) === bucket(window.toMs - 1)) return;
   const groups = [...groupBy(rows, row => bucket(row.date))].sort(([a], [b]) => a - b);
   const subtotals = groups.map(([start, entries]) => `${dayLabel(start)}: ${amount(total(entries), unit)}`);
-  parts.push(`${label} subtotals: ${subtotals.join(', ')}.`);
+  return `${label} subtotals: ${subtotals.join(', ')}.`;
 }
 
 /** @param {QuantityLedgerRow} goal @param {readonly QuantityLedgerRow[]} records @param {LedgerWindow} window */
@@ -113,10 +117,12 @@ function compareGoal(goal, records, window) {
  * Summarize rows that have passed the delivery check in the read snapshot.
  * @param {readonly QuantityLedgerRow[]} rows
  * @param {readonly QuantityLedgerRow[]} goals
- * @param {LedgerWindow} window
- * @returns {LedgerDigest | null}
+ * @param {ParsedLedgerWindow} window
+ * @param {boolean} [calendarReading]
+ * @param {string} [query]
+ * @returns {LedgerPlan | null}
  */
-export function digest(rows, goals, window) {
+export function planDigest(rows, goals, window, calendarReading = false, query) {
   if (window.fromMs >= window.toMs) return null;
   const asOf = rows.filter(row => row.kind === 'record' && row.date < window.toMs);
   const distinct = [...asOf.filter(row => row.measure !== 'steps'),
@@ -126,25 +132,106 @@ export function digest(rows, goals, window) {
     row => JSON.stringify([row.measure, row.unit, row.group, row.category, row.period, row.comparator]));
   if (!used.length && !targets.length) return null;
 
-  const parts = [`Computed ledger for ${dayLabel(window.fromMs)} to ${dayLabel(window.toMs - 1)} (${window.label}), from the dated records you mentioned.`];
-  for (const entries of groupBy(used, row => JSON.stringify([row.measure, row.unit])).values()) {
+  const calendar = calendarReading ? window.calendar : undefined;
+  const measureKey = (/** @type {QuantityLedgerRow} */ row) => JSON.stringify([row.measure, row.unit]);
+  const calendarGroups = calendar ? groupBy(distinct.filter(row => ledgerRowInRange(row, calendar)), measureKey) : undefined;
+  const header = `Computed ledger for ${dayLabel(window.fromMs)} to ${dayLabel(window.toMs - 1)} (${window.label}), from the dated records you mentioned.`;
+  const calendarHeader = calendar && `${title(calendar.label)}: ${dayLabel(calendar.fromMs)} to ${dayLabel(calendar.toMs - 1)}.`;
+  /** @type {LedgerLine[]} */
+  const lines = [];
+  /** @type {Map<string, boolean>} */
+  const termMatches = new Map();
+  /** @param {string} term */
+  function matches(term) {
+    if (query === undefined || !term) return false;
+    const cached = termMatches.get(term);
+    if (cached !== undefined) return cached;
+    const matched = readIntent(query, [term]);
+    termMatches.set(term, matched);
+    return matched;
+  }
+  const targeted = new Set([...used, ...targets].filter(row => matches(row.group) || matches(row.category)).map(row => row.measure));
+  for (const [key, entries] of groupBy(used, measureKey)) {
     const { measure, unit } = entries[0];
     const stepDays = measure === 'steps';
-    parts.push(summary(title(measure), entries, unit, stepDays ? entries.length : daysIn(window)));
-    if (measure === 'spend') {
-      for (const [group, purchases] of groupBy(entries, row => row.group)) {
-        parts.push(summary(`${title(group)} spending`, purchases, unit, daysIn(window)));
+    const calendarRows = calendarGroups?.get(key) ?? [];
+    const measureMatch = matches(measure) && !targeted.has(measure);
+    const categoryMatches = entries.some(row => matches(row.category));
+    /** @param {LedgerLine['kind']} kind @param {string} term @param {string} label
+     * @param {QuantityLedgerRow[]} rollingRows @param {QuantityLedgerRow[]} comparisonRows @param {boolean} answering */
+    function appendSummary(kind, term, label, rollingRows, comparisonRows, answering) {
+      lines.push({ key: JSON.stringify([kind, key, term, 'rolling']), kind, answering, rows: rollingRows,
+        total: total(rollingRows), text: summary(label, rollingRows, unit, stepDays ? rollingRows.length : daysIn(window)) });
+      if (calendar) {
+        lines.push({ key: JSON.stringify([kind, key, term, 'calendar']), kind, answering, calendar: true, rows: comparisonRows,
+          total: total(comparisonRows), text: summary(`${label}, ${calendar.label}`, comparisonRows, unit,
+            stepDays ? Math.max(1, comparisonRows.length) : daysIn(calendar)) });
       }
     }
-    const categories = groupBy(entries.filter(row => row.category), row => row.category);
-    for (const [category, records] of [...categories].sort((a, b) => total(b[1]) - total(a[1]))) {
-      parts.push(summary(title(category), records, unit, stepDays ? records.length : daysIn(window)));
+    if (query === undefined || measureMatch || categoryMatches) {
+      appendSummary('measure', measure, title(measure), entries, calendarRows, matches(measure));
     }
-    appendSubtotals(parts, entries, unit, window, weekStart, 'Weekly');
-    appendSubtotals(parts, entries, unit, window, monthStart, 'Monthly');
+    if (measure === 'spend' || query !== undefined) {
+      for (const [group, purchases] of groupBy(entries, row => row.group)) {
+        const direct = matches(group);
+        if (query === undefined || measureMatch || direct || purchases.some(row => matches(row.category))) {
+          appendSummary('group', group, measure === 'spend' ? `${title(group)} spending` : `${title(group)} ${measure.replaceAll('_', ' ')}`,
+            purchases, calendarRows.filter(row => row.group === group), direct);
+        }
+      }
+    }
+    const categories = [...groupBy(entries.filter(row => row.category &&
+      (query === undefined || matches(row.category) || matches(row.group))), row => row.category)];
+    for (const [category, records] of categories.sort(([, a], [, b]) => total(b) - total(a))) {
+      const direct = matches(category);
+      appendSummary('category', category, title(category), records,
+        calendarRows.filter(row => row.category === category && (query === undefined || direct || matches(row.group))), direct);
+    }
+    const subtotalRows = query === undefined || measureMatch ? entries :
+      entries.filter(row => matches(row.group) || matches(row.category));
+    if (subtotalRows.length) {
+      for (const [label, bucket] of /** @type {const} */ ([['Weekly', weekStart], ['Monthly', monthStart]])) {
+        const text = subtotal(subtotalRows, unit, window, bucket, label);
+        if (text) lines.push({ key: JSON.stringify(['subtotal', key, label]), kind: 'subtotal', answering: false, rows: subtotalRows, text });
+      }
+    }
   }
-  const comparisons = targets.map(goal => compareGoal(goal, distinct, window));
-  if (comparisons.length) parts.push('Goals: ' + comparisons.map(result => result.text).join(' '));
-  const sources = new Set([...used, ...targets, ...comparisons.flatMap(result => result.rows)].map(row => row.memoryId));
-  return { body: parts.join(' '), sources: [...sources].sort(compareUtf8) };
+  for (const goal of targets) {
+    const { measure, unit, group, category, period, comparator } = goal;
+    if (query !== undefined && !matches(group) && !matches(category) &&
+      (!matches(measure) || targeted.has(measure))) continue;
+    const comparison = compareGoal(goal, distinct, window);
+    lines.push({ key: JSON.stringify(['goal', measure, unit, group, category, period, comparator]),
+      kind: 'goal', answering: false, rows: [goal, ...comparison.rows], text: comparison.text });
+  }
+  return lines.length ? { header, calendarHeader, lines } : null;
+}
+
+/** @param {LedgerPlan} plan @param {readonly LedgerLine[]} lines @param {boolean} [trimmed] */
+export function renderDigest(plan, lines, trimmed = false) {
+  const parts = [plan.header];
+  if (plan.calendarHeader && (lines.some(line => line.calendar) || plan.lines.every(line => line.kind === 'goal'))) {
+    parts.push(plan.calendarHeader);
+  }
+  let goals = false;
+  for (const line of lines) {
+    if (line.kind === 'goal' && !goals) {
+      parts.push('Goals:');
+      goals = true;
+    }
+    parts.push(line.text);
+  }
+  if (trimmed) parts.push('More ledger rows not shown.');
+  const rows = [...new Set(lines.flatMap(line => line.rows))];
+  const sources = [...new Set(rows.map(row => row.memoryId))].sort(compareUtf8);
+  return { body: parts.join(' '), rows, sources };
+}
+
+/** @param {readonly QuantityLedgerRow[]} rows @param {readonly QuantityLedgerRow[]} goals
+ * @param {ParsedLedgerWindow} window @param {boolean} [calendarReading] @returns {LedgerDigest | null} */
+export function digest(rows, goals, window, calendarReading = false) {
+  const plan = planDigest(rows, goals, window, calendarReading);
+  if (!plan) return null;
+  const { body, sources } = renderDigest(plan, plan.lines);
+  return { body, sources };
 }

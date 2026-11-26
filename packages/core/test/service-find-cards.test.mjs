@@ -174,7 +174,7 @@ test("delivery checks a fresh visibility input after get in the candidate snapsh
   const { service, cardHooks, transactions } = fixture({ cards: [item], words: [lexical(item, 1)] });
   let visibilityReads = 0;
   cardHooks.input = () => evidence(item, { memoryStates: new Map([["link",
-    ++visibilityReads === 1 ? { status: "visible", revision: 1 } : { status: "forgotten" },
+    ++visibilityReads === 1 ? { status: "visible", revision: 1, correctedRevisions: [] } : { status: "forgotten" },
   ]]) });
   const result = await service.find(scope, "spare key", { kinds: ["card"] });
   assert.deepEqual(result.cards, []);

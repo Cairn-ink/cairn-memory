@@ -12,6 +12,12 @@ import { hydrateMemoryRows, readCursor, readSet, readStateToken, recentPage } fr
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 
+/** @param {import("../ports/retrieval.d.ts").EmbedQuery} embedQuery
+ * @param {string} owner @param {string} query @param {import("../ports/common.d.ts").CallOptions} [options] */
+export function embedRecallQuery(embedQuery, owner, query, options) {
+  return embedQuery.embedQuery(owner, normalizeForHash(query), { ...options, budgetClass: "recall" });
+}
+
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps */
 export function recallMethod(deps) {
   const search = recallSearch(deps);
@@ -70,7 +76,6 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
       if (!embedQuery || capabilities.semanticRetrieval !== true || !vector) {
         fallback = "semantic_unavailable";
       } else {
-        const text = normalizeForHash(query);
         // Hosted search itself has no pause check (index.ts:65–83,119–133).
         // A closed send gate or failed query embed leaves lexical search available on the first page.
         try {
@@ -80,7 +85,7 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
         }
         if (!fallback) {
           try {
-            embedding = await embedQuery.embedQuery(scope.owner, text, { budgetClass: "recall" });
+            embedding = await embedRecallQuery(embedQuery, scope.owner, query);
           } catch {
             embedding = null;
           }

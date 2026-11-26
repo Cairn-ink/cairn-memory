@@ -3,7 +3,7 @@ import { createBM25, scoreBM25 } from "../retrieval/bm25.mjs";
 import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
-import { fitCardAmendments, fitLedgerDigest } from "./context-read-pack.mjs";
+import { fitCardAmendments } from "./context-read-pack.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey,
   wireItem } from "./context-read-projection.mjs";
 
@@ -257,8 +257,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     /** @type {Unit[]} */
     const selected = [], remaining = units.slice();
     const sessions = new Set(), turns = new Set();
-    /** @type {PackOptions["ledger"]} */
-    let ledger;
+    const { ledger } = options;
     const breadth = /\b(how many|how often|number of|count|total|list|all|which)\b|\bhow much\b(?!\s+(earlier|later|more|less|longer|shorter)\b)/iu.test(query);
     /** @param {Unit[]} proposed @returns {Projection} */
     function project(proposed) {
@@ -288,8 +287,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     }
     // Legacy context-read-three-layer.mjs:310–365. Pack ranked units together,
     // including their provenance, and update diversity only on acceptance.
-    ledger = fitLedgerDigest(options.ledger, empty, p => diagnostics(p, 0), metering);
-    let accepted = ledger ? project([]) : empty;
+    let accepted = empty;
     const availableItems = budget.maxItems - Number(!!ledger);
     while (remaining.length) {
       const full = accepted.value.items.length >= availableItems;

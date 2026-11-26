@@ -12,6 +12,7 @@ export {
   legacyExactMac, passageShingles, userFingerprintKey, validateFingerprintLabels,
 } from "./privacy/fingerprint.mjs";
 export * from "./privacy/fact-match.mjs";
+export { hasLegacyPassageDigest } from "./privacy/legacy-passages.mjs";
 export { exactDigestMatch, withholdsPassage, withholdsAnyPassage, blocksMemoryPassage } from "./privacy/withholds.mjs";
 export * from "./privacy/forget-steps.mjs";
 export * from "./privacy/pause.mjs";

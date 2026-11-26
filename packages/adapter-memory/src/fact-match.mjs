@@ -1,4 +1,4 @@
-import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
+import { CoreError, factBlocksIncoming, factHidesRow, hasLegacyPassageDigest, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { readEmbedding, snapshotArray } from "./validation.mjs";
 
@@ -289,7 +289,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
         // Core validates the full fact even with no passages. Use validation alone
         // in the exact-only profile, where the matcher already checks the candidates.
         return result !== false || withholdsAnyPassage(exactOnly ? [] : passages, [fact.fact]) ||
-          (hasCandidates && requiresLegacyMacDomain(fact.fact));
+          (hasCandidates && (requiresLegacyMacDomain(fact.fact) || hasLegacyPassageDigest(fact.fact)));
       });
     }
   };

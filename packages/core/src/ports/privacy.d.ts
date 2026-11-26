@@ -38,11 +38,13 @@ export interface SuppressionStore {
    * filtered only by owner/namespace and by a definite false from core's own capture matcher.
    * Use `factBlocksIncoming` in capture mode with shingles enabled on the same candidate
    * `passages` Core supplied. Keep exact and containment matches, ineligible results,
-   * and facts requiring legacy-domain handling. Core applies the same match, so a definite
+   * and facts requiring legacy-domain handling, including full-mode legacy SHA passage facts
+   * when there are candidate passages. Core applies the same match, so a definite
    * miss leaves its decision unchanged. Fact mode, `rowShingles`, and missing row shingles
    * are forbidden as independent capture filters.
-   * When neither side has a key or shingle evidence, capture matching is exact-only,
-   * with weaker protection without a key. When `candidates.passages` is omitted, only owner
+   * When neither side has a key or shingle evidence, the fingerprint-only matcher uses
+   * exact digests. The service also checks sentence runs for legacy SHA passage facts.
+   * When `candidates.passages` is omitted, only owner
    * and namespace scope the text facts. Client, session and time candidates govern
    * `blockedSession` and `blockedMessages`.
    * Uncertain or unbounded → throws ineligible (fail closed).

@@ -10,13 +10,16 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @typedef {ReturnType<typeof contextEpochs>} Epochs */
 /** @typedef {{ fence: string, incarnation: string, sequence: number, base_sequence: number, checkpoint: number,
- * phase: number, last_id: string, eligible: number, total_length: number, published: 0 | 1, rebuilt: 0 | 1 }} Generation */
+ * phase: number, last_id: string, eligible: number, total_length: number, published: 0 | 1, rebuilt: 0 | 1,
+ * pendingRemovals: number }} Generation */
 /** @typedef {{ ref: {type: "memory", namespace: Scope["namespace"], id: string}, qualified: ContextMemoryRef,
  * length: number, frequencies: Map<string, number> }} Match */
 
 const MAX_ROWS = 1024;
 const MAX_TEXT_UNITS = 2_000_000;
 const CARD_STATES = ["draft", "confirmed", "cancelled", "deleted"];
+// Canonical UUIDs and imported IDs cannot start with this control character.
+const CHECKPOINT_PREFIX = "\x1f";
 
 /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
 function projectionKey({ owner, namespaces }, { types, intent }) {
@@ -30,7 +33,32 @@ function fence({ canonical, suppression }, { accessGenerations }, { types }) {
 
 /** @param {Connection} db @param {string} key */
 function generation(db, key) {
-  return /** @type {Generation | undefined} */ (db.prepare("SELECT * FROM cairn_context_publications WHERE projection = ?").get(key));
+  const row = /** @type {Omit<Generation, "pendingRemovals"> | undefined} */ (
+    db.prepare("SELECT * FROM cairn_context_publications WHERE projection = ?").get(key)
+  );
+  if (!row) return undefined;
+  const [last_id, pendingRemovals] = row.last_id.startsWith(CHECKPOINT_PREFIX)
+    ? /** @type {[string, number]} */ (decodeJson(row.last_id.slice(1)))
+    : [row.last_id, 0];
+  return { ...row, last_id, pendingRemovals };
+}
+
+/** @param {string} id @param {number} pendingRemovals */
+function lexicalCheckpoint(id, pendingRemovals) {
+  return pendingRemovals ? CHECKPOINT_PREFIX + JSON.stringify([id, pendingRemovals]) : id;
+}
+
+/** @param {Connection} db @param {string} namespaceKey @param {string} id */
+export function eraseContextDocuments(db, namespaceKey, id) {
+  const removed = db.prepare("DELETE FROM cairn_context_documents WHERE namespace_key = ? AND id = ? RETURNING projection")
+    .all(namespaceKey, id);
+  // Terms cascade with the documents. Preserve only a count for the next reconciliation.
+  const update = db.prepare("UPDATE cairn_context_publications SET last_id = ? WHERE projection = ?");
+  for (const { projection } of removed) {
+    const key = String(projection), prior = generation(db, key);
+    if (!prior) throw new CoreError("storage_error");
+    update.run(lexicalCheckpoint(prior.last_id, prior.pendingRemovals + 1), key);
+  }
 }
 
 /** @param {Connection} db @param {string} key @param {Generation} state */
@@ -41,7 +69,7 @@ function saveGeneration(db, key, state) {
     last_id = excluded.last_id, eligible = excluded.eligible, total_length = excluded.total_length,
     published = excluded.published, rebuilt = excluded.rebuilt`)
     .run(key, state.fence, state.incarnation, state.sequence, state.base_sequence, state.checkpoint, state.phase,
-      state.last_id, state.eligible, state.total_length, state.published, state.rebuilt);
+      lexicalCheckpoint(state.last_id, state.pendingRemovals), state.eligible, state.total_length, state.published, state.rebuilt);
 }
 
 /** @param {Connection} db @param {string} key @param {Generation} state */
@@ -92,7 +120,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs) {
       fence: captured, incarnation: prior?.incarnation ?? randomUUID(), sequence: (prior?.sequence ?? 0) + 1,
       base_sequence: prior?.published ? prior.sequence : prior?.base_sequence ?? 0,
       checkpoint: prior?.checkpoint ?? 0, phase: 0, last_id: "", eligible: 0, total_length: 0,
-      published: 0, rebuilt: prior ? 0 : 1,
+      published: 0, rebuilt: prior ? 0 : 1, pendingRemovals: prior?.pendingRemovals ?? 0,
     };
     state.checkpoint++;
     saveGeneration(db, key, state);
@@ -139,8 +167,11 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs) {
     }
     if (state.phase === streams.length && !stopped()) {
       metrics.removed = documents.sweep(budget());
+      const erased = Math.min(state.pendingRemovals, budget());
+      state.pendingRemovals -= erased;
+      metrics.removed += erased;
       metrics.sidecarRows += metrics.removed;
-      state.published = documents.hasOld() ? 0 : 1;
+      state.published = state.pendingRemovals || documents.hasOld() ? 0 : 1;
     }
     saveGeneration(db, key, state);
     return metrics;

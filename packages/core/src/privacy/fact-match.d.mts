@@ -73,6 +73,19 @@ export interface FactMatchIncoming {
 
 /** An ineligible comparison provides no permission to reveal the row. */
 export declare function factHidesRow(storedFact: StoredFact, row: FactMatchRow, policy?: FactMatchPolicy): FactMatchResult;
+
+declare const preparedRowMatchFact: unique symbol;
+export interface PreparedRowMatchFact {
+  readonly [preparedRowMatchFact]: true;
+}
+
+/** Prepare a stored fact for reuse within its visibility load. */
+export declare function prepareRowMatchFact(storedFact: StoredFact): PreparedRowMatchFact;
+/** Capture each requested projection of a stable candidate once when matching prepared facts. */
+export declare function prepareRowMatcher(
+  row: FactMatchRow, policy?: FactMatchPolicy,
+): (storedFact: StoredFact | PreparedRowMatchFact) => FactMatchResult;
+
 /** An ineligible comparison provides no permission to admit the input. */
 export declare function factBlocksIncoming(
   storedFact: StoredFact, incoming: FactMatchIncoming, policy: IncomingFactMatchPolicy,
