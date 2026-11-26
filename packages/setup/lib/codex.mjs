@@ -423,7 +423,7 @@ export async function withCodexInspectionEnvironment({ env = process.env, fallba
   }
   throw new CodexInspectionError('codex_tmpdir');
 }
-export async function inspectCodexServers({ home = codexHome(), env = process.env, ...inspection } = {}) {
+export async function inspectCodexServers({ home = codexHome(), env = process.env, includeLaunchOptions = false, ...inspection } = {}) {
   const before = await snapshot(join(home, 'config.toml'));
   return withCodexInspectionEnvironment({ ...inspection, env }, async neutral => {
     const inspectionHome = join(neutral, 'user-file'); await mkdir(inspectionHome, { mode: 0o700 });
@@ -444,6 +444,13 @@ export async function inspectCodexServers({ home = codexHome(), env = process.en
       name: entry.name, type: entry.transport.type,
       command: entry.transport.type === 'stdio' ? entry.transport.command : undefined,
       args: entry.transport.type === 'stdio' ? entry.transport.args : undefined,
+      ...(includeLaunchOptions && {
+        customEnvironment: ['env', 'env_vars', 'cwd'].some(key => {
+          const value = entry.transport[key];
+          return value != null && Object.keys(value).length > 0;
+        }),
+        enabled: entry.enabled,
+      }),
     }));
   });
 }

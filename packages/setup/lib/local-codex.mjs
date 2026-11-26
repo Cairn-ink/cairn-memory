@@ -44,7 +44,7 @@ export async function codexCapabilities(env) {
   }
   return true;
 }
-export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable }) {
+export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable, allowCoreLocal }) {
   const home = dirname(checkpoint.destination), { desired } = checkpoint;
   try {
     const original = await lstat(codexHome(env));
@@ -54,13 +54,23 @@ export async function registerCodex({ root, checkpoint, env = process.env, write
   if (!(capable ?? await codexCapabilities(env))) { write(t('codex_mcp_required')); manual(); return 'manual'; }
   return withCodexLock(home, async () => {
     await snapshot(join(home, 'config.toml'));
+    if (allowCoreLocal) {
+      const entries = await inspectCodexServers({ ...inspection, home, env, includeLaunchOptions: true });
+      const current = entries.find(entry => entry.name === 'cairn-local');
+      const observed = observedVector(root, current, true);
+      if (current?.customEnvironment || current?.enabled === false ||
+          (current && !sameVector(observed, checkpoint.previous) && !sameVector(observed, desired))) {
+        throw new SetupError('codex_changed', 2);
+      }
+      if (sameVector(observed, desired)) return 'done';
+    }
     const result = await runCodex(codexAddArguments(root, desired), { env: { ...env, CODEX_HOME: home } });
     let verified = false, environmentCause;
     if (!result.error && result.status === 0) {
       try {
         const entries = await inspectCodexServers({ ...inspection, home, env });
         const local = entries.filter(entry => entry.name === 'cairn-local');
-        verified = local.length === 1 && sameVector(observedVector(root, local[0]), desired);
+        verified = local.length === 1 && sameVector(observedVector(root, local[0], allowCoreLocal), desired);
       } catch (error) { environmentCause = codexEnvironmentCause(error); }
     }
     if (!verified) { manual(); if (environmentCause) write(t(environmentCause)); throw new SetupError('codex_mcp_unverified'); }

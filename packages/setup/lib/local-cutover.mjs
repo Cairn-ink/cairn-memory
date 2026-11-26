@@ -9,6 +9,7 @@ import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
 import { assertReclaimedMaintenance, backupFor, maintenanceFor, reclaimAttempt, reclaimMaintenance,
   reclaimPastAttempts } from './local-cutover-reclaim.mjs';
+import { abortRetirement, assertNoLegacyCaches, readActivation } from './local-cutover-retirement.mjs';
 import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, withLocalLock,
   writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
@@ -93,7 +94,7 @@ function attestResult(result, inventory) {
   }
 }
 
-async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint) {
+async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint, assertSourceContents) {
   const path = descriptor.database.path;
   const { migration } = descriptor, { cutover } = migration;
   let lastSaved = structuredClone(migration);
@@ -119,6 +120,7 @@ async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigra
         const { migrateLegacyStore } = await import('../../adapter-sqlite/src/migrate/index.mjs');
         const inventory = inventoryLegacyStore(path, { expectedStoreId: cutover.source?.storeId });
         if (![18, 29, 48, 53].includes(inventory.physical)) throw refuse('legacy_cross_version');
+        await assertSourceContents?.(path);
         if (atLeast(migration, 'backup-proved') && cutover.source.layout !== inventory.physical) {
           throw refuse('legacy_backup_stale');
         }
@@ -185,6 +187,37 @@ async function activate(root, descriptor, maintenance, env, manifest, client, on
   });
 }
 
+async function confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint) {
+  if (descriptor.migration.state !== 'verified') throw refuse('cutover_capture_not_verified');
+  const { cutover } = descriptor.migration;
+  const { byteDigest, verifyLegacyBackupAgainstSource } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
+  const { assertSupportedLegacyContents, confirmActivation } = await import('./local-cutover-release.mjs');
+  const input = { path: cutover.sourcePath, backupDirectory: backupFor(maintenance, cutover.attemptId),
+    expectedStoreId: cutover.source.storeId, quiescence };
+  const reattest = async assertLease => {
+    await reattestSource(input, cutover, assertLease);
+    await assertSupportedLegacyContents(input.path);
+    await assertLease();
+  };
+  const proveRetired = async (path, assertLease) => {
+    const proof = verifyLegacyBackupAgainstSource({ ...input, path });
+    if (proof.logicalDigest !== cutover.backup.logicalDigest || proof.byteDigest !== cutover.backup.byteDigest ||
+        byteDigest(path) !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
+    await assertLease();
+  };
+  try {
+    return await withCutoverCapture(root, maintenance, cutover.sourcePath, false, () =>
+      confirmActivation({ root, maintenance, descriptor, manifest, env, context, receipt, reattest, proveRetired,
+        drain: () => drainDaemon(root, descriptor, env), onCheckpoint }));
+  } catch (error) {
+    if (['legacy_backup_stale', 'cutover_target_changed', 'cutover_legacy_content_unrepresentable'].includes(error.code)) {
+      const current = await readActivation(maintenance, cutover);
+      if (!current || ['staging', 'exchanging'].includes(current.phase)) await abort(root, descriptor, maintenance, onCheckpoint);
+    }
+    throw error;
+  }
+}
+
 async function finishRollback(root, descriptor, maintenance, onCheckpoint) {
   const { migration } = descriptor, { cutover } = migration;
   await reclaimAttempt(maintenance, cutover, state => onCheckpoint(state, structuredClone(cutover)));
@@ -207,6 +240,8 @@ async function abort(root, descriptor, maintenance, onCheckpoint) {
   };
   const { hasCaptureActivation, disarmCaptureActivations, restoreCaptureVectors } = await import('./local-cutover-activation.mjs');
   const activated = await hasCaptureActivation(maintenance);
+  const activation = await readActivation(maintenance, cutover);
+  if (activation && !['staging', 'exchanging'].includes(activation.phase)) throw refuse('cutover_activation_confirmed');
   const rememberAbort = async () => {
     cutover.aborting = true;
     await writeDescriptor(root, descriptor);
@@ -215,11 +250,13 @@ async function abort(root, descriptor, maintenance, onCheckpoint) {
   else await rememberAbort();
   await ensureMaintenance(root, maintenance);
   await writeMarker(maintenance, cutover);
-  // Keep the v2 journal and capture snapshots until all retired bytes have
-  // been durably reclaimed. Any error leaves the abort intent available to retry.
-  await reclaimAttempt(maintenance, { ...cutover, reclaimCapture: activated }, reclaimCheckpoint);
-  await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
-  await assertReclaimedMaintenance(maintenance);
+  await abortRetirement(cutover, activation, async () => {
+    // Keep the journal and capture snapshots until the unserved copies have
+    // been reclaimed. If the old pathname is fenced, keep it closed until then.
+    await reclaimAttempt(maintenance, { ...cutover, reclaimCapture: activated || !!activation }, reclaimCheckpoint);
+    await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
+    await assertReclaimedMaintenance(maintenance);
+  });
   if (activated) await restoreCaptureVectors(root, cutover, maintenance, onCheckpoint);
   await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
     delete descriptor.migration;
@@ -246,10 +283,11 @@ async function ensureMaintenance(root, maintenance) {
 // Explicit checkout-only entry point. Leave non-Linux and existing stdio
 // sessions alone. A busy lease asks the operator to close those sessions and
 // retry. Successful readiness is point-in-time and must be re-attested at activation.
-export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform,
+export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform, context,
   onCheckpoint = async () => {}, onMigrationCheckpoint }) {
   if (platform !== 'linux' || process.platform !== 'linux') throw refuse('cutover_platform');
-  if (!['prepare', 'abort', 'activate-capture'].includes(action) || !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
+  if (!['prepare', 'abort', 'activate-capture', 'prepare-activation', 'confirm-activation'].includes(action) ||
+      !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
   return stateLock(join(root, '.cutover.lock'), async () => {
     await recoverCutoverLock(root);
     return withLocalLock(root, async () => {
@@ -262,8 +300,21 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
         await reclaimPastAttempts(root, descriptor.database.path, null, onCheckpoint);
         return { state: 'aborted' };
       }
+      const releaseAction = action === 'prepare-activation' || action === 'confirm-activation';
+      const receipt = migration ? await readActivation(maintenanceFor(root, migration.cutover.id), migration.cutover) : null;
+      let assertSourceContents;
+      if (receipt && action !== 'confirm-activation') throw refuse('cutover_activation_pending');
+      if (releaseAction) {
+        const { assertKeylessActivation, assertSupportedLegacyContents, checkActivationClients } = await import('./local-cutover-release.mjs');
+        await assertKeylessActivation(root, env);
+        if (action === 'prepare-activation') {
+          assertNoLegacyCaches(descriptor.database.path);
+          await checkActivationClients({ root, descriptor, env, context });
+          assertSourceContents = assertSupportedLegacyContents;
+        } else if (migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
+      }
       if (action === 'activate-capture' && migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
-      if (migration && action === 'prepare') {
+      if (migration && ['prepare', 'prepare-activation', 'confirm-activation'].includes(action) && !receipt) {
         const { hasCaptureActivation } = await import('./local-cutover-activation.mjs');
         if (await hasCaptureActivation(maintenanceFor(root, migration.cutover.id))) throw refuse('cutover_capture_active');
       }
@@ -291,7 +342,13 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
       const maintenance = maintenanceFor(root, migration.cutover.id);
       await ensureMaintenance(root, maintenance);
       if (action === 'activate-capture') return activate(root, descriptor, maintenance, env, manifest, captureClient, onCheckpoint);
-      return prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint);
+      if (action === 'confirm-activation') return confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint);
+      try {
+        return await prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint, assertSourceContents);
+      } catch (error) {
+        if (error.code === 'cutover_legacy_content_unrepresentable') await abort(root, descriptor, maintenance, onCheckpoint);
+        throw error;
+      }
     }, { cutover: true });
   });
 }

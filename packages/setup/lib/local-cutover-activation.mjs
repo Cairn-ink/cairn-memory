@@ -103,7 +103,7 @@ async function journal(maintenance, client, cutover) {
   return value;
 }
 
-async function stageStore(cutover) {
+export async function stageStore(cutover, beforePublish = async () => {}) {
   const target = captureTargetFor(cutover.sourcePath, cutover.attemptId);
   const reserved = entry(cutover.targetPath), serving = entry(target);
   const selected = reserved ? cutover.targetPath : target;
@@ -121,7 +121,11 @@ async function stageStore(cutover) {
     await assertLease();
     if (wal) await privateRemove(selected + '-wal');
     if (shm) await privateRemove(selected + '-shm');
-    if (reserved) await publishCaptureStore(cutover.targetPath, target);
+    if (reserved) {
+      await beforePublish();
+      await assertLease();
+      await publishCaptureStore(cutover.targetPath, target);
+    }
     await syncDirectory(dirname(target));
   });
   const identity = await captureStoreIdentity(target);
@@ -137,7 +141,8 @@ async function writeBinding(directory, desired) {
   if (current !== text(desired)) await privateWrite(path, text(desired));
 }
 
-export async function activateCapture({ root, maintenance, descriptor, manifest, client, env, reattest, onCheckpoint }) {
+export async function activateCapture({ root, maintenance, descriptor, manifest, client, env, reattest, onCheckpoint,
+  stagedStore, stageOnly = false }) {
   if (!Object.hasOwn(clients, client)) throw refuse('cutover_arguments');
   const { migration } = descriptor, { cutover } = migration;
   const record = await legacyRecord(root, client, cutover, maintenance);
@@ -188,7 +193,7 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
     }
 
     await reattest();
-    const { target, identity } = await stageStore(cutover);
+    const { target, identity } = stagedStore ?? await stageStore(cutover, reattest);
     await advance('capture-store-staged');
     const binding = trustedBinding({ version: 'core-local-capture-v1', phase: 'staged', generation: current.generation,
       database: target, ...identity, attemptId: cutover.attemptId, migrationId: cutover.result.migrationId, attestation: cutover.result.attestation,
@@ -204,6 +209,7 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
     await reattest();
     if (before.text === current.original) await nativeWrite(current.settings, current.published, before, request);
     await advance('capture-native-published');
+    if (stageOnly) return { state: 'capture-native-published', client };
     await reattest();
     const published = await nativeSnapshot(current.settings, request);
     if (published.text !== current.published || published.mode !== current.mode) throw refuse('cutover_capture_changed');
