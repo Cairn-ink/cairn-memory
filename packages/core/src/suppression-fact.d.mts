@@ -75,6 +75,7 @@ export interface SessionFact extends FactBase {
  * Hides raw in the half-open window [startMs, endMs). client null = all clients.
  * `unknownTime` includes null event times for Raw rows and capture admission only.
  * The `pm30min` anchor marks a local window of ±30 minutes around an anchor.
+ * A `pm30min` window never hides memory rows.
  */
 export interface WindowFact extends FactBase {
   kind: "window";

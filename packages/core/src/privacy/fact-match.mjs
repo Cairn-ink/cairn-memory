@@ -337,6 +337,7 @@ function hidesRow(fact, row, policy) {
     case "session":
       return sessionMatches(fact.session, row.source, policy);
     case "window":
+      if (fact.anchor === "pm30min" && row.type === "memory") return false;
       return windowMatches(fact, row.source?.client, row.source?.occurredAtMs, row.type !== "memory");
     case "rawSpan":
       if (row.type === "memory" && nonempty(row.memoryId)) return false;

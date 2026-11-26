@@ -1487,3 +1487,20 @@ outside-a-hook checks. `bindHookAuthority` refuses registration from inside a ho
 keep their hook context module-private and share no global marker. Because authorization flows
 through the registered reader instead of a module-private brand, it holds when the adapter and
 the service load separate copies of the core module.
+
+## Addendum 32 — Explicit window fences never hide memories
+
+This amends Addendum 28. A window with `anchor: "pm30min"` never hides a
+memory row, whatever the memory's times. Only `config.explicitWindowFence`
+writes such windows, on forget and on correct. A correction therefore keeps its
+replacement visible at the same ID, as Addendum 20 requires. Memories saved
+near a forgotten one also stay visible.
+
+These windows still fence Raw rows, router cards, receipt excerpts for turns
+inside them, and capture and import admission inside them. The forgotten
+memory stays hidden by its identity fact, and its text by its text fact.
+Windows without the anchor keep their existing matching.
+
+Known limit: an adapter that decides placement reads from a memory's receipts
+can still drop that memory from a placement read when one of its receipts
+falls inside such a window. Direct reads still return the memory.
