@@ -65,11 +65,17 @@ export async function serveStdio(input, output, options, { shared, closed = () =
           const error = toolInputError(tool, args);
           if (scope && !error) {
             try {
-              await shared?.authorize();
-              if (closed()) break;
-              runtime ??= await openLocalService(options, shared);
-              if (closed()) break;
-              const result = await callTool(runtime.service, scope, handles, tool.name, args);
+              const release = await shared?.enter?.();
+              let result;
+              try {
+                await shared?.authorize();
+                if (closed()) break;
+                runtime = shared ? await openLocalService(options, shared) : runtime ?? await openLocalService(options);
+                if (closed()) break;
+                result = await callTool(runtime.service, scope, handles, tool.name, args);
+              } finally {
+                await release?.(result !== undefined && tool.name === 'forget_memory');
+              }
               await shared?.authorize();
               reply.result = result;
             } catch {
