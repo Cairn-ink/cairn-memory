@@ -190,6 +190,55 @@ test("text purge drops quantities across clients for an ambiguous MCP save sessi
   assert.deepEqual(await list(named), namespaced);
 });
 
+test("text purge drops quantities across clients from a physical MCP save address", migrationDbTest, async t => {
+  const { pool, memories, run } = await setup(t);
+  const { raw } = createPostgresRawPorts({ lineageSecret: randomUUID() });
+  const client = "reported-client";
+  const sessionId = `mcp-save:${randomUUID()}`;
+  const messageId = randomUUID();
+  const content = "Tea cost 6.25 USD.";
+  for (const kind of ["mcp", "plugin"]) {
+    const text = `${kind} memory`;
+    await run(tx => memories.insert(tx, scope, {
+      text, textHash: hash(text), kind: "fact", origin: "explicit", confidence: 1,
+      source: { kind, client, sessionId }, embedding: { model: "fixture", vector },
+    }, [], 1), {});
+  }
+  await pool.query(`INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content)
+    VALUES ($1, $2, 'mcp', $3, $4, 'user', $5)`, [randomUUID(), scope.owner, sessionId, messageId, content]);
+
+  const rows = [
+    ["at-mcp", scope, "mcp", sessionId, messageId],
+    ["at-reported", scope, client, sessionId, messageId],
+    ["at-third-client", scope, "third-client", sessionId, messageId],
+    ["same-session-other-message", scope, client, sessionId, randomUUID()],
+    ["other-session-same-message", scope, client, `mcp-save:${randomUUID()}`, messageId],
+    ["other-owner", other, client, sessionId, messageId],
+    ["named-namespace", { ...scope, namespace: "project" }, client, sessionId, messageId],
+    ["null-source", scope, null, null, null],
+  ];
+  for (const [label, target, sourceClient, sourceSession, sourceMessage] of rows) {
+    await pool.query(`INSERT INTO core_quantity_ledger (user_id, core_namespace, memory_id, receipt_id, source_client,
+      source_session_id, source_message_id, ledger_key, text_hash, date_ms, ordinal, kind, measure, category, value,
+      unit, quantity_group, period, comparator)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $8, 10, 0, 'record', 'spend', 'tea', 6.25, 'USD', 'food', 'none', 'none')`,
+    [target.owner, target.namespace, label, randomUUID(), sourceClient, sourceSession, sourceMessage, hash(content)]);
+  }
+
+  const fact = { ...scope, actionId: randomUUID(), origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [await coreDigest(content)] } };
+  const write = work => run(work, { pauseLock: true });
+  await write(tx => createPostgresSuppressionStore().writeFact(tx, fact, sha256Hex(factIncarnationBody(fact))));
+  assert.deepEqual(await write(tx => raw.purgeWithheld(tx, scope, [{ fact }])), { rawDeleted: 1, ledgerBlanked: 0 });
+  const physical = await pool.query(`SELECT id FROM raw_messages
+    WHERE user_id = $1 AND client = 'mcp' AND session_id = $2 AND message_id = $3`, [scope.owner, sessionId, messageId]);
+  assert.equal(physical.rows.length, 0);
+  const survivors = await pool.query("SELECT memory_id FROM core_quantity_ledger ORDER BY memory_id");
+  assert.deepEqual(survivors.rows.map(({ memory_id }) => memory_id), [
+    "named-namespace", "null-source", "other-owner", "other-session-same-message", "same-session-other-message",
+  ]);
+});
+
 test("text purge commits with NUL-bearing outbox IDs and drops matching quantities", migrationDbTest, async t => {
   for (const storage of ["legacy request", "Core metadata"]) {
     await t.test(storage, async t => {
