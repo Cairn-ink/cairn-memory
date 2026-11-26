@@ -116,7 +116,7 @@ test("an authored card bound to the corrected revision is withheld from direct G
   const service = tool(adapter).service;
   assert.equal((await service.correct(scope, bound.id, bound.revision, "The synthetic axle is steel.", source)).status, "saved");
   const after = await surface(adapter, card, topics);
-  assert.deepEqual(after.input, { visible: false, reason: "source_memory_not_visible" });
+  assert.deepEqual(after.input, { visible: false, reason: "source_memory_corrected" });
   assertHidden(after);
 });
 
@@ -227,5 +227,5 @@ test("an identical stale mark leaves the card generation and revision alone", as
     assert.deepEqual(await state(tx), marked);
   });
   assert.deepEqual(await read(adapter, state), marked);
-  assert.equal(await indexRevision(), indexBefore + 2);
+  assert.equal(await indexRevision(), indexBefore + 1);
 });

@@ -573,7 +573,7 @@ export const DOCUMENT_CARD_CORRECT_CASES = [
       await writeFact(tx);
       await f.storage.memories.replaceContent(tx, f.scope, f.link.id, f.link.revision, next, null, nextDay);
     });
-    equal(await f.visible(), [f.ref], "A forget fact for earlier text is not an in-place edit fact");
+    equal(await f.visible(), [], "A forget fact withholding a retained receipt must withhold the card");
     const service = cardService(ctx, f.storage, { documentCards: { enabled: true } });
     equal((await service.forget(f.scope, f.link.id, source)).status, "forgotten", "Expected memory forget");
     equal(await f.visible(), [], "Forget still withholds dependent cards");

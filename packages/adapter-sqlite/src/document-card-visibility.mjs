@@ -53,6 +53,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
     const policy = scopedSuppression(db, scope, hashSession);
     const project = receiptProjector(db, scope, policy, receiptReadSafety);
     const visibleMemory = memoryVisibility(db, scope, policy);
+    const visibleCitation = memoryVisibility(db, scope, policy, { allowCorrectedReceipts: true });
     const maxLinks = 1000;
     const receipts = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
         r.body, r.legacy_receipt_key, r.memory_id
@@ -118,9 +119,11 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         return { status: "forgotten" };
       }
       if (!entry) return { status: "unknown" };
-      const row = visibleMemory(id);
-      if (!row) return { status: "suppressed" };
       const correction = memoryCorrectionEvidence(policy.facts, entry, link);
+      const textRevision = entry.textVersions.at(-1)?.revision ?? 1;
+      const afterCorrection = textRevision > 1 && link.revision >= textRevision && !correction.unresolvedCorrection;
+      const row = afterCorrection ? visibleCitation(id) : visibleMemory(id);
+      if (!row) return { status: "suppressed" };
       return row.historical ? { status: "historical", revision: row.revision, ...correction }
         : { status: "visible", revision: row.revision, content: row.text, date: row.createdAtMs, ...correction };
     }

@@ -131,8 +131,9 @@ async function passage(text, key) {
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
  * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceChecks>["sourceVisible"]} [rawSourceVisible]
- * @param {RawSourceWithholding} [rawSourceWithholding] */
-export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, rawSourceWithholding) {
+ * @param {RawSourceWithholding} [rawSourceWithholding]
+ * @param {ReturnType<typeof import("./document-cards.mjs").createForgottenReceiptCheck>} [forgottenReceiptCheck] */
+export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, rawSourceWithholding, forgottenReceiptCheck) {
   /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
   const fingerprintKeys = new WeakMap();
   /** @param {Tx} tx */
@@ -152,6 +153,7 @@ export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, r
     const definiteOnly = purgeFacts !== undefined;
     const policy = matchFacts(purgeFacts ?? state.facts, scope);
     const rows = state.rows.get(scope.namespace);
+    const checkReceipt = definiteOnly ? undefined : forgottenReceiptCheck?.(state, scope);
     /** @type {Map<string, DocumentCardMemoryState>} */
     const memoryStates = new Map();
     for (const link of card.sourceMemories) {
@@ -162,7 +164,9 @@ export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, r
       else if (!entry) memoryStates.set(id, { status: "unknown" });
       else if (definiteOnly && policy.hides(entry) && !policy.definitelyHides(entry)) {
         memoryStates.set(id, { status: "unknown" });
-      } else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      } else if (policy.hides(entry) || (checkReceipt && await checkReceipt(entry))) {
+        memoryStates.set(id, { status: "suppressed" });
+      }
       else {
         const previous = memoryStates.get(id);
         const evidence = memoryCorrectionEvidence(state, scope, link);

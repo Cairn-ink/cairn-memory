@@ -2,7 +2,7 @@ import { CoreError, assertAdapterCapabilities, capabilities, receiptExcerpt, toC
 import { createCapturePorts } from "./capture.mjs";
 import { createCardRawSourceChecks, withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
-import { createDocumentCardStore } from "./document-cards.mjs";
+import { createDocumentCardStore, createForgottenReceiptCheck } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { createInspectStore } from "./inspect.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
@@ -56,11 +56,12 @@ export function createMemoryAdapter(options = {}) {
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const cardRawSources = archive && createCardRawSourceChecks(archive, matchFacts, receiptReadSafety);
+  const forgottenReceiptCheck = createForgottenReceiptCheck(matchFacts, ringKeys);
   const { cardVisibilityInput, amendmentWithheld } = createCardVisibilityInputs(matchFacts, keys, cardRawSources?.sourceVisible,
-    archive?.sourceWithholding);
+    archive?.sourceWithholding, forgottenReceiptCheck);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const documentCards = flags.documentCards ? handleWriteRejections(
-    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch),
+    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch, forgottenReceiptCheck),
     ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive, documentCards) : undefined;
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;

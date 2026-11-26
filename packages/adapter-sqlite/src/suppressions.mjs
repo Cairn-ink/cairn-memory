@@ -137,6 +137,18 @@ const isText = stored => stored.fact.kind === "text";
 /** @param {SuppressionFact} fact @returns {fact is TextFact} */
 const isReplacement = fact => fact.kind === "text" && (fact.origin === "edit" || fact.origin === "correct");
 
+/** @param {StoredFact} stored @param {Entry["row"]} memory @param {Receipt} receipt @param {SessionHasher} hashSession */
+export function isReceiptCorrection(stored, memory, receipt, hashSession) {
+  const { fact } = stored;
+  if (!isReplacement(fact)) return false;
+  const source = textPredecessors.get(stored) ?? fact.sourceMemory;
+  if (source) return source.id === memory.id && source.createdAtMs === memory.createdAtMs;
+  // Unsourced legacy facts need positive evidence in this memory's retained receipt.
+  const { messageId, role, excerpt, occurredAtMs } = receipt;
+  return excerpt !== undefined && rawFactPolicy(memory.scope, receipt, [stored], hashSession)
+    .purges({ id: messageId, role, content: excerpt, occurredAtMs });
+}
+
 /** @param {StoredFact<TextFact>} stored @param {Entry} entry */
 function predecessorTextMatch(stored, { row, digests, legacyHash }) {
   const legacy = stored.fact.legacyTextHash;

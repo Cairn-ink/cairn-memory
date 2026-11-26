@@ -1,7 +1,7 @@
 import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
 import { scopeKey } from "./storage-values.mjs";
-import { scopedSuppression } from "./suppressions.mjs";
+import { isReceiptCorrection, scopedSuppression } from "./suppressions.mjs";
 
 /** @import { MemoryRow, Scope } from "@cairn-ink/core/ports" */
 /** @import { Connection } from "./storage-values.mjs" */
@@ -18,8 +18,9 @@ export const exactScope = "owner_id = ? AND namespace_key = ?";
  * @param {MigratedRawPolicy} [migratedRaw]
  */
 export function createPlacementVisibility(hashSession, receiptReadSafety, migratedRaw) {
-  /** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof scopedSuppression>} [policy] */
-  return (db, scope, policy = scopedSuppression(db, scope, hashSession)) => {
+  /** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof scopedSuppression>} [policy]
+   * @param {{ allowCorrectedReceipts?: boolean }} [options] */
+  return (db, scope, policy = scopedSuppression(db, scope, hashSession), { allowCorrectedReceipts = false } = {}) => {
     /** @type {Map<string, MemoryRow | undefined>} */
     const seen = new Map();
     const keys = scopeKey(scope);
@@ -40,8 +41,13 @@ export function createPlacementVisibility(hashSession, receiptReadSafety, migrat
           const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
           const receipt = { client, sessionId, messageId, role, occurredAtMs, excerpt: typeof excerpt === "string" ? excerpt : undefined };
           const position = { id: messageId, occurredAtMs };
-          return migratedRaw?.blocks(db, scope, receipt, [position]) || migratedRaw?.blocksSpan(db, scope, receipt, messageId) ||
-            !receiptReadSafety(db, scope, policy, receipt, receiptKey ?? legacyKey, legacyKey, legacyRawAncestryEmpty);
+          if (migratedRaw?.blocks(db, scope, receipt, [position]) || migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;
+          const key = receiptKey ?? legacyKey;
+          if (!allowCorrectedReceipts || !entry) {
+            return !receiptReadSafety(db, scope, policy, receipt, key, legacyKey, legacyRawAncestryEmpty);
+          }
+          return receiptReadSafety.withholdReason(db, scope, policy, receipt, key, legacyKey, legacyRawAncestryEmpty,
+            stored => isReceiptCorrection(stored, entry.row, receipt, hashSession)) === "withheld";
         });
         if (withheld) row = undefined;
       }
