@@ -125,6 +125,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           const zeroQuery = values.every(value => value === 0);
           /** @type {Set<string>} */
           const seen = new Set();
+          let checkedHidden = 0;
+          let zerosExhausted = false;
           /** @type {Awaited<ReturnType<VectorCandidates["vector"]>>["rows"]} */
           const result = [];
 
@@ -181,7 +183,9 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               for (const [i, { memory, hidden }] of checked.entries()) {
                 seen.add(memory.id);
                 if (hidden || pending[i].vector_hidden) {
+                  checkedHidden++;
                   if (!hiddenIds.has(memory.id)) {
+                    hiddenIds.add(memory.id);
                     eligible--;
                     embedded--;
                   }
@@ -196,12 +200,15 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
                 compareUtf8(b.ref.id, a.ref.id));
               if (result.length > depth) result.length = depth;
               if (exact) afterDistance = rows.at(-1)?.distance ?? null;
+              if (mode === "zero") zerosExhausted = rows.length < size;
               if (rows.length < size || result.length >= depth) return true;
             }
             return false;
           }
 
           let checkedDepth;
+          let annFilled = false;
+          let annExhausted = false;
           if (zeroQuery) {
             checkedDepth = await collect("orthogonal");
           } else {
@@ -237,16 +244,30 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               throw error;
             }
             await restoreSort();
+            annFilled = preferIndex && result.length >= depth;
             // Zero vectors have no cosine index entry. They rank at distance 1.
             if (result.length < depth || result[depth - 1].distance >= 1) {
+              const checkedNonzero = seen.size - checkedHidden;
               const checkedZeros = await collect("zero");
               checkedDepth &&= checkedZeros;
+              if (preferIndex && !annFilled && checkedZeros) {
+                const checked = seen.size - checkedHidden;
+                let zeros = checked - checkedNonzero;
+                // A short zero page accounts for all zeros. If a full page filled depth,
+                // count the remaining zeros to distinguish ANN exhaustion from cutoff.
+                if (!zerosExhausted && checked !== embedded) {
+                  const { rows: [count] } = await query(`SELECT count(*)::text AS zeros FROM memories
+                    WHERE ${MEMORY_FILTER} AND embedding_model = $7 AND vector_norm(embedding) = 0
+                    AND id <> ALL ($8::text[])`, [...params, model, [...hiddenIds]]);
+                  zeros = Number(count.zeros);
+                }
+                annExhausted = checkedNonzero === embedded - zeros;
+              }
             }
           }
-          // Counts beyond checked pages are upper bounds. A bounded index scan can
-          // also end short while same-model rows remain unchecked.
-          const required = preferIndex && !zeroQuery ? depth : Math.min(depth, embedded);
-          const complete = eligible === embedded && checkedDepth && result.length >= required;
+          const complete = eligible === embedded && (preferIndex && !zeroQuery
+            ? annFilled || annExhausted
+            : checkedDepth && result.length >= Math.min(depth, embedded));
           return { coverage: { eligible, embedded, complete }, rows: result };
         });
       },

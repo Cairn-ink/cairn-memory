@@ -82,3 +82,48 @@ test("the read lint admits only the exact relaxed scan and setup strings", () =>
     }
   }
 });
+
+test("ANN coverage distinguishes filled, exhausted, and cut-off pools", async t => {
+  const owner = "owner";
+  const axis = new Float32Array(1536);
+  axis[0] = 1;
+  const embedded = 70;
+  const row = (id, distance) => ({ id, distance, core_namespace: null, revision: 1, updated_us: "1" });
+  const cases = [
+    { name: "filled", ann: 2, zeros: 0, complete: true, calls: ["ann"] },
+    { name: "exhausted with unchecked zeros", ann: 1, zeros: 69, complete: true, calls: ["ann", "zero", "count"] },
+    { name: "cut off with an unchecked nonzero", ann: 1, zeros: 68, complete: false, calls: ["ann", "zero", "count"] },
+  ];
+  for (const { name, ann, zeros, complete, calls } of cases) {
+    await t.test(name, async () => {
+      const observed = [];
+      const uow = createPostgresUnitOfWork({ async connect() {
+        return {
+          release() {},
+          async query(sql, values) {
+            const result = rows => ({ command: "SELECT", rows });
+            if (sql.startsWith("SELECT count(*)::text AS eligible")) return result([{ eligible: embedded, embedded }]);
+            if (sql.includes("ORDER BY embedding <=> $8::vector LIMIT $9")) {
+              observed.push("ann");
+              return result(Array.from({ length: ann }, (_, i) => row(`ann-${i}`, 0.5)));
+            }
+            if (sql.startsWith("SELECT count(*)::text AS zeros")) {
+              observed.push("count");
+              return result([{ zeros }]);
+            }
+            if (sql.includes("vector_norm(embedding) = 0")) {
+              observed.push("zero");
+              return result(Array.from({ length: Math.min(zeros, values[8]) }, (_, i) => row(`zero-${i}`, 1)));
+            }
+            return command(sql);
+          },
+        };
+      } });
+      const result = await uow.run(owner, { readOnly: true },
+        tx => createPostgresMemoryCandidates().vector.vector(tx, { owner, namespaces: [null] }, axis, "test", 2));
+      assert.deepEqual(observed, calls);
+      assert.equal(result.rows.length, 2);
+      assert.deepEqual(result.coverage, { eligible: embedded, embedded, complete });
+    });
+  }
+});

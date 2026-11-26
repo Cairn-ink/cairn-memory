@@ -15,6 +15,7 @@ const scope = { owner, namespaces: [null] };
 const readOnly = { readOnly: true };
 const distance = "embedding <=> $1::vector";
 const tieOrder = 'updated_at DESC, id COLLATE "C" DESC';
+const initializeVector = "SELECT '[1,0]'::vector <=> '[1,0]'::vector";
 
 function direction(angle) {
   return Float32Array.from([Math.cos(angle), Math.sin(angle), ...Array(1534).fill(0)]);
@@ -45,12 +46,18 @@ async function seed(pool, paging) {
   await pool.query("ANALYZE memories");
 }
 
-function recordingSource(pool, pages, efSearch = 40) {
+function recordingSource(pool, pages, efSearch = 40, maxScanTuples = 20_000) {
   return {
     async connect() {
       const client = await pool.connect();
-      await client.query("LOAD 'vector'");
-      await client.query("SELECT set_config('hnsw.ef_search', $1, false)", [String(efSearch)]);
+      try {
+        await client.query(initializeVector);
+        await client.query("SELECT set_config('hnsw.ef_search', $1, false), set_config('hnsw.max_scan_tuples', $2, false)",
+          [String(efSearch), String(maxScanTuples)]);
+      } catch (error) {
+        client.release(true);
+        throw error;
+      }
       return {
         async query(sql, values) {
           const result = await client.query(sql, values);
@@ -71,7 +78,7 @@ async function scan(pool, vector, order) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN READ ONLY");
-    await client.query("LOAD 'vector'");
+    await client.query(initializeVector);
     const settings = {
       strict: "SET LOCAL hnsw.iterative_scan = 'strict_order'; SET LOCAL hnsw.ef_search = 8; SET LOCAL enable_sort = off",
       relaxed: "SET LOCAL hnsw.iterative_scan = 'relaxed_order'; SET LOCAL enable_sort = off",
@@ -91,8 +98,11 @@ async function scan(pool, vector, order) {
     SELECT id FROM candidates ORDER BY distance + 0, ${tieOrder}`, [bind(vector), owner, model]);
     return rows.map(row => row.id);
   } finally {
-    await client.query("ROLLBACK");
-    client.release();
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
   }
 }
 
@@ -191,5 +201,39 @@ test("pool extension has no gaps or duplicates and honors committed suppression"
   const exhausted = await search(20);
   assert.equal(pages.length, 2);
   assert.deepEqual(ids(exhausted), expected);
-  assert.deepEqual(exhausted.coverage, { eligible: 19, embedded: 19, complete: false });
+  assert.deepEqual(exhausted.coverage, { eligible: 19, embedded: 19, complete: true });
+});
+
+test("zero-vector fallback cannot complete a bounded ANN scan", migrationDbTest, async t => {
+  const { pool } = await migrationDatabase(t);
+  await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, other]);
+  await pool.query(`INSERT INTO memories (id, user_id, text, kind, text_hash, embedding, embedding_model,
+    source_kind, updated_at)
+    SELECT who || '-' || i, who, 'example', 'fact', i::text, embedding, $3, 'import',
+      '2024-01-01'::timestamptz + i * interval '1 second'
+    FROM (
+      SELECT $1 AS who, i,
+        (ARRAY[cos(0.3 + i / 10000.0), sin(0.3 + i / 10000.0)] || array_fill(0, ARRAY[1534]))::vector(1536) AS embedding
+      FROM generate_series(1, 120) AS seed(i)
+      UNION ALL
+      SELECT $1, i, array_fill(0, ARRAY[1536])::vector(1536) FROM generate_series(121, 125) AS seed(i)
+      UNION ALL
+      SELECT $2, i, (ARRAY[cos(i / 100000.0), sin(i / 100000.0)] || array_fill(0, ARRAY[1534]))::vector(1536)
+      FROM generate_series(1, 400) AS seed(i)
+    ) seed`, [owner, other, model]);
+  await pool.query("ANALYZE memories");
+
+  const vector = direction(0);
+  const pages = [];
+  const uow = createPostgresUnitOfWork(recordingSource(pool, pages, 1, 1));
+  const candidates = createPostgresMemoryCandidates();
+  const result = await uow.run(owner, readOnly, tx => candidates.vector.vector(tx, scope, vector, model, 3));
+  assert.equal(pages.length, 1);
+  const annIds = pages[0].rows.map(row => row.id);
+  assert.ok(annIds.length < 3);
+  const fallbackIds = ["target-125", "target-124", "target-123"].slice(0, 3 - annIds.length);
+  assert.deepEqual(ids(result), [...annIds, ...fallbackIds]);
+  assert.ok(result.rows.slice(annIds.length).every(row => row.distance === 1));
+  assert.deepEqual((await scan(pool, vector, "exact")).slice(0, 3), ["target-1", "target-2", "target-3"]);
+  assert.deepEqual(result.coverage, { eligible: 125, embedded: 125, complete: false });
 });
