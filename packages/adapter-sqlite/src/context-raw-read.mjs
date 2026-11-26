@@ -250,11 +250,13 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     return { ...turn, witness };
   }
 
-  /** @param {Connection} db @param {() => boolean} stopped */
-  function visibility(db, stopped) {
+  /** @param {Connection} db @param {() => boolean} stopped @param {number} [memoryCacheLimit] */
+  function visibility(db, stopped, memoryCacheLimit = MAX_INVENTORY) {
     /** @type {Map<Scope["namespace"], {policy: Policy, project: ReturnType<typeof receiptProjector>, current: Map<string, boolean>}>} */
     const scopes = new Map();
     let cachedMemories = 0;
+    /** @type {ReturnType<Connection["prepare"]> | undefined} */
+    let citingMemories;
     // The source index avoids scanning this scope's receipt inventory for each Raw row.
     const possibleReceipts = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
         r.body, r.legacy_receipt_key, r.memory_id
@@ -287,6 +289,21 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       return scoped;
     }
 
+    /** @param {Scope} scope @param {string} id */
+    function memoryVisible(scope, id) {
+      const { policy, current } = forScope(scope);
+      let visible = current.get(id);
+      if (visible === undefined) {
+        const entry = findMemory.get(...scopeKey(scope), id);
+        visible = !!entry && entry.historical !== 1 && !policy.hides(decodeEntry(scope, entry));
+        if (cachedMemories < memoryCacheLimit) {
+          current.set(id, visible);
+          cachedMemories++;
+        }
+      }
+      return visible;
+    }
+
     /** @param {Scope} scope @param {RawRow} row */
     function directlyVisible(scope, row) {
       const { message } = row, { policy } = forScope(scope);
@@ -303,23 +320,25 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     const cheap = (scope, row) => directlyVisible(scope, row) && rootsVisible(scope, row, directlyVisible);
 
     /** @param {Scope} scope @param {RawRow} row */
+    function citingMemoriesVisible(scope, row) {
+      citingMemories ??= db.prepare(`SELECT memory_id FROM cairn_receipts INDEXED BY cairn_context_receipts_by_source
+        WHERE owner_id = ? AND namespace_key = ? AND source_key = ?`);
+      const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
+      for (const { memory_id } of citingMemories.iterate(...scopeKey(scope), sourceKey)) {
+        if (stopped() || !memoryVisible(scope, String(memory_id))) return false;
+      }
+      return true;
+    }
+
+    /** @param {Scope} scope @param {RawRow} row */
     function prove(scope, row) {
-      const { policy, project, current } = forScope(scope);
+      const { policy, project } = forScope(scope);
       const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
       let linkCount = 0;
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
         const id = String(record.memory_id);
-        let visible = current.get(id);
-        if (visible === undefined) {
-          const entry = findMemory.get(...scopeKey(scope), id);
-          visible = !!entry && entry.historical !== 1 && !policy.hides(decodeEntry(scope, entry));
-          if (cachedMemories < MAX_INVENTORY) {
-            current.set(id, visible);
-            cachedMemories++;
-          }
-        }
-        if (!visible) return false;
+        if (!memoryVisible(scope, id)) return false;
         if (record.excerpt === null) {
           if (!addressReceipt(db, scope, id, policy, receiptReadSafety, record, exactTurn, row)) return false;
         } else {
@@ -329,7 +348,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       }
       return true;
     }
-    return { cheap, prove };
+    return { cheap, citingMemoriesVisible, prove };
   }
 
   return {
@@ -337,7 +356,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       return port(tx, readSet.owner, {}, db => {
         const stopped = contextDeadline(options, monotonicMs), fence = inventoryFence(contextEpochs(db, readSet));
         const published = publishedInventory(db, readSet, fence);
-        const { cheap, prove } = visibility(db, stopped);
+        const { cheap, citingMemoriesVisible, prove } = visibility(db, stopped, Infinity);
         /** @type {Document[]} */
         const documents = [];
         /** @type {Map<string, number>} */
@@ -351,7 +370,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
             if (stopped()) return { turns: [], coverage: "partial" };
             examined++;
             const row = decodeRawRow(record);
-            if (!cheap(scope, row)) continue;
+            if (!cheap(scope, row) || !citingMemoriesVisible(scope, row)) continue;
             const tokens = termFrequencies(row.message.content);
             const matched = terms.filter(term => tokens.frequencies.has(term));
             if (matched.length && !prove(scope, row)) continue;

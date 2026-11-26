@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { test } from "node:test";
-import { createBM25, termFrequencies } from "@cairn-ink/core";
+import { createBM25, factIncarnationBody, termFrequencies } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { rawSegment } from "../src/raw-rows.mjs";
@@ -73,6 +73,7 @@ async function cite(adapter, tx, session, turn, index, eventId = turn.id) {
     receipts: [{ ...session, messageId: turn.id, role: turn.role, occurredAtMs: turn.occurredAtMs }],
   }]);
   assert.equal(result.memories.length, 1);
+  return result.memories[0].id;
 }
 
 function denyIdentity({ adapter, port }, session, turn) {
@@ -82,7 +83,7 @@ function denyIdentity({ adapter, port }, session, turn) {
 }
 
 async function publish(adapter) {
-  for (let i = 0; i < 3; i++) if (await adapter.maintainContextRaw(readSet)) return;
+  for (let i = 0; i < 5; i++) if (await adapter.maintainContextRaw(readSet)) return;
   assert.fail("Raw inventory checkpoint did not publish");
 }
 
@@ -226,6 +227,55 @@ test("Forgetting a long nonmatch removes exactly its contribution to the Raw cor
   assert.deepEqual((await searchWithStats(adapter, query)).stats, {
     N: 2, totalLength: matchingLength, averageLength: matchingLength / 2, df,
   });
+});
+
+test("Nonmatches with hidden or historical citing memories consume no Raw corpus capacity", async t => {
+  const session = { client: "client", sessionId: "thread" };
+  const visible = message("z-visible", "archive marble");
+  const hidden = message("a-hidden", "archive " + "gravel ".repeat(50));
+  const historical = message("a-historical", "archive " + "slate ".repeat(50));
+  const textUnits = 4 * 1024 * 1024 - visible.content.length;
+  const rowFiller = Array(4095).fill("archive pebble");
+  const textFiller = Array.from({ length: Math.ceil(textUnits / 20_000) }, (_, i) =>
+    "pebble".padEnd(Math.min(20_000, textUnits - i * 20_000), "-"));
+  assert.equal(textFiller.reduce((sum, content) => sum + content.length, 0), textUnits);
+
+  for (const [name, filler] of [["BM25 count and length", []], ["row cap", rowFiller], ["UTF-16 cap", textFiller]]) {
+    await t.test(name, async t => {
+      const { adapter, port } = await open(t);
+      const rows = [...filler.map((content, i) => message(`b-${String(i).padStart(4, "0")}`, content)), visible];
+      await write(adapter, async tx => {
+        assert.equal((await adapter.raw.importArchive(tx, scope, session, rows)).archived, rows.length);
+      });
+      await publish(adapter);
+      const query = "marble";
+      const baseline = await searchWithStats(adapter, query);
+      assert.equal(baseline.coverage, "included");
+      assert.deepEqual(baseline.turns.map(({ messageId }) => messageId), [visible.id]);
+
+      await write(adapter, async tx => {
+        assert.equal((await adapter.raw.importArchive(tx, scope, session, [hidden, historical])).archived, 2);
+        const hiddenId = await cite(adapter, tx, session, hidden, 0);
+        const historicalId = await cite(adapter, tx, session, historical, 1);
+        const fact = { ...scope, kind: "identity", origin: "forget", actionId: "hide-memory", memoryId: hiddenId };
+        assert.equal((await adapter.suppressions.writeFact(tx, fact, sha256(factIncarnationBody(fact)))).created, true);
+        await port(tx, scope.owner, { write: true }, db => {
+          assert.equal(db.prepare(`UPDATE cairn_memories SET historical = 1, revision = revision + 1
+            WHERE owner_id = ? AND namespace_key = ? AND id = ?`).run(...scopeKey(scope), historicalId).changes, 1);
+        });
+      });
+      await publish(adapter);
+      if (!filler.length) {
+        for (const term of ["gravel", "slate"]) {
+          assert.deepEqual(await search(adapter, term), { turns: [], coverage: "included" });
+        }
+      }
+      const result = await search(adapter, query);
+      assert.deepEqual(result.turns.map(({ messageId }) => messageId), [visible.id]);
+      assert.equal(result.coverage, "included");
+      assert.deepEqual((await searchWithStats(adapter, query)).stats, baseline.stats);
+    });
+  }
 });
 
 test("A matching turn that fails address proof is neither counted nor scored", async t => {
