@@ -12,20 +12,27 @@ const clock = {
   hmacHex: async (key, text) => createHmac('sha256', key).update(text).digest('hex'),
 };
 
-export async function openStorage(database, localAuthority) {
+// Enable after both SQLite DocumentCardStore and Context Read can serve the
+// same card lineage, including removal and migration.
+const documentCardsReady = false;
+
+export async function openStorage(database, localAuthority, { model = null, embedder = null } = {}) {
   const storage = await openSqliteAdapter(database, {
-    capabilities: { contextRead: true, contextRawRead: true }, legacyInspectPlacements: true,
+    capabilities: { contextRead: true, contextRawRead: true, documentCards: documentCardsReady }, legacyInspectPlacements: true,
     ...(localAuthority && { localAuthority }),
   });
   let encoding;
   try {
     encoding = tokenizer.get_encoding('o200k_base');
     const countTokens = text => encoding.encode(text, [], []).length;
-    const config = localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {};
+    const config = {
+      ...(model ? { rawCapture: { onModelFailure: true } }
+        : localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {}),
+      ...(documentCardsReady && { documentCards: { enabled: true, amendments: !!model } }),
+    };
     const service = createMemoryService({
-      storage, embedder: null, clock, tokens: { countTokens }, config,
-      // The fixed local connection has no provider. The service checks the
-      // persisted write pause separately from its model gate.
+      storage, model, embedder: model ? embedder : null, clock, tokens: { countTokens }, config,
+      // The service checks the persisted write pause separately from its model gate.
       gate: { assertOpen() {} },
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
     });
