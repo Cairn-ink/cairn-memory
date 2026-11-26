@@ -1,7 +1,7 @@
 import { basename, dirname, join } from 'node:path';
 import { privateList, privateRead, privateRemove, syncDirectory } from '../../../integrations/client/private-state.mjs';
 import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { cutoverId, legacyTargetFor, taggedCutoverAttemptForName, targetFor } from './local-cutover-journal.mjs';
+import { captureTargetFor, cutoverId, legacyTargetFor, taggedCutoverAttemptForName, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse } from './local-cutover-lease.mjs';
 import { canonicalPath, inside, ownedDirectory, parseStrictJSON, removeCutoverDirectory } from './local-descriptor.mjs';
 
@@ -57,11 +57,12 @@ async function reclaimBackup(directory, name) {
   }));
 }
 
-export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targetPath }, checkpoint) {
+export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targetPath, reclaimCapture = false }, checkpoint) {
   if (inside(maintenance, sourcePath)) throw refuse('cutover_unsafe_artifact');
   // A journal supplies the exact target. Historical maintenance receipts
   // can identify an attempt by UUID alone and cover both naming generations.
-  const targets = targetPath ? [targetPath] : [targetFor(sourcePath, attemptId), legacyTargetFor(sourcePath, attemptId)];
+  const targets = [...(reclaimCapture ? [captureTargetFor(sourcePath, attemptId)] : []),
+    ...(targetPath ? [targetPath] : [targetFor(sourcePath, attemptId), legacyTargetFor(sourcePath, attemptId)])];
   await reclaimTargets(sourcePath, targets, checkpoint);
   const names = await privateList(maintenance);
   for (const name of names) {
@@ -74,7 +75,7 @@ export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targe
 function metadataOnly(directory, names) {
   const records = new Map();
   for (const name of names) {
-    const match = /^(maintenance|stale|claude|codex)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
+    const match = /^(maintenance|stale|claude|codex|capture-claude|capture-codex)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
     const info = entry(join(directory, name));
     if (match?.[0] !== name || (match[2] && !cutoverId(match[2])) || !privateFile(info)) return false;
     const key = match[1] + ':' + info.dev + ':' + info.ino;
@@ -127,6 +128,10 @@ export async function reclaimPastAttempts(root, source, active, checkpoint) {
     const current = active?.id === id;
     const attempts = current ? [] : await maintenanceAttempts(directory, source, id);
     if (!attempts) continue;
+    if (!current && ['capture-claude.json', 'capture-codex.json'].some(file => entry(join(directory, file))) &&
+        attempts.some(attempt => suffixes.some(suffix => entry(captureTargetFor(source, attempt) + suffix)))) {
+      throw refuse('cutover_capture_journal_required');
+    }
     const stages = [];
     for (const file of await privateList(directory)) {
       const attemptId = backupId(file);
