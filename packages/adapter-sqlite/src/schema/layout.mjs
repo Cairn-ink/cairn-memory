@@ -5,7 +5,7 @@ import { PLACEMENT_RELATION_SCHEMA } from "./placement-relations.mjs";
 // migration compatibility tables to the inspect and Context Read layout.
 // Version 6 adds procedural tags. Version 7 adds memory placement and relations.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
-export const SQLITE_PHYSICAL_VERSION = 7;
+export const SQLITE_PHYSICAL_VERSION = 8;
 
 export const STORAGE_SCHEMA = `
   PRAGMA encoding = 'UTF-8';

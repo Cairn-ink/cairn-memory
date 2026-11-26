@@ -84,6 +84,45 @@ export function clearReceipts(db, scope, id) {
     .run(...scopeKey(scope), id);
 }
 
+/** Remove attested plaintext while retaining its source address and denial.
+ * @param {Connection} db @param {Scope} scope @param {{client: string, sessionId: string}} session
+ * @param {string} [messageId]
+ */
+export function scrubAttestedReceipts(db, scope, { client, sessionId }, messageId) {
+  const keys = scopeKey(scope);
+  const legacySession = /^legacy-raw:[0-9a-f]{64}$/u.test(sessionId) ? "s1:" + sessionId.slice(11) : sessionId;
+  const rows = db.prepare(`SELECT r.memory_id, r.ordinal, i.id, r.body
+    FROM cairn_receipts r JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
+    WHERE r.owner_id = ? AND r.namespace_key = ? AND r.legacy_receipt_key IS NOT NULL
+      AND json_extract(r.body, '$.legacy.root') = 'legacy-attested' AND i.excerpt IS NOT NULL
+      AND json_extract(r.body, '$.client') = ?
+      AND (json_extract(r.body, '$.sessionId') IN (?, ?) OR EXISTS (
+        SELECT 1 FROM json_each(r.body, '$.legacy.spans') s WHERE json_extract(s.value, '$.sessionId') = ?))
+      AND (? IS NULL OR json_extract(r.body, '$.messageId') = ?)`)
+    .all(...keys, client, sessionId, legacySession, sessionId, messageId ?? null, messageId ?? null);
+  if (!rows.length) return;
+  const deny = db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+  const scrubBody = db.prepare(`UPDATE cairn_receipts SET body = json_remove(body, '$.legacy.excerpt')
+    WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? AND ordinal = ?`);
+  const scrubExcerpt = db.prepare("UPDATE cairn_inspect_receipts SET excerpt = NULL WHERE id = ?");
+  const scrubEvidence = db.prepare(`UPDATE cairn_inspect_evidence SET
+    qualification = CASE WHEN EXISTS (SELECT 1 FROM json_each(qualification, '$.anchors')
+      WHERE json_extract(value, '$.receiptId') = ?) THEN NULL ELSE qualification END,
+    procedural = CASE WHEN EXISTS (SELECT 1 FROM json_each(procedural, '$.anchors')
+      WHERE json_extract(value, '$.receiptId') = ?) THEN NULL ELSE procedural END
+    WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?`);
+  const scrubTag = db.prepare(`DELETE FROM cairn_procedural_tags WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?
+    AND EXISTS (SELECT 1 FROM json_each(anchors) WHERE json_extract(value, '$.receiptId') = ?)`);
+  for (const { memory_id, ordinal, id, body } of rows) {
+    const address = /** @type {import("./receipt-identity.mjs").StoredReceipt} */ (decodeJson(body));
+    deny.run(...keys, receiptAddressDenial(address));
+    scrubBody.run(...keys, memory_id, ordinal);
+    scrubExcerpt.run(id);
+    scrubEvidence.run(id, id, ...keys, memory_id);
+    scrubTag.run(...keys, memory_id, id);
+  }
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {string} text */
 export function suppressReceiptSources(db, scope, id, text) {
   const rows = db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
@@ -94,6 +133,7 @@ export function suppressReceiptSources(db, scope, id, text) {
     const key = receipt.receiptKey ?? legacy_receipt_key;
     insert.run(...scopeKey(scope), receiptAddressDenial(receipt));
     if (typeof key === "string") insert.run(...scopeKey(scope), receiptIdentityDenial(key));
+    scrubAttestedReceipts(db, scope, receipt, receipt.messageId);
   }
   // A full source turn can be saved without a linked receipt or archive.
   if (text.length > 800) {

@@ -13,7 +13,9 @@ const clock = {
 };
 
 export async function openStorage(database) {
-  const storage = await openSqliteAdapter(database, { capabilities: { contextRead: true, contextRawRead: true } });
+  const storage = await openSqliteAdapter(database, {
+    capabilities: { contextRead: true, contextRawRead: true }, legacyInspectPlacements: true,
+  });
   let encoding;
   try {
     encoding = tokenizer.get_encoding('o200k_base');

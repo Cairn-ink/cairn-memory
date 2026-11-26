@@ -163,7 +163,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     eraseSessions(tx, scope, closure) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, copyBatch(closure).map(copySession))));
+        return changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(selection, copyBatch(closure).map(copySession))));
       });
     },
 
@@ -173,7 +173,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const session = copySession(input);
         // Keep late turns with previously unseen message IDs from restoring the session.
         const fenced = addFence(db, selection, session);
-        const { rawDeleted } = changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(db, selection, [session])), fenced);
+        const { rawDeleted } = changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(selection, [session])), fenced);
         return { rawDeleted };
       });
     },
@@ -197,20 +197,27 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session} session */
-  function addFence(db, scope, { client, sessionId }) {
-    const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
-      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(scope), hashSession(scope, client, sessionId));
-    if (added.changes) advanceSuppressionEpoch(db, scope.owner);
-    return !!added.changes;
+  function addFence(db, scope, session) {
+    const hashes = migratedRaw?.fenceHashes(scope, session) ?? [hashSession(scope, session.client, session.sessionId)];
+    const insert = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
+      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`);
+    const keys = scopeKey(scope);
+    let added = false;
+    for (const hash of hashes) if (insert.run(...keys, hash).changes) added = true;
+    if (added) advanceSuppressionEpoch(db, scope.owner);
+    return added;
   }
 
-  /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
+  /** @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session[]} sessions */
-  function eraseAddresses(db, scope, sessions) {
+  function eraseAddresses(scope, sessions) {
     if (!migratedRaw) return sessions;
     return sessions.flatMap(session => {
-      const alias = migratedRaw.storageSession(db, scope, session);
-      return alias === session ? [session] : [session, alias];
+      const { client, sessionId } = session;
+      const hash = hashSession(scope, client, sessionId);
+      // Converted archives may retain the original legacy session address.
+      return [...new Set([sessionId, "legacy-raw:" + hash, "s1:" + hash])]
+        .map(sessionId => ({ client, sessionId }));
     });
   }
 
