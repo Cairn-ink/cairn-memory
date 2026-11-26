@@ -180,7 +180,8 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     return { policyFor, sourceDenied, receiptLinksVisible,
       /** @param {Scope} scope @param {RawRow} row */
       visible(scope, row) {
-        return directlyVisible(scope, row) && lineage.receiptRootsVisible(db, scope, row, directlyVisible) &&
+        return directlyVisible(scope, row) && lineage.receiptRootsVisible(db, scope, row, (target, root) =>
+          (!amendment || root.message.role === row.message.role) && directlyVisible(target, root)) &&
           receiptLinksVisible(scope, row, { ...row, messageId: row.message.id });
       },
     };

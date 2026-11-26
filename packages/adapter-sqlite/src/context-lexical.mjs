@@ -25,6 +25,11 @@ const MAX_ROWS = 1024;
 const MAX_TEXT_UNITS = 2_000_000;
 const CARD_STATES = ["draft", "confirmed", "cancelled", "deleted"];
 
+/** @returns {Metrics} */
+function maintenanceMetrics() {
+  return { canonicalRows: 0, sidecarRows: 0, textRows: 0, textUnits: 0, transformed: 0, removed: 0 };
+}
+
 /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
 function projectionKey({ owner, namespaces }, { types, intent }) {
   return sha256(JSON.stringify(["candidate-text-v1", "hr1-t1-v1", owner, namespaces, types, intent]));
@@ -148,7 +153,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
   /** @param {Connection} db @param {ContextReadSet} readSet @param {ContextReadSelection} selection
    * @param {Epochs} epochs @param {() => boolean} stopped */
   function reconcile(db, readSet, selection, epochs, stopped) {
-    const metrics = { canonicalRows: 0, sidecarRows: 0, textRows: 0, textUnits: 0, transformed: 0, removed: 0 };
+    const metrics = maintenanceMetrics();
     const key = projectionKey(readSet, selection), captured = fence(epochs, readSet, selection);
     const prior = generation(db, key);
     if (published(prior, captured) || stopped()) return metrics;
@@ -198,9 +203,10 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
   }
 
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadSelection} selection
-   * @param {Metrics} metrics @param {() => boolean} stopped */
-  async function reconcileCards(tx, readSet, selection, metrics, stopped) {
-    if (!loadCards || stopped() || metrics.canonicalRows + metrics.removed >= MAX_ROWS || metrics.textUnits >= MAX_TEXT_UNITS) return;
+   * @param {() => boolean} stopped */
+  async function reconcileCards(tx, readSet, selection, stopped) {
+    const metrics = maintenanceMetrics();
+    if (!loadCards || stopped()) return metrics;
     const key = cardProjectionKey(readSet, selection);
     const batch = await port(tx, readSet.owner, {}, db => {
       const captured = cardFence(db, readSet, contextEpochs(db, readSet)), prior = generation(db, key);
@@ -210,7 +216,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
         WHERE ${exactScope} AND state = 'active' AND id > ? ORDER BY id LIMIT ?`);
       /** @type {{scope: Scope, candidates: CardDocument[]}[]} */
       const pages = [];
-      let textUnits = metrics.textUnits;
+      let textUnits = 0;
       while (state.phase < readSet.namespaces.length && !stopped() && textUnits < MAX_TEXT_UNITS) {
         const limit = MAX_ROWS - metrics.canonicalRows - metrics.removed;
         if (limit === 0) break;
@@ -238,18 +244,18 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       }
       return { state, pages };
     });
-    if (!batch) return;
+    if (!batch) return metrics;
     const { state, pages } = batch;
     /** @type {{scope: Scope, rows: CardDocument[]}[]} */
     const eligible = [];
     for (const { scope, candidates } of pages) {
-      if (stopped()) return;
+      if (stopped()) return metrics;
       const inputs = await loadCards(tx, scope, candidates.map(({ ref }) => ref));
       const byId = new Map(candidates.map(({ ref }, i) => [ref.id, inputs[i]]));
       const { rows } = await visibleDocumentCardRows(candidates, ref => stopped() ? null : byId.get(ref.id) ?? null);
       eligible.push({ scope, rows });
     }
-    if (stopped()) return;
+    if (stopped()) return metrics;
     // The same write transaction pins both the scan and the visibility inputs.
     await port(tx, readSet.owner, { write: true }, db => {
       state.checkpoint++;
@@ -262,6 +268,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       if (state.phase === readSet.namespaces.length && !stopped()) sweep(documents, state, metrics);
       saveGeneration(db, key, state);
     });
+    return metrics;
   }
 
   /** @type {ContextReadStore["observeIndex"]} */
@@ -272,23 +279,28 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       const memoryReady = published(memory, fence(epochs, readSet, selection));
       const cards = readsCards(selection);
       const card = cards ? generation(db, cardProjectionKey(readSet, selection)) : undefined;
-      const cardReady = cards && published(card, cardFence(db, readSet, epochs));
-      const ready = memoryReady && (!cards || cardReady);
+      const capturedCardFence = cards ? cardFence(db, readSet, epochs) : null;
+      const cardReady = capturedCardFence !== null && published(card, capturedCardFence);
+      const cardPending = cards && !cardReady;
       const current = memoryReady && cards ? card : memory;
       /** @type {ContextIndexObservation["maintenance"]} */
       const maintenance = { available: true, state: "rebuilding", buildState: "rebuilding", reason: null, progress: null };
       if (current) maintenance.progress = { phase: current.phase, checkpoint: current.checkpoint,
         sequence: current.sequence, baseSequence: current.base_sequence };
-      if (!ready || !current) return { ready: false, indexState: "", byType: {}, maintenance };
-      maintenance.state = "ready";
-      maintenance.buildState = current.rebuilt ? "rebuilt" : "ready";
-      maintenance.reason = current.rebuilt ? "missing" : null;
-      const byType = Object.fromEntries(selection.types.map(type => {
+      if (!memoryReady) return { ready: false, indexState: "", byType: {}, maintenance };
+      if (!cardPending && current) {
+        maintenance.state = "ready";
+        maintenance.buildState = current.rebuilt ? "rebuilt" : "ready";
+        maintenance.reason = current.rebuilt ? "missing" : null;
+      }
+      const byType = Object.fromEntries(selection.types.filter(type => type !== "card" || !cardPending).map(type => {
         const count = type === "memory" ? memory.eligible : card?.eligible ?? 0;
         return [type, { eligible: count, indexed: count }];
       }));
-      return { ready, byType, maintenance, indexState: sha256(JSON.stringify(card ?
-        [publicationStamp(memory), publicationStamp(card)] : publicationStamp(memory))) };
+      const stamp = publicationStamp(memory);
+      const binding = cards ? [stamp, cardReady ? publicationStamp(card) : ["rebuilding", capturedCardFence]] : stamp;
+      return { ready: true, byType, maintenance, ...(cardPending && { cardPending: true }),
+        indexState: sha256(JSON.stringify(binding)) };
     });
   }
 
@@ -350,12 +362,13 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       const memory = search(db, readSet.owner, key, current, terms, depth, stopped, false);
       if (readsCards(selection)) {
         const cardKey = cardProjectionKey(readSet, selection), card = generation(db, cardKey);
-        if (!published(card, cardFence(db, readSet, epochs))) throw new CoreError("index_unavailable");
-        const cards = search(db, readSet.owner, cardKey, card, terms, depth, stopped, true);
-        memory.ranked.push(...cards.ranked);
-        memory.ranked.sort((a, b) => b.score - a.score || compareCanonical(a, b));
-        if (memory.ranked.length > depth) memory.ranked.length = depth;
-        memory.matched += cards.matched;
+        if (published(card, cardFence(db, readSet, epochs))) {
+          const cards = search(db, readSet.owner, cardKey, card, terms, depth, stopped, true);
+          memory.ranked.push(...cards.ranked);
+          memory.ranked.sort((a, b) => b.score - a.score || compareCanonical(a, b));
+          if (memory.ranked.length > depth) memory.ranked.length = depth;
+          memory.matched += cards.matched;
+        }
       }
       return { rows: memory.ranked.map(({ qualified: ref, score }) => ({ ref, score })), matched: memory.matched };
     });

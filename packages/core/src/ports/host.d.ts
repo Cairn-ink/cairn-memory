@@ -151,7 +151,7 @@ export interface ReadContextInput extends ContextReadQuery {
 
 export interface ContextReadChannel {
   state: "ready" | "unavailable" | "disabled" | "absent" | "timeout";
-  causes: readonly ("unavailable" | "disabled" | "absent" | "timeout")[];
+  causes: readonly ("unavailable" | "disabled" | "absent" | "timeout" | "card_index_rebuilding")[];
 }
 
 export interface ContextReadMaintenance {
@@ -163,7 +163,7 @@ export interface ContextReadMaintenance {
 }
 
 export interface ContextReadCoverage {
-  status: "complete" | "unavailable";
+  status: "complete" | "partial" | "unavailable";
   byType: Partial<Record<ContextReadType, {
     eligible: number | null;
     indexed: number | null;
@@ -461,9 +461,11 @@ interface ReadIdentityPort {
 }
 
 export interface ContextIndexObservation {
-  /** Binding for the ready publication, including its canonical and suppression fences. */
+  /** Binding for the observed publications and their canonical and suppression fences. */
   indexState: string;
   ready: boolean;
+  /** Lexical can run, with counts and hits omitted for the rebuilding document card projection. */
+  cardPending?: true;
   byType: Partial<Record<ContextReadType, { eligible: number; indexed: number }>>;
   maintenance: ContextReadMaintenance;
 }

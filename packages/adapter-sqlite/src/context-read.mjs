@@ -88,8 +88,16 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
           if (raw) reconcileRawInventory(db, readSet, epochs, stopped);
           return metrics;
         });
-        if (cards && selection.types.includes("card")) await index.reconcileCards(tx, readSet, selection, metrics, stopped);
-        return metrics;
+        if (!cards || !selection.types.includes("card")) return metrics;
+        const cardMetrics = await index.reconcileCards(tx, readSet, selection, stopped);
+        return {
+          canonicalRows: metrics.canonicalRows + cardMetrics.canonicalRows,
+          sidecarRows: metrics.sidecarRows + cardMetrics.sidecarRows,
+          textRows: metrics.textRows + cardMetrics.textRows,
+          textUnits: metrics.textUnits + cardMetrics.textUnits,
+          transformed: metrics.transformed + cardMetrics.transformed,
+          removed: metrics.removed + cardMetrics.removed,
+        };
       });
     },
     observeIndex: index.observeIndex,

@@ -114,6 +114,7 @@ async function finishCapture(storage, { key, source, message }) {
     assert.equal((await storage.capture.admit(tx, key, [message])).status, "admitted");
     const { status, token } = await storage.capture.claim(tx, key, [message], { leaseMs: 100 });
     assert.equal(status, "claimed");
+    await storage.capture.assertEligible(tx, key, [0]);
     const { text: content, ...memory } = memoryRow("The migration route crosses the bay.");
     const result = await storage.capture.finish(tx, token, [{ ...memory, content,
       receipts: [{ ...source, role: message.role, occurredAtMs: message.occurredAtMs }] }]);
@@ -121,6 +122,33 @@ async function finishCapture(storage, { key, source, message }) {
     return result.memories[0];
   });
 }
+
+test("an address-only capture receipt qualifies its archived amendment turn", async t => {
+  const storage = await fixture(t);
+  const sourceTurn = turn("receipt-source", "The petrel returned to the bay.");
+  await archive(storage, sourceTurn);
+  const captured = await finishCapture(storage, sourceTurn);
+  const project = () => read(storage, tx => storage.contextRead.documentCardAmendmentSource(tx, readSet, scope,
+    { sourceMessage: sourceTurn.source, quote: sourceTurn.message.content }));
+  assert.ok(await project());
+  await write(storage, tx => storage.memories.erase(tx, scope, captured.id));
+  assert.equal(await project(), null);
+});
+
+test("the amendment source port requires an inherited root with the same role", async t => {
+  const storage = await fixture(t);
+  for (const role of ["user", "assistant"]) {
+    const messageId = `inherited-${role}`;
+    const root = turn(`root-${role}`, "The petrel returned to the bay.", { messageId, target: excluded, role });
+    const fork = turn(`fork-${role}`, root.message.content, { messageId });
+    await archive(storage, root);
+    await write(storage, tx => storage.raw.recordLineage(tx, root.key, [root.message]), excluded);
+    await archive(storage, fork);
+    const projection = await read(storage, tx => storage.contextRead.documentCardAmendmentSource(tx, readSet, scope,
+      { sourceMessage: fork.source, quote: fork.message.content }));
+    assert.equal(projection !== null, role === "user", `archived root role: ${role}`);
+  }
+});
 
 test("default budget includes two literal amendments and omits conflicted or forgotten sources", async t => {
   const storage = await fixture(t);
@@ -271,6 +299,75 @@ test("card generations are scoped and excluded namespace writes preserve a candi
   assert.deepEqual((await api.findCandidates(set, search)).items.map(({ ref }) => ref.id), [other.id]);
 });
 
+test("mixed reads keep serving memories and publish cards across unrelated saves", async t => {
+  const storage = await fixture(t);
+  const insert = (tx, content) => storage.memories.insert(tx, scope, memoryRow(content), [], now());
+  await write(storage, async tx => {
+    await insert(tx, "A petrel dives for fish.");
+    for (let i = 1; i < 768; i++) await insert(tx, `Wind measurement ${i}`);
+    await storage.documentCards.put(tx, scope, authored("matching-card"));
+    for (let i = 1; i < 320; i++) {
+      await storage.documentCards.put(tx, scope, { ...authored(`card-${i}`), title: "Weather", body: "Wind blows inland." });
+    }
+  });
+  const api = service(storage);
+  const memoryOnly = { ...search, types: ["memory"] };
+  const mixed = { ...search, types: ["memory", "card"] };
+  const find = () => api.findCandidates(readSet, mixed);
+  const assertMemory = async result => {
+    const [memory] = (await api.findCandidates(readSet, memoryOnly)).items;
+    const found = result.items.find(({ ref }) => ref.type === "memory");
+    assert.deepEqual(found?.ref, memory.ref);
+    assert.equal(found.channels.lexical.rawScore, memory.channels.lexical.rawScore);
+  };
+  await assertMemory(await find());
+  assert.equal((await find()).coverage.status, "complete");
+  for (let i = 0; i < 2; i++) {
+    await write(storage, tx => insert(tx, `An unrelated weather observation ${i}`));
+    const found = await find();
+    await assertMemory(found);
+    assert.deepEqual(found.coverage.byType.card, { eligible: 320, indexed: 320, embedded: null, scanned: 0,
+      embeddedFraction: null, scannedFraction: 0 });
+    assert.ok(found.items.some(({ ref }) => ref.type === "card" && ref.id === "matching-card"));
+  }
+});
+
+test("an unpublished card projection leaves mixed find and assembly partially covered", async t => {
+  const storage = await fixture(t);
+  const memory = await write(storage, tx => storage.memories.insert(tx, scope, memoryRow("A petrel dives for fish."), [], now()));
+  const matching = authored("card-0000");
+  const api = service(storage);
+  const mixed = { ...search, types: ["memory", "card"] };
+  await put(storage, matching);
+  assert.ok((await api.findCandidates(readSet, mixed)).items.some(({ ref }) => ref.id === matching.id));
+  await write(storage, async tx => {
+    for (let i = 1; i <= 1024; i++) {
+      const card = authored(`card-${String(i).padStart(4, "0")}`);
+      await storage.documentCards.put(tx, scope, { ...card, title: "Weather", body: "Wind blows inland." });
+    }
+  });
+  const assertPartial = ({ coverage, channels }) => {
+    assert.equal(coverage.status, "partial");
+    assert.equal(coverage.byType.memory.indexed, 1);
+    assert.equal(coverage.byType.card.eligible, null);
+    assert.equal(coverage.byType.card.indexed, null);
+    assert.equal(coverage.omitted.lexical, null);
+    assert.deepEqual(channels.lexical, { state: "ready", causes: ["card_index_rebuilding"] });
+  };
+  const pending = await api.findCandidates(readSet, mixed);
+  assert.deepEqual(pending.items.map(({ ref }) => ref.id), [memory.id]);
+  assertPartial(pending);
+  // A new card write starts another bounded pass before assembly.
+  await put(storage, { ...authored("new-card"), title: "Weather", body: "The wind changed." });
+  const assembled = await api.readContext(readSet, mixed);
+  assert.deepEqual(assembled.assembly.items.map(({ ref }) => ref.id), [memory.id]);
+  assertPartial(assembled.diagnostics.candidates);
+  const ready = await api.findCandidates(readSet, mixed);
+  assert.equal(ready.coverage.status, "complete");
+  assert.equal(ready.coverage.byType.card.indexed, 1026);
+  assert.deepEqual(new Set(ready.items.map(({ ref }) => ref.id)), new Set([memory.id, matching.id]));
+});
+
 test("card publication resumes a bounded scan and sweeps old postings", async t => {
   const storage = await fixture(t);
   const { documentCards: cards, contextRead } = storage;
@@ -282,15 +379,19 @@ test("card publication resumes a bounded scan and sweeps old postings", async t 
   });
   const prepare = () => contextRead.prepareLexical(readSet, selection, {});
   const observe = () => read(storage, tx => contextRead.observeIndex(tx, readSet, selection));
-  assert.equal((await prepare()).canonicalRows, total - 1);
-  assert.equal((await observe()).ready, false);
+  const pending = await service(storage).findCandidates(readSet, search);
+  assert.equal(pending.trace.maintenance.canonicalRows, total - 1);
+  assert.deepEqual(pending.items, []);
+  assert.equal(pending.coverage.status, "partial");
+  assert.equal(pending.coverage.byType.card.indexed, null);
+  assert.equal((await observe()).cardPending, true);
   assert.equal((await prepare()).canonicalRows, 1);
   const first = await observe();
   assert.deepEqual(first.byType.card, { eligible: total, indexed: total });
 
   await write(storage, tx => cards.purgeById(tx, scope, "card-0000", "forget"));
   await prepare();
-  assert.equal((await observe()).ready, false);
+  assert.equal((await observe()).cardPending, true);
   assert.equal((await prepare()).removed, 1);
   const next = await observe();
   assert.notEqual(next.indexState, first.indexState);
