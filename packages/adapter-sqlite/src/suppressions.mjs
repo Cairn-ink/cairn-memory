@@ -301,12 +301,13 @@ export function scopedSuppression(db, scope, hashSession) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession
+ * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>["sourceVisible"]} receiptSourceVisible
  * @param {(db: Connection, tx: Tx) => void} [markDirty]
  * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls]
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls, scrubTitles) {
+export function createSuppressionStore(port, hashSession, receiptSourceVisible, markDirty, migratedRaw, controls, scrubTitles) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -355,17 +356,19 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
         if (excerpt === undefined) invalidInput();
         const policy = scopedSuppression(db, scope, hashSession);
         if (policy.hasReceiptDenial(receipt, receiptIdentityKey(receipt))) return true;
+        const placeholder = placeholderReceipt(receipt);
         const raw = rawFactPolicy(scope, receipt, policy.facts, hashSession);
         const position = { id: messageId, occurredAtMs };
         if (!allowsRawSession(db, scope, client, raw.sessionKeyHash, policy.facts) ||
-            raw.refusesSource(position, true, !placeholderReceipt(receipt)) ||
+            raw.refusesSource(position, true, !placeholder) ||
             migratedRaw?.blocksEvent(db, { scope, client, eventId: messageId }) ||
             migratedRaw?.blocks(db, scope, receipt, [position]) ||
             migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;
         const session = migratedRaw?.storageSession(db, scope, receipt) ?? receipt;
         const archived = readRawRow(db, scope, session, messageId);
         // Archived turns use the full Raw window policy.
-        return archived ? raw.refusesSource(archived.message, true) : false;
+        if (archived && raw.refusesSource(archived.message, true)) return true;
+        return placeholder && !receiptSourceVisible(db, scope, policy, receipt);
       });
     },
     factsFor(tx, scope, { memoryId }) {
