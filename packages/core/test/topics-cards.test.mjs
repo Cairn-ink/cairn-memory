@@ -75,6 +75,12 @@ function fixture({ cards = [record], memoryStates = new Map(), excluded = [], be
         assert.deepEqual(actualScope, scope);
         return records.get(id) ?? null;
       },
+      async visibilityInputs(_tx, requestedScope, refs) {
+        return refs.map(({ id }) => {
+          const card = records.get(id);
+          return card ? { card, requestedScope, memoryStates, textFacts: [] } : null;
+        });
+      },
     },
     fence: {
       async assertVisible(tx, selection, refs) {
@@ -191,7 +197,7 @@ test('a missing or replaced pending card is skipped without a failure receipt', 
 
 test('a source excluded during the model call receives a terminal receipt', async () => {
   const source = { id: 'source', revision: 1 };
-  const memoryStates = new Map([[source.id, { status: 'visible', revision: source.revision }]]);
+  const memoryStates = new Map([[source.id, { status: 'visible', revision: source.revision, correctedRevisions: [] }]]);
   const { options, writes, receipts } = fixture({ cards: [{ ...record, sourceMemories: [source] }], memoryStates });
   const model = modelWith(async () => {
     memoryStates.set(source.id, { status: 'forgotten' });

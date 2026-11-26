@@ -5,6 +5,7 @@ import { detach, identifier, isWellFormedText, validateDenseArray, validateObjec
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
 import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
+import { hasLegacyPassageDigest, legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -14,7 +15,7 @@ import { pauseResult } from "./pause.mjs";
 import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
 
 /** @import {CaptureKey, CaptureMessage, FinishItem, RetainedDigester, Tx} from "../ports/index.d.ts" */
-/** @import {CallOptions} from "../ports/common.d.ts" */
+/** @import {CallOptions, Scope} from "../ports/common.d.ts" */
 /** @import {ModelRequest} from "../ports/model.d.ts" */
 /** @import {SuppressionSnapshot} from "../ports/privacy.d.ts" */
 /** @typedef {ReturnType<typeof createCaptureDeadline>} CaptureDeadline */
@@ -57,15 +58,18 @@ function prepareMessage(raw) {
   return { message: { ...message, content: prepareMessageContent(cleanContent(originalContent)) }, originalContent };
 }
 
-/** @param {SuppressionSnapshot["passages"]} passages */
-export function captureTextWithholding(passages) {
+/** @param {SuppressionSnapshot["passages"]} passages @param {Scope} [scope] */
+export function captureTextWithholding(passages, scope) {
   const textFacts = passages.map(({ fact }) => fact);
+  if (!scope && textFacts.some(hasLegacyPassageDigest)) throw new CoreError("internal_error");
   const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
+  const legacyWithholds = scope && legacyPassageMatcher(scope, textFacts);
   // Historical aliases are used for suppression only.
   /** @param {string} originalContent @param {string} preparedContent @param {FingerprintKey | null} key */
   const matches = async (originalContent, preparedContent, key) =>
+    legacyWithholds?.(originalContent) ||
     withholdsAnyPassage(await fingerprintMemoryPassages(originalContent, preparedContent, key), textFacts);
-  return { legacyKeyUnavailable, matches: textFacts.length ? matches : null };
+  return { legacyKeyUnavailable, legacyWithholds, matches: textFacts.length ? matches : null };
 }
 
 /**
@@ -79,6 +83,7 @@ async function retainedSourceEvidence(sources, key, digesters) {
 }
 
 /**
+ * @param {Scope} scope
  * @param {CaptureSource[]} sources
  * @param {number[]} positions
  * @param {SuppressionSnapshot["passages"]} passages
@@ -86,13 +91,14 @@ async function retainedSourceEvidence(sources, key, digesters) {
  * @param {Awaited<ReturnType<typeof retainedSourceEvidence>>} preparedEvidence
  * @param {FingerprintKey | null} refreshKey
  */
-async function filterCaptureSources(sources, positions, passages, preparedKey, preparedEvidence, refreshKey) {
-  const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+async function filterScopedCaptureSources(scope, sources, positions, passages, preparedKey, preparedEvidence, refreshKey) {
+  const { legacyKeyUnavailable, legacyWithholds, matches } = captureTextWithholding(passages, scope);
   if (!matches) return positions;
   const textFacts = preparedEvidence && passages.map(({ fact }) => fact);
   const allowed = await Promise.all(positions.map(async index => {
     const { message, originalContent } = sources[index];
     if (preparedEvidence && textFacts) {
+      if (legacyWithholds?.(originalContent)) return false;
       const retained = preparedEvidence[index];
       let evidence = retained;
       if (refreshKey) {
@@ -194,7 +200,7 @@ function prepareCaptureCandidates(candidates, messages, { client, sessionId }, f
       const { id: messageId, role, occurredAtMs } = messages[index];
       return { client, sessionId, messageId, role, occurredAtMs };
     });
-    return { item: { content, kind, confidence, textHash, ...(digests && { digests }), receipts }, passages };
+    return { item: { content, kind, confidence, textHash, ...(digests && { digests }), receipts }, raw, passages };
   }));
 }
 
@@ -212,8 +218,9 @@ function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
   if (facts.some(fact => fact?.owner !== scope.owner || (fact.namespace ?? null) !== scope.namespace)) {
     throw new CoreError("internal_error");
   }
+  const legacyWithholds = legacyPassageMatcher(scope, facts);
   return candidates.filter(candidate => {
-    if (!withholdsAnyPassage(candidate.passages, facts)) return true;
+    if (!legacyWithholds?.(candidate.raw) && !withholdsAnyPassage(candidate.passages, facts)) return true;
     for (const { messageId } of candidate.item.receipts) excludedSources.add(messageId);
     return false;
   });
@@ -244,11 +251,11 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
   }
   check();
 
-  return prepared.map(({ item, passages }, index) => {
+  return prepared.map(({ item, raw, passages }, index) => {
     const vector = Array.isArray(vectors) && vectors.length <= prepared.length ? vectors[index] : undefined;
     const embedding = validWriteEmbedding(vector, dimensions) ? { model, vector } : null;
     if (storage.capabilities.embeddingRequiredOnInsert && embedding === null) throw new CoreError("embedding_failed");
-    return { item: { ...item, embedding }, passages };
+    return { item: { ...item, embedding }, raw, passages };
   });
 }
 
@@ -303,7 +310,7 @@ export function captureMethods(deps) {
             positions.some(position => !Number.isInteger(position) || position < 0 || position >= prepared.length)) {
           throw new CoreError("internal_error");
         }
-        const allowed = new Set(await filterCaptureSources(incoming, [...new Set(positions)], passages, preparedKey,
+        const allowed = new Set(await filterScopedCaptureSources(scope, incoming, [...new Set(positions)], passages, preparedKey,
           preparedEvidence, await sourceWriteKey(tx, passages)));
         const admitted = prepared.map((message, index) => allowed.has(index) ? message : { ...message, content: "" });
         const { status } = await admit.call(capture, tx, key, admitted);
@@ -346,6 +353,7 @@ export function captureMethods(deps) {
     }),
     runCapture: entry(async (inputScope, input, options) => {
       const scope = scopeOf(inputScope);
+      const filterCaptureSources = filterScopedCaptureSources.bind(null, scope);
       const { owner } = scope;
       const { client: inputClient, sessionId: inputSession, eventId: inputEvent } =
         validateObject(input, ["client", "sessionId", "eventId"]);

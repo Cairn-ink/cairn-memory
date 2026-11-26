@@ -69,7 +69,7 @@ function boundedInteger(value, fallback, maximum) {
   return number;
 }
 
-/** @param {unknown} value @returns {FindCandidatesInput & { semantic: boolean, limit: number, deadlineMs: number }} */
+/** @param {unknown} value @returns {FindCandidatesInput & { limit: number, deadlineMs: number }} */
 export function findCandidatesInput(value) {
   const { query, types, intent, semantic, limit, deadlineMs, cursor } = validateObject(value,
     ["query", "types", "intent", "semantic", "limit", "deadlineMs", "cursor"]);
@@ -80,7 +80,7 @@ export function findCandidatesInput(value) {
     throw new CoreError("invalid_input");
   }
   if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 8192)) throw new CoreError("invalid_cursor");
-  return { query, types: normalized, intent: intentOf(intent), semantic: semantic ?? false,
+  return { query, types: normalized, intent: intentOf(intent), semantic,
     limit: boundedInteger(limit, 12, CONTEXT_HORIZON), deadlineMs: boundedInteger(deadlineMs, 1000, 5000), cursor };
 }
 

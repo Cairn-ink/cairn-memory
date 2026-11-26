@@ -99,7 +99,7 @@ export function createMemoryAdapter(options = {}) {
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
     ...(contextRead && { contextRead: archive && (flags.contextRawRead || flags.documentCards)
-      ? withContextRawRead(work, archive, contextRead, {
+      ? withContextRawRead(work, archive, contextRead, matchFacts, receiptReadSafety, {
         raw: flags.contextRawRead, amendmentLineage: flags.documentCards ? cardRawSources?.lineageVisible : undefined,
       })
       : contextRead }),

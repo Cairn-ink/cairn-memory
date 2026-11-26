@@ -14,6 +14,7 @@ export { FINISH_BINDING_CASES } from "./finish-binding-cases.mjs";
 export { ADMISSION_CASES } from "./admission-cases.mjs";
 export { IMPORT_TIME_CASES } from "./import-time-cases.mjs";
 export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
+export { LEGACY_PASSAGE_CASES } from "./legacy-passage-cases.mjs";
 export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
 export { RETAINED_KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";

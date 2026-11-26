@@ -13,6 +13,7 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
  * ids: ReadonlySet<string>, observation: ContextIndexObservation }} Publication */
 
 const MAX_PROJECTIONS = 8;
+const RECEIPT_LIMIT = 16;
 
 /** @param {State} state @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {boolean} cards */
 function canonicalBinding(state, readSet, { types }, cards) {
@@ -56,24 +57,26 @@ function eligible(entry, intent, policy) {
 }
 
 /** @param {State} state @param {Scope} scope @param {Entry} entry
- * @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety */
-async function receiptEvidence(state, scope, entry, policy, receiptReadSafety) {
+ * @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety @param {number} [scanLimit] */
+async function receiptEvidence(state, scope, entry, policy, receiptReadSafety, scanLimit = Infinity) {
   const ordered = [...entry.receipts].sort((a, b) =>
     (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0) || compareUtf8(a.id ?? "", b.id ?? ""));
-  const prefix = ordered.slice(0, 17);
   /** @type {InspectReceipt[]} */
   const receipts = [];
-  let visible = 0;
-  for (const receipt of prefix) {
+  let examined = 0;
+  for (const receipt of ordered) {
+    if (examined === scanLimit) break;
+    examined++;
     const safe = await receiptReadSafety(state, scope, receipt, entry.receiptKeys?.get(receipt), policy);
     if (!safe) continue;
-    visible++;
-    if (receipts.length < 16) receipts.push(safe);
+    if (receipts.length === RECEIPT_LIMIT) break;
+    receipts.push(safe);
   }
-  const exhausted = prefix.length > 16;
+  const exhausted = examined > RECEIPT_LIMIT;
+  const withheld = examined - receipts.length;
   /** @type {import("@cairn-ink/core/ports").ContextReceiptCoverage} */
-  const receiptCoverage = { status: exhausted || visible < prefix.length ? "budget_exhausted" : "complete",
-    included: receipts.length, omitted: exhausted ? null : prefix.length - visible };
+  const receiptCoverage = { status: exhausted || withheld ? "budget_exhausted" : "complete",
+    included: receipts.length, omitted: exhausted ? null : withheld };
   return { receipts, receiptCoverage };
 }
 
@@ -82,7 +85,8 @@ async function receiptEvidence(state, scope, entry, policy, receiptReadSafety) {
 export async function currentMemoryReceipts(state, { scope, id }, policy, receiptReadSafety) {
   const entry = state.rows.get(scope.namespace)?.get(id);
   if (!entry || !eligible(entry, "current", policy)) return [];
-  return (await receiptEvidence(state, scope, entry, policy, receiptReadSafety)).receipts;
+  // Keep the physical scan bound for Raw and Card lineage qualification.
+  return (await receiptEvidence(state, scope, entry, policy, receiptReadSafety, RECEIPT_LIMIT + 1)).receipts;
 }
 
 /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
@@ -237,7 +241,9 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
         for (const ref of refs) {
           const { scope, id, type } = ref;
           if (type === "card") {
-            rows.push(loadCardInputs ? cardEvidence(state, scope, state.documentCards.get(scope.namespace)?.get(id), intent) : null);
+            const card = loadCardInputs && await documentCards?.get(tx, scope, id);
+            rows.push(card
+              ? cardEvidence(state, scope, state.documentCards.get(scope.namespace)?.get(id), intent) : null);
             continue;
           }
           const entry = state.rows.get(scope.namespace)?.get(id);

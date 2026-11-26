@@ -9,7 +9,7 @@ export { NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE } from "../decisions.mjs"
 // Widen the hiding cutoff to cover rounding from pgvector's float32 storage.
 export const SUPPRESSION_DISTANCE_TOLERANCE = 1e-6;
 
-/** @import { FactMatchEmbedding, FactMatchIncoming, FactMatchPolicy, FactMatchResult, FactMatchRow, FactMatchSource, IncomingFactMatchPolicy } from "./fact-match.mjs" */
+/** @import { FactMatchEmbedding, FactMatchIncoming, FactMatchPolicy, FactMatchResult, FactMatchRow, FactMatchSource, IncomingFactMatchPolicy, PreparedRowMatchFact } from "./fact-match.mjs" */
 /** @import { Scope } from "../ports/common.d.ts" */
 /** @import { SessionRef, StoredFact, SuppressionFact, TextFact, WindowFact } from "../suppression-fact.mjs" */
 
@@ -362,6 +362,58 @@ export function factHidesRow(storedFact, row, policy = {}) {
   } catch {
     return "ineligible";
   }
+}
+
+/** @type {WeakMap<PreparedRowMatchFact, SuppressionFact | null>} */
+const preparedRowFacts = new WeakMap();
+
+/**
+ * Keep this handle with the facts from the visibility load that produced it.
+ * @param {StoredFact} storedFact @returns {PreparedRowMatchFact}
+ */
+export function prepareRowMatchFact(storedFact) {
+  const handle = /** @type {PreparedRowMatchFact} */ (Object.freeze({}));
+  let fact = null;
+  try {
+    fact = validateSuppressionFact(matchReader().fact(storedFact));
+  } catch {
+    // A failed snapshot or validation always withholds as ineligible.
+  }
+  preparedRowFacts.set(handle, fact);
+  return handle;
+}
+
+/**
+ * Snapshot an adapter-owned candidate at most once for each projection used by
+ * a prepared fact. The projected evidence stays private to this row matcher.
+ * @param {FactMatchRow} row @param {FactMatchPolicy} [policy]
+ * @returns {(storedFact: StoredFact | PreparedRowMatchFact) => FactMatchResult}
+ */
+export function prepareRowMatcher(row, policy = {}) {
+  /** @type {(FactMatchRow | null | undefined)[]} */
+  const rows = [undefined, undefined, undefined, undefined];
+  return (storedFact) => {
+    const fact = preparedRowFacts.get(/** @type {PreparedRowMatchFact} */ (storedFact));
+    if (fact === undefined) return factHidesRow(/** @type {StoredFact} */ (storedFact), row, policy);
+    if (fact === null) return "ineligible";
+    try {
+      const snapshot = matchReader();
+      const useShingles = snapshot.useCandidateShingles(fact, policy);
+      const usePhysicalSource = fact.kind === "text" && fact.explicitSaveExemptAfterUs !== undefined;
+      const projection = Number(useShingles) + 2 * Number(usePhysicalSource);
+      if (rows[projection] === undefined) {
+        rows[projection] = null;
+        rows[projection] = snapshot.row(row, useShingles, usePhysicalSource) ?? null;
+      }
+      const candidate = rows[projection];
+      if (candidate === null) return "ineligible";
+      const rules = snapshot.policy(policy);
+      if (!isValidPolicy(rules)) return "ineligible";
+      return hidesRow(fact, candidate, rules);
+    } catch {
+      return "ineligible";
+    }
+  };
 }
 
 /**

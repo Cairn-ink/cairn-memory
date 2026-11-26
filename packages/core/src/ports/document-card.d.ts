@@ -92,7 +92,8 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
    * Bind sourceMemories for a router card to the memories that capture wrote or
    * touched for its source message, or use documentCardMemoryLinks with receipts.
-   * On recapture, union these bindings by id, keeping the highest revision.
+   * On recapture, union these bindings by id, keeping the highest revision. A
+   * changed body may replace or drop a citation invalidated by an in-place text edit.
    * Use linkMemories to add bindings for the same content, or implement it within put.
    * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
@@ -114,6 +115,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
   hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string, options?: { purge?: boolean }): Promise<void>;
   /**
    * Uses the live Tx to union links into sourceMemories by id, keeping the highest revision.
+   * Preserve corrected citations for the current body revision so re-linking cannot restore delivery.
    * A change returns "linked" and advances the owner index revision once. A union
    * with no change returns "unchanged". A hidden or tombstoned card returns
    * "tombstoned" without writing. An unknown id returns "not_found".
@@ -153,7 +155,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
     input: DocumentCardVisibilityInput | null;
     amendments: readonly (Pick<DocumentCardAmendment, "amendmentId" | "sourceMessage"> & { sourceWithheld: boolean })[];
   }>>;
-  /** Stores the ids of the changed memory and its replacement. */
+  /** Stores the changed memory and its replacement. Only a new pair advances the card generation and owner index revision. */
   markStale(tx: Tx, scope: Scope, cardId: string, entry: DocumentCardStaleEntry): Promise<void>;
   /**
    * Same read snapshot as the final visibility check. Returns visible cards and amendments only,
@@ -169,8 +171,15 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * message-backed cards or applicable text facts and key for authored cards.
    * Return null for invalid, out-of-scope, unknown, store-hidden, tombstoned, or
    * unresolvable refs. A bad ref does not fail the batch. Reject an ended Tx.
+   * Provider refreshes can set requireRaw to false to allow stores without Raw.
+   * During capture, newCard supplies Core's already screened input for a matching
+   * ref only when no record exists. Existing records use the store's live evidence.
+   * Card provider sends require a live visible verdict through this optional
+   * method, even when get returned null. Without this method, Core skips card
+   * provider work.
    */
-  visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[]): Promise<Array<DocumentCardVisibilityInput | null>>;
+  visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[],
+    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<DocumentCardVisibilityInput | null>>;
 }
 
 /**

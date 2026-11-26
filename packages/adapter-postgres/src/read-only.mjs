@@ -1,3 +1,5 @@
+import { ANN_SETUP_BATCH, DISABLE_SORT, HNSW_ITERATIVE_SCAN, READ_START_BATCH, RESTORE_SORT } from "./statement-batches.mjs";
+
 // Adapter code supplies all SQL and uses bound values for caller input.
 // This lint catches adapter mistakes. The post-run session reset protects pooled sessions.
 // Keep quoted identifiers distinct from strings and unquoted keywords.
@@ -17,11 +19,12 @@ const DENIED_CALL = new RegExp("^(?:"
   + "|query_to_xml|query_to_xml_and_xmlschema|cursor_to_xml|(?:table|database|schema)_to_xml.*"
   + ")$", "is");
 
-/** @param {string} text */
-export function isReadStatement(text) {
+/** @param {string} text @param {boolean} [allowBatch] */
+export function isReadStatement(text, allowBatch = true) {
   // Retrieval uses these transaction-local planner settings.
-  if (text === "SET LOCAL jit = off" || text === "SET LOCAL hnsw.iterative_scan = 'strict_order'" ||
-      text === "SET LOCAL enable_sort = off" || text === "SET LOCAL enable_sort = on") return true;
+  if (text === "SET LOCAL jit = off" || text === HNSW_ITERATIVE_SCAN ||
+      text === DISABLE_SORT || text === RESTORE_SORT) return true;
+  if (allowBatch && (text === READ_START_BATCH || text === ANN_SETUP_BATCH)) return true;
   let first;
   let depth = 0;
   let hasOuterSelect = false;

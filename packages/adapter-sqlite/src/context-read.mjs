@@ -19,18 +19,19 @@ const RECEIPT_LIMIT = 16;
  * @param {boolean} includeRaw @returns {Pick<Evidence, "receipts" | "receiptCoverage">}
  */
 function receiptEvidence(db, scope, id, project, includeRaw) {
-  const prefix = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
+  const rows = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE i.owner_id = ? AND i.namespace_key = ? AND i.memory_id = ?
-    ORDER BY i.created_at_us, i.id LIMIT ?`).all(...scopeKey(scope), id, RECEIPT_LIMIT + 1);
+    ORDER BY i.created_at_us, i.id`).iterate(...scopeKey(scope), id);
   /** @type {Array<Evidence["receipts"][number]>} */
   const receipts = [];
-  const exhausted = prefix.length > RECEIPT_LIMIT;
-  for (const row of prefix) {
-    if (receipts.length === RECEIPT_LIMIT) break;
+  let examined = 0;
+  for (const row of rows) {
+    examined++;
     const safe = project(row)?.receipt;
     if (!safe) continue;
+    if (receipts.length === RECEIPT_LIMIT) break;
     const archived = includeRaw ? readRawRow(db, scope, safe, safe.messageId) : undefined;
     if (!archived || !exactReceiptTurn(db, scope, id, safe, archived)) {
       receipts.push(safe);
@@ -40,7 +41,8 @@ function receiptEvidence(db, scope, id, project, includeRaw) {
     receipts.push({ ...safe, rawTurns: [{ scope, conversationId: JSON.stringify([client, sessionId]), messageId: message.id }],
       ...(message.occurredAtMs !== null && { sourceTimesMs: [message.occurredAtMs] }) });
   }
-  const withheld = prefix.length - receipts.length;
+  const exhausted = examined > RECEIPT_LIMIT;
+  const withheld = examined - receipts.length;
   return { receipts, receiptCoverage: { status: exhausted || withheld ? "budget_exhausted" : "complete",
     included: receipts.length, omitted: exhausted ? null : withheld } };
 }
@@ -48,9 +50,9 @@ function receiptEvidence(db, scope, id, project, includeRaw) {
 /**
  * @param {UnitOfWork} uow @param {Port} port @param {SessionHasher} hashSession @param {ReceiptReadSafety} receiptReadSafety
  * @param {ContextReadStore["identity"]} identity @param {ReturnType<typeof import("./context-lexical.mjs").createContextLexical>} index
- * @param {() => number} monotonicMs @param {ContextReadStore["raw"]} [raw] @returns {ContextReadStore}
+ * @param {string} storeKey @param {() => number} monotonicMs @param {ContextReadStore["raw"]} [raw] @returns {ContextReadStore}
  */
-export function createContextReadStore(uow, port, hashSession, receiptReadSafety, identity, index, monotonicMs, raw) {
+export function createContextReadStore(uow, port, hashSession, receiptReadSafety, identity, index, storeKey, monotonicMs, raw) {
   return {
     maintenanceAvailable: true,
     identity,
@@ -59,7 +61,7 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
       return uow.run(readSet.owner, {}, tx => port(tx, readSet.owner, { write: true }, db => {
         const stopped = contextDeadline(options, monotonicMs), epochs = contextEpochs(db, readSet);
         const metrics = index.reconcile(db, readSet, selection, epochs, stopped);
-        if (raw) reconcileRawInventory(db, readSet, epochs, stopped);
+        if (raw) reconcileRawInventory(db, readSet, epochs, storeKey, stopped);
         return metrics;
       }));
     },

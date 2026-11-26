@@ -36,6 +36,7 @@ export declare const CAPTURE_CONTAINMENT_CASES: readonly ConformanceCase[];
 export declare const ADMISSION_CASES: readonly ConformanceCase[];
 export declare const IMPORT_TIME_CASES: readonly ConformanceCase[];
 export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];
+export declare const LEGACY_PASSAGE_CASES: readonly ConformanceCase[];
 export declare const SOURCE_FILTER_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_LATE_FORGET_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_DELETE_CASES: readonly ConformanceCase[];

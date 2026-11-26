@@ -1,13 +1,13 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 import { isReadStatement } from "./read-only.mjs";
+import { LOCAL_LOCK_TIMEOUT, LOCAL_STATEMENT_TIMEOUT, LOCK_TIMEOUT, READ_BEGIN, READ_START_BATCH, WRITE_START_BATCH } from "./statement-batches.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexStart?: bigint }} Run */
+/** @import { VisibilityFactsCache } from "./memory-visibility.mjs" */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexStart?: bigint, visibilityFacts?: VisibilityFactsCache }} Run */
 
-const LOCK_TIMEOUT = "5s";
-const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
 // Match the hosted service so both implementations serialize on the same locks.
 const PAUSE_LOCK_KEY = "hashtextextended('cairn:memory-pause:' || $1, 0)";
 const PAUSE_LOCK = `SELECT pg_advisory_xact_lock(${PAUSE_LOCK_KEY})`;
@@ -34,26 +34,42 @@ function trackPending(run, pending) {
   return pending;
 }
 
-/**
- * @param {Run} run
- * @param {boolean} readOnly
- * @param {string} text
- * @param {unknown[]} [values]
- * @param {boolean} [checkAfterFailure]
- */
-async function queryInRun(run, readOnly, text, values, checkAfterFailure = false) {
+/** @template T @param {Run} run @param {boolean} readOnly @param {string} text
+ * @param {() => Promise<T>} execute @param {boolean} [checkAfterFailure] @param {boolean} [allowBatch] */
+async function statementInRun(run, readOnly, text, execute, checkAfterFailure = false, allowBatch = false) {
   // Logical write failures leave PostgreSQL usable for precondition reads. The
   // transaction still rolls back with the first failure and issues no further writes.
-  if (run.failure && (!checkAfterFailure || run.statementFailure || !isReadStatement(text))) throw run.failure;
+  if (run.failure && (!checkAfterFailure || run.statementFailure || !isReadStatement(text, allowBatch))) throw run.failure;
   try {
-    if (readOnly && !isReadStatement(text)) throw new CoreError("internal_error");
-    return await run.connection.query(text, values);
+    if (readOnly && !isReadStatement(text, allowBatch)) throw new CoreError("internal_error");
+    return await execute();
   } catch (error) {
     // A failed statement can leave the transaction aborted even if fn catches it.
     run.statementFailure ??= toPostgresError(error);
     run.failure ??= run.statementFailure;
     throw run.failure;
   }
+}
+
+/** @param {Run} run @param {boolean} readOnly @param {string} text
+ * @param {unknown[]} [values] @param {boolean} [checkAfterFailure] */
+function queryInRun(run, readOnly, text, values, checkAfterFailure) {
+  return statementInRun(run, readOnly, text, () => run.connection.query(text, values), checkAfterFailure);
+}
+
+/** @param {Connection} connection @param {string} text @param {readonly string[]} commands */
+async function executeBatch(connection, text, commands) {
+  const results = await connection.queryBatch?.(text);
+  if (!Array.isArray(results) || results.length !== commands.length ||
+      commands.some((command, i) => results[i]?.command !== command)) {
+    throw new CoreError("storage_error");
+  }
+  return results;
+}
+
+/** @param {Run} run @param {boolean} readOnly @param {string} text @param {readonly string[]} commands */
+export function queryBatchInRun(run, readOnly, text, commands) {
+  return statementInRun(run, readOnly, text, () => executeBatch(run.connection, text, commands), false, true);
 }
 
 /**
@@ -64,6 +80,8 @@ async function queryInRun(run, readOnly, text, values, checkAfterFailure = false
 export function query(tx, text, values) {
   const run = liveRuns.get(tx);
   if (!run) return Promise.reject(new CoreError("internal_error"));
+  // Keep direct queries outside the ANN operation's temporary planner settings.
+  if (run.connection.queryBatch) return runOperation(tx, (query) => query(text, values));
   return trackPending(run, queryInRun(run, tx.readOnly, text, values));
 }
 
@@ -155,7 +173,11 @@ export function createPostgresUnitOfWork(source) {
     try {
       const connection = await source.connect();
       /** @type {Run} */
-      const state = { connection, pending: new Set(), pauseLock: pauseLock === true };
+      const state = {
+        connection, pending: new Set(), pauseLock: pauseLock === true,
+        // Only repeatable-read, read-only runs can reuse their statement's facts.
+        visibilityFacts: readOnly ? new Map() : undefined,
+      };
       let committed = false;
       let sharedPauseHeld = false;
       try {
@@ -169,9 +191,13 @@ export function createPostgresUnitOfWork(source) {
         }
         let result;
         try {
-          await connection.query(readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
-          await connection.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
-          await connection.query(STATEMENT_TIMEOUT);
+          if (connection.queryBatch) {
+            await executeBatch(connection, readOnly ? READ_START_BATCH : WRITE_START_BATCH, ["BEGIN", "SET", "SET"]);
+          } else {
+            await connection.query(readOnly ? READ_BEGIN : "BEGIN");
+            await connection.query(LOCAL_LOCK_TIMEOUT);
+            await connection.query(LOCAL_STATEMENT_TIMEOUT);
+          }
           if (!readOnly) {
             if (pauseLock) await connection.query(PAUSE_LOCK, [owner]);
             await connection.query(OWNER_LOCK, [owner]);
@@ -188,6 +214,7 @@ export function createPostgresUnitOfWork(source) {
           } finally {
             liveRuns.delete(tx);
             await Promise.allSettled(state.pending);
+            state.visibilityFacts?.clear();
             if (state.failure) throw state.failure;
           }
         } catch (error) {

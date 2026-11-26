@@ -77,7 +77,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const rawContext = flags.contextRawRead
     ? createContextRawRead(port, hashSessionKey, sessionHashKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, captureControls) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(uow, port, hashSessionKey, receiptReadSafety, inspect.identity,
-    createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs), monotonicMs, rawContext) : undefined;
+    createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs), sessionHashKey, monotonicMs, rawContext) : undefined;
   const adapter = {
     name: "sqlite",
     capabilities: flags,
@@ -96,7 +96,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
        */
       maintainContextRaw(readSet, options = {}) {
         return uow.run(readSet.owner, {}, tx => port(tx, readSet.owner, { write: true }, db =>
-          reconcileRawInventory(db, readSet, contextEpochs(db, readSet), contextDeadline(options, monotonicMs), true)));
+          reconcileRawInventory(db, readSet, contextEpochs(db, readSet), sessionHashKey, contextDeadline(options, monotonicMs), true)));
       },
     }),
     ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs),

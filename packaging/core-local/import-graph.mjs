@@ -43,7 +43,7 @@ const fileGlobals = new Map([
 const adapterMembers = {
   'adapter.mjs': { performance: ['now'] },
   'context-lexical.mjs': { Buffer: ['from'] },
-  'context-raw-read.mjs': { Buffer: ['from'] },
+  'context-raw-read.mjs': { Buffer: ['concat', 'from'] },
   'memories.mjs': { Buffer: ['from'] },
   'migrate/raw-privacy.mjs': { Buffer: ['from'] },
   'placement-input.mjs': { Symbol: ['iterator'] },
@@ -59,10 +59,10 @@ export const cliEntry = 'packaging/core-local/cli.mjs';
 export const coreManifest = coreRoot + '/package.json';
 
 const runtimeGlobals = new Set([
-  'AbortSignal', 'Array', 'ArrayBuffer', 'BigInt', 'Blob', 'Date', 'Error', 'Float32Array',
+  'AbortSignal', 'Array', 'ArrayBuffer', 'BigInt', 'Blob', 'DataView', 'Date', 'Error', 'Float32Array',
   'Float64Array', 'Infinity', 'Intl', 'JSON', 'Map', 'Math', 'NaN', 'Number',
   'Object', 'Promise', 'Reflect', 'RegExp', 'Set', 'String', 'TextDecoder',
-  'TextEncoder', 'TypeError', 'Uint8Array', 'WeakMap', 'WeakSet', 'atob', 'btoa',
+  'TextEncoder', 'TypeError', 'Uint8Array', 'Uint32Array', 'WeakMap', 'WeakSet', 'atob', 'btoa',
   'encodeURIComponent', 'isFinite', 'isNaN', 'parseInt', 'structuredClone', 'undefined',
 ]);
 const stdioProcessMembers = new Set(['argv', 'stdin', 'stdout']);
