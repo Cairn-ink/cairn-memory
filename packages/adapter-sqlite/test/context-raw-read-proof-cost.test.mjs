@@ -1,14 +1,39 @@
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
-import { createBM25 } from "@cairn-ink/core";
+import { createBM25, termFrequencies } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
-import { createSqliteAdapter } from "../src/adapter.mjs";
 import { rawSegment } from "../src/raw-rows.mjs";
 import { receiptIdentityDenial, receiptIdentityKey } from "../src/receipt-identity.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { archivedReceiptExcerpt, scopeKey } from "../src/storage-values.mjs";
-import { scratch, sha256 } from "./storage-fixtures.mjs";
+
+const core = JSON.stringify(import.meta.resolve("@cairn-ink/core"));
+const observedCore = "data:text/javascript," + encodeURIComponent(`
+  export * from ${core};
+  import { scoreBM25 as score } from ${core};
+  export const observation = { calls: null };
+  export function scoreBM25(terms, document, stats) {
+    observation.calls?.push({ N: stats.N, totalLength: stats.totalLength,
+      averageLength: stats.totalLength / stats.N, df: Object.fromEntries(stats.df) });
+    return score(terms, document, stats);
+  }
+`);
+const rawReader = new URL("../src/context-raw-read.mjs", import.meta.url).href;
+const hook = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(context.parentURL === rawReader && specifier === "@cairn-ink/core" ? observedCore : specifier, context);
+  },
+});
+const { observation } = await import(observedCore);
+let createSqliteAdapter;
+try {
+  ({ createSqliteAdapter } = await import("../src/adapter.mjs"));
+} finally {
+  hook.deregister();
+}
+const { scratch, sha256 } = await import("./storage-fixtures.mjs");
 
 const scope = { owner: "owner", namespace: null };
 const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGenerations: [1] };
@@ -66,9 +91,35 @@ function search(adapter, query, options = {}) {
     adapter.contextRead.raw.search(tx, readSet, query, { limit: 24, lexicalOnly: true, ...options }));
 }
 
+function revalidate(adapter, turns) {
+  return adapter.uow.run(scope.owner, { readOnly: true }, tx => adapter.contextRead.raw.revalidate(tx, readSet, turns));
+}
+
+async function searchWithStats(adapter, query) {
+  const calls = [];
+  observation.calls = calls;
+  try {
+    const result = await search(adapter, query);
+    assert.equal(calls.length, result.turns.length);
+    assert.ok(calls.length > 0);
+    for (const stats of calls) assert.deepEqual(stats, calls[0]);
+    return { ...result, stats: calls[0] };
+  } finally {
+    observation.calls = null;
+  }
+}
+
 function read(service, query, options = {}) {
   return service.readContext(readSet, { query, types: ["memory"], intent: "current", raw: true,
     budget: { maxItems: 12, maxTokens: 3000 }, ...options });
+}
+
+async function forget(adapter, text) {
+  const writer = createMemoryService({ storage: adapter, config: {}, model: null, embedder: null,
+    gate: { async assertOpen() {} }, clock: assemblyClock(), tokens: { countTokens: fixtureCount } });
+  const saved = await writer.save(scope, text, source);
+  assert.equal(saved.status, "saved");
+  assert.equal((await writer.forget(scope, saved.item.id, source)).status, "forgotten");
 }
 
 // Every fixture row has this term, so this scan applies the full proof to
@@ -126,15 +177,22 @@ test("Real-size Raw inventory keeps cited proof inside the default Context Read 
     t.diagnostic(`Raw search took ${elapsed.toFixed(1)} ms`);
   });
 
+  await t.test("query turns and their order agree with a full-proof corpus", async () => {
+    const full = await fullCorpus(adapter, 2500);
+    for (const query of ["heliotrope", "granite", "cedar fern", "ochre record", "quartzspire cypressgate", "missing"]) {
+      const limit = 24;
+      const expected = full.searchWithCount(query, limit);
+      assert.deepEqual(await search(adapter, query, { limit }), {
+        turns: expected.rows.map(({ turn }) => turn), coverage: expected.matched > limit ? "partial" : "included",
+      }, query);
+    }
+  });
+
   await t.test("the forgotten prefix and receipt identity stay hidden on their only matches", async () => {
     for (const [query, turn] of [["quartzspire", forgotten], ["cypressgate", denied]]) {
       assert.deepEqual((await search(adapter, query)).turns.map(({ messageId }) => messageId), [turn.id]);
     }
-    const writer = createMemoryService({ storage: adapter, config: {}, model: null, embedder: null,
-      gate: { async assertOpen() {} }, clock: assemblyClock(), tokens: { countTokens: fixtureCount } });
-    const saved = await writer.save(scope, prefix, source);
-    assert.equal(saved.status, "saved");
-    assert.equal((await writer.forget(scope, saved.item.id, source)).status, "forgotten");
+    await forget(adapter, prefix);
     await denyIdentity(fixture, firstSession, denied);
     await publish(adapter);
     for (const query of ["quartzspire", "cypressgate"]) {
@@ -144,39 +202,54 @@ test("Real-size Raw inventory keeps cited proof inside the default Context Read 
       assert.equal(result.diagnostics.coverage.raw, "included");
     }
   });
-
-  await t.test("query turns and their order agree with a full-proof corpus", async () => {
-    const full = await fullCorpus(adapter, 2498);
-    for (const query of ["heliotrope", "granite", "cedar fern", "ochre record", "quartzspire cypressgate", "missing"]) {
-      const limit = 24;
-      const expected = full.searchWithCount(query, limit);
-      assert.deepEqual(await search(adapter, query, { limit }), {
-        turns: expected.rows.map(({ turn }) => turn), coverage: expected.matched > limit ? "partial" : "included",
-      }, query);
-    }
-  });
 });
 
-test("An unproved nonmatch can affect the order and limit of the matching turns", async t => {
-  const fixture = await open(t);
-  const { adapter } = fixture;
+test("Forgetting a long nonmatch removes exactly its contribution to the Raw corpus", async t => {
+  const { adapter } = await open(t);
   const session = { client: "client", sessionId: "thread" };
   const rows = [
     message("marble", "archive marble marble tile slab grain"),
     message("copper", "archive copper"),
-    message("gravel", "archive " + "gravel ".repeat(50)),
+    message("gravel", "archive gravel " + "The trail curves along the lakeshore. ".repeat(12).trimEnd()),
   ];
-  await write(adapter, async tx => {
-    assert.equal((await adapter.raw.importArchive(tx, scope, session, rows)).archived, 3);
-    await cite(adapter, tx, session, rows[2], 0);
-  });
-  const query = "marble copper";
-  assert.equal((await search(adapter, query, { limit: 1 })).turns[0].messageId, "marble");
-  await denyIdentity(fixture, session, rows[2]);
+  assert.equal((await write(adapter, tx => adapter.raw.importArchive(tx, scope, session, rows))).archived, rows.length);
   await publish(adapter);
-  const expected = (await fullCorpus(adapter, 2)).search(query, 1).map(({ turn }) => turn);
-  assert.equal(expected[0].messageId, "copper");
-  assert.deepEqual(await search(adapter, query, { limit: 1 }), { turns: expected, coverage: "partial" });
+  const query = "marble copper";
+  const lengths = rows.map(({ content }) => termFrequencies(content).length);
+  const matchingLength = lengths[0] + lengths[1];
+  const df = { marble: 1, copper: 1 };
+  assert.deepEqual((await searchWithStats(adapter, query)).stats, {
+    N: 3, totalLength: matchingLength + lengths[2], averageLength: (matchingLength + lengths[2]) / 3, df,
+  });
+  await forget(adapter, rows[2].content);
+  await publish(adapter);
+  assert.deepEqual((await searchWithStats(adapter, query)).stats, {
+    N: 2, totalLength: matchingLength, averageLength: matchingLength / 2, df,
+  });
+});
+
+test("A matching turn that fails address proof is neither counted nor scored", async t => {
+  const fixture = await open(t);
+  const { adapter } = fixture;
+  const session = { client: "client", sessionId: "thread" };
+  const visible = message("visible", "archive marble copper");
+  const denied = message("denied", "archive marble copper silver");
+  const query = "marble copper silver";
+  await write(adapter, tx => adapter.raw.importArchive(tx, scope, session, [visible]));
+  await publish(adapter);
+  const withoutDenied = await searchWithStats(adapter, query);
+  assert.deepEqual(withoutDenied.stats.df, { marble: 1, copper: 1 });
+  await write(adapter, async tx => {
+    await adapter.raw.importArchive(tx, scope, session, [denied]);
+    await cite(adapter, tx, session, denied, 0);
+  });
+  assert.equal((await search(adapter, "silver")).turns[0].messageId, denied.id);
+  await denyIdentity(fixture, session, denied);
+  await publish(adapter);
+  const withDenied = await searchWithStats(adapter, query);
+  assert.deepEqual(withDenied.turns.map(({ messageId }) => messageId), [visible.id]);
+  assert.equal(withDenied.coverage, "included");
+  assert.deepEqual(withDenied.stats, withoutDenied.stats);
 });
 
 test("A Raw deadline during the inventory scan returns no turns", async t => {
@@ -210,7 +283,7 @@ test("Large fenced turns leave time for the visible cited turn", async t => {
   assert.equal(result.diagnostics.coverage.raw, "included");
 });
 
-test("A receipt-denied nonmatch has no effect on Raw corpus order or delivery", async t => {
+test("An unproved nonmatch can affect Raw order through corpus length and count", async t => {
   const fixture = await open(t);
   const { adapter } = fixture;
   const session = { client: "client", sessionId: "thread" };
@@ -225,15 +298,22 @@ test("A receipt-denied nonmatch has no effect on Raw corpus order or delivery", 
   await publish(adapter);
   const query = "marble copper";
   const visibleCorpus = await fullCorpus(adapter, 3);
-  assert.deepEqual(visibleCorpus.search(query).map(({ turn }) => turn.messageId), [longMatch.id, shortMatch.id]);
+  const expectedOrder = visibleCorpus.search(query).map(({ turn }) => turn.messageId);
+  assert.deepEqual(expectedOrder, [longMatch.id, shortMatch.id]);
+  assert.deepEqual((await search(adapter, query)).turns.map(({ messageId }) => messageId), expectedOrder);
 
   await denyIdentity(fixture, session, nonmatch);
   await publish(adapter);
   const full = await fullCorpus(adapter, 2);
-  const expected = full.search(query).map(({ turn }) => turn);
-  assert.deepEqual(expected.map(({ messageId }) => messageId), [shortMatch.id, longMatch.id]);
-  assert.deepEqual(await search(adapter, query), { turns: expected, coverage: "included" });
-  assert.deepEqual(await search(adapter, query, { limit: 1 }), { turns: expected.slice(0, 1), coverage: "partial" });
+  const fullOrder = full.search(query).map(({ turn }) => turn.messageId);
+  assert.deepEqual(fullOrder, [shortMatch.id, longMatch.id]);
+  const { turns, coverage, stats } = await searchWithStats(adapter, query);
+  const actual = turns.map(({ messageId }) => messageId);
+  assert.equal(coverage, "included");
+  assert.deepEqual(new Set(actual), new Set(fullOrder));
+  assert.deepEqual(actual, expectedOrder);
+  assert.deepEqual(stats, { N: visibleCorpus.N, totalLength: visibleCorpus.totalLength,
+    averageLength: visibleCorpus.avgLength, df: { marble: 1, copper: 1 } });
 });
 
 test("Raw search and revalidation find a proving capture in a long session", async t => {
@@ -258,12 +338,12 @@ test("Raw search and revalidation find a proving capture in a long session", asy
   await publish(adapter);
 
   const query = "heliotrope";
-  const { turns, coverage } = await search(adapter, query);
+  const started = performance.now();
+  const { turns, coverage } = await search(adapter, query, { deadlineAtMs: started + 400 });
+  t.diagnostic(`Last capture proof took ${(performance.now() - started).toFixed(1)} ms`);
   assert.equal(coverage, "included");
   assert.deepEqual(turns.map(({ messageId }) => messageId), [turn.id]);
-  const revalidate = () => adapter.uow.run(scope.owner, { readOnly: true }, tx =>
-    adapter.contextRead.raw.revalidate(tx, readSet, turns));
-  assert.equal(await revalidate(), true);
+  assert.equal(await revalidate(adapter, turns), true);
 
   await write(adapter, tx => port(tx, scope.owner, { write: true }, db => {
     assert.equal(db.prepare(`UPDATE cairn_capture_outbox SET messages = '[]'
@@ -271,5 +351,47 @@ test("Raw search and revalidation find a proving capture in a long session", asy
       .run(scope.owner, JSON.stringify(session.client), JSON.stringify(provingEvent)).changes, 1);
   }));
   assert.deepEqual(await search(adapter, query), { turns: [], coverage: "included" });
-  assert.equal(await revalidate(), false);
+  assert.equal(await revalidate(adapter, turns), false);
+});
+
+test("An early capture proof leaves large unrelated payloads unread", async t => {
+  const { adapter, port } = await open(t);
+  const session = { client: "client", sessionId: "thread" };
+  const turn = message("turn", "archive heliotrope by the planter");
+  const provingEvent = "a-capture";
+  const unrelated = "pebble".repeat(50_000);
+  await write(adapter, async tx => {
+    assert.equal((await adapter.raw.importArchive(tx, scope, session, [turn])).archived, 1);
+    await cite(adapter, tx, session, turn, 0, provingEvent);
+    await port(tx, scope.owner, { write: true }, db => {
+      const client = JSON.stringify(session.client), first = JSON.stringify(provingEvent);
+      const insertClaim = db.prepare(`INSERT INTO cairn_capture_claims
+        (owner_id, namespace_key, client_key, event_key, session_key, payload_digest, status)
+        SELECT owner_id, namespace_key, client_key, ?, session_key, payload_digest, status
+        FROM cairn_capture_claims WHERE owner_id = ? AND client_key = ? AND event_key = ?`);
+      const insertOutbox = db.prepare(`INSERT INTO cairn_capture_outbox
+        SELECT owner_id, client_key, ?, ?, result
+        FROM cairn_capture_outbox WHERE owner_id = ? AND client_key = ? AND event_key = ?`);
+      for (let i = 0; i < 1024; i++) {
+        const event = JSON.stringify(`z-capture-${i}`);
+        assert.equal(insertClaim.run(event, scope.owner, client, first).changes, 1);
+        const messages = JSON.stringify([message(`unrelated-${i}`, unrelated)]);
+        assert.equal(insertOutbox.run(event, messages, scope.owner, client, first).changes, 1);
+      }
+      db.exec("ANALYZE");
+    });
+  });
+  await publish(adapter);
+
+  const startSearch = performance.now();
+  const { turns, coverage } = await search(adapter, "heliotrope", { deadlineAtMs: startSearch + 400 });
+  const searchMs = performance.now() - startSearch;
+  assert.equal(coverage, "included");
+  assert.deepEqual(turns.map(({ messageId }) => messageId), [turn.id]);
+  const startRevalidation = performance.now();
+  assert.equal(await revalidate(adapter, turns), true);
+  const revalidateMs = performance.now() - startRevalidation;
+  t.diagnostic(`First capture proof search took ${searchMs.toFixed(1)} ms, revalidation took ${revalidateMs.toFixed(1)} ms`);
+  assert.ok(searchMs < 150);
+  assert.ok(revalidateMs < 150);
 });
