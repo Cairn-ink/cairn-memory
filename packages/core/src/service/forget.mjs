@@ -5,7 +5,7 @@ import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
 import { documentCardVisible } from "../routing/visibility.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
-import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
+import { predecessorFact, scopedRow, sourceOf, sourceWindowFacts } from "./writes.mjs";
 
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
@@ -212,6 +212,10 @@ export function forgetMethod({ storage, clock }) {
       const { fact, incarnation } = await predecessorFact(scope, row, key, clock, "forget");
       const { factId, epoch, createdAtMs, created } = await suppressions.writeFact(tx, fact, incarnation);
       const factIds = new Set([factId]);
+      for (const window of sourceWindowFacts(row, fact.actionId, "forget")) {
+        const written = await suppressions.writeFact(tx, window, await clock.sha256Hex(factIncarnationBody(window)));
+        factIds.add(written.factId);
+      }
 
       // session.fence
       if (fenceRaw) {
