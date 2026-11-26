@@ -5,7 +5,7 @@ import { readProceduralTag } from "./procedural-tags.mjs";
 import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
-import { topicMembershipReader } from "./topics.mjs";
+import { inspectTopics, topicMembershipReader } from "./topics.mjs";
 
 /** @import { ContextReadFields, InspectMemoryMetadata, InspectReceipt, InspectReceiptAnchor, InspectStore,
  * MemoryRow, Scope } from "@cairn-ink/core/ports" */
@@ -51,14 +51,15 @@ function resolveReceiptAnchor(db, scope, id, anchor) {
  * @returns {ReceiptProjector}
  */
 export function receiptProjector(db, scope, policy, receiptReadSafety) {
-  return ({ body, legacy_receipt_key, id, excerpt, position, time }) => {
+  return ({ body, legacy_receipt_key, memory_id, id, excerpt, position, time }) => {
     if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt) ||
         typeof id !== "string" || !id) return null;
-    const { client, sessionId, messageId, role, occurredAtMs, receiptKey, legacyRawAncestryEmpty } =
+    const stored =
       /** @type {StoredReceipt} */ (decodeJson(body));
+    const { client, sessionId, messageId, role, occurredAtMs, receiptKey } = stored;
     const source = { client, sessionId, messageId, role, occurredAtMs, excerpt };
     const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
-    if (!receiptReadSafety(db, scope, policy, source, receiptKey ?? legacyKey, legacyKey, legacyRawAncestryEmpty)) return null;
+    if (!receiptReadSafety(db, scope, policy, source, receiptKey ?? legacyKey, legacyKey, stored, typeof memory_id === "string" ? memory_id : undefined)) return null;
     const createdAtMs = Number(BigInt(String(time)) / 1000n);
     return { position: Number(position), receipt: { ...source, id, eventId: messageId, createdAtMs } };
   };
@@ -68,7 +69,7 @@ export function receiptProjector(db, scope, policy, receiptReadSafety) {
  * @param {{ time: bigint, id: string }} [after]
  */
 function* visibleReceipts(db, scope, id, project, after) {
-  const records = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
+  const records = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE ${receiptScope} AND i.excerpt IS NOT NULL ${after ? "AND (i.created_at_us, i.id) > (?, ?)" : ""}
@@ -97,7 +98,7 @@ function metadata(db, { scope, id, createdAtMs, updatedAtMs, confidence, kind, o
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project @param {readonly string[]} ids */
 function receiptsById(db, scope, id, project, ids) {
-  const find = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
+  const find = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE ${receiptScope} AND i.id = ?`);
@@ -150,7 +151,7 @@ function supersession(db, scope, policy, project, stored, current, visible) {
 /** @param {Port} port @param {SessionHasher} hashSession @param {ReceiptReadSafety} receiptReadSafety
  * @param {PlacementVisibility} visibility @param {Readonly<Record<string, boolean>>} flags @returns {InspectStore}
  */
-export function createInspectStore(port, hashSession, receiptReadSafety, visibility, flags) {
+export function createInspectStore(port, hashSession, receiptReadSafety, visibility, flags, legacyInspectPlacements = false) {
   return {
     async identity(tx) {
       return port(tx, tx.owner, {}, db => {
@@ -225,7 +226,9 @@ export function createInspectStore(port, hashSession, receiptReadSafety, visibil
           epoch, nextAnchor,
           item: {
             memory, receipts: rows.slice(0, limit).map(({ receipt }) => receipt),
-            placements: (placed ?? []).map(id => ({ id })), conflicts: conflicts.map(edge => ({ ...edge })),
+            placements: legacyInspectPlacements && visible
+              ? inspectTopics(db, scope, visible, placed ?? []) : (placed ?? []).map(id => ({ id })),
+            conflicts: conflicts.map(edge => ({ ...edge })),
             ...(includeQualification && { qualification: qualification &&
               anchorsVisible(db, scope, memoryId, project, qualification.anchors) ? qualification : null }),
             ...(proceduralSafety && { procedural }),

@@ -115,6 +115,7 @@ function openUnitOfWork(filename, migration) {
     const uri = pathToFileURL(path);
     uri.searchParams.set("mode", "rw");
     openingWriter = new DatabaseSync(uri.href);
+    if (migration) openingWriter.exec("PRAGMA main.secure_delete = ON");
     if (!migration) assertMigrationComplete(openingWriter);
     const journalMode = openingWriter.prepare("PRAGMA main.journal_mode = WAL").get()?.journal_mode;
     if (journalMode !== "wal") throw new CoreError("storage_error");

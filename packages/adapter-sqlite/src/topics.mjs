@@ -33,6 +33,17 @@ export function topicMembershipReader(db, scope, visible) {
   };
 }
 
+/** @param {Connection} db @param {Scope} scope @param {ScopedVisibility} visible @param {string[]} ids */
+export function inspectTopics(db, scope, visible, ids) {
+  if (!ids.length) return [];
+  const keys = scopeKey(scope);
+  const topics = new Map(catalogTopics(db, scope, visible).map(topic => [topic.id, topic]));
+  return db.prepare(`SELECT id, revision FROM cairn_topics WHERE ${exactScope}
+    AND id IN (SELECT value FROM json_each(?)) ORDER BY wire_order, id`).all(...keys, JSON.stringify(ids))
+    .map(({ id, revision }) => ({ id: String(id), mocRevision: Number(revision),
+      title: topics.get(String(id))?.title ?? null }));
+}
+
 /** @param {Connection} db @param {Scope} scope @param {ScopedVisibility} visible */
 function catalogTopics(db, scope, visible) {
   const keys = scopeKey(scope);
@@ -85,17 +96,23 @@ function topicMembers(topic, catalog, groups) {
 /** @param {Connection} db @param {Scope} scope @param {string} id */
 function retireSource(db, scope, id) {
   const keys = scopeKey(scope);
-  db.prepare(`UPDATE cairn_topics SET title = NULL WHERE ${exactScope} AND title IS NOT NULL AND id IN (
-    SELECT topic_id FROM cairn_topic_sources WHERE ${exactScope} AND memory_id = ?
-  )`).run(...keys, ...keys, id);
+  db.prepare(`UPDATE cairn_topics SET revision = revision + 1,
+    title = CASE WHEN id IN (
+      SELECT topic_id FROM cairn_topic_sources WHERE ${exactScope} AND memory_id = ?
+    ) THEN NULL ELSE title END
+    WHERE ${exactScope} AND id IN (
+      SELECT topic_id FROM cairn_topic_sources WHERE ${exactScope} AND memory_id = ? AND revision != 0
+      UNION
+      SELECT topic_id FROM cairn_topic_memberships WHERE ${exactScope} AND memory_id = ?
+    )`).run(...keys, id, ...keys, ...keys, id, ...keys, id);
   return db.prepare(`UPDATE cairn_topic_sources SET revision = 0
     WHERE ${exactScope} AND memory_id = ? AND revision != 0`).run(...keys, id).changes;
 }
 
 /** @param {Port} port @param {IndexRevisions} index @param {PlacementVisibility} visibility
- * @param {() => number} now @param {TopicOptions} options @returns {TopicStore}
+ * @param {() => number} now @param {TopicOptions} options @param {boolean} legacyFiling @returns {TopicStore}
  */
-export function createTopicStore(port, index, visibility, now, { topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 }) {
+export function createTopicStore(port, index, visibility, now, { topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 }, legacyFiling) {
   const access = placementPort(port);
   return {
     pending(tx, callerScope, { limit }) {
@@ -157,15 +174,51 @@ export function createTopicStore(port, index, visibility, now, { topicRetryAfter
           for (const id of newL1?.parentL2Ids ?? []) assertParent(id, "L2");
         }
         const { newL1, newL2 } = coalesceNewTopics(items);
-        const addTopic = db.prepare("INSERT INTO cairn_topics VALUES (?, ?, ?, ?, ?, ?, ?)");
+        const addTopic = db.prepare("INSERT INTO cairn_topics VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)");
+        const ordered = db.prepare(`SELECT title, wire_order FROM cairn_topics WHERE ${exactScope} ORDER BY wire_order`);
+        const shift = db.prepare(`UPDATE cairn_topics SET wire_order = wire_order + 1 WHERE ${exactScope} AND wire_order >= ?`);
+        const affected = new Set();
+        const created = new Set();
+        const retiredTitles = new Set();
+        const outcome = db.prepare(`SELECT revision FROM cairn_topic_outcomes WHERE ${exactScope} AND memory_id = ?`);
+        const memberships = db.prepare(`SELECT topic_id, CAST(placed_at_us AS TEXT) AS time FROM cairn_topic_memberships
+          WHERE ${exactScope} AND memory_id = ?`);
+        const sources = db.prepare(`SELECT topic_id FROM cairn_topic_sources WHERE ${exactScope} AND memory_id = ?`);
+        const retireSources = db.prepare(`UPDATE cairn_topic_sources SET revision = 0
+          WHERE ${exactScope} AND memory_id = ? AND revision = ?`);
+        const plans = new Map(items.map(({ memoryId, parentIds, newL1 }) => {
+          const revision = /** @type {NonNullable<ReturnType<ScopedVisibility>>} */ (visible(memoryId)).revision;
+          const sameRevision = outcome.get(...keys, memoryId)?.revision === revision;
+          const previous = new Map(sameRevision ? memberships.all(...keys, memoryId)
+            .map(({ topic_id, time }) => [String(topic_id), BigInt(String(time))]) : []);
+          const filingChanged = legacyFiling && (previous.size > 0) !== (parentIds.length > 0 || !!newL1);
+          if (filingChanged) {
+            for (const { topic_id } of sources.all(...keys, memoryId)) {
+              const id = String(topic_id);
+              retiredTitles.add(id);
+              affected.add(id);
+            }
+            // This placement owns the single topic advance. Retire the old bindings
+            // before writing the Memory revision so its trigger cannot count them again.
+            retireSources.run(...keys, memoryId, revision);
+          }
+          return [memoryId, { revision: revision + Number(filingChanged), sameRevision, previous, filingChanged }];
+        }));
         const addSource = db.prepare("INSERT INTO cairn_topic_sources VALUES (?, ?, ?, ?, ?)");
         /** @param {Topic["level"]} level @param {string} title @param {string[]} parentIds @returns {Topic} */
         function create(level, title, parentIds) {
           const titleHash = sha256(titleKey(title));
           if (findTitle.get(...keys, level, titleHash)) throw new CoreError("moc_title_conflict");
           const id = randomUUID();
-          addTopic.run(...keys, id, level, title, titleHash, JSON.stringify(parentIds));
-          for (const guard of guards) addSource.run(...keys, id, guard.memoryId, guard.revision);
+          const canonical = titleKey(title);
+          const rows = ordered.all(...keys);
+          const following = rows.find(row => typeof row.title === "string" && compareUtf8(titleKey(row.title), canonical) > 0);
+          const order = following?.wire_order ?? Number(rows.at(-1)?.wire_order ?? 0) + 1;
+          shift.run(...keys, order);
+          addTopic.run(...keys, id, level, title, titleHash, order, JSON.stringify(parentIds));
+          created.add(id);
+          for (const parentId of parentIds) affected.add(parentId);
+          for (const guard of guards) addSource.run(...keys, id, guard.memoryId, plans.get(guard.memoryId)?.revision ?? guard.revision);
           return { id, level, title, parentIds };
         }
         const l2s = new Map([...newL2].map(([key, plan]) => [key, create("L2", plan.title, [])]));
@@ -177,28 +230,36 @@ export function createTopicStore(port, index, visibility, now, { topicRetryAfter
           memoryId, topicIds: newL1 ? [...parentIds, /** @type {Topic} */ (l1s.get(titleKey(newL1.title))).id] : parentIds,
         }));
 
-        const outcome = db.prepare(`SELECT revision FROM cairn_topic_outcomes WHERE ${exactScope} AND memory_id = ?`);
-        const memberships = db.prepare(`SELECT topic_id, CAST(placed_at_us AS TEXT) AS time FROM cairn_topic_memberships
-          WHERE ${exactScope} AND memory_id = ?`);
         const putOutcome = db.prepare(`INSERT INTO cairn_topic_outcomes VALUES (?, ?, ?, ?)
           ON CONFLICT (owner_id, namespace_key, memory_id) DO UPDATE SET revision = excluded.revision`);
         const remove = db.prepare(`DELETE FROM cairn_topic_memberships WHERE ${exactScope} AND memory_id = ?`);
         const add = db.prepare("INSERT INTO cairn_topic_memberships VALUES (?, ?, ?, ?, ?)");
+        const advanceMemory = db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?
+          WHERE ${exactScope} AND id = ?`);
+        const invalidateConflicts = db.prepare(`DELETE FROM cairn_conflicts
+          WHERE ${exactScope} AND (left_id = ? OR right_id = ?)`);
         let changed = createdTopics.length > 0;
         let placedAtUs;
         for (const { memoryId, topicIds } of placed) {
-          const revision = /** @type {NonNullable<ReturnType<ScopedVisibility>>} */ (visible(memoryId)).revision;
-          const sameRevision = outcome.get(...keys, memoryId)?.revision === revision;
-          const previous = new Map(sameRevision ? memberships.all(...keys, memoryId)
-            .map(({ topic_id, time }) => [String(topic_id), BigInt(String(time))]) : []);
+          const { revision, sameRevision, previous, filingChanged } =
+            /** @type {NonNullable<ReturnType<typeof plans.get>>} */ (plans.get(memoryId));
           if (sameRevision && previous.size === topicIds.length && topicIds.every(id => previous.has(id))) continue;
           putOutcome.run(...keys, memoryId, revision);
           remove.run(...keys, memoryId);
           for (const id of topicIds) {
             add.run(...keys, memoryId, id, previous.get(id) ?? (placedAtUs ??= writeTime(now()).updatedAtUs));
           }
+          for (const id of previous.keys()) if (!topicIds.includes(id)) affected.add(id);
+          for (const id of topicIds) if (!previous.has(id)) affected.add(id);
+          if (filingChanged) {
+            advanceMemory.run(revision, placedAtUs ??= writeTime(now()).updatedAtUs, ...keys, memoryId);
+            invalidateConflicts.run(...keys, memoryId, memoryId);
+          }
           if (topicIds.length || previous.size) changed = true;
         }
+        const bump = db.prepare(`UPDATE cairn_topics SET revision = revision + 1, title = CASE WHEN ? THEN NULL ELSE title END
+          WHERE ${exactScope} AND id = ?`);
+        for (const id of affected) if (!created.has(id)) bump.run(Number(retiredTitles.has(id)), ...keys, id);
         if (changed) index.markDirty(db, tx);
         return { placed, createdTopics };
       });
@@ -276,9 +337,9 @@ export function createTopicStore(port, index, visibility, now, { topicRetryAfter
 
     dropMemory(tx, callerScope, memoryId) {
       return access(tx, callerScope, write, (db, scope) => {
+        const retired = retireSource(db, scope, memoryId);
         const dropped = Number(db.prepare(`DELETE FROM cairn_topic_memberships WHERE ${exactScope} AND memory_id = ?`)
           .run(...scopeKey(scope), memoryId).changes);
-        const retired = retireSource(db, scope, memoryId);
         if (dropped || retired) index.markDirty(db, tx);
         return { dropped };
       });
