@@ -98,7 +98,8 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
     const readScope = readSet(scope, filters);
     const hostedPool = FUSION_PRESETS.hosted.pool;
     // Fetch enough lexical rows for the hybrid pool and for lexical fallback, including lookahead.
-    const lexicalDepth = Math.max(embedding ? hostedPool : 0, offset + limit + 1);
+    const lexicalWindow = offset + limit + 1;
+    const lexicalDepth = Math.max(embedding ? hostedPool : 0, lexicalWindow);
     /** @param {ItemRef} ref */
     const isScopedMemory = ref => ref.type === "memory" && ref.namespace === scope.namespace;
 
@@ -111,7 +112,8 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
       const complete = semantic?.coverage.complete === true;
       if (positionPath === "hybrid" && !complete) throw new CoreError("cursor_stale");
       const path = complete ? "hybrid" : "lexical";
-      const lexicalRows = words.rows.filter(row => isScopedMemory(row.ref));
+      const candidates = !complete && lexicalDepth > lexicalWindow ? words.rows.slice(0, lexicalWindow) : words.rows;
+      const lexicalRows = candidates.filter(row => isScopedMemory(row.ref));
       const page = { offset, limit, floor: mode === "plugin" };
       const { rows, total } = complete
         ? fuseHosted(lexicalRows, semantic.rows.filter(row => isScopedMemory(row.ref)), page)
