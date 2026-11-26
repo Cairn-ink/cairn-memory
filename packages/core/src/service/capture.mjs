@@ -267,7 +267,10 @@ export function captureMethods(deps) {
   const { storage, clock, model, gate, config, diagnostics, embedder } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
   const documents = captureDocumentSteps(deps, untilAborted, captureTransport, checkCaptureAbort);
-  const captureUnavailable = documents?.captureUnavailable ?? (model === null || embedder === null);
+  const rawOnly = model === null && config.rawCapture?.enabled === true && documents === undefined;
+  const captureUnavailable = rawOnly
+    ? capabilities.rawArchive !== true || typeof raw?.archive !== "function" || typeof capture?.admit !== "function"
+    : documents?.captureUnavailable ?? (model === null || embedder === null);
   /** @param {Tx} tx @param {SuppressionSnapshot["passages"]} passages */
   const sourceWriteKey = (tx, passages) =>
     capabilities.fingerprintKey && passages.length && keys.userKeyForWrite ? keys.userKeyForWrite(tx) : null;
@@ -566,6 +569,28 @@ export function captureMethods(deps) {
           positions = dispatch.allowed;
           if (supplemental && documents?.skipExtraction) return await supplemental.finishWithoutExtraction(positions,
             createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock));
+          if (rawOnly) {
+            const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
+            const completed = await runAtGeneration(async tx => {
+              checkCaptureAbort(options?.signal, deadline);
+              const stillCurrent = await unchangedPositions(tx, positions);
+              await capture.assertEligible(tx, key, stillCurrent);
+              const sourcePassages = await readSourcePassages(tx, stillCurrent);
+              let currentSourceKey = null;
+              if (capabilities.fingerprintKey && sourcePassages.length) {
+                currentSourceKey = await selectWriteKey(tx);
+                if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
+              }
+              const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
+                null, sourceEvidence, currentSourceKey);
+              const result = await finish(tx, []);
+              if (archive && allowedPositions.length && await archive.archiveAllowed(tx, key) === true) {
+                await archive.archive(tx, key, allowedPositions.map(position => admittedMessages[position]));
+              }
+              return /** @type {const} */ ({ status: "done", result });
+            });
+            return completed === null ? { status: "paused" } : completed;
+          }
           if (model === null) throw new CoreError("capability_unavailable");
           const messages = positions.map(position => admittedMessages[position]);
           const { system, input, schema } = (documents?.extractionSpec ?? plainExtractionSpec)(messages);

@@ -32,6 +32,13 @@ export interface MemoryServiceConfig {
     /** Include calendar comparisons for “this week” and “this month” when the ledger is enabled. */
     readonly calendarReading?: boolean;
   };
+  /**
+   * Addendum 26. Opt in to provider-free capture that stores admitted conversation text in Raw only:
+   * no provider call, no extraction, no memories. Valid only without a model; registration with a
+   * model throws invalid_input. Capture still requires rawArchive storage and capture.admit.
+   * With documentCards enabled, the existing keyless card path runs instead.
+   */
+  readonly rawCapture?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {
@@ -90,6 +97,7 @@ export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "e
     /**
      * Registration requires a model when storage.capabilities.fingerprintKey is true.
      * Model-backed capture requires a model. Opted-in keyless document cards can finish without extraction.
+     * Opted-in Raw-only capture (config.rawCapture, Addendum 26) archives Raw without extraction.
      */
     readonly model?: MemoryServiceDeps["model"] | undefined;
   };
