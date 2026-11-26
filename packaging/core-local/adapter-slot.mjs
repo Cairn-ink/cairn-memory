@@ -28,7 +28,7 @@ export async function openStorage(database, localAuthority, { model = null, embe
     const config = {
       ...(model ? { rawCapture: { onModelFailure: true } }
         : localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {}),
-      ...(documentCardsReady && { documentCards: { enabled: true, amendments: !!model } }),
+      ...(documentCardsReady && localAuthority && { documentCards: { enabled: true, amendments: !!model } }),
     };
     const service = createMemoryService({
       storage, model, embedder: model ? embedder : null, clock, tokens: { countTokens }, config,
