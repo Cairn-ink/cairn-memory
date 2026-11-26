@@ -83,6 +83,8 @@ export interface HostWriteHookPort {
     getStore(): HostHookRun | undefined;
     run<T>(store: HostHookRun, fn: () => T): T;
   };
+  /** Core registers the reader of its live hook runs; ports authorize only from it. */
+  bindHookAuthority(reader: (tx: Tx) => HostHookRun | undefined): void;
   priorReceipts(tx: Tx, scope: Scope, id: string): Promise<readonly HostReceipt[]>;
   predecessorEvidence(tx: Tx, scope: Scope, id: string): Promise<Pick<PrivacyContext, "priorReceipts" | "affectedMessages">>;
   beginCapture(tx: Tx, key: CaptureKey): Promise<void>;

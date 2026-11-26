@@ -86,13 +86,38 @@ export function isHostWriteHookFailure(error) {
 }
 
 /**
+ * Port-owned authorization: a port asks only the readers that core registered through
+ * `bindHookAuthority`, keyed by the live transaction. Records entered through the async
+ * context grant nothing; that context only tells whether code runs inside a hook.
+ * @returns {{ bind(reader: (tx: Tx) => HostHookRun | undefined): void, authorize(tx: Tx): HostHookRun | undefined }}
+ */
+export function createHookAuthorizer() {
+  /** @type {Set<(tx: Tx) => HostHookRun | undefined>} */
+  const readers = new Set();
+  return Object.freeze({
+    bind(reader) {
+      assertOutsideHostWriteHook();
+      if (typeof reader !== "function") throw new CoreError("invalid_input");
+      readers.add(reader);
+    },
+    authorize(tx) {
+      for (const reader of readers) {
+        const run = reader(tx);
+        if (run) return run;
+      }
+      return undefined;
+    },
+  });
+}
+
+/**
  * @template T
- * @param {HostWriteHookPort["context"]} context
+ * @param {(tx: Tx) => HostHookRun | undefined} authorize
  * @param {Tx} tx @param {Scope} scope @param {"read" | "write" | "finalizeSave"} mode
  * @param {(scope: Scope) => Promise<T>} start
  */
-export function hostOperation(context, tx, scope, mode, start) {
-  const run = context.getStore();
+export function hostOperation(authorize, tx, scope, mode, start) {
+  const run = typeof authorize === "function" ? authorize(tx) : undefined;
   if (!run) {
     const denied = Promise.reject(new CoreError("host_write_hook_failed"));
     void denied.catch(() => {});
@@ -179,6 +204,9 @@ export function bindHostWriteHooks(input, port) {
   if (!port) throw new CoreError("capability_unavailable");
   const adapter = port;
   registerHostWriteContext(adapter.context);
+  /** @type {WeakMap<Tx, HostHookRun>} */
+  const live = new WeakMap();
+  adapter.bindHookAuthority(tx => live.get(tx));
 
   /**
    * @template {keyof HostWriteHooks} K
@@ -210,6 +238,7 @@ export function bindHostWriteHooks(input, port) {
     });
     let failed = false;
     let result;
+    live.set(tx, run);
     try {
       const callback = /** @type {(tx: Tx, ctx: typeof context) => Promise<unknown>} */ (hooks[phase]);
       result = await adapter.context.run(run, async () => {
@@ -223,6 +252,7 @@ export function bindHostWriteHooks(input, port) {
     } finally {
       active = false;
       if (pending.size) await Promise.allSettled(pending);
+      if (live.get(tx) === run) live.delete(tx);
     }
     const native = adapter.statementFailure(tx);
     if (native || failed) {

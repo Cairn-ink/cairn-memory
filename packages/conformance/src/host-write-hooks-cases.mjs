@@ -507,4 +507,95 @@ export const HOST_WRITE_HOOK_CASES = [
       }
     },
   },
+  {
+    id: "HWH-EXECUTOR-3",
+    title: "a record entered through the async context cannot widen the authorized namespace",
+    async run(f) {
+      const { scope, table, deps } = f;
+      const port = deps.storage.hostWriteHookPort;
+      check(port, "Expected a host write hook port");
+      const elsewhere = { owner: scope.owner, namespace: "elsewhere" };
+      const before = await f.snapshot();
+      const api = service(f, {
+        async onSave(tx, ctx) {
+          const entered = { tx, scope: elsewhere, phase: "onSave", keyedSave: true,
+            track: (/** @type {() => Promise<unknown>} */ start) => Promise.resolve().then(start) };
+          await port.context.run(/** @type {any} */ (entered), () => table.put(tx, elsewhere, "widened", true));
+          void ctx;
+        },
+      });
+      await rejects(() => api.save(scope, initialText, source), "host_write_hook_failed");
+      equal(await table.inspect(elsewhere, "widened"), undefined, "No write in another namespace");
+      equal(await f.snapshot(), before, "Core write rolled back");
+    },
+  },
+  {
+    id: "HWH-EXECUTOR-4",
+    title: "a record entered through the async context cannot write during an admission hook",
+    async run(f) {
+      const { scope, table, deps } = f;
+      const port = deps.storage.hostWriteHookPort;
+      check(port, "Expected a host write hook port");
+      const before = await f.snapshot();
+      const api = service(f, {
+        async beforeSave(tx, ctx) {
+          const entered = { tx, scope: ctx.scope, phase: "onSave", keyedSave: false,
+            track: (/** @type {() => Promise<unknown>} */ start) => Promise.resolve().then(start) };
+          await port.context.run(/** @type {any} */ (entered), () => table.put(tx, ctx.scope, "admission", true));
+          return { status: "proceed" };
+        },
+      });
+      await rejects(() => api.save(scope, initialText, source), "host_write_hook_failed");
+      equal(await table.inspect(scope, "admission"), undefined, "No write during admission");
+      equal(await f.snapshot(), before, "Core write rolled back");
+    },
+  },
+  {
+    id: "HWH-EXECUTOR-5",
+    title: "an operation started after the hook returned is refused even with an entered record",
+    async run(f) {
+      const { scope, table, deps } = f;
+      const port = deps.storage.hostWriteHookPort;
+      check(port, "Expected a host write hook port");
+      /** @type {Promise<unknown> | undefined} */
+      let late;
+      const api = service(f, {
+        async onSave(tx, ctx) {
+          const entered = { tx, scope: ctx.scope, phase: "onSave", keyedSave: false,
+            track: (/** @type {() => Promise<unknown>} */ start) => Promise.resolve().then(start) };
+          late = new Promise(resolve => setTimeout(resolve, 20))
+            .then(() => port.context.run(/** @type {any} */ (entered), () => table.put(tx, ctx.scope, "late", true)));
+          void late.catch(() => {});
+        },
+      });
+      const saved = await api.save(scope, initialText, source);
+      equal(saved.status, "saved", "The hook itself succeeded");
+      check(late, "Expected the late operation");
+      await rejects(() => /** @type {Promise<unknown>} */ (late), "host_write_hook_failed");
+      equal(await table.inspect(scope, "late"), undefined, "No write after the hook returned");
+    },
+  },
+  {
+    id: "HWH-EXECUTOR-6",
+    title: "a shared async-context marker grants no authorization",
+    async run(f) {
+      const { scope, table } = f;
+      const marker = /** @type {{ run?: (store: unknown, fn: () => unknown) => unknown } | undefined} */ (
+        Reflect.get(globalThis, Symbol.for("@cairn-ink/host-write-context")));
+      equal(marker, undefined, "No shared global hook-context marker");
+      const elsewhere = { owner: scope.owner, namespace: "elsewhere" };
+      const before = await f.snapshot();
+      const api = service(f, {
+        async onSave(tx) {
+          const entered = { tx, scope: elsewhere, phase: "onSave", keyedSave: true,
+            track: (/** @type {() => Promise<unknown>} */ start) => Promise.resolve().then(start) };
+          const attempt = () => table.put(tx, elsewhere, "marker", true);
+          await (typeof marker?.run === "function" ? marker.run(entered, attempt) : attempt());
+        },
+      });
+      await rejects(() => api.save(scope, initialText, source), "host_write_hook_failed");
+      equal(await table.inspect(elsewhere, "marker"), undefined, "No write through the marker");
+      equal(await f.snapshot(), before, "Core write rolled back");
+    },
+  },
 ];

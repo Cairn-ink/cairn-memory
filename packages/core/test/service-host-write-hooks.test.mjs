@@ -21,6 +21,7 @@ function hooks() {
 function port() {
   return {
     context: new AsyncLocalStorage(),
+    bindHookAuthority() {},
     async priorReceipts() { return []; },
     async predecessorEvidence() { return { priorReceipts: [], affectedMessages: [] }; },
     async beginCapture() {},

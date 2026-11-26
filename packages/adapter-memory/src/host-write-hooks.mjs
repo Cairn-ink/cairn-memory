@@ -1,7 +1,7 @@
 import { hostCaptureEffects, nodeHostWriteContext } from "./host-write-context.mjs";
 import { CoreError } from "@cairn-ink/core";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
-import { hostOperation, hostReceipt } from "../../core/src/service/entry.mjs";
+import { createHookAuthorizer, hostOperation, hostReceipt } from "../../core/src/service/entry.mjs";
 
 /** @import { HostWriteHookPort, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { State } from "./unit-of-work.mjs" */
@@ -15,10 +15,12 @@ export function createMemoryHostWriteHooks({ uow, port, hostRead, hostWrite }, r
     getState => (getState().rows.get(scope.namespace)?.get(id)?.receipts ?? []).map(hostReceipt), true);
   /** @type {WeakMap<Tx, ((state: State, indexRevision: number) => void)[]>} */
   const finalizers = new WeakMap();
+  const authority = createHookAuthorizer();
 
   /** @type {HostWriteHookPort} */
   const hookPort = {
     context: nodeHostWriteContext,
+    bindHookAuthority: authority.bind,
     priorReceipts,
 
     async predecessorEvidence(tx, scope, id) {
@@ -103,11 +105,11 @@ export function createMemoryHostWriteHooks({ uow, port, hostRead, hostWrite }, r
     /** @type {MemoryHostHookTable} */
     const fixture = {
       get(tx, scope, key) {
-        return hostOperation(nodeHostWriteContext, tx, scope, "read", bound => hostRead(tx, bound, false, getState => read(getState(), bound, key), true));
+        return hostOperation(authority.authorize, tx, scope, "read", bound => hostRead(tx, bound, false, getState => read(getState(), bound, key), true));
       },
       put(tx, scope, key, value, indexed = false) {
         const copy = structuredClone(value);
-        return hostOperation(nodeHostWriteContext, tx, scope, "write", bound => hostWrite(tx, bound, "conditional", () => (getState, _markDirty, run) => {
+        return hostOperation(authority.authorize, tx, scope, "write", bound => hostWrite(tx, bound, "conditional", () => (getState, _markDirty, run) => {
           set(getState(), bound, key, copy);
           run.stateWritten = true;
           if (indexed) run.cardWrites++;
@@ -115,7 +117,7 @@ export function createMemoryHostWriteHooks({ uow, port, hostRead, hostWrite }, r
       },
       stageSave(tx, scope, key, value) {
         const copy = structuredClone(value);
-        return hostOperation(nodeHostWriteContext, tx, scope, "finalizeSave", async bound => {
+        return hostOperation(authority.authorize, tx, scope, "finalizeSave", async bound => {
           const pending = finalizers.get(tx) ?? [];
           pending.push((state, indexRevision) => set(state, bound, key, { value: copy, indexRevision }));
           finalizers.set(tx, pending);

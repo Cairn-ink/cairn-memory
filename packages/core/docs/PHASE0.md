@@ -1473,3 +1473,17 @@ The current span step writes suppression facts and leaves Raw rows in storage. C
 writes suppression facts and replaces the memory without purging Raw, so `onCorrect` keeps
 its predecessor selectors. Memory and Postgres project tuples from the rows already deleted
 in the write. With hooks omitted, the Raw purge uses its existing results and queries.
+
+### 6. Port-owned hook authorization
+
+Hook operations are authorized only from runs that core created. When core binds the hook
+set, it registers a reader of its live runs with the adapter through
+`port.bindHookAuthority(reader)`. Each port method and scoped executor looks up the run for the
+call's live transaction through that reader. Core adds the run before the callback starts and
+removes it after the callback settles. A record entered through the port's async context grants
+nothing, so it cannot widen the namespace, write during `beforeSave` or `beforeCorrect`, or act
+after the hook returns. The async context only tells whether code runs inside a hook, for the
+outside-a-hook checks. `bindHookAuthority` refuses registration from inside a hook. The adapters
+keep their hook context module-private and share no global marker. Because authorization flows
+through the registered reader instead of a module-private brand, it holds when the adapter and
+the service load separate copies of the core module.

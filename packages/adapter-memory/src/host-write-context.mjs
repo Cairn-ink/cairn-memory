@@ -4,17 +4,14 @@ import { AsyncLocalStorage } from "node:async_hooks";
 /** @import { HostWriteHookPort, HostCaptureWrite, Tx } from "../../core/src/ports/index.d.ts" */
 /** @typedef {HostWriteHookPort["context"]} HookContext */
 
-// The Node adapters share the marker, including when separate package copies are loaded.
-const key = Symbol.for("@cairn-ink/host-write-context");
-const shared = /** @type {{ [key]?: HookContext }} */ (globalThis);
+// Module-private: this context only tells whether code runs inside a hook. It grants nothing;
+// hook operations are authorized from the port's core-registered reader.
+const storage = new AsyncLocalStorage();
 
 /** @type {HookContext} */
 export const nodeHostWriteContext = {
-  getStore() { return shared[key]?.getStore(); },
-  run(store, callback) {
-    const context = shared[key] ??= new AsyncLocalStorage();
-    return context.run(store, callback);
-  },
+  getStore() { return storage.getStore(); },
+  run(store, callback) { return storage.run(store, callback); },
 };
 
 /** @type {WeakMap<Tx, HostCaptureWrite[]>} */

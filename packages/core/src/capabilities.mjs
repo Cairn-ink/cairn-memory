@@ -120,7 +120,7 @@ export function assertAdapterCapabilities(adapter) {
 export function assertHostWriteHookCapability(caps, port) {
   if ((port != null) !== (caps.hostWriteHooks === true)) throw new CoreError("capability_unavailable");
   if (port != null && (typeof port !== "object" ||
-      ["priorReceipts", "predecessorEvidence", "beginCapture", "captureWrites", "captureSources", "finalizeCapture", "finalizeSave", "statementFailure"]
+      ["bindHookAuthority", "priorReceipts", "predecessorEvidence", "beginCapture", "captureWrites", "captureSources", "finalizeCapture", "finalizeSave", "statementFailure"]
         .some(method => typeof Reflect.get(port, method) !== "function") ||
       typeof Reflect.get(port, "context")?.getStore !== "function" ||
       typeof Reflect.get(port, "context")?.run !== "function")) {

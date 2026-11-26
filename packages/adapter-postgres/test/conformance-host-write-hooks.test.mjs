@@ -125,8 +125,8 @@ test("Postgres checks finalization authorization before inspecting the save queu
   let refused;
   const api = createMemoryService({ ...deps, hostWriteHooks: syntheticHooks({
     async onSave(tx, ctx) {
-      refused = await port.finalizeSave(tx, ctx, 0).then(() => false, error => error.code);
       await table.stageSave(tx, ctx.scope, "envelope", ctx.memory);
+      refused = await port.finalizeSave(tx, ctx, 0).then(() => false, error => error.code);
     },
   }) });
   const saved = await api.save(scope, "The trail ends at a stone bench.", explicit, "fact", { hostRequest: requested });

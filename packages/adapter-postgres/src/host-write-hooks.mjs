@@ -1,6 +1,6 @@
 import { hostCaptureEffects } from "./host-write-context.mjs";
 import { CoreError } from "../../core/src/index.mjs";
-import { assertOutsideHostWriteHook, hostOperation, hostReceipt, registerHostWriteContext } from "../../core/src/service/entry.mjs";
+import { assertOutsideHostWriteHook, createHookAuthorizer, hostOperation, hostReceipt, registerHostWriteContext } from "../../core/src/service/entry.mjs";
 import { requireHostFinish } from "./capture-finish.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex, decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
@@ -47,6 +47,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
   const statements = new Map(Object.entries(operations).map(([name, operation]) => [name, copyOperation(operation)]));
   const raw = rawVisibility && createRawVisibility(rawVisibility);
   registerHostWriteContext(context);
+  const authority = createHookAuthorizer();
   /** @type {WeakMap<Tx, {sql: string, values: unknown[]}[]>} */
   const staged = new WeakMap();
 
@@ -54,7 +55,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     execute(tx, scope, name, values = []) {
       const operation = statements.get(name);
       const params = structuredClone([...values]);
-      return hostOperation(context, tx, scope, operation?.mode === "read" ? "read" : "write", bound => {
+      return hostOperation(authority.authorize, tx, scope, operation?.mode === "read" ? "read" : "write", bound => {
         requireWrite(tx, bound);
         if (!operation || operation.mode === "finalizeSave") throw new CoreError("host_write_hook_failed");
         return runHostOperation(tx, async (query, run) => {
@@ -68,7 +69,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     stageSave(tx, scope, name, values = []) {
       const operation = statements.get(name);
       const params = structuredClone([...values]);
-      return hostOperation(context, tx, scope, "finalizeSave", async bound => {
+      return hostOperation(authority.authorize, tx, scope, "finalizeSave", async bound => {
         requireWrite(tx, bound);
         if (operation?.mode !== "finalizeSave") throw new CoreError("host_write_hook_failed");
         const pending = staged.get(tx) ?? [];
@@ -78,7 +79,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     },
 
     transactionIsolation(tx, scope) {
-      return hostOperation(context, tx, scope, "read", bound => {
+      return hostOperation(authority.authorize, tx, scope, "read", bound => {
         requireWrite(tx, bound);
         return runHostOperation(tx, async query => {
           const { rows } = await query("SHOW transaction_isolation");
@@ -89,6 +90,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
     },
 
     context,
+    bindHookAuthority: authority.bind,
     priorReceipts: readHostReceipts,
 
     async predecessorEvidence(tx, scope, id) {
