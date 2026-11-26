@@ -10,6 +10,7 @@ import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORA
 import { sha256 } from "../storage-values.mjs";
 import { openMigrationUnitOfWork } from "../uow.mjs";
 import { BOOTSTRAP_FILENAME, MIGRATION_SCHEMA } from "./layout.mjs";
+import { convertPlacement } from "./placement.mjs";
 import { encodeEvidence, planMigration } from "./plan.mjs";
 
 /** @import { SQLInputValue } from "node:sqlite" */
@@ -121,6 +122,22 @@ function tableDigest(tuples) {
   return sha256(JSON.stringify(encoded.sort()));
 }
 
+/** @param {Connection} db @param {string} table @param {SQLInputValue[][]} tuples */
+function verifyTable(db, table, tuples) {
+  const target = db.prepare(`SELECT * FROM "${table}"`);
+  target.setReadBigInts(true);
+  const digest = tableDigest(target.all().map(row => Object.values(row)));
+  if (digest !== tableDigest(tuples)) return refuse("legacy_integrity_mismatch");
+  return digest;
+}
+
+/** @param {Connection} db @param {string} table @param {SQLInputValue[][]} tuples */
+function insertRows(db, table, tuples) {
+  if (!tuples.length) return;
+  const insert = db.prepare(`INSERT INTO ${table} VALUES (${tuples[0].map(() => "?").join(", ")})`);
+  for (const tuple of tuples) insert.run(...tuple);
+}
+
 /** @param {LegacyInput} source @param {Plan} plan @param {string} target */
 function reportCutoverEvidence(source, plan, target) {
   const db = new DatabaseSync(target, { readOnly: true });
@@ -186,11 +203,7 @@ function verify(db, source, plan, record, schema) {
   const digests = [];
   for (const { type, name } of schema) {
     if (type !== "table" || name === "cairn_migration") continue;
-    const target = db.prepare(`SELECT * FROM "${String(name)}"`);
-    target.setReadBigInts(true);
-    const digest = tableDigest(target.all().map(row => Object.values(row)));
-    if (digest !== tableDigest(expected.get(String(name)) ?? [])) return refuse("legacy_integrity_mismatch");
-    digests.push([name, digest]);
+    digests.push([name, verifyTable(db, String(name), expected.get(String(name)) ?? [])]);
   }
   return sha256(encodeEvidence([record.migrationId, source.logicalDigest, schema, plan.evidence, digests]));
 }
@@ -258,11 +271,7 @@ export async function migrateLegacyStore(input) {
         const record = checkRecord(migrationRecord(db), source, plan);
         if (record.migrationId !== migrationId || record.checkpoint < index) refuse("legacy_incomplete");
         if (record.checkpoint > index) return false;
-        for (const [table, tuples] of steps[index]) {
-          if (!tuples.length) continue;
-          const insert = db.prepare(`INSERT INTO ${table} VALUES (${tuples[0].map(() => "?").join(", ")})`);
-          for (const tuple of tuples) insert.run(...tuple);
-        }
+        for (const [table, tuples] of steps[index]) insertRows(db, table, tuples);
         db.prepare("UPDATE cairn_migration SET checkpoint = ?").run(index + 1);
         return true;
       });
@@ -288,8 +297,20 @@ export async function migrateLegacyStore(input) {
           if (remove.run(...rule).changes !== 1) return refuse("legacy_integrity_mismatch");
         }
       }
-      const proof = verify(db, source, plan, record, schema);
-      installInspectSchema(db, source.inspect);
+      let proof = verify(db, source, plan, record, schema);
+      installInspectSchema(db, source.inspect, () => {
+        const { tables, evidence } = convertPlacement(db, source, record.sessionKey);
+        const digests = [];
+        for (const [table, rows] of Object.entries(tables)) {
+          insertRows(db, table, rows);
+          if (rows.length) digests.push([table, verifyTable(db, table, rows)]);
+        }
+        if (digests.length) {
+          if (db.prepare("PRAGMA foreign_key_check").get()) return refuse("legacy_integrity_mismatch");
+          proof = sha256(encodeEvidence([proof, digests]));
+        }
+        return evidence;
+      });
       installContextReadSchema(db);
       db.prepare("UPDATE cairn_migration SET checkpoint = 3, attestation = ?").run(proof);
       return [proof, true];

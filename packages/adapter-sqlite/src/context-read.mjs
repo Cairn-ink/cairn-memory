@@ -20,7 +20,7 @@ const RECEIPT_LIMIT = 16;
  * @param {boolean} includeRaw @returns {Pick<Evidence, "receipts" | "receiptCoverage">}
  */
 function receiptEvidence(db, scope, id, project, includeRaw) {
-  const rows = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
+  const rows = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE i.owner_id = ? AND i.namespace_key = ? AND i.memory_id = ?

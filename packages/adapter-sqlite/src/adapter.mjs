@@ -27,7 +27,7 @@ import { clearCardPlacement } from "./topic-card-placement.mjs";
 import { createTopicStore } from "./topics.mjs";
 
 /** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
-/** @typedef {{ now?: () => number, monotonicMs?: () => number,
+/** @typedef {{ now?: () => number, monotonicMs?: () => number, legacyInspectPlacements?: boolean,
  * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean, documentCards?: boolean,
  * supersession?: boolean, conflictEdges?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
 
@@ -46,7 +46,7 @@ export async function openSqliteAdapter(filename, options) {
 
 /** @param {Awaited<ReturnType<typeof openStorage>>} storage @param {Options} [options] */
 export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal },
-  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, ...topicOptions } = {}) {
+  { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, legacyInspectPlacements, ...topicOptions } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
     documentCards: requested?.documentCards ?? false,
@@ -72,7 +72,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
   const loadCards = documentCards?.visibilityInputs;
   const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now, topicOptions,
-    flags.documentCards ? cardVisibility : undefined),
+    controls !== undefined, flags.documentCards ? cardVisibility : undefined),
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
   const relations = createRelationStores(port, index, visibility);
   const supersession = flags.supersession ? handleWriteRejections(relations.supersession, ["record", "markHistorical"]) : undefined;
@@ -80,7 +80,11 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles,
     cards.purgeSources, flags.documentCards);
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
-  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, flags);
+  // Keep migrated evidence readable by inspect even for hosts that have not
+  // enabled the optional placement and relation mutation ports.
+  const inspectFlags = legacyInspectPlacements || controls?.evidence.placementConversion === true
+    ? { placement: true, supersession: true, conflictEdges: true } : flags;
+  const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, inspectFlags, legacyInspectPlacements);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
   const rawContext = flags.contextRawRead

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { createMemoryService } from "@cairn-ink/core/service";
@@ -91,7 +92,8 @@ for (const name of ["memory", "sqlite"]) {
   });
 }
 
-async function converted(t, { fenced = false, archived = false, oldFormat = false } = {}) {
+async function converted(t, { fenced = false, archived = false, oldFormat = false,
+  archiveText = "A synthetic Memory derived from an archived turn." } = {}) {
   const directory = scratch(t);
   const legacy = await legacyFixture(directory, 29);
   const engine = openMemoryCore({ path: legacy.path, ...(archived && { model: rationaleModel(), rawSearch: false,
@@ -105,7 +107,7 @@ async function converted(t, { fenced = false, archived = false, oldFormat = fals
     if (fenced) covered = admit(engine, "A legacy Memory with a fenced source.", personal, [legacyReceipt(fencedReceipt)]);
     assert.equal(ok(engine.get({ namespace: personal, memoryId: allowed.id })).receipts.length, 1);
     if (archived) {
-      request = rawRequest(splitRaw("A synthetic Memory derived from an archived turn.")[0],
+      request = rawRequest(splitRaw(archiveText)[0],
         { namespace: personal, sessionId: "archived-legacy-session" });
       const captured = ok(await engine.captureRaw(request));
       derived = ok(captured.interpretation).admission.memories[0];
@@ -125,7 +127,7 @@ async function converted(t, { fenced = false, archived = false, oldFormat = fals
     "UPDATE cairn_receipts SET body = json_remove(body, '$.legacyRawAncestryEmpty')"));
   const storage = await openSqliteAdapter(input.destination);
   t.after(() => storage.close());
-  return { storage, allowed, covered, fencedReceipt, derived, request };
+  return { storage, allowed, covered, fencedReceipt, derived, request, destination: input.destination };
 }
 
 test("sqlite: a Raw-enabled conversion delivers an uncovered legacy receipt", async t => {
@@ -147,13 +149,25 @@ test("sqlite: older migrations can prove empty ancestry from an empty source inv
 });
 
 test("sqlite: losing legacy roots withholds the derived receipt alongside an independent receipt", async t => {
-  const { storage, allowed, derived, request } = await converted(t, { archived: true });
+  const witness = "The receipt carries this distinct tail.";
+  const archiveText = "A synthetic Memory derived from an archived turn. " + "x".repeat(610) + " " + witness;
+  const { storage, allowed, derived, request, destination } = await converted(t, { archived: true, archiveText });
   await assertReceipt(storage, allowed.id);
-  await assertWithheld(storage, derived.id);
+  assert.equal((await inspect(storage, derived.id)).receipts.length, 1);
+  const fenced = await converted(t, { archived: true, archiveText });
+  assert.equal((await inspect(fenced.storage, fenced.derived.id)).receipts.length, 1);
+  await write(fenced.storage, tx => fenced.storage.raw.fenceSession(tx, scope, fenced.request));
+  await assertWithheld(fenced.storage, fenced.derived.id);
   const archived = request.messages.map(({ id, role, content, occurredAt }) =>
     ({ id, role, content, occurredAtMs: occurredAt === null ? null : Date.parse(occurredAt) }));
   const key = { scope, client: request.client, sessionId: request.sessionId, eventId: request.eventId,
     payloadDigest: "a".repeat(64) };
   assert.equal((await write(storage, tx => storage.raw.archive(tx, key, archived))).archived, archived.length);
+  assert.equal((await inspect(storage, derived.id)).receipts.length, 1);
+  assert.ok((await inspect(storage, derived.id)).receipts[0].excerpt.includes(witness));
+  await write(storage, tx => storage.raw.deleteConversation(tx, scope, key));
   await assertWithheld(storage, derived.id);
+  await assertReceipt(storage, allowed.id);
+  await storage.close();
+  assert.equal(readFileSync(destination).includes(witness), false);
 });

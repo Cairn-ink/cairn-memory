@@ -90,7 +90,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
           const stored = /** @type {StoredReceipt} */ (decodeJson(record.body));
           const legacy = typeof record.legacy_receipt_key === "string" ? record.legacy_receipt_key : undefined;
           if (!receiptReadSafety(db, scope, policy, stored, stored.receiptKey ?? legacy, legacy,
-            stored.legacyRawAncestryEmpty)) return true;
+            stored, memoryId)) return true;
           receipt = stored;
         } else {
           receipt = project(record)?.receipt;
