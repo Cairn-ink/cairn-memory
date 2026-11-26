@@ -135,7 +135,7 @@ async function purgeWithheldCards(cards, tx, scope, deletedSources, action, sele
  * @param {import("./index.d.mts").MemoryServiceDeps} deps
  * @returns {Forget}
  */
-export function forgetMethod({ storage, clock }) {
+export function forgetMethod({ storage, clock, config }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
     conflicts, rationale, documentCards, quantityLedger, forgetLog, proceduralTags } = storage;
 
@@ -212,9 +212,11 @@ export function forgetMethod({ storage, clock }) {
       const { fact, incarnation } = await predecessorFact(scope, row, key, clock, "forget");
       const { factId, epoch, createdAtMs, created } = await suppressions.writeFact(tx, fact, incarnation);
       const factIds = new Set([factId]);
-      for (const window of sourceWindowFacts(row, fact.actionId, "forget")) {
-        const written = await suppressions.writeFact(tx, window, await clock.sha256Hex(factIncarnationBody(window)));
-        factIds.add(written.factId);
+      if (config?.explicitWindowFence?.enabled === true) {
+        for (const window of sourceWindowFacts(row, fact.actionId)) {
+          const written = await suppressions.writeFact(tx, window, await clock.sha256Hex(factIncarnationBody(window)));
+          factIds.add(written.factId);
+        }
       }
 
       // session.fence

@@ -44,6 +44,8 @@ export interface MemoryServiceConfig {
    * `done` carrying the failure code. Unset or false keeps model-backed capture byte-identical.
    */
   readonly rawCapture?: { readonly enabled?: boolean; readonly onModelFailure?: boolean };
+  /** Addendum 28. Opt in to suppression windows when forgetting or correcting a session-less explicit memory. */
+  readonly explicitWindowFence?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {

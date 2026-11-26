@@ -182,17 +182,17 @@ export async function predecessorFact({ owner, namespace }, row, key, clock, ori
   return { fact, incarnation };
 }
 
-/** @param {MemoryRow} row @param {string} actionId @param {"forget" | "edit"} origin @returns {WindowFact[]} */
-export function sourceWindowFacts(row, actionId, origin) {
+/** @param {MemoryRow} row @param {string} actionId @returns {WindowFact[]} */
+export function sourceWindowFacts(row, actionId) {
   const { source, scope, createdAtMs, updatedAtMs } = row;
   if ((source.kind !== "mcp" && source.kind !== "web") || source.sessionId !== null) return [];
 
   const { owner, namespace } = scope;
   return Array.from(new Set([createdAtMs, updatedAtMs]), time => {
     const fact = /** @satisfies {WindowFact} */ ({
-      kind: "window", owner, namespace, actionId, origin, client: null,
+      kind: "window", owner, namespace, actionId, origin: "forget", client: null,
       window: { startMs: time - HALF_WINDOW_MS, endMs: time + HALF_WINDOW_MS },
-      anchor: "pm30min", unknownTime: true,
+      anchor: "pm30min",
     });
     validateSuppressionFact(fact);
     return fact;
@@ -332,7 +332,7 @@ export async function fullWriteWithholds(suppressions, tx, scope, source, batch)
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "save" | "correct">}
  */
 export function writeMethods(deps) {
-  const { storage, gate, clock, embedder } = deps;
+  const { storage, gate, clock, embedder, config } = deps;
   const { uow, pause, memories, suppressions, keys, fence, capabilities, proceduralTags } = storage;
   const { embed } = writeEmbedding(deps);
   /** @param {string} text */
@@ -509,6 +509,11 @@ export function writeMethods(deps) {
       const source = previous.source;
 
       const predecessor = unchanged ? undefined : await predecessorFact(scope, previous, key, clock, "edit");
+      const windows = predecessor && config.explicitWindowFence?.enabled === true
+        ? await Promise.all(sourceWindowFacts(previous, predecessor.fact.actionId).map(async fact => ({
+          fact, incarnation: await sha256Hex(factIncarnationBody(fact)),
+        })))
+        : [];
 
       let result, start;
       if (!unchanged) await gate.assertOpen(owner, "post-send");
@@ -541,8 +546,8 @@ export function writeMethods(deps) {
           const { kind, origin, confidence, textHash } = plan;
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
-          for (const window of sourceWindowFacts(current, predecessor.fact.actionId, "edit")) {
-            await suppressions.writeFact(tx, window, await clock.sha256Hex(factIncarnationBody(window)));
+          for (const { fact, incarnation } of windows) {
+            await suppressions.writeFact(tx, fact, incarnation);
           }
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
             { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, receipts, now);

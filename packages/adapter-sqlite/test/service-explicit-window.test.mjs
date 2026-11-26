@@ -1,11 +1,11 @@
 import { test } from "node:test";
-import { scenarios } from "../../core/test/helpers/service-explicit-window.mjs";
+import { keylessScenarios, scenarios } from "../../core/test/helpers/service-explicit-window.mjs";
 import { openSqliteAdapter } from "../src/adapter.mjs";
 import { scratch } from "./storage-fixtures.mjs";
 
 for (const fingerprintKey of [false, true]) {
   const mode = fingerprintKey ? "keyed" : "keyless";
-  for (const [name, scenario] of Object.entries(scenarios)) {
+  for (const [name, scenario] of Object.entries(fingerprintKey ? scenarios : { ...scenarios, ...keylessScenarios })) {
     test(`SQLite ${mode} ${name}`, async t => {
       const { path, remove } = scratch();
       let adapter;
