@@ -2035,6 +2035,11 @@
     "reason": "Build-time read of a fixed shared client module for the independent plugin dependency closure; never a database path."
   },
   {
+    "path": "packages/setup/lib/local-cutover-darwin.mjs",
+    "source": "import { linkSync, lstatSync, realpathSync, renameSync, unlinkSync } from 'node:fs'",
+    "reason": "macOS cutover retirement: path metadata, hard link and rename/unlink of store pathnames only; no file descriptor is opened on a SQLite file."
+  },
+  {
     "path": "packaging/bin/cairn-memory.mjs",
     "source": "import { realpathSync } from 'node:fs'",
     "reason": "Immutable shipped artifact metadata only: the bin resolves its own invocation path to recognize a symlinked npm .bin entry; never a store path. No DB, WAL or SHM path is opened."

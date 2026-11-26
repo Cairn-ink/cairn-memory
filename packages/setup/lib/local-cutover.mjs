@@ -6,11 +6,11 @@ import { stateLock } from '../../../integrations/client/state-lock.mjs';
 import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { withCutoverCapture } from './local-cutover-capture.mjs';
 import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
-import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
+import { cutoverRefusal as refuse, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
 import { assertReclaimedMaintenance, backupFor, maintenanceFor, reclaimAttempt, reclaimMaintenance,
   reclaimPastAttempts } from './local-cutover-reclaim.mjs';
 import { abortRetirement, assertNoLegacyCaches, readActivation } from './local-cutover-retirement.mjs';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, withLocalLock,
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, pidIsDead, readDescriptor, withLocalLock,
   writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
 import { runLocalDaemon } from './local-mode.mjs';
@@ -41,6 +41,11 @@ function parseDaemon(result) {
 }
 
 function drainDaemon(root, descriptor, env) {
+  const exclusion = localCutoverExclusion();
+  if (exclusion.drainDaemon) {
+    return exclusion.drainDaemon(() => runLocalDaemon('stop', root, descriptor, env, 'pipe'),
+      () => runLocalDaemon('status', root, descriptor, env, 'pipe'));
+  }
   const stop = parseDaemon(runLocalDaemon('stop', root, descriptor, env, 'pipe'));
   if (stop?.still_running !== 0) throw refuse('cutover_daemon_busy');
   const status = parseDaemon(runLocalDaemon('status', root, descriptor, env, 'pipe'));
@@ -64,6 +69,10 @@ async function recoverCutoverLock(root) {
   // A completed descriptor restore can precede metadata cleanup and lock release.
   // Continue to recognize pre-existing cutover locks while their v2 journal exists.
   if (owner.cutover !== true && !journaled) return;
+  if (process.platform === 'darwin') {
+    if (pidIsDead(owner.pid)) await privateRemove(path);
+    return;
+  }
   const live = processStart(owner.pid);
   if (!live || live.zombie) await privateRemove(path);
 }
@@ -200,9 +209,13 @@ async function confirm(root, descriptor, maintenance, env, manifest, context, re
     await assertLease();
   };
   const proveRetired = async (path, assertLease) => {
+    // On macOS a late writer can change the SQLite header before the rename.
+    // Establish byte freshness before asking SQLite to read the retired file.
+    const digest = process.platform === 'darwin' ? byteDigest(path) : undefined;
+    if (digest !== undefined && digest !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
     const proof = verifyLegacyBackupAgainstSource({ ...input, path });
     if (proof.logicalDigest !== cutover.backup.logicalDigest || proof.byteDigest !== cutover.backup.byteDigest ||
-        byteDigest(path) !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
+        (digest ?? byteDigest(path)) !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
     await assertLease();
   };
   try {
@@ -256,7 +269,7 @@ async function abort(root, descriptor, maintenance, onCheckpoint) {
     await reclaimAttempt(maintenance, { ...cutover, reclaimCapture: activated || !!activation }, reclaimCheckpoint);
     await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
     await assertReclaimedMaintenance(maintenance);
-  });
+  }, checkpoint);
   if (activated) await restoreCaptureVectors(root, cutover, maintenance, onCheckpoint);
   await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
     delete descriptor.migration;
@@ -280,12 +293,10 @@ async function ensureMaintenance(root, maintenance) {
   await ownedDirectory(maintenance);
 }
 
-// Explicit checkout-only entry point. Leave non-Linux and existing stdio
-// sessions alone. A busy lease asks the operator to close those sessions and
-// retry. Successful readiness is point-in-time and must be re-attested at activation.
+// Successful readiness is point-in-time and must be re-attested at activation.
 export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform, context,
   onCheckpoint = async () => {}, onMigrationCheckpoint }) {
-  if (platform !== 'linux' || process.platform !== 'linux') throw refuse('cutover_platform');
+  localCutoverExclusion(platform);
   if (!['prepare', 'abort', 'activate-capture', 'prepare-activation', 'confirm-activation'].includes(action) ||
       !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
   return stateLock(join(root, '.cutover.lock'), async () => {

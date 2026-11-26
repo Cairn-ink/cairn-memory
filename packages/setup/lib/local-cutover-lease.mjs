@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
+import { darwinExclusion } from './local-cutover-darwin.mjs';
 
 // The explicit checkout entry point uses Linux leases on a local filesystem.
 // Acquire a write lease briefly to prove there are no preexisting handles,
@@ -39,7 +40,7 @@ except OSError as error:
 
 export const cutoverRefusal = code => Object.assign(new Error(code), { code });
 
-export async function withColdStoreLease(path, work) {
+async function withLinuxLease(path, work) {
   const child = spawn('/usr/bin/python3', ['-I', '-u', '-c', helper, path], {
     env: {}, stdio: ['pipe', 'pipe', 'ignore'],
   });
@@ -75,4 +76,17 @@ export async function withColdStoreLease(path, work) {
     } finally { timer.abort(); }
     await exit;
   }
+}
+
+const linuxExclusion = Object.freeze({ withColdStoreLease: withLinuxLease });
+const macOSExclusion = darwinExclusion(cutoverRefusal);
+
+export function localCutoverExclusion(platform = process.platform) {
+  if (platform === 'linux' && process.platform === 'linux') return linuxExclusion;
+  if (platform === 'darwin' && process.platform === 'darwin') return macOSExclusion;
+  throw cutoverRefusal('cutover_platform');
+}
+
+export function withColdStoreLease(path, work) {
+  return localCutoverExclusion().withColdStoreLease(path, work);
 }
