@@ -12,22 +12,24 @@ const clock = {
   hmacHex: async (key, text) => createHmac('sha256', key).update(text).digest('hex'),
 };
 
-export async function openStorage(database) {
+export async function openStorage(database, localAuthority) {
   const storage = await openSqliteAdapter(database, {
     capabilities: { contextRead: true, contextRawRead: true }, legacyInspectPlacements: true,
+    ...(localAuthority && { localAuthority }),
   });
   let encoding;
   try {
     encoding = tokenizer.get_encoding('o200k_base');
     const countTokens = text => encoding.encode(text, [], []).length;
+    const config = localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {};
     const service = createMemoryService({
-      storage, embedder: null, clock, tokens: { countTokens }, config: {},
+      storage, embedder: null, clock, tokens: { countTokens }, config,
       // The fixed local connection has no provider. The service checks the
       // persisted write pause separately from its model gate.
       gate: { assertOpen() {} },
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
     });
-    return { service, async close() {
+    return { service, storage, async close() {
       try { encoding.free(); } finally { await storage.close(); }
     } };
   } catch (error) {

@@ -1,0 +1,1154 @@
+{
+  "version": "0.6.11",
+  "exchanges": [
+    {
+      "label": "claude start",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "SessionStart"
+      ],
+      "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 0,
+        "issuedOrdinal": 0,
+        "selection": {
+          "ownSkillTurn": true,
+          "awaitingUserBoundary": true
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "ready",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude append",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 214,
+        "issuedOrdinal": 1,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [
+        {
+          "exit": 0,
+          "signal": null,
+          "reply": {
+            "status": 200,
+            "body": {
+              "version": 2,
+              "duplicate": false,
+              "memoryCount": 0,
+              "raw": {
+                "conversationId": "<uuid-1>",
+                "revision": 1,
+                "parts": [
+                  {
+                    "messageId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "index": 0,
+                    "saved": true,
+                    "reason": null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "progress",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude repeat",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 214,
+        "issuedOrdinal": 1,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "ready",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude partial",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "PreCompact"
+      ],
+      "stdin": "{\"hook_event_name\":\"PreCompact\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 214,
+        "issuedOrdinal": 1,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "waiting",
+        "reason": "partial_record"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude complete",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "PreCompact"
+      ],
+      "stdin": "{\"hook_event_name\":\"PreCompact\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [
+        {
+          "exit": 0,
+          "signal": null,
+          "reply": {
+            "status": 200,
+            "body": {
+              "version": 2,
+              "duplicate": false,
+              "memoryCount": 0,
+              "raw": {
+                "conversationId": "<uuid-1>",
+                "revision": 2,
+                "parts": [
+                  {
+                    "messageId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "index": 0,
+                    "saved": true,
+                    "reason": null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "progress",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude invalid event",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "event_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude malformed stdin",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": null,
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex partial start",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "SessionStart"
+      ],
+      "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": null,
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "source_unqualified"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex prompt fallback",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "UserPromptSubmit"
+      ],
+      "stdin": "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 171,
+        "issuedOrdinal": 0,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "ready",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex repeat prompt",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "UserPromptSubmit"
+      ],
+      "stdin": "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 171,
+        "issuedOrdinal": 0,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "ready",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex append",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 462,
+        "issuedOrdinal": 1,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [
+        {
+          "exit": 0,
+          "signal": null,
+          "reply": {
+            "status": 200,
+            "body": {
+              "version": 2,
+              "duplicate": false,
+              "memoryCount": 0,
+              "raw": {
+                "conversationId": "<uuid-2>",
+                "revision": 1,
+                "parts": [
+                  {
+                    "messageId": "d5faac04b6d791440c70b95d42b7932da835108d6aead1bc8a10291eaf3fafda",
+                    "index": 0,
+                    "saved": true,
+                    "reason": null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "progress",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex precompact",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "PreCompact"
+      ],
+      "stdin": "{\"hook_event_name\":\"PreCompact\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 764,
+        "issuedOrdinal": 2,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [
+        {
+          "exit": 0,
+          "signal": null,
+          "reply": {
+            "status": 200,
+            "body": {
+              "version": 2,
+              "duplicate": false,
+              "memoryCount": 0,
+              "raw": {
+                "conversationId": "<uuid-2>",
+                "revision": 2,
+                "parts": [
+                  {
+                    "messageId": "02ddf3aada9c8ee6bcc0e513c5e6a5b1879a88a0eda17cc4751e98156f085379",
+                    "index": 0,
+                    "saved": true,
+                    "reason": null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "progress",
+        "reason": null
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex fork start",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "SessionStart"
+      ],
+      "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"33333333-3333-4333-8333-333333333333\",\"transcript_path\":\"$transcript\",\"source\":\"fork\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 764,
+        "issuedOrdinal": 2,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "capture_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex fork prompt",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "UserPromptSubmit"
+      ],
+      "stdin": "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"33333333-3333-4333-8333-333333333333\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 764,
+        "issuedOrdinal": 2,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "rearm_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex fork stop",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"33333333-3333-4333-8333-333333333333\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 764,
+        "issuedOrdinal": 2,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "rearm_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "codex paused",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 764,
+        "issuedOrdinal": 2,
+        "selection": {},
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic deleted conversation sentinel.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "claude-code",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic completed partial record.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "authority_changed"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    },
+    {
+      "label": "claude delete restart",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "SessionStart"
+      ],
+      "stdin": "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\",\"source\":\"resume\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "rearm_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": true
+    },
+    {
+      "label": "claude deleted replay",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "Stop"
+      ],
+      "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "rearm_refused"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": true
+    },
+    {
+      "label": "claude scoped disabled",
+      "argv": [
+        "/usr/bin/env",
+        "-u",
+        "NODE_OPTIONS",
+        "-u",
+        "NODE_PATH",
+        "$node",
+        "$hook",
+        "hook",
+        "--installation",
+        "$installation",
+        "--event",
+        "PreCompact"
+      ],
+      "stdin": "{\"hook_event_name\":\"PreCompact\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"transcript_path\":\"$transcript\"}",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "cursor": {
+        "offset": 423,
+        "issuedOrdinal": 2,
+        "selection": {
+          "ownSkillTurn": false,
+          "awaitingUserBoundary": false
+        },
+        "blockedReason": null,
+        "pending": null
+      },
+      "archived": [
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        },
+        {
+          "client": "codex",
+          "saved": 1,
+          "reason": null,
+          "content": "Synthetic Codex compact turn.",
+          "occurredAt": "2025-01-01T00:00:00.000Z"
+        }
+      ],
+      "acknowledgements": [],
+      "hook": {
+        "version": "local-raw-hook-v1",
+        "status": "blocked",
+        "reason": "authority_changed"
+      },
+      "modelCalls": 0,
+      "closedFileContainsDeletedText": null
+    }
+  ]
+}

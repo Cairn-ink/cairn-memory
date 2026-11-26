@@ -7,11 +7,15 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from '
 import { join, posix } from 'node:path';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { adapterImports } from './adapter-imports.mjs';
+import { captureImports, captureAdapterImports } from './capture-imports.mjs';
 import { sha256 } from './engine-id.mjs';
 
 const coreRoot = 'packages/core';
 const coreSource = coreRoot + '/src/';
 const hostEntry = 'packaging/core-local/host.mjs';
+const captureEntry = 'packaging/core-local/capture-cli.mjs';
+const captureHook = 'packaging/core-local/capture-hook.mjs';
+const captureSlot = 'packaging/core-local/capture-slot.mjs';
 const adapterSlot = 'packaging/core-local/adapter-slot.mjs';
 const adapterSource = 'packages/adapter-sqlite/src/';
 const adapterEntry = adapterSource + 'adapter.mjs';
@@ -56,6 +60,7 @@ const adapterMembers = {
 };
 const compositionEntry = 'openLocalService';
 export const cliEntry = 'packaging/core-local/cli.mjs';
+export const captureInventoryPath = 'packaging/core-local-capture-files.json';
 export const coreManifest = coreRoot + '/package.json';
 
 const runtimeGlobals = new Set([
@@ -162,7 +167,9 @@ function allowedAmbient(name, node, parents, path) {
     return webCryptoMembers.get(path)?.has(dotMember(use, method)) &&
       call.type === 'CallExpression' && call.callee === method;
   }
-  return runtimeGlobals.has(name) || fileGlobals.get(path)?.has(name) ||
+  const capture = captureImports[path];
+  return (name === 'process' ? capture?.process?.includes(property) : capture?.globals?.includes(name)) ||
+    runtimeGlobals.has(name) || fileGlobals.get(path)?.has(name) ||
     path.startsWith(adapterSource) && adapterMembers[path.slice(adapterSource.length)]?.[name]?.includes(property);
 }
 
@@ -255,12 +262,12 @@ function adapterCoreSpecifier(from) {
 function target(from, specifier, node) {
   const approved = adapterApproval(from);
   if (specifier === 'node:sqlite') {
-    if (approvedNames(node, approved?.sqlite) || from === adapterSlot && node.type === 'ExportNamedDeclaration' &&
+    if (approvedNames(node, approved?.sqlite) || from === captureSlot && namedImport(node, 'DatabaseSync') || from === adapterSlot && node.type === 'ExportNamedDeclaration' &&
         node.specifiers.length === 1 && node.specifiers[0].local.name === 'DatabaseSync') return;
     throw new Error(`sqlite_outside_core_local_adapter: ${from}`);
   }
   if (typeof specifier === 'string' && specifier.startsWith('node:') &&
-      approvedNames(node, (hostBuiltins.get(from) ?? approved)?.[specifier.slice(5)])) return;
+      approvedNames(node, (hostBuiltins.get(from) ?? approved ?? captureImports[from]?.builtins)?.[specifier.slice(5)])) return;
   if (approvedNames(node, approved?.core) &&
       (specifier === '@cairn-ink/core' || specifier === adapterCoreSpecifier(from))) return coreEntry;
   if (from === adapterSlot && specifier === './vendor/tiktoken/tiktoken.cjs' &&
@@ -270,14 +277,19 @@ function target(from, specifier, node) {
     throw new Error(`unsupported_core_local_import: ${from}`);
   }
   const path = posix.join(posix.dirname(from), specifier);
+  if (captureImports[path] && !captureImports[from] || path === captureSlot && from !== captureHook) {
+    throw new Error(`invalid_core_local_capture_edge: ${from} -> ${path}`);
+  }
   if (from.startsWith(coreSource)) {
     if (!path.startsWith(coreSource)) throw new Error(`core_import_escapes_package: ${from} -> ${path}`);
   } else if (from.startsWith(adapterSource) || path.startsWith(adapterSource)) {
     if (!(from.startsWith(adapterSource) && path.startsWith(adapterSource)) &&
-        !(from === adapterSlot && path === adapterEntry && namedImport(node, 'openSqliteAdapter'))) {
+        !(from === adapterSlot && path === adapterEntry && namedImport(node, 'openSqliteAdapter')) &&
+        !(from === captureSlot && approvedNames(node, captureAdapterImports[path.slice(adapterSource.length)]))) {
       throw new Error(`invalid_core_local_sqlite_edge: ${from} -> ${path}`);
     }
-  } else if (!path.startsWith(coreSource) && !path.startsWith('packaging/core-local/')) {
+  } else if (!path.startsWith(coreSource) && !path.startsWith('packaging/core-local/') &&
+      !(captureImports[from] && captureImports[path])) {
     throw new Error(`core_local_import_escapes_runtime: ${from} -> ${path}`);
   }
   if (path === hostEntry && (from !== cliEntry || !namedImport(node, 'serveStdio'))) {
@@ -322,7 +334,8 @@ function imports(root, path) {
   const parents = new WeakMap();
   walk(ast, null, (node, parent) => {
     parents.set(node, parent);
-    if (node.type === 'MetaProperty' && node.meta.name === 'import' ||
+    if (node.type === 'MetaProperty' && node.meta.name === 'import' &&
+        !(captureImports[path]?.moduleURL && dotMember(node, parent) === 'url') ||
         node.type === 'Identifier' && node.name === 'getBuiltinModule' ||
         node.type === 'Literal' && node.value === 'getBuiltinModule') {
       throw new Error(`unsupported_core_local_loader: ${path}`);
@@ -335,7 +348,16 @@ function imports(root, path) {
     if (dynamic || ['ImportDeclaration', 'ExportNamedDeclaration', 'ExportAllDeclaration'].includes(node.type)) {
       if (node.source) {
         const next = target(path, node.source.type === 'Literal' ? node.source.value : undefined, node);
-        if (next === adapterSlot) {
+        if (next === captureSlot) {
+          const declaration = parents.get(parent);
+          const statement = parents.get(declaration);
+          const block = parents.get(statement);
+          const opener = parents.get(block);
+          if (path !== captureHook || !dynamic || parent.type !== 'AwaitExpression' ||
+              opener?.type !== 'FunctionDeclaration' || opener.id.name !== 'openBoundAdapter' ||
+              parents.get(opener)?.type !== 'Program') throw new Error(`invalid_core_local_capture_slot: ${path}`);
+        }
+        if (next === adapterSlot && !(path === captureSlot && namedImport(node, 'openStorage'))) {
           let body = parent;
           while (body && body !== composition?.body) body = parents.get(body);
           if (!dynamic || !body) throw new Error(`invalid_core_local_adapter_edge: ${path}`);
@@ -383,7 +405,7 @@ export function coreRuntimeManifest(root) {
   return { name, version, private: true, type, license, engines, exports: Object.fromEntries(exports) };
 }
 
-export function deriveRuntimeGraph(root, { checkStartup } = {}) {
+export function deriveRuntimeGraph(root, { checkStartup, includeCapture } = {}) {
   root = realpathSync(root);
   const { exports } = coreRuntimeManifest(root);
   const coreEntries = Object.values(exports).map(({ default: entry }) => posix.join(coreRoot, entry));
@@ -415,6 +437,7 @@ export function deriveRuntimeGraph(root, { checkStartup } = {}) {
 
   const required = new Set(startup);
   const pending = [adapterSlot];
+  if (includeCapture ?? existsSync(join(root, captureInventoryPath))) pending.push(captureEntry);
   while (pending.length) {
     const path = pending.pop();
     if (required.has(path)) continue;
