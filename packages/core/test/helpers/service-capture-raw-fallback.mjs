@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { allDigests, CoreError, factIncarnationBody } from "@cairn-ink/core";
+import { runInNewContext } from "node:vm";
+import { allDigests, CoreError, factIncarnationBody, normalizeForHash } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 
 const scope = { owner: "owner", namespace: null };
@@ -27,7 +28,9 @@ function deps(storage) {
   };
 }
 
-function fixture(t, storage, { gateCode, extractCode = gateCode ? null : "model_timeout", serviceConfig = config } = {}) {
+function fixture(t, storage, {
+  gateCode, extractCode = gateCode ? null : "model_timeout", extractItems = [], embed, serviceConfig = config,
+} = {}) {
   const { capture, raw, uow } = storage;
   const archive = raw && t.mock.method(raw, "archive");
   const abandon = t.mock.method(capture, "abandon");
@@ -43,12 +46,13 @@ function fixture(t, storage, { gateCode, extractCode = gateCode ? null : "model_
     ...options, config: serviceConfig,
     clock: { ...options.clock, monotonicMs: () => monotonicMs },
     gate: { assertOpen(_owner, phase) { if (phase === "post-send" && gateCode) throw new CoreError(gateCode); } },
+    embedder: { ...options.embedder, embed: embed ?? options.embedder.embed },
     model: { ...options.model, async call(stage, request) {
       assert.equal(stage, "extract");
       requests.push(request);
       await onExtract?.();
       if (extractCode) throw new CoreError(extractCode);
-      return { items: [] };
+      return { items: extractItems };
     } },
   });
   const read = work => uow.run(scope.owner, { readOnly: true }, work);
@@ -62,9 +66,9 @@ function fixture(t, storage, { gateCode, extractCode = gateCode ? null : "model_
     async admit() {
       assert.deepEqual(await service.enqueueCapture(scope, { ...selection, messages }), { status: "accepted" });
     },
-    async forgetFirstText() {
+    async forgetText(content = messages[0].content) {
       const key = storage.capabilities.fingerprintKey ? await storage.keys.userKey(scope.owner) : null;
-      const digests = await allDigests(messages[0].content, key);
+      const digests = await allDigests(content, key);
       const fact = { ...scope, origin: "forget", kind: "text", mode: "exact", actionId: "forget-text", text: { digests } };
       // Leave the outbox intact to exercise Core's finish-time text filter.
       const result = await write(tx => storage.suppressions.writeFact(tx, fact, sha256Hex(factIncarnationBody(fact))));
@@ -146,7 +150,7 @@ export async function assertTimeout(t, storage) {
   const f = fixture(t, storage);
   await f.admit();
   const admitted = (await f.admission()).messages;
-  await f.forgetFirstText();
+  await f.forgetText();
   f.duringExtract(f.expireDeadline);
 
   const done = await f.run();
@@ -169,6 +173,12 @@ export async function assertUnavailableArchive(t, storage) {
   await assertNoFinish(f, await f.run(), "model_timeout");
   assert.equal(f.requests.length, 1);
 }
+
+const registrationShapes = {
+  "cross-realm objects": key => runInNewContext("({ [key]: true })", { key }),
+  "class instances": key => new (class { [key] = true; })(),
+  "boolean accessors": key => ({ get [key]() { return true; } }),
+};
 
 export const scenarios = {
   "archives only screened admitted messages after an expired extraction deadline and replays once": assertTimeout,
@@ -226,13 +236,71 @@ export const scenarios = {
     assert.equal(f.runTransaction.mock.callCount() - beforeAbort, 1, "Only the original abandon transaction may run");
     await assertNoFinish(f, outcome, "model_timeout");
   },
+  "rolls back when the host aborts inside archiveAllowed and no messages are archived": async (t, storage) => {
+    const f = fixture(t, storage);
+    const caller = new AbortController();
+    const archiveAllowed = t.mock.method(storage.raw, "archiveAllowed", async () => {
+      caller.abort();
+      return false;
+    });
+    await f.admit();
+
+    const outcome = await f.run(caller.signal);
+    assert.equal(archiveAllowed.mock.callCount(), 1);
+    assert.equal(f.archive.mock.callCount(), 0);
+    assert.deepEqual(outcome, { status: "failed", code: "model_timeout" });
+    assertAbandoned(f, "model_timeout");
+    await f.assertStored([]);
+  },
+  "rolls back when the host aborts inside archive after the rows are written": async (t, storage) => {
+    const { archive } = storage.raw;
+    const f = fixture(t, storage);
+    const caller = new AbortController();
+    let writeResult;
+    f.archive.mock.mockImplementation(async (...args) => {
+      writeResult = await archive(...args);
+      caller.abort();
+      return writeResult;
+    });
+    await f.admit();
+
+    const outcome = await f.run(caller.signal);
+    assert.deepEqual(writeResult, { archived: messages.length });
+    assert.deepEqual(outcome, { status: "failed", code: "model_timeout" });
+    assertAbandoned(f, "model_timeout");
+    await f.assertStored([]);
+  },
   "does not restore a conversation deleted during extraction": (t, storage) => assertDeleted(t, storage, false),
   "does not restore a conversation deleted just before the fallback transaction": (t, storage) => assertDeleted(t, storage, true),
   "filters text forgotten during extraction before calling the archive port": async (t, storage) => {
     const f = fixture(t, storage);
     await f.admit();
-    f.duringExtract(f.forgetFirstText);
+    f.duringExtract(f.forgetText);
     assertDone(await f.run(), "model_timeout");
+    assert.deepEqual((await f.admission()).messages, messages);
+    assert.deepEqual(f.archive.mock.calls.map(({ arguments: args }) => args[2]), [messages.slice(1)]);
+    await f.assertStored(messages.slice(1));
+  },
+  "leaves a withheld candidate's admitted source out of Raw after embedding fails": async (t, storage) => {
+    const withheld = "The lantern belongs beneath the staircase.";
+    const survivor = "Orchids need water at the start of the week.";
+    let embeddedTexts;
+    const f = fixture(t, storage, {
+      extractCode: null,
+      extractItems: [
+        { content: withheld, kind: "preference", confidence: 0.9, sourceIndices: [0] },
+        { content: survivor, kind: "preference", confidence: 0.9, sourceIndices: [2] },
+      ],
+      embed(texts) {
+        embeddedTexts = texts;
+        throw new CoreError("embedding_failed");
+      },
+    });
+    await f.admit();
+    f.duringExtract(() => f.forgetText(withheld));
+
+    assertDone(await f.run(), "embedding_failed");
+    assert.deepEqual(embeddedTexts, [normalizeForHash(survivor)]);
     assert.deepEqual((await f.admission()).messages, messages);
     assert.deepEqual(f.archive.mock.calls.map(({ arguments: args }) => args[2]), [messages.slice(1)]);
     await f.assertStored(messages.slice(1));
@@ -246,7 +314,15 @@ export const scenarios = {
       assert.deepEqual(await f.service.captureStatus(scope, selection.eventId, { client: selection.client }),
         { status: "failed", code: "model_timeout" });
     }])),
-  "rejects invalid fallback registrations and non-data options": (_t, storage) => {
+  ...Object.fromEntries(Object.entries(registrationShapes).flatMap(([shape, makeFields]) => [
+    [`registers Raw-only capture with ${shape}`, (_t, storage) => {
+      createMemoryService({ ...deps(storage), model: null, config: { rawCapture: makeFields("enabled") } });
+    }],
+    [`registers model fallback with ${shape}`, (_t, storage) => {
+      createMemoryService({ ...deps(storage), config: { rawCapture: makeFields("onModelFailure") } });
+    }],
+  ])),
+  "rejects invalid fallback registrations and non-boolean options": (_t, storage) => {
     const options = deps(storage);
     assert.throws(() => createMemoryService({ ...options, model: null }), { code: "invalid_input" });
     for (const model of [null, options.model]) {
@@ -255,9 +331,8 @@ export const scenarios = {
     }
     for (const rawCapture of [
       { onModelFailure: undefined }, { onModelFailure: "true" }, { enabled: undefined, onModelFailure: true },
-      Object.assign(Object.create({ enabled: false }), { onModelFailure: true }),
       Object.defineProperty({ onModelFailure: true }, "extra", { value: false }),
-      { get onModelFailure() { assert.fail("Option validation invoked a getter"); } },
+      { get onModelFailure() { return "true"; } },
     ]) {
       assert.throws(() => createMemoryService({ ...options, config: { rawCapture } }), { code: "invalid_input" });
     }

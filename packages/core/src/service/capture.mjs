@@ -560,9 +560,12 @@ export function captureMethods(deps) {
               null, sourceEvidence, currentSourceKey);
             if (!checkDeadline) checkCaptureAbort(options?.signal);
             const result = await finish(tx, []);
-            if (allowedPositions.length && await archive.archiveAllowed(tx, key) === true) {
-              await archive.archive(tx, key, allowedPositions.map(position => admittedMessages[position]));
+            const rawMessages = allowedPositions.map(position => admittedMessages[position])
+              .filter(({ id }) => !excludedSources.has(id));
+            if (rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
+              await archive.archive(tx, key, rawMessages);
             }
+            if (!checkDeadline) checkCaptureAbort(options?.signal);
             return { status: "done", result };
           }, checkDeadline);
         };

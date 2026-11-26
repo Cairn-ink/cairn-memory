@@ -82,17 +82,17 @@ function freezeConfig(input) {
   if (rawCapture !== undefined) {
     const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
     const keys = Reflect.ownKeys(fields);
-    if (![Object.prototype, null].includes(Object.getPrototypeOf(fields)) || !keys.length || keys.some(key => {
-      const descriptor = Object.getOwnPropertyDescriptor(fields, key);
-      return (key !== "enabled" && key !== "onModelFailure") ||
-        !descriptor || !Object.hasOwn(descriptor, "value") || typeof descriptor.value !== "boolean";
-    })) {
-      throw new CoreError("invalid_input");
+    if (!keys.length) throw new CoreError("invalid_input");
+    let enabled = false;
+    let onModelFailure = false;
+    for (const key of keys) {
+      if (key !== "enabled" && key !== "onModelFailure") throw new CoreError("invalid_input");
+      const value = fields[key];
+      if (typeof value !== "boolean") throw new CoreError("invalid_input");
+      if (key === "enabled") enabled = value;
+      else onModelFailure = value;
     }
-    raw = Object.freeze({
-      enabled: Object.hasOwn(fields, "enabled") && fields.enabled === true,
-      onModelFailure: Object.hasOwn(fields, "onModelFailure") && fields.onModelFailure === true,
-    });
+    raw = Object.freeze({ enabled, onModelFailure });
   }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
