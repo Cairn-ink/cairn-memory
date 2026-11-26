@@ -42,7 +42,7 @@ test("Postgres batches preserve timeouts, ANN plans, ordered IDs and enable_sort
         await client.query(initialSort === "on" ? "SET enable_sort = on" : "SET enable_sort = off");
         const connection = {
           async query(text, values) {
-            if (text.includes("ORDER BY embedding <=> $8::vector FETCH FIRST")) {
+            if (text.includes("ORDER BY embedding <=> $8::vector LIMIT $9")) {
               const { rows } = await client.query("EXPLAIN (FORMAT JSON) " + text, values);
               plans.push(planShape(rows[0]["QUERY PLAN"][0].Plan));
             }

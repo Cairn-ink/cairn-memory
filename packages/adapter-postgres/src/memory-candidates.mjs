@@ -11,6 +11,7 @@ import { queryBatchInRun, runOperation } from "./uow.mjs";
 /** @import { LexicalCandidates, VectorCandidates } from "../../core/src/ports/index.d.ts" */
 
 const BATCH_SIZE = 128;
+const ANN_POOL_SIZE = 400;
 const MAX_VECTOR_PAGES = 8;
 const MAX_VECTOR_OVERFETCH = 512;
 const VECTOR_DIMENSION = 1536;
@@ -120,21 +121,29 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           });
           const columns = visibility.candidateColumns(namespaces, { skipEmbedding: true });
           const pageSize = Math.min(depth * 4, MAX_VECTOR_OVERFETCH);
+          const preferIndex = embedded > pageSize * MAX_VECTOR_PAGES;
           const zeroQuery = values.every(value => value === 0);
+          /** @type {Set<string>} */
           const seen = new Set();
           /** @type {Awaited<ReturnType<VectorCandidates["vector"]>>["rows"]} */
           const result = [];
 
-          /** @param {"ann" | "orthogonal" | "zero"} mode */
+          /** @param {"ann" | "exact" | "orthogonal" | "zero"} mode */
           async function collect(mode) {
             const ann = mode === "ann";
-            const distance = ann ? "embedding <=> $8::vector" : "1::float8";
-            const filter = ann ? `AND ($10::float8 IS NULL OR ${distance} > $10)
+            const exact = mode === "exact";
+            const size = ann ? ANN_POOL_SIZE : pageSize;
+            const distance = ann || exact ? "embedding <=> $8::vector" : "1::float8";
+            const filter = ann ? `AND id <> ALL ($10::text[]) AND ${distance} <> 'NaN'::float8`
+              : exact ? `AND ($10::float8 IS NULL OR ${distance} > $10)
               AND ${distance} <> 'NaN'::float8` : mode === "zero" ? "AND vector_norm(embedding) = 0" : "";
-            // WITH TIES uses only distance so the index can supply the entire
-            // boundary group. Rank that group before taking any visible prefix.
-            const boundary = ann ? `ORDER BY ${distance} FETCH FIRST $9 ROWS WITH TIES`
+            // The bare operator drives HNSW. The exact path keeps the entire distance tie group.
+            const boundary = ann ? `ORDER BY ${distance} LIMIT $9`
+              : exact ? `ORDER BY (${distance}) + 0 FETCH FIRST $9 ROWS WITH TIES`
               : `ORDER BY ${NEWEST} LIMIT $9 OFFSET $10`;
+            // The pool's distance is computed from the stored vector. Force a fresh sort of
+            // that value because the index can emit candidates out of distance order.
+            const rankDistance = ann ? "c.distance + 0" : "c.distance";
             const vectorFacts = vectors.length ? `, vector_facts AS MATERIALIZED (
               SELECT * FROM jsonb_to_recordset($11::jsonb) AS f(namespace text, embedding vector(1536), exempt_after_us numeric)
             )` : "";
@@ -149,7 +158,10 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
             /** @type {number | null} */
             let afterDistance = null;
             for (let page = 0; page < MAX_VECTOR_PAGES; page++) {
-              const arguments_ = [...params, model, JSON.stringify(values), pageSize, ann ? afterDistance : page * pageSize];
+              // Under relaxed ordering a distance boundary can skip candidates on extension.
+              // Exclude every previously checked ID in the same snapshot, including hidden rows.
+              const cursor = ann ? [...seen] : exact ? afterDistance : page * pageSize;
+              const arguments_ = [...params, model, JSON.stringify(values), size, cursor];
               if (vectors.length) arguments_.push(JSON.stringify(vectors));
               if (ann && previousSortOn && !sortDisabled) {
                 await query(DISABLE_SORT);
@@ -163,7 +175,7 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
                 SELECT page.*, c.distance FROM candidates c CROSS JOIN LATERAL (
                   SELECT ${columns}, ${suppression} AS vector_hidden FROM memories m WHERE m.id = c.id AND m.user_id = $1
                   OFFSET 0
-                ) page ORDER BY c.distance, c.updated_at DESC, c.id COLLATE "C" DESC`, arguments_);
+                ) page ORDER BY ${rankDistance}, c.updated_at DESC, c.id COLLATE "C" DESC`, arguments_);
               const pending = rows.filter(row => !seen.has(row.id) && Number.isFinite(row.distance));
               const checked = await visibility.check(pending.map(row => readCandidate(row, selection.owner)));
               for (const [i, { memory, hidden }] of checked.entries()) {
@@ -183,11 +195,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               result.sort((a, b) => a.distance - b.distance || compareSortKey(b.updatedAtUs, a.updatedAtUs) ||
                 compareUtf8(b.ref.id, a.ref.id));
               if (result.length > depth) result.length = depth;
-              afterDistance = rows.at(-1)?.distance ?? null;
-              if (rows.length < pageSize ||
-                  (result.length >= depth && (!ann || afterDistance !== null && afterDistance >= result[depth - 1].distance))) {
-                return true;
-              }
+              if (exact) afterDistance = rows.at(-1)?.distance ?? null;
+              if (rows.length < size || result.length >= depth) return true;
             }
             return false;
           }
@@ -198,7 +207,6 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           } else {
             // Prefer HNSW over sorting a broad owner. For selective scopes the planner can
             // still choose a bounded exact sort on the filtered rows.
-            const preferIndex = embedded > pageSize * MAX_VECTOR_PAGES;
             if (batched && preferIndex) {
               const [, { rows: [settings] }] = await queryBatchInRun(run, tx.readOnly, ANN_SETUP_BATCH, ["SET", "SELECT", "SET"]);
               if (settings?.enable_sort !== "on" && settings?.enable_sort !== "off") throw new CoreError("storage_error");
@@ -215,7 +223,7 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
               }
             }
             try {
-              checkedDepth = await collect("ann");
+              checkedDepth = await collect(preferIndex ? "ann" : "exact");
             } catch (error) {
               // PostgreSQL restores transaction-local settings on rollback after a SQL failure.
               // If only result processing failed, the setting can still be restored here.
@@ -237,7 +245,8 @@ export function createPostgresMemoryCandidates({ hashSessionKey, allowNonNullNam
           }
           // Counts beyond checked pages are upper bounds. A bounded index scan can
           // also end short while same-model rows remain unchecked.
-          const complete = eligible === embedded && checkedDepth && result.length >= Math.min(depth, embedded);
+          const required = preferIndex && !zeroQuery ? depth : Math.min(depth, embedded);
+          const complete = eligible === embedded && checkedDepth && result.length >= required;
           return { coverage: { eligible, embedded, complete }, rows: result };
         });
       },

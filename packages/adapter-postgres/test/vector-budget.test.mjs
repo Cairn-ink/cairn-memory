@@ -39,16 +39,20 @@ async function vector(candidates, depth) {
           if (sql.startsWith("WITH candidates")) {
             if (hasSuppression) assert.match(sql, /FROM vector_facts f/u);
             const size = values[8];
-            // Model the SQL's ordering and cut, including the old distance-only OFFSET shape.
             const sorted = candidates.slice().sort((a, b) => a.distance - b.distance);
+            const order = (a, b) => a.distance - b.distance || Number(b.updated_us) - Number(a.updated_us) ||
+              (a.id < b.id ? 1 : -1);
+            if (sql.includes("ORDER BY embedding <=> $8::vector LIMIT $9")) {
+              assert.match(sql, /ORDER BY c\.distance \+ 0, c\.updated_at DESC, c\.id COLLATE "C" DESC/u);
+              const excluded = new Set(values[9]);
+              return result(candidates.filter(row => !excluded.has(row.id)).slice(0, size).sort(order));
+            }
             if (!sql.includes("ROWS WITH TIES")) return result(sorted.slice(values[9], values[9] + size));
             assert.match(sql, /ORDER BY c\.distance, c\.updated_at DESC, c\.id COLLATE "C" DESC/u);
             const after = values[9];
             const pending = sorted.filter(row => after === null || row.distance > after);
             const cutoff = pending[size - 1]?.distance;
-            return result(pending.filter(row => cutoff === undefined || row.distance <= cutoff)
-              .sort((a, b) => a.distance - b.distance || Number(b.updated_us) - Number(a.updated_us) ||
-                (a.id < b.id ? 1 : -1)));
+            return result(pending.filter(row => cutoff === undefined || row.distance <= cutoff).sort(order));
           }
           return { command: sql === "COMMIT" || sql === "DISCARD ALL" ? sql : "SET", rows: [] };
         },
