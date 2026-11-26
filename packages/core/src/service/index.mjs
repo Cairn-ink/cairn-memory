@@ -81,10 +81,12 @@ function freezeConfig(input) {
   let raw;
   if (rawCapture !== undefined) {
     const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
-    // Read accessors once, before checking the resulting own keys.
-    const { enabled, onModelFailure } = fields;
+    // Read enabled as in the base validator, and read the fallback option only when own.
+    const { enabled } = fields;
+    const onModelFailure = Object.hasOwn(fields, "onModelFailure") ? fields.onModelFailure : undefined;
     const keys = Reflect.ownKeys(fields);
-    if (!keys.length || keys.some(key => (key !== "enabled" && key !== "onModelFailure") || !Object.hasOwn(fields, key))) {
+    if (!keys.length || keys.some(key => key !== "enabled" && key !== "onModelFailure") ||
+        keys.some(key => !Object.hasOwn(fields, key))) {
       throw new CoreError("invalid_input");
     }
     const hasEnabled = keys.includes("enabled");

@@ -3,6 +3,8 @@ import { createHash, createHmac } from "node:crypto";
 import { runInNewContext } from "node:vm";
 import { allDigests, CoreError, factIncarnationBody, normalizeForHash } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { validateObject } from "../../src/capture/validate.mjs";
+import { entryError } from "../../src/service/entry.mjs";
 
 const scope = { owner: "owner", namespace: null };
 const selection = { client: "client", sessionId: "session", eventId: "event" };
@@ -183,6 +185,83 @@ const registrationShapes = {
   },
 };
 
+function baseRawCapture(rawCapture) {
+  const fields = validateObject(rawCapture, ["enabled"]);
+  const { enabled } = fields;
+  if (Reflect.ownKeys(fields).length !== 1 || !Object.hasOwn(fields, "enabled") || typeof enabled !== "boolean") {
+    throw new CoreError("invalid_input");
+  }
+  return Object.freeze({ enabled });
+}
+
+const baseRawCaptureCases = {
+  "plain true": () => ({ enabled: true }),
+  "plain false": () => ({ enabled: false }),
+  "null prototype": () => Object.assign(Object.create(null), { enabled: true }),
+  frozen: () => Object.freeze({ enabled: true }),
+  "cross-realm object": () => registrationShapes["cross-realm objects"]("enabled"),
+  "class instance": () => registrationShapes["class instances"]("enabled"),
+  "own boolean accessor": () => registrationShapes["boolean accessors"]("enabled"),
+  "inherited enabled only": () => Object.create({ enabled: true }),
+  "inherited enabled getter throwing a CoreError": () => Object.create({
+    get enabled() { throw new CoreError("provider_error"); },
+  }),
+  "inherited enabled getter throwing an Error": () => Object.create({
+    get enabled() { throw new Error("Inherited enabled"); },
+  }),
+  "throwing inherited onModelFailure": read => new (class {
+    enabled = true;
+    get onModelFailure() { read(); throw new Error("Inherited onModelFailure"); }
+  })(),
+  "true inherited onModelFailure": read => new (class {
+    enabled = true;
+    get onModelFailure() { read(); return true; }
+  })(),
+  "proxy listing inherited enabled": () => new Proxy(Object.create({ enabled: true }), {
+    ownKeys: () => ["enabled"],
+  }),
+  "proxy listing an extra key without a descriptor": () => new Proxy({ enabled: true }, {
+    ownKeys: () => ["enabled", "extra"],
+  }),
+  "proxy hiding the enabled descriptor": () => new Proxy({ enabled: true }, {
+    getOwnPropertyDescriptor: () => undefined,
+  }),
+  "proxy reporting an own enabled descriptor": () => new Proxy(Object.create({ enabled: true }), {
+    ownKeys: () => ["enabled"],
+    getOwnPropertyDescriptor: (_target, key) => key === "enabled"
+      ? { value: true, enumerable: true, configurable: true }
+      : undefined,
+  }),
+  "enabled getter adding an extra key": () => ({
+    get enabled() { this.extra = true; return true; },
+  }),
+  "symbol key": () => ({ enabled: true, [Symbol()]: true }),
+  "extra string key": () => ({ enabled: true, extra: false }),
+  "non-enumerable extra string key": () => Object.defineProperty({ enabled: true }, "extra", { value: false }),
+  "string enabled": () => ({ enabled: "true" }),
+  "undefined enabled": () => ({ enabled: undefined }),
+  "empty object": () => ({}),
+  null: () => null,
+  array: () => [],
+};
+
+async function rawOnlyRegistration(storage, rawCapture, eventId) {
+  let service;
+  try {
+    service = createMemoryService({ ...deps(storage), model: null, config: { rawCapture } });
+  } catch (error) {
+    assert.ok(error instanceof CoreError);
+    return { code: error.code };
+  }
+  try {
+    assert.deepEqual(await service.enqueueCapture(scope, { ...selection, eventId, messages }), { status: "accepted" });
+    return { enabled: true };
+  } catch (error) {
+    assert.equal(error.code, "capability_unavailable");
+    return { enabled: false };
+  }
+}
+
 export const scenarios = {
   "archives only screened admitted messages after an expired extraction deadline and replays once": assertTimeout,
   ...Object.fromEntries([
@@ -317,6 +396,33 @@ export const scenarios = {
       assert.deepEqual(await f.service.captureStatus(scope, selection.eventId, { client: selection.client }),
         { status: "failed", code: "model_timeout" });
     }])),
+  "matches base rawCapture registration without an own fallback option": async (t, storage) => {
+    let event = 0;
+    for (const [name, makeInput] of Object.entries(baseRawCaptureCases)) {
+      await t.test(name, async t => {
+        const readInheritedFallback = t.mock.fn();
+        let expected;
+        try {
+          expected = baseRawCapture(makeInput(readInheritedFallback));
+        } catch (error) {
+          expected = { code: entryError(error).code };
+        }
+        const actual = await rawOnlyRegistration(storage, makeInput(readInheritedFallback), `raw-capture-${++event}`);
+        assert.deepEqual(actual, expected);
+        assert.equal(readInheritedFallback.mock.callCount(), 0);
+      });
+    }
+  },
+  "rejects a fallback option that becomes own during the ownership check": (_t, storage) => {
+    const rawCapture = new Proxy({ enabled: false }, {
+      getOwnPropertyDescriptor(target, key) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+        if (key === "onModelFailure" && descriptor === undefined) target.onModelFailure = false;
+        return descriptor;
+      },
+    });
+    assert.throws(() => createMemoryService({ ...deps(storage), config: { rawCapture } }), { code: "invalid_input" });
+  },
   ...Object.fromEntries(Object.entries(registrationShapes).flatMap(([shape, makeFields]) => [
     [`registers Raw-only capture with ${shape}`, (_t, storage) => {
       createMemoryService({ ...deps(storage), model: null, config: { rawCapture: makeFields("enabled") } });
