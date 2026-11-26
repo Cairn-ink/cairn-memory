@@ -1,4 +1,4 @@
-import { CoreError, isErrorCode, receiptExcerpt, validateSuppressionFact } from "@cairn-ink/core";
+import { CoreError, isErrorCode, placeholderReceipt, receiptExcerpt, validateSuppressionFact } from "@cairn-ink/core";
 import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
@@ -324,10 +324,16 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 
+/** @param {StoredReceipt} receipt */
+export function isPlaceholderReceipt(receipt) {
+  return receipt.includeUnknownTime !== true && placeholderReceipt(receipt);
+}
+
 /** @param {readonly StoredReceipt[]} receipts @param {boolean} [fromFinish] */
 export function copyReceipts(receipts, fromFinish = false) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
+    const placeholder = !fromFinish && placeholderReceipt(receipt);
     const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
         (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
@@ -337,10 +343,17 @@ export function copyReceipts(receipts, fromFinish = false) {
       if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt)) invalid();
       if (excerpt !== receiptExcerpt(excerpt)) invalid();
     }
-    return { client, sessionId, messageId, role, occurredAtMs,
+    /** @type {StoredReceipt} */
+    const copy = { client, sessionId, messageId, role, occurredAtMs,
       ...(id !== undefined && { id }),
       ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }),
       ...(fromFinish && receipt.captureEventId !== undefined && { captureEventId: receipt.captureEventId }) };
+    // Capture receipts always honor unknown-time windows. Copying must preserve that check
+    // when accessors or a custom prototype would otherwise become a placeholder.
+    if (fromFinish || (!placeholder && placeholderReceipt(copy))) {
+      copy.includeUnknownTime = true;
+    }
+    return copy;
   });
 }
 
