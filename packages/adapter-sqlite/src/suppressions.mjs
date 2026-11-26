@@ -226,6 +226,7 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
   const hasSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
   const legacy = forgetFactIds ? new Set() : readLegacyDenials(db, scope);
   const hasLegacyReceipts = [...legacy].some(key => key.startsWith("rs1:"));
+  const needsReceipts = sessions.length > 0 || hasSpans || hasLegacyReceipts;
 
   /** @param {readonly TextDigest[]} digests @param {string} [historyHash] */
   const legacyText = (digests, historyHash) => digests.some(digest =>
@@ -253,7 +254,7 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
   function classify(entry, definiteOnly = false) {
     const { row, legacyHash, historyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
-    const receipts = sessions.length || hasSpans || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
+    const receipts = needsReceipts ? readReceipts(db, scope, row.id) : [];
     /** @type {FactMatchRow} */
     const candidate = { type: "memory", scope, memoryId: row.id, revision: row.revision, digests: aliases };
     /** @param {StoredFact} stored @param {FactMatchRow} evidence */

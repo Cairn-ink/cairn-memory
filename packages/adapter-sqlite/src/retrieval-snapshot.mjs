@@ -56,3 +56,16 @@ export function validateSnapshotToken(token) {
     throw new CoreError("invalid_cursor");
   }
 }
+
+/**
+ * Installed triggers advance these epochs for Memory, receipts, suppression,
+ * and Raw fences. Read the stamp on the connection that owns the snapshot.
+ * @param {{prepare(sql: string): {get(): {high?: unknown, low?: unknown} | undefined}}} db
+ */
+export function vectorCacheEpoch(db) {
+  // Sum in two parts to stay within SQLite's signed integer aggregate range
+  // when combining namespaces that already have large migrated epochs.
+  const row = db.prepare(`SELECT CAST(COALESCE(SUM(epoch >> 32), 0) AS TEXT) AS high,
+    CAST(COALESCE(SUM(epoch & 4294967295), 0) AS TEXT) AS low FROM cairn_inspect_epochs`).get();
+  return (BigInt(String(row?.high)) << 32n) + BigInt(String(row?.low));
+}

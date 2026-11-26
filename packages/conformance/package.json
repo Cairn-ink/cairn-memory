@@ -26,6 +26,7 @@
       "types": "./src/document-card-visibility-input-cases.d.mts",
       "default": "./src/document-card-visibility-input-cases.mjs"
     },
+    "./raw-import-controls": "./src/raw-import-controls-case.mjs",
     "./node-test": { "types": "./src/node-test.d.mts", "default": "./src/node-test.mjs" }
   },
   "files": ["src"],

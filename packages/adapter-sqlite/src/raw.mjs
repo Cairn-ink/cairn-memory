@@ -128,6 +128,15 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const selection = { owner: tx.owner, namespace: scope.namespace };
         const counts = { archived: 0, existing: 0, withheld: 0 };
         if (!batch.length) return counts;
+        try {
+          if (controls?.rawDisposition({ scope: selection, client: session.client })) {
+            return { ...counts, withheld: batch.length };
+          }
+        } catch (error) {
+          // Explicit imports count policy refusals per message.
+          if (!(error instanceof CoreError) || error.code !== "capture_disabled") throw error;
+          return { ...counts, withheld: batch.length };
+        }
         const facts = readFacts(db, selection);
         const policy = rawFactPolicy(selection, session, facts, hashSession);
         if (!allowsRawSession(db, selection, session.client, policy.sessionKeyHash, facts)) {
