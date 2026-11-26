@@ -2,9 +2,9 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:
 import { rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
 import { receiptProjector } from "./inspect.mjs";
-import { decodeJson, readEntry } from "./memory-rows.mjs";
+import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS } from "./memory-rows.mjs";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
-import { hasRawFence } from "./raw-lineage.mjs";
+import { rawFenceReader } from "./raw-lineage.mjs";
 import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
 import { receiptIdentityKey } from "./receipt-identity.mjs";
 import { archivedReceiptExcerpt, scopeKey, sha256 } from "./storage-values.mjs";
@@ -23,6 +23,7 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} RawLineage */
 /** @typedef {[string, string, string, string]} InventoryPosition */
+/** @typedef {{ scope: Scope, row: RawRow, tokens: ReturnType<typeof termFrequencies>, ref: ReturnType<typeof rawSegment>["ref"] }} Document */
 
 const CHECKPOINT_ROWS = 1024;
 const MAX_INVENTORY = 4096;
@@ -123,21 +124,33 @@ function publishedInventory(db, readSet, fence) {
     WHERE projection = ? AND fence = ? AND published = 1`).get(inventoryKey(readSet), fence)?.examined;
 }
 
+/** @param {Connection} db @param {() => boolean} [stopped] */
+function captureTurnReader(db, stopped) {
+  // All source-key columns are fixed. The source index visits the same
+  // event keys as the claims primary key without scanning other sessions.
+  const find = db.prepare(`SELECT messages, result
+    FROM cairn_capture_claims ${stopped ? "INDEXED BY cairn_capture_source" : ""}
+    JOIN cairn_capture_outbox USING (owner_id, client_key, event_key)
+    WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND session_key = ? AND status = 'done'
+    ${stopped ? "ORDER BY event_key" : ""}
+    LIMIT ?`);
+  return (/** @type {Scope} */ scope, /** @type {string} */ memoryId, /** @type {Receipt} */ receipt, /** @type {RawRow} */ row) => {
+    if (row.message.role !== receipt.role || !row.message.content) return false;
+    for (const capture of find.iterate(...scopeKey(scope), JSON.stringify(receipt.client), JSON.stringify(receipt.sessionId), MAX_LINKS)) {
+      if (stopped?.()) return false;
+      if (typeof capture.messages !== "string" || typeof capture.result !== "string") continue;
+      const result = /** @type {FinishResult} */ (decodeJson(capture.result));
+      if (!result.memories.some(memory => memory.id === memoryId)) continue;
+      const admitted = /** @type {CaptureMessage[]} */ (decodeJson(capture.messages)).find(message => message.id === receipt.messageId);
+      if (admitted?.content === row.message.content && admitted.role === row.message.role) return true;
+    }
+    return false;
+  };
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {Receipt} receipt @param {RawRow} row */
 export function exactReceiptTurn(db, scope, memoryId, receipt, row) {
-  if (row.message.role !== receipt.role || !row.message.content) return false;
-  const captures = db.prepare(`SELECT messages, result
-    FROM cairn_capture_claims JOIN cairn_capture_outbox USING (owner_id, client_key, event_key)
-    WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND session_key = ? AND status = 'done'
-    LIMIT ?`).iterate(...scopeKey(scope), JSON.stringify(receipt.client), JSON.stringify(receipt.sessionId), MAX_LINKS);
-  for (const capture of captures) {
-    if (typeof capture.messages !== "string" || typeof capture.result !== "string") continue;
-    const result = /** @type {FinishResult} */ (decodeJson(capture.result));
-    if (!result.memories.some(memory => memory.id === memoryId)) continue;
-    const admitted = /** @type {CaptureMessage[]} */ (decodeJson(capture.messages)).find(message => message.id === receipt.messageId);
-    if (admitted?.content === row.message.content && admitted.role === row.message.role) return true;
-  }
-  return false;
+  return captureTurnReader(db)(scope, memoryId, receipt, row);
 }
 
 /** @param {Scope} scope @param {EvidenceReceipt} receipt @param {RawRow} archived @returns {EvidenceReceipt} */
@@ -148,8 +161,11 @@ export function withRawEvidence(scope, receipt, { client, sessionId, message }) 
 
 /** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {Policy} policy
  * @param {ReceiptReadSafety} receiptReadSafety @param {Record<string, SQLOutputValue>} row
+ * @param {ReturnType<typeof captureTurnReader>} [exactTurn]
+ * @param {RawRow} [searched]
  */
-export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, legacy_receipt_key, id, time }) {
+export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, legacy_receipt_key, id, time },
+  exactTurn = (scope, id, receipt, row) => exactReceiptTurn(db, scope, id, receipt, row), searched) {
   if (typeof id !== "string" || !id) return;
   const stored = /** @type {StoredReceipt} */ (decodeJson(body));
   if (stored.receiptKey !== undefined || stored.excerpt !== undefined) return;
@@ -158,18 +174,49 @@ export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, {
   const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
   /** @type {RawRow | undefined} */
   let archived;
-  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, row => { archived = row; }) ||
-      !archived || !exactReceiptTurn(db, scope, memoryId, address, archived)) return;
+  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, row => { archived = row; }, searched) ||
+      !archived || !exactTurn(scope, memoryId, address, archived)) return;
   const excerpt = archivedReceiptExcerpt(archived.message.content);
   if (!excerpt) return;
   const receipt = { ...address, excerpt };
   /** @type {RawRow | undefined} */
   let checkedArchive;
   if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId,
-    row => { checkedArchive = row; }) || !checkedArchive || checkedArchive.client !== archived.client ||
+    row => { checkedArchive = row; }, searched) || !checkedArchive || checkedArchive.client !== archived.client ||
     checkedArchive.sessionId !== archived.sessionId || checkedArchive.message.id !== archived.message.id) return;
+  if (searched && (searched.message.role !== archived.message.role || searched.message.content !== archived.message.content) &&
+      !exactTurn(scope, memoryId, receipt, searched)) return;
   return withRawEvidence(scope, { ...receipt, id, eventId: messageId,
     createdAtMs: Number(BigInt(String(time)) / 1000n) }, archived);
+}
+
+/**
+ * A skipped nonmatch adds no df, but its presence can change N and average
+ * length. Certify the delivered prefix against lower and upper scores before
+ * relying on the cheaper inventory. Equal query frequencies and lengths tie
+ * for every corpus, so their canonical order is already fixed.
+ * @param {Array<Document & {score: number}>} ranked @param {Set<string>} terms
+ * @param {{N: number, totalLength: number, df: Map<string, number>}} stats
+ * @param {number} pending @param {number} pendingLength @param {number} limit @param {() => boolean} stopped
+ */
+function stablePrefix(ranked, terms, stats, pending, pendingLength, limit, stopped) {
+  if (ranked.length < 2 || limit === 0) return true;
+  const known = stats.N - pending, knownLength = stats.totalLength - pendingLength;
+  const low = { ...stats, N: known, totalLength: Math.floor(knownLength / stats.N * known) };
+  const high = { ...stats, totalLength: Math.ceil(stats.totalLength / known * stats.N) };
+  const bounds = ranked.map(({ tokens }) => ({
+    low: /** @type {number} */ (scoreBM25(terms, tokens, low)),
+    high: /** @type {number} */ (scoreBM25(terms, tokens, high)),
+    shape: JSON.stringify([tokens.length, ...Array.from(terms, term => tokens.frequencies.get(term) ?? 0)]),
+  }));
+  for (let i = 0; i < Math.min(limit, bounds.length); i++) {
+    if (stopped()) return false;
+    for (let j = i + 1; j < bounds.length; j++) {
+      // Require a strict gap with room for floating-point rounding.
+      if (bounds[i].shape !== bounds[j].shape && bounds[i].low <= bounds[j].high * (1 + 1e-10)) return false;
+    }
+  }
+  return true;
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey @param {RawLineage} lineage
@@ -191,49 +238,87 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
 
   /** @param {Connection} db @param {() => boolean} stopped */
   function visibility(db, stopped) {
-    /** @type {Map<Scope["namespace"], ReturnType<typeof scopedSuppression>>} */
-    const policies = new Map();
+    /** @type {Map<Scope["namespace"], {policy: Policy, project: ReturnType<typeof receiptProjector>, current: Map<string, boolean>}>} */
+    const scopes = new Map();
+    let cachedMemories = 0;
+    // The source index avoids scanning this scope's receipt inventory for each Raw row.
     const possibleReceipts = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
         r.body, r.legacy_receipt_key, r.memory_id
-      FROM cairn_receipts r LEFT JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
+      FROM cairn_receipts r INDEXED BY cairn_context_receipts_by_source
+      LEFT JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
       WHERE r.owner_id = ? AND r.namespace_key = ? AND r.source_key = ? LIMIT ?`);
+    const findMemory = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM cairn_memories WHERE ${LIVE_SCOPE} AND id = ?`);
+    /** @type {Map<string, string>} */
+    const sessionHashes = new Map();
+    /** @type {SessionHasher} */
+    const hash = (scope, client, sessionId) => {
+      const key = JSON.stringify([scope.namespace, client, sessionId]);
+      let value = sessionHashes.get(key);
+      if (value === undefined) {
+        value = hashSession(scope, client, sessionId);
+        if (sessionHashes.size < MAX_INVENTORY) sessionHashes.set(key, value);
+      }
+      return value;
+    };
+    const fenced = rawFenceReader(db), rootsVisible = lineage.receiptRootReader(db, hash), exactTurn = captureTurnReader(db, stopped);
 
     /** @param {Scope} scope */
-    function policyFor(scope) {
-      let policy = policies.get(scope.namespace);
-      if (!policy) {
-        policy = scopedSuppression(db, scope, hashSession);
-        policies.set(scope.namespace, policy);
+    function forScope(scope) {
+      let scoped = scopes.get(scope.namespace);
+      if (!scoped) {
+        const policy = scopedSuppression(db, scope, hash);
+        scoped = { policy, project: receiptProjector(db, scope, policy, receiptReadSafety), current: new Map() };
+        scopes.set(scope.namespace, scoped);
       }
-      return policy;
+      return scoped;
     }
 
     /** @param {Scope} scope @param {RawRow} row */
     function directlyVisible(scope, row) {
-      const { message } = row, policy = policyFor(scope);
-      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
+      const { message } = row, { policy } = forScope(scope);
+      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hash);
       return !stopped() && (!controls || controls.rawReadable(scope)) && Boolean(message.content) &&
-        !hasRawFence(db, scope, rawPolicy.sessionKeyHash) &&
-        !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }) &&
+        !fenced(scope, rawPolicy.sessionKeyHash) &&
+        ((!policy.facts.length && !policy.legacy.size) ||
+          !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs })) &&
         !rawPolicy.hides(message) && !importTextBlocked([], message.content, policy.legacy) &&
         !migratedRaw?.blocks(db, scope, row, [message]);
     }
 
-    /** @param {Scope} scope @param {RawRow} row */
-    return (scope, row) => {
-      if (!directlyVisible(scope, row) || !lineage.receiptRootsVisible(db, scope, row, directlyVisible)) return false;
-      const policy = policyFor(scope), project = receiptProjector(db, scope, policy, receiptReadSafety);
+    /** @param {Scope} scope @param {RawRow} row @param {boolean} fullProof */
+    function checkLinks(scope, row, fullProof) {
+      const { policy, project, current } = forScope(scope);
       const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
       let linkCount = 0;
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
-        const id = String(record.memory_id), entry = readEntry(db, scope, id);
-        if (!entry || entry.row.historical || policy.hides(entry)) return false;
-        const receipt = record.excerpt === null
-          ? addressReceipt(db, scope, id, policy, receiptReadSafety, record) : project(record)?.receipt;
-        if (!receipt || !exactReceiptTurn(db, scope, id, receipt, row)) return false;
+        const id = String(record.memory_id);
+        let visible = current.get(id);
+        if (visible === undefined) {
+          const entry = findMemory.get(...scopeKey(scope), id);
+          visible = !!entry && entry.historical !== 1 && !policy.hides(decodeEntry(scope, entry));
+          if (cachedMemories < MAX_INVENTORY) {
+            current.set(id, visible);
+            cachedMemories++;
+          }
+        }
+        if (!visible) return false;
+        if (record.excerpt === null) {
+          if (fullProof && !addressReceipt(db, scope, id, policy, receiptReadSafety, record, exactTurn, row)) return false;
+        } else {
+          const receipt = project(record)?.receipt;
+          if (!receipt || (fullProof && !exactTurn(scope, id, receipt, row))) return false;
+        }
       }
-      return true;
+      return fullProof || linkCount === 0 ? true : "unproved";
+    }
+
+    return { checkLinks,
+      /** @param {Scope} scope @param {RawRow} row @param {boolean} [fullProof] */
+      check(scope, row, fullProof = true) {
+        if (!directlyVisible(scope, row) || !rootsVisible(scope, row, directlyVisible)) return false;
+        return checkLinks(scope, row, fullProof);
+      },
     };
   }
 
@@ -243,37 +328,81 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
         const stopped = contextDeadline(options, monotonicMs), fence = inventoryFence(contextEpochs(db, readSet));
         const published = publishedInventory(db, readSet, fence);
         const visible = visibility(db, stopped);
-        const documents = [], df = new Map(), terms = tokenizeT1(query);
-        let examined = 0, textUnits = 0, complete = true, totalLength = 0;
+        /** @type {Document[]} */
+        const documents = [];
+        /** @type {Array<{scope: Scope, row: RawRow, length: number}>} */
+        const pending = [];
+        /** @type {Map<string, number>} */
+        const df = new Map();
+        const terms = new Set(tokenizeT1(query)), stats = { N: 0, totalLength: 0, df };
+        let examined = 0, textUnits = 0, complete = true, pendingLength = 0;
+
+        function resolvePending() {
+          for (const { scope, row, length } of pending) {
+            if (stopped()) return;
+            if (visible.checkLinks(scope, row, true)) continue;
+            stats.N--;
+            stats.totalLength -= length;
+            textUnits -= row.message.content.length;
+          }
+          pending.length = 0;
+          pendingLength = 0;
+        }
+
         inventory: for (const namespace of readSet.namespaces) {
           const scope = { owner: readSet.owner, namespace };
           for (const record of rawRows(db, scope)) {
-            if (stopped()) {
-              complete = false;
-              break inventory;
-            }
+            if (stopped()) return { turns: [], coverage: "partial" };
             examined++;
             const row = decodeRawRow(record);
-            if (!visible(scope, row)) continue;
-            textUnits += row.message.content.length;
-            if (documents.length >= MAX_INVENTORY || textUnits > MAX_TEXT_UNITS) {
+            const tokens = termFrequencies(row.message.content);
+            const matched = [...terms].filter(term => tokens.frequencies.has(term));
+            let qualification = visible.check(scope, row, matched.length > 0);
+            if (!qualification) continue;
+            const size = row.message.content.length;
+            if (stats.N === MAX_INVENTORY || textUnits + size > MAX_TEXT_UNITS) {
+              resolvePending();
+              if (stopped()) return { turns: [], coverage: "partial" };
+              if (qualification === "unproved") {
+                qualification = visible.checkLinks(scope, row, true);
+                if (!qualification) continue;
+              }
+            }
+            if (stats.N === MAX_INVENTORY || textUnits + size > MAX_TEXT_UNITS) {
               complete = false;
               break inventory;
             }
-            const tokens = termFrequencies(row.message.content);
-            totalLength += tokens.length;
-            for (const term of tokens.frequencies.keys()) df.set(term, (df.get(term) ?? 0) + 1);
-            documents.push({ ref: rawSegment(scope, row, 0).ref, tokens, scope, row });
+            stats.N++;
+            stats.totalLength += tokens.length;
+            textUnits += size;
+            if (qualification === "unproved") {
+              pending.push({ scope, row, length: tokens.length });
+              pendingLength += tokens.length;
+            }
+            if (matched.length) {
+              for (const term of matched) df.set(term, (df.get(term) ?? 0) + 1);
+              documents.push({ ref: rawSegment(scope, row, 0).ref, tokens, scope, row });
+            }
           }
         }
-        const ranked = [], stats = { N: documents.length, totalLength, df };
-        for (const { tokens, ...document } of documents) {
-          if (stopped()) return { turns: [], coverage: "partial" };
-          const score = scoreBM25(terms, tokens, stats);
-          if (score !== null) ranked.push({ ...document, score });
+
+        function rank() {
+          const ranked = [];
+          for (const document of documents) {
+            if (stopped()) return [];
+            ranked.push({ ...document, score: /** @type {number} */ (scoreBM25(terms, document.tokens, stats)) });
+          }
+          return rankScores(ranked);
         }
         if (stopped()) return { turns: [], coverage: "partial" };
-        const rows = rankScores(ranked).slice(0, limit);
+        let ranked = rank();
+        if (pending.length && !stablePrefix(ranked, terms, stats, pending.length, pendingLength, ranked.slice(0, limit).length, stopped)) {
+          resolvePending();
+          if (stopped()) return { turns: [], coverage: "partial" };
+          ranked = rank();
+        }
+        if (stopped()) return { turns: [], coverage: "partial" };
+        const rows = ranked.slice(0, limit);
         return { turns: rows.map(({ scope, row }) => witnessedTurn(scope, row, fence)),
           coverage: complete && examined === published && rows.length === ranked.length ? "included" : "partial" };
       });
@@ -294,7 +423,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
           if (!Array.isArray(session) || session.length !== 2 || !session.every(value => typeof value === "string" && value)) return false;
           const [client, sessionId] = session;
           const row = readRawRow(db, scope, { client, sessionId }, turn.messageId);
-          if (!row || !visible(scope, row) || JSON.stringify(witnessedTurn(scope, row, fence)) !== JSON.stringify(turn)) return false;
+          if (!row || !visible.check(scope, row) || JSON.stringify(witnessedTurn(scope, row, fence)) !== JSON.stringify(turn)) return false;
         }
         return true;
       });
