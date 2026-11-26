@@ -20,21 +20,24 @@ const deadline = new Error("raw assembly deadline");
 
 /** @param {ContextRawReadStore | undefined} store @param {UnitOfWork} uow @param {ContextReadSet} readSet
  * @param {string} query @param {boolean} lexicalOnly @param {CallOptions} options @param {() => number} now
- * @param {number} end @returns {Promise<Channel>} */
-export async function readRawChannel(store, uow, readSet, query, lexicalOnly, options, now, end) {
+ * @param {number} end @param {number} [readStarted] @returns {Promise<Channel>} */
+export async function readRawChannel(store, uow, readSet, query, lexicalOnly, options, now, end, readStarted) {
   if (!store) return { turns: [], coverage: "unavailable" };
   // Legacy context-read-three-layer.mjs:21–102. Scope, cap and timeout apply
   // to the qualified search and preparation together.
-  const started = now();
+  const started = readStarted ?? now();
   const cutoff = Math.min(end - 50, started + (end - started) * 0.4);
   /** @type {Channel} */
   const partial = { turns: [], coverage: "partial" };
   if (cutoff <= started || options.signal?.aborted) return partial;
-  const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(cutoff - now())));
+  const remaining = cutoff - now();
+  if (readStarted !== undefined && remaining <= 0) return partial;
+  const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(remaining)));
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   let onAbort = () => {};
   try {
     const search = uow.run(readSet.owner, { readOnly: true }, async tx => {
+      if (signal.aborted) return partial;
       const result = await store.search(tx, readSet, query, { limit: CONTEXT_HORIZON, lexicalOnly, deadlineAtMs: cutoff, signal });
       if (now() >= cutoff || signal.aborted) return partial;
       if (result.coverage !== "included" && result.coverage !== "partial") {
