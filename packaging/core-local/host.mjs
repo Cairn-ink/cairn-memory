@@ -4,27 +4,31 @@ import { initialize, tools } from './profile.mjs';
 import { toolInputError } from './tool-input.mjs';
 import { callTool, missingAuthority, textResult } from './wire-tools.mjs';
 
-export async function openLocalService(storageOptions) {
+export async function openLocalService(storageOptions, shared) {
   if (typeof storageOptions?.database !== 'string' || !storageOptions.database || storageOptions.database.includes('\0')) {
     throw new Error('invalid_core_local_storage_options');
   }
-  const { openStorage } = await import('./adapter-slot.mjs');
-  return openStorage(storageOptions.database);
+  const open = async () => {
+    const { openStorage } = await import('./adapter-slot.mjs');
+    return openStorage(storageOptions.database);
+  };
+  return shared ? (shared.runtime ??= open()) : open();
 }
 
 const rpcError = (code, message) => ({ code, message });
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const supportedProtocols = new Set(['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']);
 
-export async function serveStdio(input, output, options) {
+export async function serveStdio(input, output, options, { shared, closed = () => false } = {}) {
   const lines = createInterface({ input, crlfDelay: Infinity, terminal: false });
   const handles = createContinuations();
   const scope = options && { owner: options.owner,
     namespace: options.project === undefined ? 'personal\0' : 'project\0' + options.project };
   let runtime;
-  const send = reply => output.write(JSON.stringify(reply) + '\n');
+  const send = reply => { if (!closed()) output.write(JSON.stringify(reply) + '\n'); };
   try {
     for await (const line of lines) {
+      if (closed()) break;
       let request;
       try { request = JSON.parse(line); }
       catch {
@@ -61,8 +65,13 @@ export async function serveStdio(input, output, options) {
           const error = toolInputError(tool, args);
           if (scope && !error) {
             try {
-              runtime ??= await openLocalService(options);
-              reply.result = await callTool(runtime.service, scope, handles, tool.name, args);
+              await shared?.authorize();
+              if (closed()) break;
+              runtime ??= await openLocalService(options, shared);
+              if (closed()) break;
+              const result = await callTool(runtime.service, scope, handles, tool.name, args);
+              await shared?.authorize();
+              reply.result = result;
             } catch {
               reply.error = rpcError(-32603, 'Internal error');
             }
@@ -78,6 +87,6 @@ export async function serveStdio(input, output, options) {
     }
   } finally {
     handles.close();
-    await runtime?.close();
+    if (!shared) await runtime?.close();
   }
 }
