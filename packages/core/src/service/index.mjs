@@ -44,7 +44,7 @@ function freezeConfig(input) {
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
     rowShingles: true,
   };
-  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger"]);
+  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger", "rawCapture"]);
   const {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
@@ -54,6 +54,7 @@ function freezeConfig(input) {
     deadlines,
     documentCards,
     quantityLedger,
+    rawCapture,
   } = input;
   for (const weight of [nearDuplicateDistance, lexicalWeight, vectorWeight]) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
@@ -77,10 +78,19 @@ function freezeConfig(input) {
     }
     cards = Object.freeze({ enabled, amendments });
   }
+  let raw;
+  if (rawCapture !== undefined) {
+    const fields = validateObject(rawCapture, ["enabled"]);
+    const { enabled } = fields;
+    if (Reflect.ownKeys(fields).length !== 1 || !Object.hasOwn(fields, "enabled") || typeof enabled !== "boolean") {
+      throw new CoreError("invalid_input");
+    }
+    raw = Object.freeze({ enabled });
+  }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
-    documentCards: cards, quantityLedger: freezeQuantityLedger(quantityLedger),
+    documentCards: cards, quantityLedger: freezeQuantityLedger(quantityLedger), rawCapture: raw,
   });
 }
 
@@ -188,6 +198,7 @@ export function createMemoryService(input) {
       return { inspect: inspectMethod(storage, clock) };
     }
     const deps = freezeDeps(input);
+    if (deps.model !== null && deps.config.rawCapture?.enabled === true) throw new CoreError("invalid_input");
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
