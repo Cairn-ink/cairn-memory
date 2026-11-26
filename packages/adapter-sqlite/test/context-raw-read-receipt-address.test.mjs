@@ -228,3 +228,49 @@ test("A keyless store with no memory receipts still surfaces Raw turns", async t
   assert.deepEqual(assembly.items.filter(candidate => candidate.ref.type === "raw")
     .map(({ ref, date }) => [ref.messageId, date]), [[message.id, sourceDate]]);
 });
+
+const outOfRangeTime = 8640000000000001;
+
+for (const [name, makeAdapter] of [
+  ["SQLite", open],
+  ["memory", () => createMemoryAdapter({ capabilities: { inspect: true, contextRead: true, contextRawRead: true, rawArchive: true } })],
+]) {
+  test(`An out-of-range cited Raw time leaves the Context Read intact on ${name}`, async t => {
+    const adapter = await makeAdapter(t);
+    const turn = { ...message, occurredAtMs: outOfRangeTime };
+    const { api, memory } = await capture(adapter, { turn });
+    const validBody = "A surveyor calibrates the compass every spring.";
+    const saved = await api.save(scope, validBody, source);
+    assert.equal(saved.status, "saved");
+
+    const { assembly } = await api.readContext(readSet(), query);
+    assert.ok(assembly.items.some(item => item.ref.id === saved.item.id && item.body === validBody));
+    const item = assembly.items.find(candidate => candidate.ref.id === memory.id);
+    assert.ok(item);
+    assert.equal(item.date, undefined);
+    assert.deepEqual(item.sources.map(({ date, dates }) => [date, dates]), [[undefined, undefined]]);
+    assert.equal(item.evidence?.length, 1);
+    const [evidence] = item.evidence;
+    assert.deepEqual(evidence.ref, { ns: 0, type: "raw", conversationId, messageId: turn.id });
+    assert.equal(evidence.occurredAt, undefined);
+    assert.equal(evidence.date, undefined);
+  });
+
+  test(`An out-of-range sole receipt time leaves a memory undated on ${name}`, async t => {
+    const adapter = await makeAdapter(t);
+    const api = service(adapter, { profile: "keyless-local" });
+    const saved = await write(adapter, tx => adapter.memories.insert(tx, scope, {
+      text: body, kind: "fact", origin: "explicit", source, confidence: 1,
+      embedding: null, textHash: "sha256:" + sha256(body.toLowerCase()),
+    }, [{ ...session, messageId: message.id, role: message.role, occurredAtMs: outOfRangeTime,
+      excerpt: message.content }], 1));
+
+    const { assembly } = await api.readContext(readSet(), { ...query, raw: false });
+    const item = assembly.items.find(candidate => candidate.ref.id === saved.id);
+    assert.ok(item);
+    assert.equal(item.body, body);
+    assert.equal(item.date, undefined);
+    assert.deepEqual(item.sources.map(({ excerpt, date, dates }) => [excerpt, date, dates]),
+      [[message.content, undefined, undefined]]);
+  });
+}
