@@ -204,8 +204,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
                 return admitted && !receipt.id && !(inspect && receipt.excerpt !== undefined)
                   ? { ...receipt, captureEventId: eventId } : receipt;
               }
-              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs,
-                ...(receipt.includeUnknownTime && { includeUnknownTime: receipt.includeUnknownTime }) };
+              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs };
               if (!admitted) return link;
               const excerpt = receiptExcerpt(cleanContent(retained.content));
               return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt, captureEventId: eventId }) };

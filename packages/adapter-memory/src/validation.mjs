@@ -333,7 +333,7 @@ export function isPlaceholderReceipt(receipt) {
 export function copyReceipts(receipts, fromFinish = false) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
-    const placeholder = placeholderReceipt(receipt);
+    const placeholder = !fromFinish && placeholderReceipt(receipt);
     const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
         (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
@@ -348,8 +348,9 @@ export function copyReceipts(receipts, fromFinish = false) {
       ...(id !== undefined && { id }),
       ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }),
       ...(fromFinish && receipt.captureEventId !== undefined && { captureEventId: receipt.captureEventId }) };
-    // Copying accessors or fields from a custom prototype must not grant the window exemption.
-    if (placeholderReceipt(copy) && (!placeholder || (fromFinish && receipt.includeUnknownTime))) {
+    // Capture receipts always honor unknown-time windows. Copying must preserve that check
+    // when accessors or a custom prototype would otherwise become a placeholder.
+    if (fromFinish || (!placeholder && placeholderReceipt(copy))) {
       copy.includeUnknownTime = true;
     }
     return copy;

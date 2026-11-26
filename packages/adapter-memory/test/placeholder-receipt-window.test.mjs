@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { coreDigest } from "@cairn-ink/core";
+import { coreDigest, factIncarnationBody } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { createFactMatcher } from "../src/fact-match.mjs";
+import { createReceiptReadSafety } from "../src/receipt-read-safety.mjs";
 
 const scope = { owner: "owner", namespace: null };
 const selection = { owner: scope.owner, namespaces: [scope.namespace] };
@@ -198,4 +201,99 @@ for (const [label, windowClient] of [["global", null], ["client-scoped", "codex"
     });
     assert.equal((await service.save(scope, cited.excerpt, source, "fact", { receipt: cited })).status, "suppressed");
   });
+}
+
+async function captureFixture(rawArchive) {
+  const entry = new URL("../src/index.mjs?receiptFixture", import.meta.url).href;
+  const unitOfWork = new URL("../src/unit-of-work.mjs", import.meta.url).href;
+  const fixture = `${unitOfWork}?receiptFixture`;
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      return nextResolve(context.parentURL === entry && specifier === "./unit-of-work.mjs" ? fixture : specifier, context);
+    },
+    load(url, context, nextLoad) {
+      if (url !== fixture) return nextLoad(url, context);
+      const source = `import { createUnitOfWork as create } from ${JSON.stringify(unitOfWork)};
+        export * from ${JSON.stringify(unitOfWork)};
+        export let work;
+        export function createUnitOfWork(...args) { return work = create(...args); }`;
+      return { format: "module", source, shortCircuit: true };
+    },
+  });
+  try {
+    const { createMemoryAdapter } = await import(entry);
+    const control = await import(fixture);
+    const storage = createMemoryAdapter({ capabilities: { rawArchive, inspect: true, contextRead: true } });
+    return { storage, port: control.work.port };
+  } finally {
+    hooks.deregister();
+  }
+}
+
+for (const rawArchive of [false, true]) {
+  for (const [label, windowClient] of [["global", null], ["client-scoped", receipt.client]]) {
+    test(`a ${label} unknown-time window withholds captured receipts with Raw Archive ${rawArchive ? "enabled" : "disabled"}`, async () => {
+      const { storage, port } = await captureFixture(rawArchive);
+      const { client, sessionId } = receipt;
+      const event = { client, sessionId, eventId: "capture" };
+      const countTokens = () => 1;
+      const service = createMemoryService({
+        storage, config: {},
+        model: { model: "test", contextWindow: 32_768, countTokens, async call() {
+          return { items: [{ content: "The cabinet holds spare hardware.", kind: "fact", confidence: 1, sourceIndices: [0] }] };
+        } },
+        embedder: { model: "test", dimensions: 1, async embed(inputs) { return inputs.map(() => Float32Array.of(1)); } },
+        tokens: { countTokens }, gate: { async assertOpen() {} },
+        clock: {
+          nowMs: Date.now, monotonicMs: () => performance.now(),
+          async sha256Hex(value) { return createHash("sha256").update(value).digest("hex"); },
+          hmacHex: () => assert.fail("Unexpected keyed hashing"),
+        },
+      });
+      assert.equal((await service.enqueueCapture(scope, { ...event, messages: [message] })).status, "accepted");
+      const done = await service.runCapture(scope, event);
+      assert.equal(done.status, "done");
+      assert.equal(done.result.memories.length, 1);
+      const [{ id }] = done.result.memories;
+      const read = fn => storage.uow.run(scope.owner, { readOnly: true }, fn);
+      const inspected = () => read(async tx => (await storage.inspect.item(tx, scope, id, { limit: 10 })).item.receipts);
+      const evidence = () => read(async tx => {
+        const [row] = await storage.contextRead.evidence(tx, { ...selection, accessGenerations: [1] },
+          [{ type: "memory", scope, id }], "current");
+        return row.receipts;
+      });
+
+      const before = { inspect: await inspected(), context: await evidence() };
+      for (const receipts of Object.values(before)) {
+        assert.deepEqual(receipts.map(({ excerpt }) => excerpt), [message.content]);
+      }
+      const dump = await storage.harness.dump();
+      assert.equal(dump[0].rawRows?.length ?? 0, rawArchive ? 1 : 0);
+
+      const fact = {
+        ...scope, origin: "forget", actionId: "window", kind: "window",
+        client: windowClient, window: { startMs: 10, endMs: 20 }, unknownTime: true,
+      };
+      const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
+      await storage.uow.run(scope.owner, {}, tx => storage.suppressions.writeFact(tx, fact, incarnation));
+
+      const { receiptWithheld } = createReceiptReadSafety(async () => []);
+      const withheld = rawArchive
+        ? await read(tx => storage.suppressions.receiptWithheld(tx, scope, receipt))
+        : await read(tx => port.read(tx, scope, getState => {
+          const state = getState();
+          const [stored] = state.rows.get(scope.namespace).get(id).receipts;
+          return receiptWithheld(state, scope, stored, createFactMatcher(false)(state.facts, scope));
+        }));
+      assert.deepEqual({ withheld, inspect: await inspected(), context: await evidence() },
+        { withheld: true, inspect: [], context: [] });
+
+      const exported = await service.exportMemories(scope, { limit: 10 });
+      assert.deepEqual(exported.items.map(item => item.id), [id]);
+      for (const output of [before, dump, exported]) {
+        const serialized = JSON.stringify(output, (_key, value) => typeof value === "bigint" ? value.toString() : value);
+        assert.equal(serialized.includes('"includeUnknownTime"'), false);
+      }
+    });
+  }
 }
