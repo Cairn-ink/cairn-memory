@@ -1325,20 +1325,18 @@ model failure and the fallback finish is not archived.
 
 ## Addendum 28 — Window fence for session-less explicit memories
 
-Forget and correct of a memory whose source names no conversation write
-durable window suppression facts in the same transaction as the rest of the
-operation, before receipts are removed.
+Forget and correct of a session-less explicit memory write durable window
+suppression facts in the same transaction as the rest of the operation.
 
-A memory is session-less when its source session is `null`, or when one or
-more of its receipts has a session of `null`, `"explicit-tool"` or
-`"explicit"`. These are the placeholders explicit tools use, because an
-explicit tool never learns which conversation it serves. Receipts that name a
-real session keep the existing session fence and add no window.
+A memory is session-less explicit when its source kind is `"mcp"` or `"web"`
+and its source session is `null`. An explicit tool never learns which
+conversation it serves, so its saves name no session, and migrated explicit
+memories carry the same source. Captured, imported and migrated captured
+memories keep the existing session fence and add no window. The trigger reads
+only the memory row, so other memories see no extra reads or writes.
 
-The anchors are the finite `occurredAtMs` of the placeholder receipts. When
-any placeholder receipt has no time, or the memory has no receipts, the
-memory's `createdAtMs` and `updatedAtMs` are anchors too. For each distinct
-anchor `t`, the operation writes:
+The anchors are the memory's `createdAtMs` and `updatedAtMs`. For each
+distinct anchor `t`, the operation writes:
 
 ```
 { kind: "window", owner, namespace, actionId, origin,
@@ -1349,9 +1347,14 @@ anchor `t`, the operation writes:
 `client: null` covers every client, because an explicit tool's client name
 is not the captured client's name. `unknownTime: true` also withholds
 messages whose time is unknown. `actionId` is the operation's action. `origin`
-is the operation's fact origin: `"forget"` for forget and `"edit"` for
-correct. The facts carry no text.
+is the operation's fact origin: `"forget"` for forget and `"edit"` for a
+changed correction. An unchanged correction writes nothing. The facts carry
+no text.
 
 Windows are durable. Raw, router cards and captures that arrive later inside
 a window are withheld, as are rows already stored inside it. A store that
 cannot write a window fact fails the whole operation.
+
+Known limit: an explicit save that only touched an existing captured memory
+leaves that memory's source unchanged. Its forget fences the captured
+session, not the conversation where the explicit save happened.
