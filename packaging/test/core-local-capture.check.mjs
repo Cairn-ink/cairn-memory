@@ -32,7 +32,7 @@ test('a ledger status is insufficient for acknowledgement and an admission refus
   for (const [admit, expected] of [
     [() => ({ status: 'paused' }), 'authority_changed'],
     [() => ({ status: 'blocked' }), 'capture_refused'],
-    [() => { throw Object.assign(Error(), { code: 'capability_unavailable' }); }, 'capability_unavailable'],
+    [() => { throw Object.assign(Error(), { code: 'capability_unavailable' }); }, 'capture_refused'],
   ]) {
     const result = await dispatchCapture({ enqueueCapture: admit, captureStatus: unused, runCapture: unused },
       scope, selection, message, signal, true);

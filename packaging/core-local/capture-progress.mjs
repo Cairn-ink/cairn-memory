@@ -90,13 +90,12 @@ export async function advanceCapture({ options, identity, context, opened, curso
       const result = await dispatch({ client, sessionId: identity.wireSessionId, eventId: projection.eventId }, input, !!pending);
       dispatched++;
       if (result.status !== 'done') {
-        if (result.status === 'busy' || result.reason === 'capability_unavailable') {
+        if (result.status === 'busy') {
           await save({ ...cursor, pending: { projection, attempts: 0, state: 'prepared', lastAttemptAt: null, nextEligibleAt: null } });
         } else if (result.status === 'processing') {
           const closedAt = Math.max(Date.now(), started);
           await save({ ...cursor, pending: { ...cursor.pending, state: 'processing', nextEligibleAt: closedAt + 125000 } });
         } else fault(result.reason ?? 'capture_refused');
-        if (result.reason === 'capability_unavailable') return result;
         return { status: 'waiting', reason: result.status };
       }
       const source = { ...cursor.source, anchor: await prove(binding, expected, range.end) };

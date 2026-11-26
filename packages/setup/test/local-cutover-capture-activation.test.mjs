@@ -9,6 +9,7 @@ import { setupLocalRaw, createLocalRawSetup } from '../../../integrations/client
 import { initLocalRawStore } from '../../../integrations/client/raw/local-setup-init.mjs';
 import { runLocalRawHook } from '../../../integrations/client/raw/local-hook.mjs';
 import { buildCoreLocalCandidate } from '../../../packaging/build-core-local.mjs';
+import { SQLITE_PHYSICAL_VERSION } from '../../adapter-sqlite/src/schema/layout.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { runLocalCutover } from '../lib/local-cutover.mjs';
 import { captureTargetFor } from '../lib/local-cutover-journal.mjs';
@@ -121,6 +122,10 @@ test('per-client capture activation resumes every SIGKILL checkpoint and arms on
   await f.run('prepare');
   const { cutover } = (await f.read()).migration;
   const target = captureTargetFor(f.database, cutover.attemptId);
+  await assert.rejects(runLocalCutover({ ...f.options, action: 'activate-capture', captureClient: 'claude',
+    env: { ...f.options.env, OPENAI_API_KEY: 'synthetic-provider-value' } }), { params: { code: 'cutover_capture_changed' } });
+  assert.deepEqual(await readFile(claude.clientConfigPath), claude.nativeBytes);
+  await assert.rejects(stat(target), { code: 'ENOENT' });
   for (const [index, step] of activationSteps.entries()) {
     crash(f, step, 'activate-capture');
     assert.equal((await claude.old()).reason, 'authority_changed');
@@ -141,6 +146,9 @@ test('per-client capture activation resumes every SIGKILL checkpoint and arms on
   const cx = await f.run('activate-capture', 'codex');
   assert.equal(cx.targetPath, target);
   assert.notEqual(cx.generation, result.generation);
+  const db = new DatabaseSync(target, { readOnly: true });
+  try { assert.equal(db.prepare('PRAGMA user_version').get().user_version, SQLITE_PHYSICAL_VERSION); }
+  finally { db.close(); }
   assert.equal((await f.read()).database.path, f.database);
   const directory = await bindingDirectory(claude);
   const cli = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', f.executable,
@@ -218,8 +226,8 @@ test('an armed hook rejects a substituted SQLite file and a copied binding of an
   finally { database.close(); }
 });
 
-// Seed the adapter directly so this independently proves the migrated hook's
-// delete refusal even before the automatic Raw-only runner is registered.
+// Seed the adapter directly to test the setup-armed hook separately from the
+// packaged automatic-capture replay.
 test('a deleted candidate session refuses restart and replay and stays absent from the closed SQLite file', linux, async t => {
   const f = await fixture(t);
   await f.run('prepare');

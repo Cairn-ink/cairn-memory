@@ -24,7 +24,6 @@ export async function dispatchCapture(service, scope, selection, message, signal
 }
 
 function refusal(code) {
-  if (code === 'capability_unavailable') return { status: 'blocked', reason: code };
   if (code === 'storage_busy' || code === 'commit_outcome_unknown') return { status: 'busy' };
   if (['capture_disabled', 'capture_paused', 'capture_evidence_closed', 'revision_conflict'].includes(code)) {
     return { status: 'blocked', reason: 'authority_changed' };

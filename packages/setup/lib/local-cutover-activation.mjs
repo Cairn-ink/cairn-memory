@@ -137,11 +137,12 @@ async function writeBinding(directory, desired) {
   if (current !== text(desired)) await privateWrite(path, text(desired));
 }
 
-export async function activateCapture({ root, maintenance, descriptor, manifest, client, reattest, onCheckpoint }) {
+export async function activateCapture({ root, maintenance, descriptor, manifest, client, env, reattest, onCheckpoint }) {
   if (!Object.hasOwn(clients, client)) throw refuse('cutover_arguments');
   const { migration } = descriptor, { cutover } = migration;
   const record = await legacyRecord(root, client, cutover, maintenance);
   const { saved, request, paused } = record;
+  if (Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
   // Capture can use only the same installed owner and namespace as the client.
   if (!descriptor.clients[client] || request.namespace.ownerId !== descriptor.ownerId ||
       request.namespace.projectId !== descriptor.projectId) throw refuse('cutover_capture_changed');

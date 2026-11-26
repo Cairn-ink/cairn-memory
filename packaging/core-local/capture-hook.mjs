@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { performance } from 'node:perf_hooks';
 import { captureLock } from './capture-lock.mjs';
-import { privateRead, privateRemove, privateWrite } from '../../integrations/client/private-state.mjs';
+import { privateRead, privateWrite } from '../../integrations/client/private-state.mjs';
 import { detectRunningHost, cachedQualification, boundBinary, hasQualifiedCreator } from './capture-codex-qualification.mjs';
 import { sessionSourceMetadata } from '../../integrations/codex/session-source.mjs';
 import { openLocalSource } from '../../integrations/client/raw/local-source-open.mjs';
@@ -59,9 +59,9 @@ async function codexFormat(configPath, context, signal) {
 
 async function markUsed(directory) {
   const path = join(directory, 'used');
-  if (await privateRead(path, { missing: true }) !== undefined) return null;
-  await privateWrite(path, 'capture write requested\n', { exclusive: true });
-  return path;
+  if (await privateRead(path, { missing: true }) === undefined) {
+    await privateWrite(path, 'capture write requested\n', { exclusive: true });
+  }
 }
 
 async function capture(binding, legacy, input, operation) {
@@ -133,12 +133,8 @@ async function capture(binding, legacy, input, operation) {
         if (initialize) return cursor.blockedReason ? { status: 'blocked', reason: cursor.blockedReason } : { status: 'ready' };
         return await advanceCapture({ options, identity, context, opened, cursor, operation, bytes,
           dispatch: (selection, message, recovering) => runtime.run(selection.sessionId, async ({ service, scope }) => {
-            const marker = await markUsed(input.directory);
-            const outcome = await dispatchCapture(service, scope, selection, message, operation.signal, recovering);
-            // This gate rejects before admission. Every ambiguous outcome
-            // keeps the rollback fence until the store can be reconciled.
-            if (marker && outcome.reason === 'capability_unavailable') await privateRemove(marker);
-            return outcome;
+            await markUsed(input.directory);
+            return dispatchCapture(service, scope, selection, message, operation.signal, recovering);
           }) });
       } finally { await opened.close(); }
     }, { signal: operation.signal });
@@ -158,7 +154,10 @@ export async function runBoundCapture(input, signal) {
     check() { if (controller.signal.aborted || performance.now() >= end - 2000) fault(signal.aborted ? 'cancelled' : 'work_limit'); } };
   try {
     return await withCaptureBinding(input.directory, input.executable, operation.signal,
-      (binding, legacy) => capture(binding, legacy, input, operation));
+      (binding, legacy, providerKeyName) => {
+        if (input.hasProviderKey?.(providerKeyName)) fault('authority_changed');
+        return capture(binding, legacy, input, operation);
+      });
   } catch (error) {
     return { status: 'blocked', reason: error.reason ?? error.code ?? 'authority_changed' };
   } finally {

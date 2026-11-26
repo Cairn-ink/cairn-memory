@@ -36,8 +36,8 @@ const flags = ['--disable-warning=ExperimentalWarning'];
 const prefix = ['/usr/bin/env', '-u', 'NODE_OPTIONS', '-u', 'NODE_PATH'];
 const node = process.execPath;
 
-function child(executable, args, input, cwd = root) {
-  const result = spawnSync(executable, args, { cwd, env, input, encoding: 'utf8', timeout: 20_000,
+function child(executable, args, input, cwd = root, environment = env) {
+  const result = spawnSync(executable, args, { cwd, env: environment, input, encoding: 'utf8', timeout: 20_000,
     maxBuffer: 4 * 1024 * 1024 });
   assert.ifError(result.error);
   assert.equal(result.signal, null);

@@ -9,6 +9,7 @@ import { absolute, exact, fault } from './capture-input.mjs';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const hash = /^[a-f0-9]{64}$/u;
 const numeric = /^(0|[1-9][0-9]*)$/u;
+const providerKeyName = /^(?:OPENAI_API_KEY|CAIRN_[A-Z0-9_]{1,96}_API_KEY)$/u;
 const fail = () => fault('authority_changed');
 
 export async function captureStoreIdentity(database) {
@@ -53,9 +54,10 @@ export async function withCaptureBinding(directory, executable, signal, work) {
     if (phase !== 'disabled' || storeId !== binding.authority.storeId || targetId !== binding.authority.targetId ||
         request.installationDirectory !== legacy || request.databasePath === binding.database ||
         request.client !== binding.authority.client || request.sourceRoot !== binding.sourceRoot ||
-        request.rawMode !== 'local-plain-v1' || request.interpretationConsent || !request.plaintextRawConsent || !request.foregroundConsent) fail();
+        request.rawMode !== 'local-plain-v1' || request.interpretationConsent || !request.plaintextRawConsent || !request.foregroundConsent ||
+        typeof request.providerApiKeyEnv !== 'string' || !providerKeyName.test(request.providerApiKeyEnv)) fail();
     const actual = await captureStoreIdentity(binding.database);
     if (actual.device !== binding.device || actual.inode !== binding.inode) fail();
-    return work(binding, legacy);
+    return work(binding, legacy, request.providerApiKeyEnv);
   }, { signal });
 }

@@ -180,7 +180,7 @@ async function activate(root, descriptor, maintenance, env, manifest, client, on
       const input = { path: cutover.sourcePath, backupDirectory: backupFor(maintenance, cutover.attemptId),
         expectedStoreId: cutover.source.storeId, quiescence };
       const reattest = () => reattestSource(input, cutover, assertLease);
-      return activateCapture({ root, maintenance, descriptor, manifest, client, reattest, onCheckpoint });
+      return activateCapture({ root, maintenance, descriptor, manifest, client, env, reattest, onCheckpoint });
     });
   });
 }
