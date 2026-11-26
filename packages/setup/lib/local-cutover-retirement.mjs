@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
+import { privateList, privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
 import { entry, pinColdFile, privateFile } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
+import { cutoverRefusal as refuse, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
 import { parseStrictJSON } from './local-descriptor.mjs';
 
 const phases = ['staging', 'exchanging', 'sealed', 'reclaimed', 'active'];
@@ -10,6 +10,7 @@ const pathFor = maintenance => join(maintenance, 'activation.json');
 const retiredFor = ({ sourcePath, attemptId }) => join(dirname(sourcePath), '.cairn-retired-' + attemptId);
 const tombstone = 'Cairn local store migrated. This path is retired.\n';
 const inode = info => info && [info.dev, info.ino].join(':');
+const fenceState = { privateList, privateRead, privateWrite };
 
 export async function readActivation(maintenance, cutover) {
   const text = await privateRead(pathFor(maintenance), { missing: true });
@@ -90,6 +91,13 @@ export async function retireLegacy({ maintenance, cutover, receipt, targetIdenti
     await advance('exchanging', 'activation-retirement-planned');
   }
   if (receipt.target !== targetIdentity) throw refuse('cutover_target_changed');
+  const exclusion = localCutoverExclusion();
+  if (exclusion.retireLegacy) {
+    await exclusion.retireLegacy({ source, retired, tombstone, receipt, drain, proveRetired,
+      assertTombstone, assertSiblings: () => assertNoLegacyCaches(source), state: fenceState, syncDirectory, advance,
+      notify: state => onCheckpoint(state, structuredClone(cutover)) });
+    return advance;
+  }
   if (receipt.phase === 'exchanging' && inode(entry(source)) === receipt.source) {
     assertNoLegacyCaches(source);
     drain();
@@ -127,10 +135,16 @@ export async function retireLegacy({ maintenance, cutover, receipt, targetIdenti
   return advance;
 }
 
-export async function abortRetirement(cutover, receipt, reclaim) {
+export async function abortRetirement(cutover, receipt, reclaim, notify) {
   if (!receipt) return reclaim();
   if (!['staging', 'exchanging'].includes(receipt.phase)) throw refuse('cutover_activation_confirmed');
   const source = cutover.sourcePath, retired = retiredFor(cutover);
+  const exclusion = localCutoverExclusion();
+  if (exclusion.abortRetirement) {
+    return exclusion.abortRetirement({
+      source, retired, tombstone, receipt, reclaim, assertTombstone, state: fenceState, syncDirectory, notify,
+    });
+  }
   if (inode(entry(source)) !== receipt.source) {
     if (receipt.phase !== 'exchanging' || inode(privateFile(retired)) !== receipt.source) throw refuse('cutover_activation_changed');
     await assertTombstone(source);
