@@ -132,7 +132,10 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     }
     if (!counter || !format) throw new CoreError("token_count_unavailable");
     const { items, channels, coverage, trace } = found.result;
-    const candidates = { count: items.length, channels, coverage, trace };
+    const candidates = { count: items.length, channels, coverage, trace,
+      ...(channels.semantic.state === "ready" && { ranks: items.map(({ channels }) => ({
+        lexical: channels.lexical?.rank ?? null, semantic: channels.semantic?.rank ?? null,
+      })) }) };
     const rawRead = await readRawChannel(raw ? storage.contextRead?.raw : undefined,
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&

@@ -135,16 +135,19 @@ async function attemptEmbedding(embedQuery, gate, owner, query, now, options) {
 }
 
 /** @param {Storage} storage @param {Tx} tx @param {ContextReadSet} readSet @param {Embedding} embedding */
-async function semanticCandidates({ vector, hydrate }, tx, readSet, { vector: query, model }) {
+async function semanticCandidates({ vector, hydrate, fence }, tx, readSet, { vector: query, model }) {
   if (!vector || !hydrate) return;
   const result = await vector.vector(tx, readSet, query, model, CONTEXT_HORIZON);
   const candidates = result.rows.filter(({ ref, distance }) =>
     ref.type === "memory" && readSet.namespaces.includes(ref.namespace) && Number.isFinite(distance));
-  const memories = await hydrateMemoryRows(hydrate, tx, readSet, candidates.map(({ ref }) => ref), "recall");
+  if (candidates.length === 0) return { rows: [], coverage: result.coverage };
+  const visible = new Set((await fence.assertVisible(tx, readSet, candidates.map(({ ref }) => ref))).map(canonicalKey));
+  const qualified = candidates.filter(({ ref }) => visible.has(canonicalKey(ref)));
+  const memories = await hydrateMemoryRows(hydrate, tx, readSet, qualified.map(({ ref }) => ref), "recall");
   const seen = new Set();
   /** @type {SemanticRow[]} */
   const rows = [];
-  for (const { ref, distance } of candidates) {
+  for (const { ref, distance } of qualified) {
     const key = canonicalKey(ref);
     const memory = memories.get(key);
     if (!memory || memory.historical || !Number.isSafeInteger(memory.revision) || memory.revision < 1 || seen.has(key)) continue;
@@ -217,19 +220,18 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     const portOptions = { signal: options.signal, deadlineAtMs };
 
     async function prepareSemantic() {
-      if (queryEmbedder) await (memo.result ??= attemptEmbedding(queryEmbedder, gate, readSet.owner, query, now, portOptions));
+      if (!queryEmbedder) return;
+      const attempt = await (memo.result ??= attemptEmbedding(queryEmbedder, gate, readSet.owner, query, now, portOptions));
+      diagnostics.trace.timings.embeddingMs = attempt.elapsed;
+      if ("cause" in attempt) diagnostics.channels.semantic = { state: "unavailable", causes: [attempt.cause] };
+      else diagnostics.trace.embedder = attempt.embedding.model;
     }
 
     /** @param {Tx} tx */
     async function readSemantic(tx) {
       if (!memo.result) return;
       const attempt = await memo.result;
-      diagnostics.trace.timings.embeddingMs = attempt.elapsed;
-      if ("cause" in attempt) {
-        diagnostics.channels.semantic = { state: "unavailable", causes: [attempt.cause] };
-        return;
-      }
-      diagnostics.trace.embedder = attempt.embedding.model;
+      if ("cause" in attempt) return;
       try {
         const result = await semanticCandidates(storage, tx, readSet, attempt.embedding);
         if (result?.coverage.complete === true && result.rows.length) diagnostics.channels.semantic = { state: "ready", causes: [] };
@@ -336,7 +338,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       const memoryCoverage = diagnostics.coverage.byType.memory;
       if (semanticResult && memoryCoverage) {
         const { eligible, embedded } = semanticResult.coverage;
-        const depth = Math.min(semanticResult.rows.length, RRF_PRESETS[config.preset].depth);
+        const depth = semanticState === "ready" ? Math.min(semanticResult.rows.length, RRF_PRESETS[config.preset].depth) : 0;
         diagnostics.coverage.depths.semantic = depth;
         diagnostics.coverage.omitted.semantic = Math.max(0, embedded - depth);
         Object.assign(memoryCoverage, { embedded, scanned: eligible, embeddedFraction: eligible ? embedded / eligible : 1, scannedFraction: 1 });

@@ -1,8 +1,9 @@
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "./context-assembly-cases.mjs";
-import { check, equal, rejects, row, source } from "./support.mjs";
+import { check, equal, evidence, rejects, row, source } from "./support.mjs";
 
-/** @import { ContextReadSet, FindCandidatesInput, ReadContractStorage, VectorRow } from "@cairn-ink/core/ports" */
+/** @import { CallOptions, ContextCandidateDiagnostics, ContextMemoryRef, ContextReadSet, FindCandidatesInput, HydratedItem,
+  ReadContractStorage, Receipt, VectorRow } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 
 const model = "test";
@@ -21,12 +22,16 @@ function fixture(ctx) {
   const request = { query: "  PETREL  route  ", types: ["memory"], intent: "current" };
   const controls = { model, fail: false, hang: false, forceIncomplete: false, keepCoverageAcrossModels: false, embedCalls: 0,
     /** @type {AbortSignal | undefined} */ lastSignal: undefined, /** @type {VectorRow[]} */ staleRows: [],
+    /** @type {number | undefined} */ lastDeadline: undefined,
+    /** @type {HydratedItem[]} */ staleMemories: [],
   };
   /** @type {WeakSet<object>} */
   const lexicalTransactions = new WeakSet();
   /** @type {WeakSet<object>} */
   const vectorTransactions = new WeakSet();
   let activeTransactions = 0;
+  const clock = assemblyClock();
+  const assemblyDeps = { clock, contextReadFormat: formatAssembly, contextReadCounter: { count: fixtureCount } };
   const service = createMemoryService({
     storage: { ...storage, uow: { run(owner, options, operation) {
       return storage.uow.run(owner, options, async tx => {
@@ -43,10 +48,13 @@ function fixture(ctx) {
       if (controls.keepCoverageAcrossModels) args[2] = model;
       const { rows, coverage } = await vector.vector(tx, ...args);
       return { rows: [...controls.staleRows, ...rows], coverage: { ...coverage, complete: coverage.complete && !controls.forceIncomplete } };
-    } }, hydrate: { hydrate(tx, ...args) {
+    } }, hydrate: { async hydrate(tx, readSet, refs, intent) {
       check(vectorTransactions.has(tx), "Vector candidates must hydrate in their retrieval transaction");
-      return hydrate.hydrate(tx, ...args);
-    } } }, clock: assemblyClock(), config: {},
+      const current = await hydrate.hydrate(tx, readSet, refs, intent);
+      const stale = controls.staleMemories.filter(({ ref }) =>
+        refs.some(candidate => candidate.id === ref.id && candidate.namespace === ref.namespace && candidate.type === ref.type));
+      return [...current, ...stale];
+    } } }, ...assemblyDeps, config: {},
     model: { model: "unused", contextWindow: 1, countTokens: () => 0,
       async call() { throw new Error("Unexpected model call"); } },
     embedder: { model, dimensions: ctx.vec(0).length,
@@ -57,36 +65,60 @@ function fixture(ctx) {
       equal(activeTransactions, 0, "Embedding dispatch must run outside a storage transaction");
       equal([owner, text, options.budgetClass], [scope.owner, "petrel route", "recall"], "Expected recall query preparation and budget");
       controls.lastSignal = options.signal;
+      controls.lastDeadline = options.deadlineAtMs;
       if (controls.fail) throw new Error("Embedding provider failure");
       if (controls.hang) await new Promise(() => {});
       return { model: controls.model, vector: new Float32Array(ctx.vec(0)) };
     } },
-    contextReadFormat: formatAssembly, contextReadCounter: { count: fixtureCount },
   });
   const { findCandidates, fetchEvidence, readContext } = service;
   check(findCandidates && fetchEvidence && readContext, "Expected Context Read service entries");
 
-  /** @param {string} text @param {number} distance @param {string} [embeddingModel] @param {typeof scope} [target] */
-  async function insert(text, distance, embeddingModel = model, target = scope) {
+  /** @param {string} text @param {number} distance @param {string} [embeddingModel] @param {typeof scope} [target]
+   * @param {Receipt[]} [receipts] */
+  async function insert(text, distance, embeddingModel = model, target = scope, receipts = []) {
     const input = await row(ctx, text, distance);
     check(input.embedding, "Expected a fixed embedding");
     input.embedding.model = embeddingModel;
     const { id, revision } = await storage.uow.run(target.owner, { pauseLock: true }, tx =>
-      storage.memories.insert(tx, target, input, [], 1));
+      storage.memories.insert(tx, target, input, receipts, 1));
     return { type: /** @type {const} */ ("memory"), scope: target, id, revision };
   }
 
-  return { controls, scope, insert, service,
-    /** @param {Partial<FindCandidatesInput>} [overrides] */
-    find: overrides => findCandidates(set, { ...request, ...overrides }),
-    /** @param {Partial<import("@cairn-ink/core/ports").ReadContextInput>} [overrides] */
-    read: overrides => readContext(set, { ...request, raw: false, ...overrides }),
+  /** @param {ContextMemoryRef} memory */
+  async function retainStaleCandidate({ type, id, scope: { namespace } }) {
+    const ref = { type, id, namespace };
+    const items = await storage.uow.run(scope.owner, { readOnly: true }, tx => hydrate.hydrate(tx, set, [ref], "recall"));
+    check(items.length === 1 && items[0].memory, "Expected a visible memory before withholding");
+    controls.staleMemories.push(...items);
+    controls.staleRows.push({ ref, distance: 0, updatedAtUs: 1n });
+  }
+
+  return { controls, scope, set, request, assemblyDeps, insert, service, retainStaleCandidate,
+    /** @param {Partial<FindCandidatesInput>} [overrides] @param {CallOptions} [options] */
+    find: (overrides, options) => findCandidates(set, { ...request, ...overrides }, options),
+    /** @param {Partial<import("@cairn-ink/core/ports").ReadContextInput>} [overrides] @param {CallOptions} [options] */
+    read: (overrides, options) => readContext(set, { ...request, raw: false, ...overrides }, options),
     /** @param {string} snapshot */
     fetch: snapshot => fetchEvidence(set, { snapshot }),
   };
 }
 
 const needs = /** @type {ConformanceCase["needs"]} */ (["contextRead", "semanticRetrieval"]);
+
+/** @param {ReturnType<typeof fixture>} f @param {ContextMemoryRef} visible @param {ContextMemoryRef} hidden */
+async function expectOnlyVisible(f, visible, hidden) {
+  const found = await f.find();
+  equal(found.items.map(({ ref }) => ref), [visible], "Find drops the hidden vector candidate before fusion");
+  equal(found.coverage.depths.semantic, 1, "Only the visible candidate contributes to fusion");
+  const read = await f.read();
+  equal(read.assembly.items.map(({ ref }) => ref.id), [visible.id], "Context Read delivers only visible evidence");
+  check(read.snapshot, "Expected a snapshot for the visible evidence");
+  equal((await f.fetch(read.snapshot)).items.map(({ ref }) => ref), [visible], "The new snapshot references only visible evidence");
+  const { fetchEvidence } = f.service;
+  check(fetchEvidence, "Expected evidence fetch");
+  await rejects(() => fetchEvidence(f.set, { refs: [hidden], intent: "current" }), "evidence_unavailable");
+}
 
 /** @type {readonly ConformanceCase[]} */
 export const CONTEXT_READ_SEMANTIC_CASES = [
@@ -201,6 +233,110 @@ export const CONTEXT_READ_SEMANTIC_CASES = [
       f.controls.model = model;
       f.controls.forceIncomplete = true;
       await rejects(resume, "cursor_stale");
+    },
+  },
+  {
+    id: "T-CONTEXT-SEMANTIC-6",
+    title: "rejects a forgotten vector-only memory even when retrieval and hydration are stale",
+    needs,
+    async run(ctx) {
+      const f = fixture(ctx);
+      const forgotten = await f.insert(semanticText, 0);
+      const visible = await f.insert(lexicalText, 1);
+      equal((await f.find({ semantic: false })).items.map(({ ref }) => ref), [visible], "The forgotten memory has no lexical match");
+      const prior = await f.read();
+      check(prior.snapshot && prior.assembly.items.some(({ ref }) => ref.id === forgotten.id), "The memory was reachable through vectors");
+      await f.retainStaleCandidate(forgotten);
+      equal((await f.service.forget(f.scope, forgotten.id, source)).status, "forgotten", "Forget erases the vector-only memory");
+      await expectOnlyVisible(f, visible, forgotten);
+      await rejects(() => f.fetch(/** @type {string} */ (prior.snapshot)), "snapshot_stale");
+    },
+  },
+  {
+    id: "T-CONTEXT-SEMANTIC-7",
+    title: "rejects a session-fenced vector-only memory",
+    needs,
+    async run(ctx) {
+      const f = fixture(ctx);
+      const receipt = evidence("fixture-message", 1);
+      const { client, sessionId } = receipt;
+      const fenced = await f.insert(semanticText, 0, model, f.scope, [receipt]);
+      const visible = await f.insert(lexicalText, 1);
+      equal((await f.find({ semantic: false })).items.map(({ ref }) => ref), [visible], "The fenced memory has no lexical match");
+      await f.retainStaleCandidate(fenced);
+      const sessionKeyHash = ctx.sessionRefs === "hashed" ? ctx.harness.hashSessionKey?.(client, sessionId) : undefined;
+      if (ctx.sessionRefs === "hashed") check(sessionKeyHash, "Expected a hash for the test session");
+      const session = sessionKeyHash ? { client, sessionKeyHash } : { client, sessionId };
+      await ctx.harness.seedFact(ctx.owner, { ...f.scope, origin: "forget", actionId: "fence-source", kind: "session", session });
+      await expectOnlyVisible(f, visible, fenced);
+    },
+  },
+  {
+    id: "T-CONTEXT-SEMANTIC-8",
+    title: "rejects a vector neighbour of a forgotten memory with different text",
+    needs: [...needs, "fingerprintKey", "vectorSuppression"],
+    async run(ctx) {
+      const f = fixture(ctx);
+      const forgotten = await f.insert("Fulmars breed on rocky islands.", 0);
+      const neighbour = await f.insert(semanticText, 0.05);
+      const visible = await f.insert(lexicalText, 1);
+      equal((await f.find({ semantic: false })).items.map(({ ref }) => ref), [visible], "The neighbour has no lexical match");
+      await f.retainStaleCandidate(neighbour);
+      equal((await f.service.forget(f.scope, forgotten.id, source)).status, "forgotten", "Forget records a full suppression");
+      await expectOnlyVisible(f, visible, neighbour);
+    },
+  },
+  {
+    id: "T-CONTEXT-SEMANTIC-9",
+    title: "reports semantic state, depth and ranks in find and context diagnostics",
+    needs: [...needs, "inspect"],
+    async run(ctx) {
+      const f = fixture(ctx);
+      await f.insert(lexicalText, 1);
+      await f.insert(semanticText, 0);
+      const storage = /** @type {ReadContractStorage} */ (ctx.adapter);
+      const { findCandidates, readContext } = createMemoryService({ storage, profile: "keyless-local", ...f.assemblyDeps });
+      check(findCandidates && readContext, "Expected keyless Context Read entries");
+      /** @param {ContextCandidateDiagnostics} diagnostics @param {ContextCandidateDiagnostics["channels"]["semantic"]} channel
+       * @param {number} depth */
+      function expect(diagnostics, channel, depth) {
+        equal(diagnostics.channels.semantic, channel, "Every candidate diagnostics payload reports semantic state and causes");
+        equal(diagnostics.coverage.depths.semantic, depth, "Semantic depth counts only candidates contributed to fusion");
+      }
+      const disabled = { state: /** @type {const} */ ("disabled"), causes: /** @type {const} */ (["disabled", "absent"]) };
+      expect(await findCandidates(f.set, f.request), disabled, 0);
+      expect((await readContext(f.set, { ...f.request, raw: false })).diagnostics.candidates, disabled, 0);
+      /** @param {Partial<FindCandidatesInput>} options
+       * @param {ContextCandidateDiagnostics["channels"]["semantic"]} channel @param {number} depth */
+      async function both(options, channel, depth) {
+        const found = await f.find(options);
+        expect(found, channel, depth);
+        const read = await f.read(options);
+        expect(read.diagnostics.candidates, channel, depth);
+        return { found, read };
+      }
+      await both({ semantic: false }, disabled, 0);
+      equal(f.controls.embedCalls, 0, "Disabled reads do not dispatch");
+      const absent = { state: /** @type {const} */ ("absent"), causes: /** @type {const} */ (["absent"]) };
+      await both({ intent: "history" }, absent, 0);
+      equal(f.controls.embedCalls, 0, "Historical reads do not dispatch");
+      f.controls.forceIncomplete = true;
+      await both({}, absent, 0);
+      f.controls.forceIncomplete = false;
+      f.controls.fail = true;
+      await both({}, { state: "unavailable", causes: ["unavailable"] }, 0);
+      f.controls.fail = false;
+      const deadlineAtMs = f.assemblyDeps.clock.monotonicMs() + 1000;
+      const ready = /** @type {const} */ ({ state: "ready", causes: [] });
+      const found = await f.find({}, { deadlineAtMs });
+      expect(found, ready, 2);
+      check(f.controls.lastDeadline !== undefined && f.controls.lastDeadline <= deadlineAtMs, "Find embedding shares the caller's read deadline");
+      const read = await f.read({}, { deadlineAtMs });
+      expect(read.diagnostics.candidates, ready, 2);
+      check(f.controls.lastDeadline !== undefined && f.controls.lastDeadline <= deadlineAtMs, "Context embedding shares the caller's read deadline");
+      const ranks = found.items.map(({ channels }) => ({ lexical: channels.lexical?.rank ?? null, semantic: channels.semantic?.rank ?? null }));
+      equal(ranks.filter(({ lexical, semantic }) => lexical === null && semantic !== null).length, 1, "Find identifies the semantic-only candidate");
+      equal(read.diagnostics.candidates.ranks, ranks, "Context diagnostics preserve each candidate's channel ranks");
     },
   },
 ];

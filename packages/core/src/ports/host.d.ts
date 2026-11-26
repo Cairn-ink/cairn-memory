@@ -442,7 +442,11 @@ export interface ContextAssemblyDiagnostics {
   stops: { budget: boolean; items: boolean; deadline: boolean };
   trace: { timings: { assemblyMs: number }; counterCalls: number };
   coverage: { raw: ContextRawCoverage };
-  candidates: ContextCandidateDiagnostics & { count: number };
+  candidates: ContextCandidateDiagnostics & {
+    count: number;
+    /** Channel ranks in candidate ranking order when the semantic channel is ready. */
+    ranks?: readonly { lexical: number | null; semantic: number | null }[];
+  };
   ledger?: ContextLedgerDiagnostics;
 }
 
