@@ -1261,3 +1261,13 @@ exact-mode matching keep their existing rules.
 Capture re-screens after admission use the prepared text. If preparation
 changed the spelling of a secret-bearing passage that was forgotten after
 admission, detection at finish depends on the stored source checks.
+
+## Addendum 25 — Context Read semantic candidates
+
+`findCandidates` and `readContext` attempt semantic retrieval for `semantic: true` with a query embedder. Omission selects it when the query embedder, `semanticRetrieval` capability and vector port are available. `semantic: false` selects lexical retrieval. Without a query embedder, omission selects lexical retrieval and `semantic: true` returns `invalid_input` with candidate diagnostics.
+
+Embed the prepared query once per call through the recall embedding dependency and budget class. An embedding error or timeout leaves lexical evidence available. Semantic candidates are current memories only. Read their vector candidates and hydrate their revisions in the lexical read transaction, using the authorized read set and recall visibility. Drop unqualified rows. Fuse the qualified rows with lexical candidates under `rrf-k60-d12` when vector coverage is complete and at least one row qualifies. History, card-only selection, missing vector support, incomplete coverage and empty qualified results leave the semantic channel absent. Card candidates enter through the lexical channel.
+
+Semantic cursors bind the request's semantic choice, embedding model ID and channel state. A continuation rechecks model and state before paging the retained ranking and returns `cursor_stale` on change. Request mismatches retain `invalid_cursor`. Snapshot and evidence fetch use the qualified refs and existing delivery fences. Fetch makes no embedding call.
+
+Candidate diagnostics report the channel state and its content-free causes, requested and effective modes, embedding model ID and elapsed embedding time. Vector results supply the semantic depth and omission count and the memory embedding and scan counts and fractions. An embedding timeout reports state `unavailable` with cause `timeout`. Diagnostic data excludes query text and vectors.

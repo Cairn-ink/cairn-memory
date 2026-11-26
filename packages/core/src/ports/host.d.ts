@@ -184,10 +184,10 @@ export interface ContextCandidateDiagnostics {
   coverage: ContextReadCoverage;
   trace: {
     requested: "lexical" | "hybrid";
-    effective: "lexical";
+    effective: "lexical" | "hybrid";
     family: "local";
     preset: "rrf-k60-d12";
-    embedder: null;
+    embedder: string | null;
     tokenizer: "hr1-t1-v1";
     representation: "candidate-text-v1";
     timings: { maintenanceMs: number; lexicalMs: number; semanticPreflightMs: number; embeddingMs: number; fusionMs: number };
@@ -200,10 +200,18 @@ export interface FindCandidatesResult extends ContextCandidateDiagnostics {
   items: readonly {
     ref: ContextReadRef;
     rank: number;
-    fusionScore: null;
-    channels: { lexical: { rank: number; rawScore: number }; semantic: null };
+    fusionScore: number | null;
+    channels: { lexical: { rank: number; rawScore: number } | null; semantic: { rank: number; rawScore: number } | null };
   }[];
   nextCursor: string | null;
+}
+
+export interface LexicalFindCandidatesResult extends FindCandidatesResult {
+  trace: FindCandidatesResult["trace"] & { effective: "lexical"; embedder: null };
+  items: readonly (FindCandidatesResult["items"][number] & {
+    fusionScore: null;
+    channels: { lexical: { rank: number; rawScore: number }; semantic: null };
+  })[];
 }
 
 /** Bounded adjunct data already qualified by the store, such as filing and support details. */

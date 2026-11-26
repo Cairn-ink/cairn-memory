@@ -149,12 +149,13 @@ function freezeDeps(input) {
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
  * @param {import("../ports/index.d.ts").ClockAndHash} clock
- * @param {Pick<import("./index.d.mts").MemoryServiceDeps, "contextReadCounter" | "contextReadFormat">} host
+ * @param {Pick<import("./index.d.mts").MemoryServiceDeps, "contextReadCounter" | "contextReadFormat" | "embedQuery"> &
+ *   Partial<Pick<import("./index.d.mts").MemoryServiceDeps, "gate">>} host
  * @param {import("./index.d.mts").MemoryServiceConfig["quantityLedger"]} [quantityLedger]
- * @returns {import("./index.d.mts").ContextReadMemoryService}
+ * @returns {Required<Pick<import("../ports/index.d.ts").MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>}
  */
 function readContractMethods(storage, clock, host, quantityLedger) {
-  const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock });
+  const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock, embedQuery: host.embedQuery, gate: host.gate });
   return {
     findCandidates,
     fetchEvidence: fetchEvidenceMethod(storage),
@@ -181,7 +182,7 @@ export function createMemoryService(input) {
         if (!("fence" in storage)) throw new CoreError("invalid_input");
         requireMethods(storage.fence, "assertVisible");
         requireMethods(clock, "nowMs", "monotonicMs");
-        return readContractMethods(storage, clock, input,
+        return readContractMethods(storage, clock, { contextReadCounter: input.contextReadCounter, contextReadFormat: input.contextReadFormat },
           freezeQuantityLedger("config" in input ? input.config?.quantityLedger : undefined));
       }
       return { inspect: inspectMethod(storage, clock) };
