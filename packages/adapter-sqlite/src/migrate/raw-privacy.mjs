@@ -39,6 +39,13 @@ function fenced(db, scope, hash) {
 
 /** @param {string} key @param {SessionHasher} hashSession @param {boolean} localPrivacy */
 export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
+  /** @param {Scope} scope @param {Session} session */
+  function fenceHashes(scope, { client, sessionId }) {
+    const direct = hashSession(scope, client, sessionId);
+    const archived = /^s1:([0-9a-f]{64})$/u.exec(sessionId)?.[1];
+    return archived === undefined || archived === direct ? [direct] : [direct, archived];
+  }
+
   /** @param {Connection} db @param {Scope} scope @param {Session} session */
   function storageSession(db, scope, session) {
     const { client, sessionId } = session;
@@ -79,9 +86,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
 
   /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions */
   function blocksSession(db, scope, session, positions) {
-    const { client, sessionId } = session;
-    const hash = hashSession(scope, client, sessionId);
-    if (fenced(db, scope, hash)) return true;
+    if (fenceHashes(scope, session).some(hash => fenced(db, scope, hash))) return true;
     const [owner, namespace] = scopeKey(scope);
     /** @type {Array<[number, number]>} */
     const windows = db.prepare(`SELECT body FROM cairn_migrated_raw_privacy
@@ -99,7 +104,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
   }
 
   return {
-    storageSession, blocksSession, blocksUuid,
+    storageSession, blocksSession, blocksUuid, fenceHashes,
     /** @param {Connection} db @param {Scope} scope @param {string} client
      * @param {readonly Pick<CaptureMessage, "id">[]} messages */
     blocksLegacyFork(db, scope, client, messages) {

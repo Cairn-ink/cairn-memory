@@ -11,7 +11,7 @@ import { scopeKey } from "../storage-values.mjs";
 /** @typedef {{ localAuthority?: ManagedCaptureBinding }} CaptureOptions */
 /** @typedef {ReturnType<typeof migratedCaptureControls>} MigratedCaptureControls */
 /** @typedef {{ owner_id: string, scope: string, project_id: string }} LegacyScope */
-/** @typedef {{ scopedCaptureControls: boolean, localRawPrivacy: boolean,
+/** @typedef {{ scopedCaptureControls: boolean, localRawPrivacy: boolean, placementConversion?: boolean,
  * episodeControls: Array<LegacyScope & { paused: string, enabled: string, generation: string }>,
  * consent: Array<LegacyScope & { client: string, automatic_capture_enabled: string, revision: string,
  * target_id: string, consent_generation: string, raw_notice_version: string | null }>,

@@ -1,3 +1,18 @@
+const bumpAffected = `
+      UPDATE cairn_topics SET revision = revision + 1,
+        title = CASE WHEN id IN (
+          SELECT topic_id FROM cairn_topic_sources WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key
+            AND memory_id = OLD.id
+        ) THEN NULL ELSE title END
+        WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key AND id IN (
+          SELECT topic_id FROM cairn_topic_sources WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key
+            AND memory_id = OLD.id AND revision = OLD.revision
+          UNION
+          SELECT topic_id FROM cairn_topic_memberships JOIN cairn_topic_outcomes USING (owner_id, namespace_key, memory_id)
+            WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key AND memory_id = OLD.id
+              AND revision = OLD.revision
+        );
+`;
 export const PLACEMENT_RELATION_TABLES = [
   "cairn_topics", "cairn_topic_sources", "cairn_topic_outcomes", "cairn_topic_memberships", "cairn_topic_failures",
   "cairn_supersessions", "cairn_conflicts",
@@ -11,6 +26,8 @@ export const PLACEMENT_RELATION_SCHEMA = `
     level TEXT NOT NULL CHECK (level IN ('L1', 'L2')),
     title TEXT,
     title_hash TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
+    wire_order INTEGER NOT NULL CHECK (wire_order > 0),
     parent_ids TEXT NOT NULL,
     PRIMARY KEY (owner_id, namespace_key, id),
     UNIQUE (owner_id, id),
@@ -89,19 +106,16 @@ export const PLACEMENT_RELATION_SCHEMA = `
 
   CREATE INDEX cairn_conflict_right ON cairn_conflicts (owner_id, namespace_key, right_id);
 
-  CREATE TRIGGER cairn_topic_source_revision AFTER UPDATE OF revision, historical, deleted ON cairn_memories
-    WHEN OLD.revision != NEW.revision OR OLD.historical != NEW.historical OR OLD.deleted != NEW.deleted
+  CREATE TRIGGER cairn_topic_source_revision AFTER UPDATE OF revision, historical ON cairn_memories
+    WHEN OLD.deleted = NEW.deleted AND (OLD.revision != NEW.revision OR OLD.historical != NEW.historical)
     BEGIN
-      UPDATE cairn_topics SET title = NULL WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key
-        AND title IS NOT NULL AND id IN (
-          SELECT topic_id FROM cairn_topic_sources WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key
-            AND memory_id = OLD.id
-        );
+      ${bumpAffected}
     END;
 
   CREATE TRIGGER cairn_memory_erase_dependents AFTER UPDATE OF deleted ON cairn_memories
     WHEN NEW.deleted = 1 AND OLD.deleted = 0
     BEGIN
+      ${bumpAffected}
       DELETE FROM cairn_topic_outcomes WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key AND memory_id = OLD.id;
       DELETE FROM cairn_topic_failures WHERE owner_id = OLD.owner_id AND namespace_key = OLD.namespace_key AND memory_id = OLD.id;
       UPDATE cairn_topic_sources SET revision = 0

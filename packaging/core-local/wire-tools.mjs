@@ -49,9 +49,9 @@ function inspectResult(result) {
     receipts: receipts.map(({ id, client, sessionId, eventId, role, excerpt, createdAtMs }) =>
       ({ id, client, sessionId, eventId, role, excerpt, createdAt: iso(createdAtMs) })),
     ...(procedural !== undefined && { procedural: tag }),
-    placements, conflicts,
-    ...(supersession !== undefined && { supersession }),
+    placements: placements.map(({ id, mocRevision, title }) => ({ mocId: id, mocRevision, title })), conflicts,
     ...(qualification !== undefined && { qualification }),
+    ...(supersession !== undefined && { supersession }),
     nextReceiptCursor, exhausted,
   };
 }

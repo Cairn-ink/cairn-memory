@@ -1271,3 +1271,26 @@ Embed the prepared query once per call within the read deadline through the reca
 Semantic cursors bind the request's semantic choice, embedding model ID and channel state. A continuation rechecks model and state before paging the retained ranking and returns `cursor_stale` on change. Request mismatches retain `invalid_cursor`. Snapshot and evidence fetch use the qualified refs and existing delivery fences. Fetch makes no embedding call.
 
 Every find or context read diagnostics payload includes `channels.semantic` with state and content-free causes and `coverage.depths.semantic` with the number of semantic candidates contributed to fusion (zero unless ready), and hybrid rankings retain the per-channel ranks for each candidate. Candidate diagnostics also report requested and effective modes, embedding model ID and elapsed embedding time. Vector results supply the semantic omission count and the memory embedding and scan counts and fractions. An embedding timeout reports state `unavailable` with cause `timeout`. Diagnostic data excludes query text and vectors.
+
+## Addendum 26 — Raw-only capture
+
+`config.rawCapture = { enabled: true }` opts a service registered without a
+model into provider-free capture that stores admitted conversation text in
+Raw only. Registration with both a model and `rawCapture.enabled` throws
+`invalid_input`. The rule that a fingerprint-keyed store requires a model is
+unchanged. Without `rawArchive` storage, `raw.archive` or `capture.admit`,
+`enqueueCapture` and `runCapture` return `capability_unavailable`, as they do
+when the option is off. With `documentCards` enabled, the existing keyless
+card path runs and this option adds nothing.
+
+`enqueueCapture` is unchanged: pause, blocked session, admission-time text
+withholding and the stored outbox. `runCapture` claims the event and runs the
+existing source screening. It then finishes in one transaction, in this
+order: withdraw blank or changed slots, `assertEligible` on the survivors,
+re-read the passages, apply the core source filter, `finish(tx, token, [])`,
+`archiveAllowed`, and `archive` of the admitted copies of the allowed
+positions. It never calls `beginDispatch`, the model gate, a provider, an
+embedder, extraction or the quantity ledger. The result is `done` with no
+memories and the finish's index revision. Pause, generation, lease and
+durable-deletion rules are the same as for model-backed capture. A source
+withdrawn between admission and finish is not archived.

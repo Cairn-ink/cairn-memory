@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { receiptExcerpt } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
@@ -113,7 +114,12 @@ test("P2 conversion records an unknown legacy receipt origin as uncertain", asyn
   assert.deepEqual(await receiptView(storage, independentId), view(independent.excerpt));
   const proof = editFixture(path, db => JSON.parse(db.prepare("SELECT body FROM cairn_receipts WHERE memory_id = ?")
     .get(unknownId).body).legacyRawAncestryEmpty);
-  assert.deepEqual([proof, await receiptView(storage, unknownId)], [false, view()]);
+  assert.deepEqual([proof, await receiptView(storage, unknownId)], [false, view(unknown.excerpt)]);
+  assert.equal((await service(storage).forget(scope, unknownId, source)).status, "forgotten");
+  await assert.rejects(inspect(storage)(scope, { memoryId: unknownId }), { code: "memory_not_found" });
+  assert.ok((await inspect(storage)(scope, {})).memories.every(({ id }) => id !== unknownId));
+  await storage.close();
+  assert.equal(readFileSync(path).includes(unknown.excerpt), false);
 });
 
 test("P3 old conversions require integer zero for every absence count", async t => {

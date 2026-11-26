@@ -119,8 +119,9 @@ function legacyTimeUs(date) {
  * Append the inspect layout to an attested CNXT store. Populate only evidence
  * that the base conversion retained or the cold legacy reader qualified.
  * @param {Connection} db @param {LegacyInput["inspect"]} [source]
+ * @param {() => LegacyInput["inspect"]["evidence"]} [projectEvidence]
  */
-export function installInspectSchema(db, source) {
+export function installInspectSchema(db, source, projectEvidence) {
   db.exec(schema);
   db.prepare("INSERT INTO cairn_inspect_identity VALUES (1, ?)").run(source?.cursorSecret ?? randomBytes(32).toString("hex"));
 
@@ -156,7 +157,7 @@ export function installInspectSchema(db, source) {
     const procedural = db.prepare(`INSERT INTO cairn_procedural_tags
       (owner_id, namespace_key, memory_id, tag_revision, positive, origin, anchors) VALUES (?, ?, ?, ?, ?, ?, ?)`);
     const epoch = db.prepare("INSERT INTO cairn_inspect_epochs VALUES (?, ?, ?)");
-    for (const item of source.evidence) {
+    for (const item of projectEvidence?.() ?? source.evidence) {
       const coordinates = [...scopeKey(item.scope), item.id];
       const tag = /** @type {InspectItemEvidence["procedural"]} */ (decodeJson(item.procedural));
       if (tag) {

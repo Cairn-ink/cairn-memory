@@ -13,29 +13,22 @@ const clock = {
 };
 
 export async function openStorage(database, localAuthority) {
-  const storage = await openSqliteAdapter(database, { capabilities: { contextRead: true, contextRawRead: true }, localAuthority });
+  const storage = await openSqliteAdapter(database, {
+    capabilities: { contextRead: true, contextRawRead: true }, legacyInspectPlacements: true,
+    ...(localAuthority && { localAuthority }),
+  });
   let encoding;
   try {
     encoding = tokenizer.get_encoding('o200k_base');
     const countTokens = text => encoding.encode(text, [], []).length;
-    const deps = {
-      storage, embedder: null, clock, tokens: { countTokens }, config: {},
+    const config = localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {};
+    const service = createMemoryService({
+      storage, embedder: null, clock, tokens: { countTokens }, config,
       // The fixed local connection has no provider. The service checks the
       // persisted write pause separately from its model gate.
       gate: { assertOpen() {} },
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
-    };
-    let service;
-    if (localAuthority) {
-      try {
-        service = createMemoryService({ ...deps, config: { rawCapture: { enabled: true } } });
-      } catch (error) {
-        // The preceding Core generation rejects the new option. Its keyless
-        // service keeps capture unavailable until the opt-in is supported.
-        if (error.code !== 'invalid_input') throw error;
-      }
-    }
-    service ??= createMemoryService(deps);
+    });
     return { service, storage, async close() {
       try { encoding.free(); } finally { await storage.close(); }
     } };
