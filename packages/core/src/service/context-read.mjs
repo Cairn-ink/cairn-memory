@@ -50,8 +50,7 @@ function select(value, choices) {
 
 /** @param {unknown} value */
 function readInput(value) {
-  // Legacy context-read-input.mjs:188–211. The candidate and Raw defaults
-  // differ because an omitted semantic flag leaves Raw in its default mode.
+  // An omitted semantic flag leaves Raw in its default mode.
   const { query, types, intent, semantic, deadlineMs, budget, policy, representation, raw } = validateObject(value,
     ["query", "types", "intent", "semantic", "deadlineMs", "budget", "policy", "representation", "raw"]);
   const candidate = findCandidatesInput({ query, types, intent, semantic, deadlineMs, limit: CONTEXT_HORIZON });
@@ -110,13 +109,14 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
    * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
+   * @param {Parameters<typeof find>[3]} embedding
    * @param {RollingWitness & { asOfMs: number, candidates: AssemblyCandidates }} [expectedRolling] */
-  async function assemble(readSet, input, options, deadline, includeLedger, expectedRolling) {
+  async function assemble(readSet, input, options, deadline, includeLedger, embedding, expectedRolling) {
     const { candidate, budget, policy, representation, raw, lexicalOnly } = input;
     /** @type {AssemblyCandidates} */
     let found;
     try {
-      found = await find(readSet, candidate, { ...options, deadlineAtMs: deadline });
+      found = await find(readSet, candidate, { ...options, deadlineAtMs: deadline }, embedding);
     } catch (error) {
       if (expectedRolling && error instanceof CoreError && error.code === "evidence_unavailable") {
         // The index can still name a newly hidden memory. Reuse the prior
@@ -132,7 +132,10 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     }
     if (!counter || !format) throw new CoreError("token_count_unavailable");
     const { items, channels, coverage, trace } = found.result;
-    const candidates = { count: items.length, channels, coverage, trace };
+    const candidates = { count: items.length, channels, coverage, trace,
+      ...(channels.semantic.state === "ready" && { ranks: items.map(({ channels }) => ({
+        lexical: channels.lexical?.rank ?? null, semantic: channels.semantic?.rank ?? null,
+      })) }) };
     const rawRead = await readRawChannel(raw ? storage.contextRead?.raw : undefined,
       storage.uow, readSet, candidate.query, lexicalOnly, options, now, deadline);
     const ledgerRequest = includeLedger && storage.capabilities.quantityLedger === true && storage.quantityLedger && storage.memories &&
@@ -315,7 +318,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     // A stale ranked item or generation can invalidate the pack independently
     // of the ledger. Refresh ranked evidence once and require the rolling witness.
     if (refreshRolling !== undefined && now() < deadline) {
-      return assemble(readSet, input, options, deadline, true,
+      return assemble(readSet, input, options, deadline, true, embedding,
         { ...refreshRolling, asOfMs: ledgerRequest.asOfMs, candidates: found });
     }
     return enriched ?? fallback(scannedLedger ? { ledger_digest_omitted: 1 } : {}, {});
@@ -325,11 +328,12 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     const readSet = contextReadSet(value);
     const input = readInput(request);
     const deadline = Math.min(now() + input.candidate.deadlineMs, options.deadlineAtMs ?? Infinity);
+    const embedding = {};
     try {
-      return await assemble(readSet, input, options, deadline, true);
+      return await assemble(readSet, input, options, deadline, true, embedding);
     } catch (error) {
       if (error !== refreshAssembly) throw error;
-      return assemble(readSet, input, options, deadline, false);
+      return assemble(readSet, input, options, deadline, false, embedding);
     }
   }, undefined, snapshotContextCall);
   return async (readSet, request, options = {}) => {

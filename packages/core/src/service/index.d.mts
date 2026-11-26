@@ -1,6 +1,7 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  DocumentCardSession, EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
+  CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
+  LexicalFindCandidatesResult, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
@@ -10,7 +11,7 @@ export type {
   ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDiagnostics, ContextLedgerDigest,
   ContextLedgerErrorStage, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
-  FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
+  FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult, LexicalFindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
   InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
 } from "../ports/host.d.ts";
@@ -60,8 +61,12 @@ export interface CaptureRunner {
   ): Promise<{ status: "done" | "duplicate" | "processing" | "paused" | "failed"; code?: string; result?: FinishResult }>;
 }
 
+type LexicalFindCandidates = (set: ContextReadSet, input: FindCandidatesInput, options?: CallOptions) => Promise<LexicalFindCandidatesResult>;
+
 /** The Addendum 17 read entries for the explicit keyless-local composition. */
-export type ContextReadMemoryService = Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
+export type ContextReadMemoryService = Required<Pick<MemoryService, "fetchEvidence" | "readContext" | "inspect">> & {
+  findCandidates: LexicalFindCandidates;
+};
 
 export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps,
   "clock" | "diagnostics" | "contextReadCounter" | "contextReadFormat"> {
@@ -91,4 +96,6 @@ export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "e
 
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
 export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
+export function createMemoryService(deps: MemoryServiceRegistrationDeps & { readonly embedQuery?: undefined }):
+  Omit<MemoryService, "findCandidates"> & CaptureRunner & InspectMemoryService & { findCandidates?: LexicalFindCandidates };
 export function createMemoryService(deps: MemoryServiceRegistrationDeps): MemoryService & CaptureRunner & InspectMemoryService;
