@@ -8,7 +8,7 @@ import { hasRawFence } from "./raw-lineage.mjs";
 import { decodeRawRow, readRawRow } from "./raw-rows.mjs";
 import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
-import { readFacts, scopedSuppression } from "./suppressions.mjs";
+import { memoryCorrectionEvidence, readFacts, scopedSuppression } from "./suppressions.mjs";
 
 /** @import { RawSpanFact, StoredFact, TextFact } from "@cairn-ink/core" */
 /** @import { DocumentCardAmendment, DocumentCardSourceMessage, ItemRef, RetrievalScope, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
@@ -107,8 +107,9 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
       return verdicts.get(key) ?? null;
     }
 
-    /** @param {string} id @returns {DocumentCardMemoryState} */
-    function memoryState(id) {
+    /** @param {CardWrite["sourceMemories"][number]} link @returns {DocumentCardMemoryState} */
+    function memoryState(link) {
+      const { id } = link;
       const entry = readEntry(db, scope, id);
       const revision = entry?.row.revision;
       if (deleted.get(...scopeKey(scope), id)?.deleted === 1 || policy.facts.some(({ fact }) =>
@@ -119,8 +120,9 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
       if (!entry) return { status: "unknown" };
       const row = visibleMemory(id);
       if (!row) return { status: "suppressed" };
-      return row.historical ? { status: "historical", revision: row.revision }
-        : { status: "visible", revision: row.revision, content: row.text, date: row.createdAtMs };
+      const correction = memoryCorrectionEvidence(policy.facts, entry, link);
+      return row.historical ? { status: "historical", revision: row.revision, ...correction }
+        : { status: "visible", revision: row.revision, content: row.text, date: row.createdAtMs, ...correction };
     }
 
     return { policy, memoryState, withheld };
@@ -150,7 +152,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         if (!card.sourceMessage && (matchesText || raw.some(verdict => verdict !== false))) return null;
         const sourceWithheld = raw.includes(true) || matchesText;
         if (!sourceWithheld && raw.includes(null)) return null;
-        const memoryStates = new Map(card.sourceMemories.map(({ id }) => [id, memoryState(id)]));
+        const memoryStates = new Map(card.sourceMemories.map(link => [link.id, memoryState(link)]));
         return input(scope, card, memoryStates, facts, sourceWithheld);
       };
     },
@@ -165,11 +167,17 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
           if (card.sourceMessage) bindings.unshift(card.sourceMessage);
           return !bindings.some(source => withheld(source) === true) &&
             ![card.title, card.body].some(text => importTextBlocked(policy.facts, text, policy.legacy)) &&
-            !card.sourceMemories.some(({ id, revision }) => {
-              const state = memoryState(id);
-              return state.status === "suppressed" || state.status === "forgotten" ||
-                (card.sourceMessage === null && (state.status === "historical" ||
-                  (state.status === "visible" && state.revision !== revision)));
+            !card.sourceMemories.some(link => {
+              const { revision } = link;
+              const state = memoryState(link);
+              if (!("revision" in state)) {
+                return state.status !== "unknown" ||
+                  memoryCorrectionEvidence(policy.facts, undefined, link).unresolvedCorrection ||
+                  revision === 0;
+              }
+              return state.revision < revision || state.unresolvedCorrection === true ||
+                state.correctedRevisions.includes(revision) ||
+                (card.sourceMessage === null && (state.status === "historical" || state.revision !== revision));
             });
         },
 
@@ -218,6 +226,7 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
     forPurge(db, scope, factIds) {
       const policy = scopedSuppression(db, scope, hashSession, factIds);
       const facts = textFacts(policy.facts);
+      const liveFacts = readFacts(db, scope);
 
       /** @param {DocumentCardSourceMessage} source */
       function sourceWithheld(source) {
@@ -226,22 +235,24 @@ export function createCardVisibility(hashSession, receiptReadSafety, memoryVisib
         return rawFactPolicy(scope, source, policy.facts, hashSession).purges(row.message);
       }
 
-      /** @param {string} id @returns {DocumentCardMemoryState} */
-      function memoryState(id) {
+      /** @param {CardWrite["sourceMemories"][number]} link @returns {DocumentCardMemoryState} */
+      function memoryState(link) {
+        const { id } = link;
         const entry = readEntry(db, scope, id);
         if (policy.facts.some(({ fact }) => fact.kind === "identity" && fact.memoryId === id &&
           (fact.throughRevision == null || (entry && entry.row.revision <= fact.throughRevision)))) return { status: "forgotten" };
         if (!entry) return { status: "unknown" };
         if (policy.definitelyHides(entry)) return { status: "suppressed" };
         if (policy.hides(entry)) return { status: "unknown" };
-        return { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision };
+        return { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision,
+          ...memoryCorrectionEvidence(liveFacts, entry, link) };
       }
 
       return {
         sourceWithheld,
         /** @param {CardWrite} card */
         input(card) {
-          const memoryStates = new Map(card.sourceMemories.map(({ id }) => [id, memoryState(id)]));
+          const memoryStates = new Map(card.sourceMemories.map(link => [link.id, memoryState(link)]));
           const bindings = card.sentences.map(sentence => sentence.source);
           if (card.sourceMessage) bindings.unshift(card.sourceMessage);
           const verdicts = bindings.map(sourceWithheld);

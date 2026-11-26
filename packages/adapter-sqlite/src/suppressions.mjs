@@ -1,12 +1,12 @@
 import { createHmac } from "node:crypto";
 import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, hasLegacyPassageDigest, validateSuppressionFact } from "@cairn-ink/core";
-import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
+import { decodeJson, readEntry, readReceipts, readSuppressionEpoch } from "./memory-rows.mjs";
 import { legacyRawHash, opaqueSessionHash } from "./migrate/raw-privacy.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
 import { allowsRawSession } from "./raw-lineage.mjs";
 import { readRawRow } from "./raw-rows.mjs";
 import { receiptAddressDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
-import { copyReceipts, digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
+import { copyReceipts, digestAliases, invalidInput, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, RawSpanFact, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
@@ -16,10 +16,15 @@ import { copyReceipts, digestAliases, invalidInput, ownerKey, scopeKey, sha256 }
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
+/** @typedef {NonNullable<TextFact["sourceMemory"]>} Predecessor */
 
 const matchPolicy = { rowShingles: false };
 const capture = /** @type {const} */ ({ ...matchPolicy, mode: "capture" });
 const capturePassages = /** @type {const} */ ({ mode: "capture", rowShingles: true });
+/** @type {WeakMap<Tx, bigint>} */
+const firstReplacementEpoch = new WeakMap();
+/** @type {WeakMap<StoredFact, Predecessor>} */
+const textPredecessors = new WeakMap();
 
 /** @param {object} evidence */
 function hasNoShingleEvidence(evidence) {
@@ -101,14 +106,8 @@ function copyFact(input) {
 }
 
 /** @param {Connection} db @param {string} owner */
-function readEpoch(db, owner) {
-  const row = db.prepare("SELECT epoch FROM cairn_suppression_epochs WHERE owner_id = ?").get(ownerKey(owner));
-  return row ? BigInt(String(row.epoch)) : null;
-}
-
-/** @param {Connection} db @param {string} owner */
 export function advanceSuppressionEpoch(db, owner) {
-  const epoch = (readEpoch(db, owner) ?? 0n) + 1n;
+  const epoch = (readSuppressionEpoch(db, owner) ?? 0n) + 1n;
   db.prepare(`INSERT INTO cairn_suppression_epochs (owner_id, epoch) VALUES (?, ?)
     ON CONFLICT (owner_id) DO UPDATE SET epoch = excluded.epoch`).run(owner, epoch.toString());
   return epoch;
@@ -120,17 +119,81 @@ export function readFacts(db, scope) {
     FROM cairn_suppression_facts WHERE owner_id = ? AND namespace_key = ? ORDER BY length(epoch), epoch`)
     .all(...scopeKey(scope));
   return rows.map(row => {
-    const fact = validateSuppressionFact({ ...decodeJson(row.body), owner: scope.owner, actionId: decodeJson(row.action_id) });
+    const { textPredecessor, ...body } = decodeJson(row.body);
+    const fact = validateSuppressionFact({ ...body, owner: scope.owner, actionId: decodeJson(row.action_id) });
     if ((fact.namespace ?? null) !== scope.namespace) throw new CoreError("ineligible");
-    return {
+    const stored = {
       fact, factId: String(row.fact_id), incarnation: String(row.incarnation),
       epoch: BigInt(String(row.epoch)), createdAtMs: Number(row.created_at_ms),
     };
+    if (textPredecessor) textPredecessors.set(stored, textPredecessor);
+    return stored;
   });
 }
 
 /** @param {StoredFact} stored @returns {stored is StoredFact<TextFact>} */
 const isText = stored => stored.fact.kind === "text";
+
+/** @param {SuppressionFact} fact @returns {fact is TextFact} */
+const isReplacement = fact => fact.kind === "text" && (fact.origin === "edit" || fact.origin === "correct");
+
+/** @param {StoredFact<TextFact>} stored @param {Entry} entry */
+function predecessorTextMatch(stored, { row, digests, legacyHash }) {
+  const legacy = stored.fact.legacyTextHash;
+  if (legacy !== undefined && (legacy === row.textHash || legacy === legacyHash)) return true;
+  return factHidesRow({ ...stored, fact: { ...stored.fact, mode: "exact" } },
+    { type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision, digests }, matchPolicy);
+}
+
+/** @param {Connection} db @param {Tx} tx @param {Entry} entry @param {StoredFact[]} facts */
+export function recordTextReplacement(db, tx, entry, facts) {
+  const { row: { id, scope, createdAtMs, revision }, textVersions } = entry;
+  const since = BigInt(textVersions.at(-1)?.factEpoch ?? "0");
+  const first = firstReplacementEpoch.get(tx);
+  for (const stored of facts) {
+    const { fact, epoch } = stored;
+    if (!isReplacement(fact) || textPredecessors.has(stored) || epoch <= since) continue;
+    const source = fact.sourceMemory;
+    if (source && (source.id !== id || source.createdAtMs !== createdAtMs)) continue;
+    if ((source && first !== undefined && epoch >= first) || predecessorTextMatch({ ...stored, fact }, entry) === true) {
+      // Store only the predecessor's identity. The fact and its incarnation
+      // remain unchanged, and no predecessor text is retained here.
+      db.prepare(`UPDATE cairn_suppression_facts SET body = json_set(body, '$.textPredecessor', json(?))
+        WHERE owner_id = ? AND namespace_key = ? AND fact_id = ?`)
+        .run(JSON.stringify({ id, createdAtMs }), ...scopeKey(scope), stored.factId);
+    }
+  }
+  return [...textVersions, { revision: revision + 1, factEpoch: String(readSuppressionEpoch(db, scope.owner) ?? 0n) }];
+}
+
+/** @param {StoredFact[]} facts @param {Entry | undefined} entry @param {{id: string, revision: number}} link */
+export function memoryCorrectionEvidence(facts, entry, { id, revision }) {
+  const current = entry?.textVersions.at(-1);
+  let version;
+  for (const candidate of entry?.textVersions ?? []) {
+    if (candidate.revision > revision) break;
+    version = candidate;
+  }
+  let hasReplacement = false;
+  let unresolvedCorrection = false;
+  for (const stored of facts) {
+    const { fact, epoch } = stored;
+    if (!isReplacement(fact)) continue;
+    const textPredecessor = textPredecessors.get(stored);
+    const source = textPredecessor ?? fact.sourceMemory;
+    if (source && (source.id !== id || (entry && source.createdAtMs !== entry.row.createdAtMs))) continue;
+    if (textPredecessor) {
+      hasReplacement = true;
+      if (!current) unresolvedCorrection = true;
+    } else if ((!version || epoch > BigInt(version.factEpoch)) &&
+        (!entry || version !== current || predecessorTextMatch({ ...stored, fact }, entry) !== false)) {
+      unresolvedCorrection = true;
+    }
+  }
+  const cutoff = hasReplacement ? current?.revision ?? 1 : 1;
+  const correctedRevisions = Array.from({ length: cutoff }, (_, index) => index);
+  return { correctedRevisions, unresolvedCorrection };
+}
 
 /** @param {Connection} db @param {Scope} scope */
 export function readLegacyDenials(db, scope) {
@@ -343,6 +406,7 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
           .get(...keys, incarnation, epoch.toString(), createdAtMs, JSON.stringify(actionId), factBody(fact));
         const scope = { owner, namespace };
         const factId = String(inserted?.fact_id);
+        if (isReplacement(fact) && !firstReplacementEpoch.has(tx)) firstReplacementEpoch.set(tx, epoch);
         if (fact.kind === "rawSpan" && fact.origin === "forget") {
           purgeForgottenSpan?.(db, tx, scope, { fact, factId, epoch, incarnation, createdAtMs });
         }
@@ -387,7 +451,7 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
         .factsFor(memoryId, readEntry(db, scope, memoryId)));
     },
     epoch(tx, owner) {
-      return port(tx, owner, {}, db => readEpoch(db, owner));
+      return port(tx, owner, {}, db => readSuppressionEpoch(db, owner));
     },
   };
 }

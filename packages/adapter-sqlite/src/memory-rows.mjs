@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { CoreError, receiptExcerpt } from "@cairn-ink/core";
 import { receiptAddressDenial, receiptExcerptDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
-import { invalidInput, scopeKey, writeTime } from "./storage-values.mjs";
+import { invalidInput, ownerKey, scopeKey, writeTime } from "./storage-values.mjs";
 
 /** @import { TextDigest } from "@cairn-ink/core" */
 /** @import { MemoryRow, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { Connection } from "./storage-values.mjs" */
-/** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[] }} Entry */
+/** @typedef {{ revision: number, factEpoch: string }} TextVersion */
+/** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[], textVersions: TextVersion[] }} Entry */
 /** @typedef {Receipt & {legacyReceiptKey?: string, legacy?: {
  * canonicalRead?: boolean,
  * spans?: Array<{sessionId: string, start: number, end: number, precision: string}>
@@ -22,20 +23,27 @@ export function decodeJson(value) {
   return JSON.parse(String(value));
 }
 
+/** @param {Connection} db @param {string} owner */
+export function readSuppressionEpoch(db, owner) {
+  const row = db.prepare("SELECT epoch FROM cairn_suppression_epochs WHERE owner_id = ?").get(ownerKey(owner));
+  return row ? BigInt(String(row.epoch)) : null;
+}
+
 /** @param {Scope} scope @param {Record<string, import("node:sqlite").SQLOutputValue>} record @returns {Entry} */
 export function decodeEntry(scope, record) {
-  const { digests, historyHash, time: _legacyTime, ...body } = /** @type {ReturnType<typeof import("./storage-values.mjs").encodeContent>["body"] &
-    { historyHash?: string, time?: { createdAt: string, updatedAt: string } }} */ (
+  const { digests, historyHash, textVersions, time: _legacyTime, ...body } = /** @type {ReturnType<typeof import("./storage-values.mjs").encodeContent>["body"] &
+    { historyHash?: string, textVersions?: TextVersion[], time?: { createdAt: string, updatedAt: string } }} */ (
     decodeJson(record.body)
   );
   const updatedAtUs = BigInt(String(record.sort_key));
+  const revision = Number(record.revision);
   return {
     row: {
       ...body,
       id: String(record.id),
       scope: { owner: scope.owner, namespace: scope.namespace },
       textHash: String(record.text_hash),
-      revision: Number(record.revision),
+      revision,
       historical: record.historical === 1,
       createdAtMs: Number(record.created_at_ms),
       updatedAtMs: Number(updatedAtUs / 1000n),
@@ -44,6 +52,8 @@ export function decodeEntry(scope, record) {
     legacyHash: record.legacy_hash === null ? undefined : String(record.legacy_hash),
     historyHash,
     digests,
+    // An existing row without history only proves its current text.
+    textVersions: textVersions ?? [{ revision, factEpoch: "0" }],
   };
 }
 
@@ -60,11 +70,12 @@ export function readEntry(db, scope, id) {
 export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts, nowMs, createdAtMs = nowMs) {
   const time = writeTime(nowMs);
   if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
+  const textVersions = [{ revision: 1, factEpoch: String(readSuppressionEpoch(db, scope.owner) ?? 0n) }];
   const id = randomUUID();
   const inserted = db.prepare(`INSERT INTO cairn_memories
     (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?) RETURNING id`)
-    .get(...scopeKey(scope), id, createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
+    .get(...scopeKey(scope), id, createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify({ ...body, textVersions }));
   if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
   const { receiptIds } = attachReceipts(db, scope, inserted.id, receipts, nowMs);
   return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
