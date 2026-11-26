@@ -71,6 +71,9 @@ export interface FactMatchIncoming {
   sourceMemory?: { id: string; createdAtMs: number } | null;
 }
 
+/** Identifies the local host's explicit-save receipt by the legacy rule for its session and null event time. */
+export declare function placeholderReceipt(receipt: unknown): boolean;
+
 /** An ineligible comparison provides no permission to reveal the row. */
 export declare function factHidesRow(storedFact: StoredFact, row: FactMatchRow, policy?: FactMatchPolicy): FactMatchResult;
 
