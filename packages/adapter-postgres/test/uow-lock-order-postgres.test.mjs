@@ -18,11 +18,16 @@ async function waitForBlock(pool, pids, waiter) {
     const [holderPid, waiterPid] = pids;
     if (waiterPid !== undefined) {
       assert.notEqual(waiterPid, holderPid);
-      // Inspect both the blocker and the kind of lock the waiter needs.
+      // Inspect the blocker, the kind of lock the waiter needs, and whether it is
+      // the owner key that older hosted writers also take. That key is a fixed
+      // wire constant, so it is spelled out here rather than read from the adapter.
       const { rows } = await pool.query(`
-        SELECT locktype FROM pg_locks
-        WHERE pid = $1 AND NOT granted AND $2::int = ANY(pg_blocking_pids($1))
-      `, [waiterPid, holderPid]);
+        WITH k AS (SELECT hashtext('w3:' || $3)::bigint AS key)
+        SELECT l.locktype, (l.classid::bigint = ((k.key >> 32) & 4294967295)
+          AND l.objid::bigint = (k.key & 4294967295) AND l.objsubid = 1) AS owner_key
+        FROM pg_locks l, k
+        WHERE l.pid = $1 AND NOT l.granted AND $2::int = ANY(pg_blocking_pids($1))
+      `, [waiterPid, holderPid, owner]);
       if (rows.length) return rows;
     }
     assert.equal(await Promise.race([finished, delay(20, false)]), false,
@@ -83,8 +88,8 @@ for (const firstPauseLock of [true, false]) {
         await Promise.race([firstAtGate.promise, first]);
         const second = write(!firstPauseLock, "second");
         writers.push(second);
-        assert.deepEqual(await waitForBlock(pool, pids, second), [{ locktype: "advisory" }],
-          "second writer must wait on the owner lock before locking the capture row");
+        assert.deepEqual(await waitForBlock(pool, pids, second), [{ locktype: "advisory", owner_key: true }],
+          "second writer must wait on the shared owner key before locking the capture row");
         assert.equal(secondEntered, false, "second writer entered its callback while the owner lock was held");
       } finally {
         releaseFirst.resolve();
