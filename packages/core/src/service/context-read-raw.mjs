@@ -2,7 +2,7 @@ import { CoreError } from "../errors.mjs";
 import { createBM25, scoreBM25 } from "../retrieval/bm25.mjs";
 import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
-import { CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
+import { COMPACT_MEMORY_REPRESENTATION, CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
 import { fitCardAmendments } from "./context-read-pack.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey,
   wireItem } from "./context-read-projection.mjs";
@@ -223,6 +223,8 @@ function projectUnit(group, representation, count) {
  * @param {PackOptions} options @param {ReturnType<typeof meter>} metering */
 export function packRawContext(items, raw, readSet, query, options, metering) {
   const { now, representation, deadline: end, budget } = options;
+  if (representation === COMPACT_MEMORY_REPRESENTATION) return null;
+  const rawRepresentation = representation;
   const { tokens, trace, stops, check } = metering;
   const cutoff = end - Math.min(250, Math.max(25, (end - now()) * 0.25));
   const active = () => { if (now() >= cutoff) throw deadline; };
@@ -268,7 +270,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       const surviving = proposed.flatMap(unit => {
         const members = unit.members.filter(item => !cards.some(card => citesMemory(card, item)));
         if (members.length === unit.members.length) return [unit];
-        return members.length || unit.evidence.length ? [projectUnit({ ...unit, members }, representation, items.length)] : [];
+        return members.length || unit.evidence.length ? [projectUnit({ ...unit, members }, rawRepresentation, items.length)] : [];
       });
       const selected = surviving.flatMap(unit => unit.members);
       const rendered = surviving.slice().sort((a, b) =>

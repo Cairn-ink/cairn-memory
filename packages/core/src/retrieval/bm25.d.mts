@@ -16,7 +16,7 @@ export function scoreBM25(
   stats: { N: number; totalLength: number; df: ReadonlyMap<string, number> },
 ): number | null;
 
-export function createBM25<T extends RefRow & { text: string }>(documents: readonly T[]): {
+export function createBM25<T extends RefRow & { text: string }>(documents: readonly T[], maxDepth?: number): {
   N: number;
   totalLength: number;
   avgLength: number;

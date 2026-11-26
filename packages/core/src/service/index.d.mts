@@ -8,12 +8,13 @@ import type {
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDiagnostics, ContextLedgerDigest,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextCompactAssemblyItem,
+  ContextCompactRepresentation, ContextLedgerDiagnostics, ContextLedgerDigest,
   ContextLedgerErrorStage, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
   FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult, LexicalFindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
-  InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
+  InspectReceipt, InspectState, ReadCompactContextInput, ReadContextInput, ReadContextResult,
 } from "../ports/host.d.ts";
 
 export interface MemoryServiceConfig {

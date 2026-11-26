@@ -1380,3 +1380,11 @@ Find joins the embedding before semantic ranking and fusion, and
 an embedding error or timeout leaves lexical and Raw evidence available.
 Reads without a query embedding run Raw after find and measure its window
 from the start of Raw work.
+
+## Addendum 31 — memory-compact-v1 (opt-in)
+
+`readContext` accepts `representation: "memory-compact-v1"` as an engine API opt-in for `types: ["memory"]` with explicit `raw: false`.
+Compact reads reject source selection and cursors, and discovery and tool schemas retain their existing representation lists.
+Lexical retrieval, semantic fusion and the item budget use a horizon of 64, with the existing token budget and deadline.
+Pack whole `{ date, body }` items in ascending date order with undated items last, and meter the formatted block without source excerpts or ledger digests.
+Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.

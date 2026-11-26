@@ -8,6 +8,8 @@ import { scopeOf } from "./entry.mjs";
   FindCandidatesInput } from "../ports/host.d.ts" */
 
 export const CONTEXT_HORIZON = 24;
+export const COMPACT_MEMORY_REPRESENTATION = /** @type {const} */ ("memory-compact-v1");
+export const COMPACT_MEMORY_MAX_ITEMS = 64;
 const readTypes = /** @type {const} */ (["memory", "card"]);
 
 /** @param {Scope} scope */
@@ -94,9 +96,9 @@ export function itemRef({ type, scope, id }) {
   return { type, namespace: scope.namespace, id };
 }
 
-/** @param {unknown} values @param {ContextReadSet} readSet @returns {ContextReadRef[]} */
-export function qualifiedRefs(values, readSet) {
-  const parsed = validateDenseArray(values, 1, CONTEXT_HORIZON).map(value => {
+/** @param {unknown} values @param {ContextReadSet} readSet @param {number} maximum @returns {ContextReadRef[]} */
+export function qualifiedRefs(values, readSet, maximum = CONTEXT_HORIZON) {
+  const parsed = validateDenseArray(values, 1, maximum).map(value => {
     const data = validateObject(value, ["scope", "type", "id", "revision", "bodyRevision"]);
     const scope = scopeOf(data.scope);
     if (namespaceSlot(readSet, scope) < 0) throw new CoreError("authority_required");

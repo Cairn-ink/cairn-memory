@@ -141,12 +141,20 @@ export type FetchEvidenceInput = {
 
 export type ContextAssemblyPolicy = "rank-first-whole-v1" | "coverage-first-v1" | "rank-first-first-source-v1";
 export type ContextAssemblyRepresentation = "representation-v2-dated" | "representation-v2";
+export type ContextCompactRepresentation = "memory-compact-v1";
 export interface ReadContextInput extends ContextReadQuery {
   budget?: { maxTokens?: number; maxItems?: number };
   policy?: { id: ContextAssemblyPolicy };
   representation?: ContextAssemblyRepresentation;
   /** Use the separately qualified Raw channel. Defaults to true. */
   raw?: boolean;
+}
+
+/** Engine API opt-in. */
+export interface ReadCompactContextInput extends Omit<ReadContextInput, "types" | "representation" | "raw"> {
+  types: readonly ["memory"];
+  representation: ContextCompactRepresentation;
+  raw: false;
 }
 
 export interface ContextReadChannel {
@@ -186,7 +194,7 @@ export interface ContextCandidateDiagnostics {
     requested: "lexical" | "hybrid";
     effective: "lexical" | "hybrid";
     family: "local";
-    preset: "rrf-k60-d12";
+    preset: "rrf-k60-d12" | "rrf-k60-d64-compact";
     embedder: string | null;
     tokenizer: "hr1-t1-v1";
     representation: "candidate-text-v1";
@@ -398,16 +406,18 @@ export type ContextAssemblyItem = {
   evidence?: readonly (ContextAssemblyRawExcerpt & ({ body: string } | { sameAsBody: true }))[];
 } | (ContextAssemblyRawExcerpt & { layer: "Raw"; body: string });
 
+export type ContextCompactAssemblyItem = { date: string | null; body: string };
+
 export type ContextLedgerDigest = {
   body: string;
   sources: readonly { index: number; role: "user"; memory: ContextCompactRef & { type: "memory" } }[];
 };
 
-export interface ContextAssemblyValue {
+export interface ContextAssemblyValue<Item extends ContextAssemblyItem | ContextCompactAssemblyItem = ContextAssemblyItem> {
   framing: string;
   /** Computed evidence rendered before the ranked items. Source refs are attribution. */
   ledgerDigest?: ContextLedgerDigest;
-  items: readonly ContextAssemblyItem[];
+  items: readonly Item[];
 }
 
 export type ContextLedgerErrorStage = "terms" | "scan" | "evidence" | "seal" | "snapshot";
@@ -424,12 +434,16 @@ export interface ContextLedgerDiagnostics {
 export interface ContextAssemblyDiagnostics {
   version: "context-read-v1";
   policy: { id: ContextAssemblyPolicy };
-  representation: ContextAssemblyRepresentation;
+  representation: ContextAssemblyRepresentation | ContextCompactRepresentation;
   counter: { id: "tiktoken-o200k_base" };
   items: readonly {
     ref: ContextReadRef;
     metadata: ContextMemoryMetadata | ContextReadFields;
     body?: { tokens: number };
+    sourceAccess?: "available" | "unavailable-for-noncurrent-memory" | "unsupported";
+    sourcesComplete?: boolean;
+    fence?: string;
+    f?: string;
     sources?: readonly ({
       index: number;
       kind: "sameAsBody" | "concrete";
@@ -450,8 +464,8 @@ export interface ContextAssemblyDiagnostics {
   ledger?: ContextLedgerDiagnostics;
 }
 
-export interface ReadContextResult {
-  assembly: ContextAssemblyValue;
+export interface ReadContextResult<Item extends ContextAssemblyItem | ContextCompactAssemblyItem = ContextAssemblyItem> {
+  assembly: ContextAssemblyValue<Item>;
   diagnostics: ContextAssemblyDiagnostics;
   snapshot: string | null;
 }
@@ -471,7 +485,10 @@ export interface ContextReadTokenCounter {
 
 /** Pure synchronous formatter for the exact block the host delivers. */
 /** Render an included ledger digest before the ranked items. */
-export type ContextReadBlockFormatter = (value: ContextAssemblyValue) => string;
+/** A host opting into compact reads supplies a formatter that handles compact items. */
+export type ContextReadBlockFormatter = {
+  format(value: ContextAssemblyValue<ContextAssemblyItem | ContextCompactAssemblyItem>): string;
+}["format"];
 
 /** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */
 export interface ReadTokenIdentity {
@@ -620,6 +637,7 @@ type ForgetResult =
 export interface MemoryService {
   findCandidates?(readSet: ContextReadSet, input: FindCandidatesInput, options?: CallOptions): Promise<FindCandidatesResult>;
   fetchEvidence?(readSet: ContextReadSet, input: FetchEvidenceInput, options?: CallOptions): Promise<FetchEvidenceResult>;
+  readContext?(readSet: ContextReadSet, input: ReadCompactContextInput, options?: CallOptions): Promise<ReadContextResult<ContextCompactAssemblyItem>>;
   readContext?(readSet: ContextReadSet, input: ReadContextInput, options?: CallOptions): Promise<ReadContextResult>;
   inspect?(scope: Scope, input: InspectListInput | InspectItemInput, options?: CallOptions): Promise<InspectListResult | InspectItemResult>;
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;

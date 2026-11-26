@@ -6,7 +6,7 @@ import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "..
 import { compareUtf8 } from "../utf8.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
 import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./context-read-fetch.mjs";
-import { itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
+import { COMPACT_MEMORY_REPRESENTATION, itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
 import { readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @import { ContextEvidenceRow, ContextLedgerDigest, ContextLedgerErrorStage, ContextMemoryRef, ContextRawTurn, ContextReadRef,
@@ -183,8 +183,8 @@ async function qualifyForAssembly(row, signer, lineageEnabled, amendments, docum
 export function fetchForAssembly({ contextRead: store, uow, fence, documentCards, memories, quantityLedger }) {
   const cardsEnabled = hasContextCardLoader(documentCards);
   /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {Generations} observed
-   * @param {readonly ContextReadRef[]} refs @param {LedgerRequest} [ledgerRequest] */
-  return async (readSet, { intent, types }, observed, refs, ledgerRequest) => {
+   * @param {readonly ContextReadRef[]} refs @param {LedgerRequest} [ledgerRequest] @param {boolean} [compact] */
+  return async (readSet, { intent, types }, observed, refs, ledgerRequest, compact = false) => {
     if (!store) throw new CoreError("capability_unavailable");
     const readStore = store;
     /** @param {Tx} tx @param {Signer} signer @param {LedgerAttempt} attempt
@@ -248,6 +248,7 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
       v: 1, scope: prepared.scope, intent, refs: snapshotRefs(readSet, selected.map(({ item }) => item.ref)),
       generations: canonicalGenerations(expected, selected.some(({ item }) => item.type === "card")),
       access: readSet.accessGenerations, fences: selected.map(row => row.fence),
+      ...(compact && { representation: COMPACT_MEMORY_REPRESENTATION }),
     });
     /** @param {Tx} tx @param {Signer} signer @param {readonly AssemblyEvidence[]} selected
      * @param {readonly ContextRawTurn[]} rawTurns */
