@@ -11,14 +11,14 @@ const lockTimeout = "SET LOCAL lock_timeout = '5s'";
 const statementTimeout = "SET LOCAL statement_timeout = '30s'";
 const readStart = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'";
 const writeStart = "BEGIN; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'";
-const iterative = "SET LOCAL hnsw.iterative_scan = 'strict_order'";
+const iterative = "SET LOCAL hnsw.iterative_scan = 'relaxed_order'";
 const readSort = "SELECT current_setting('enable_sort') AS enable_sort";
 const disableSort = "SET LOCAL enable_sort = off";
 const restoreSort = "SET LOCAL enable_sort = on";
-const annSetup = "SET LOCAL hnsw.iterative_scan = 'strict_order'; SELECT current_setting('enable_sort') AS enable_sort; SET LOCAL enable_sort = off";
+const annSetup = "SET LOCAL hnsw.iterative_scan = 'relaxed_order'; SELECT current_setting('enable_sort') AS enable_sort; SET LOCAL enable_sort = off";
 const discard = ["DISCARD ALL"];
 const end = [["COMMIT"], discard];
-const annStatement = sql => sql.includes("FETCH FIRST $9 ROWS WITH TIES");
+const annStatement = sql => sql.includes("ORDER BY embedding <=> $8::vector LIMIT $9");
 const axis = new Float32Array(1536);
 axis[0] = 1;
 
@@ -112,7 +112,7 @@ test("ANN pagination restores sorting before receipt reads and disables it for t
     if (sql.startsWith("WITH owner_state")) return { command: "SELECT", rows: facts };
     if (annStatement(sql)) {
       assert.equal(db.sort(), "off");
-      const rows = pages++ ? [] : Array.from({ length: 4 }, (_, i) => ({
+      const rows = pages++ ? [] : Array.from({ length: 400 }, (_, i) => ({
         id: String(i), core_namespace: null, revision: 1, updated_us: "1", created_ms: 0,
         distance: 0.1 * i, source_client: "one", source_session_id: "closed",
       }));
@@ -162,7 +162,7 @@ for (const [initialSort, embedded, expectedDrop] of [["on", 500, 4], ["off", 500
 
     const before = await run(false);
     const after = await run(true);
-    const ann = before.findIndex(([sql]) => annStatement(sql));
+    const ann = before.findIndex(([sql]) => annStatement(sql) || sql.includes("FETCH FIRST $9 ROWS WITH TIES"));
     const broad = embedded === 500;
     const beginSetup = ann - (broad ? (initialSort === "on" ? 3 : 2) : 1);
     const expectedSetup = [[iterative, undefined]];
@@ -237,6 +237,9 @@ for (const initialSort of ["on", "off"]) {
 }
 
 test("only exact read batches pass the read-only guard", () => {
+  assert.equal(isReadStatement(iterative), true);
+  assert.equal(isReadStatement(iterative.replace("relaxed_order", "strict_order")), false);
+  assert.equal(isReadStatement(annSetup.replace("relaxed_order", "strict_order")), false);
   for (const sql of [readStart, annSetup]) {
     assert.equal(isReadStatement(sql), true, sql);
     for (const variant of [
