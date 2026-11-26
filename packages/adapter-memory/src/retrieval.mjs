@@ -164,9 +164,8 @@ export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, r
       else if (!entry) memoryStates.set(id, { status: "unknown" });
       else if (definiteOnly && policy.hides(entry) && !policy.definitelyHides(entry)) {
         memoryStates.set(id, { status: "unknown" });
-      } else if (policy.hides(entry) || (checkReceipt && await checkReceipt(entry))) {
-        memoryStates.set(id, { status: "suppressed" });
-      }
+      } else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      else if (checkReceipt && await checkReceipt(entry)) memoryStates.set(id, { status: "suppressed" });
       else {
         const previous = memoryStates.get(id);
         const evidence = memoryCorrectionEvidence(state, scope, link);
