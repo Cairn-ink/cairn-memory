@@ -80,12 +80,19 @@ function freezeConfig(input) {
   }
   let raw;
   if (rawCapture !== undefined) {
-    const fields = validateObject(rawCapture, ["enabled"]);
-    const { enabled } = fields;
-    if (Reflect.ownKeys(fields).length !== 1 || !Object.hasOwn(fields, "enabled") || typeof enabled !== "boolean") {
+    const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
+    const keys = Reflect.ownKeys(fields);
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(fields)) || !keys.length || keys.some(key => {
+      const descriptor = Object.getOwnPropertyDescriptor(fields, key);
+      return (key !== "enabled" && key !== "onModelFailure") ||
+        !descriptor || !Object.hasOwn(descriptor, "value") || typeof descriptor.value !== "boolean";
+    })) {
       throw new CoreError("invalid_input");
     }
-    raw = Object.freeze({ enabled });
+    raw = Object.freeze({
+      enabled: Object.hasOwn(fields, "enabled") && fields.enabled === true,
+      onModelFailure: Object.hasOwn(fields, "onModelFailure") && fields.onModelFailure === true,
+    });
   }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
@@ -199,6 +206,7 @@ export function createMemoryService(input) {
     }
     const deps = freezeDeps(input);
     if (deps.model !== null && deps.config.rawCapture?.enabled === true) throw new CoreError("invalid_input");
+    if (deps.model === null && deps.config.rawCapture?.onModelFailure === true) throw new CoreError("invalid_input");
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
