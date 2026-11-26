@@ -1370,6 +1370,17 @@ Known limits:
 - Where explicit receipts carry finite times, a window also withholds explicit
   saves whose receipts fall inside it.
 
+## Addendum 29 — Query embedding alongside lexical and Raw work
+
+A Context Read that attempts query embedding starts one memoized recall
+embedding at the read's start alongside lexical maintenance, lexical search
+and Raw search. For that read, the Raw cutoff is the earlier of 50 ms before
+the read deadline and the point 40% of the way from read start to deadline.
+Find joins the embedding before semantic ranking and fusion, and
+an embedding error or timeout leaves lexical and Raw evidence available.
+Reads without a query embedding run Raw after find and measure its window
+from the start of Raw work.
+
 ## Addendum 30 — Hosted write hook implementation boundaries
 
 ### 1. Hook mechanism and Postgres snapshot protocol
