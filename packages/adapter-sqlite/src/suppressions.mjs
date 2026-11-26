@@ -171,11 +171,11 @@ export function scopedSuppression(db, scope, hashSession) {
       blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]);
   }
 
-  /** @param {Entry} entry @param {StoredReceipt[]} [scanReceipts] */
-  function classify(entry, scanReceipts) {
+  /** @param {Entry} entry */
+  function classify(entry) {
     const { row, legacyHash, historyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
-    const receipts = needsReceipts ? scanReceipts ?? readReceipts(db, scope, row.id) : [];
+    const receipts = needsReceipts ? readReceipts(db, scope, row.id) : [];
     /** @type {FactMatchRow} */
     const candidate = { type: "memory", scope, memoryId: row.id, revision: row.revision, digests: aliases };
     const applicable = facts.filter(stored => {
@@ -210,12 +210,10 @@ export function scopedSuppression(db, scope, hashSession) {
   }
 
   return {
-    needsReceipts,
-
-    /** @param {Entry} entry @param {StoredReceipt[]} [scanReceipts] */
-    hides(entry, scanReceipts) {
+    /** @param {Entry} entry */
+    hides(entry) {
       if (!facts.length && !legacy.size) return false;
-      const { applicable, legacyDenied } = classify(entry, scanReceipts);
+      const { applicable, legacyDenied } = classify(entry);
       return legacyDenied || applicable.length > 0;
     },
 

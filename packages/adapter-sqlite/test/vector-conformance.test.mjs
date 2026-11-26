@@ -4,9 +4,11 @@ import { CAPTURE_CASES, CASES, PRIVACY_MATCH_CASES, RELATION_CASES, RETRIEVAL_WI
 import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { scratch, seedFact, setWriteTime } from "./storage-fixtures.mjs";
+import { waitForVectorCache } from "./vector-fixtures.mjs";
 
-const usesVector = spec => spec.needs.includes("semanticRetrieval") || spec.needsOff?.includes("semanticRetrieval") ||
-  spec.requests?.semanticRetrieval === true;
+const usesVector = spec => !spec.needs.includes("vectorSuppression") &&
+  (spec.needs.includes("semanticRetrieval") || spec.needsOff?.includes("semanticRetrieval") ||
+    spec.requests?.semanticRetrieval === true);
 
 for (const { followUp, ...kitCase } of [
   ...CASES, ...CAPTURE_CASES, ...PRIVACY_MATCH_CASES, ...RELATION_CASES, ...RETRIEVAL_WINDOW_CASES,
@@ -27,7 +29,10 @@ function register(kitCase, name) {
         const adapter = createSqliteAdapter(storage, { capabilities });
         assert.equal(adapter.capabilities.semanticRetrieval, capabilities.semanticRetrieval);
         return {
-          adapter,
+          adapter: { ...adapter, uow: { async run(owner, options, work) {
+            if (capabilities.semanticRetrieval && options.readOnly) await waitForVectorCache(adapter, owner);
+            return adapter.uow.run(owner, options, work);
+          } } },
           embeddingDimensions: 4,
           sessionRefs: "hashed",
           close: adapter.close,
@@ -46,11 +51,6 @@ function register(kitCase, name) {
       caseOwner = context.owner;
       return kitCase.run(context);
     } });
-    if (kitCase.needs.includes("vectorSuppression")) {
-      assert.equal(reason, "needs vectorSuppression");
-      t.skip(reason);
-    } else {
-      assert.equal(reason, null);
-    }
+    assert.equal(reason, null);
   });
 }

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { createSqliteAdapter, openSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { scopeKey } from "../src/storage-values.mjs";
 import { scratch, seedFact, sha256, testAccess } from "./storage-fixtures.mjs";
+import { waitForVectorCache } from "./vector-fixtures.mjs";
 
 const scope = { owner: "reader", namespace: null };
 const selection = { owner: scope.owner, namespaces: [null] };
@@ -15,11 +18,11 @@ const semantic = { capabilities: { semanticRetrieval: true, supersession: true }
 async function open(t) {
   const { path, remove } = scratch();
   const storage = await openStorage(path).catch(error => { remove(); throw error; });
-  t.after(async () => {
-    try { await storage.close(); } finally { remove(); }
-  });
   const adapter = createSqliteAdapter(storage, semantic);
-  return { adapter, port: storage.port };
+  t.after(async () => {
+    try { await adapter.close(); } finally { remove(); }
+  });
+  return { adapter, path, port: storage.port };
 }
 
 function content(text, vector, { model = "test", client = "editor" } = {}) {
@@ -37,6 +40,15 @@ function insert(adapter, text, vector = [0, 1, 0], { target = scope, time = 10, 
 
 function search(adapter, { view = selection, query = axis, depth = 50 } = {}) {
   return read(adapter, tx => adapter.vector.vector(tx, view, query, "test", depth));
+}
+
+function addUnrelatedRows(adapter) {
+  const target = { owner: "other-reader", namespace: null };
+  return write(adapter, target, async tx => {
+    for (let index = 0; index < 20; index++) {
+      await adapter.memories.insert(tx, target, content(`other memory ${index}`, axis), [], 1);
+    }
+  });
 }
 
 function oracleDistance(query, vector) {
@@ -69,6 +81,7 @@ test("exact vector top depth matches a full sort, including byte and microsecond
   await insert(adapter, "orchard other model", [...query], { model: "other" });
   await insert(adapter, "orchard wrong size", [1, 2]);
   await insert(adapter, "orchard zero vector", [0, 0, 0]);
+  await waitForVectorCache(adapter, scope.owner);
 
   const expected = entries.map(({ id, target, updatedAtUs, vector }) =>
     ({ ref: ref(target, id), updatedAtUs, distance: oracleDistance(query, vector) }))
@@ -122,6 +135,7 @@ test("vector visibility excludes hidden rows before ranking and coverage", async
   await testAccess(opened, scope, { write: true }, db => {
     db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?)").run(...scopeKey(scope), "rs1:a:" + address);
   });
+  await waitForVectorCache(adapter, scope.owner);
   await read(adapter, async tx => {
     const expected = [ref(scope, visible.id)];
     assert.deepEqual((await adapter.lexical.lexical(tx, view, "orchard", 50, {})).rows.map(row => row.ref), expected);
@@ -140,6 +154,7 @@ function service(storage, embedQuery, diagnostics) {
 
 test("recall falls back with incomplete vector coverage and reorders with complete coverage", async t => {
   const { adapter } = await open(t);
+  await addUnrelatedRows(adapter);
   const preferred = await insert(adapter, "orchard", [-1, 0, 0]);
   const nearby = await insert(adapter, "orchard mango", axis);
   const missing = await insert(adapter, "cedar", null);
@@ -149,6 +164,11 @@ test("recall falls back with incomplete vector coverage and reorders with comple
   const hybrid = service(adapter, embedQuery, ({ reason }) => reasons.push(reason));
   const recall = (instance, limit = 5) => instance.recall(scope, "orchard", { mode: "search", limit });
 
+  // The first request takes the lexical fallback before any timer can warm the cache.
+  assert.deepEqual(await search(adapter), { rows: [], coverage: { eligible: 0, embedded: 0, complete: false } });
+  assert.deepEqual(await recall(hybrid, 1), await recall(lexical, 1));
+  assert.deepEqual(reasons.splice(0), ["coverage_incomplete"]);
+  await waitForVectorCache(adapter, scope.owner);
   assert.deepEqual((await recall(lexical)).items.map(({ id }) => id), [preferred.id, nearby.id]);
   assert.deepEqual(await recall(hybrid, 1), await recall(lexical, 1));
   assert.deepEqual((await search(adapter)).coverage, { eligible: 3, embedded: 2, complete: false });
@@ -156,9 +176,13 @@ test("recall falls back with incomplete vector coverage and reorders with comple
 
   await write(adapter, scope, tx => adapter.memories.replaceContent(tx, scope, missing.id, missing.revision,
     content("cedar branch", [0, 1, 0]), null, 20));
+  assert.deepEqual(await search(adapter), { rows: [], coverage: { eligible: 0, embedded: 0, complete: false } });
+  assert.deepEqual(await recall(hybrid, 1), await recall(lexical, 1));
+  assert.deepEqual(reasons, ["coverage_incomplete", "coverage_incomplete"]);
+  await waitForVectorCache(adapter, scope.owner);
   assert.deepEqual((await search(adapter)).coverage, { eligible: 3, embedded: 3, complete: true });
   assert.deepEqual((await recall(hybrid)).items.map(({ id }) => id), [nearby.id, preferred.id, missing.id]);
-  assert.deepEqual(reasons, ["coverage_incomplete"]);
+  assert.deepEqual(reasons, ["coverage_incomplete", "coverage_incomplete"]);
 });
 
 test("default and keyless recall preserve lexical output without a query vector", async t => {
@@ -190,17 +214,17 @@ test("default and keyless recall preserve lexical output without a query vector"
   assert.equal(encode(await recall(service(enabled, { async embedQuery() { return { vector: axis, model: "test" }; } }))), expected);
 });
 
-test("vector reads use the supplied transaction snapshot", async t => {
+test("a vector cache for a newer snapshot cannot feed an older transaction", async t => {
   const { adapter } = await open(t);
   const original = await insert(adapter, "original", axis);
+  await waitForVectorCache(adapter, scope.owner);
   const started = Promise.withResolvers();
   const resume = Promise.withResolvers();
   const reader = read(adapter, async tx => {
     started.resolve();
     await resume.promise;
     const result = await adapter.vector.vector(tx, selection, axis, "test", 5);
-    assert.deepEqual(result, { rows: [{ ref: ref(scope, original.id), distance: 0, updatedAtUs: original.updatedAtUs }],
-      coverage: { eligible: 1, embedded: 1, complete: true } });
+    assert.deepEqual(result, { rows: [], coverage: { eligible: 0, embedded: 0, complete: false } });
   });
   let later;
   try {
@@ -210,5 +234,99 @@ test("vector reads use the supplied transaction snapshot", async t => {
     resume.resolve();
     await reader;
   }
+  await waitForVectorCache(adapter, scope.owner);
   assert.deepEqual((await search(adapter)).rows.map(row => row.ref.id), [later.id, original.id]);
+});
+
+test("committed writes, forget, suppression and Raw fences refresh a warm vector generation", async t => {
+  const { adapter } = await open(t);
+  await addUnrelatedRows(adapter);
+  const old = await insert(adapter, "orchard old", axis);
+  const stable = await insert(adapter, "orchard stable", [0, 1, 0]);
+  await waitForVectorCache(adapter, scope.owner);
+  const ranking = async () => (await search(adapter)).rows.map(({ ref }) => ref.id);
+  const cold = { rows: [], coverage: { eligible: 0, embedded: 0, complete: false } };
+  assert.deepEqual(await ranking(), [old.id, stable.id]);
+
+  const added = await insert(adapter, "orchard added", axis, { time: 12 });
+  assert.deepEqual(await search(adapter), cold);
+  await waitForVectorCache(adapter, scope.owner);
+  assert.deepEqual(await ranking(), [added.id, old.id, stable.id]);
+
+  await write(adapter, scope, tx => adapter.memories.replaceContent(tx, scope, added.id, added.revision,
+    content("orchard corrected", [-1, 0, 0]), null, 15));
+  assert.deepEqual(await search(adapter), cold);
+  await waitForVectorCache(adapter, scope.owner);
+  assert.deepEqual(await ranking(), [old.id, stable.id, added.id]);
+
+  assert.equal((await service(adapter).forget(scope, old.id, { kind: "mcp", client: null, sessionId: null })).status,
+    "forgotten");
+  // Let the commit-triggered rebuild run without a vector request prodding it.
+  await setTimeout(60);
+  assert.deepEqual(await ranking(), [stable.id, added.id]);
+
+  const source = { client: "editor", sessionId: "source" };
+  await adapter.uow.run(scope.owner, { pauseLock: true }, tx => adapter.raw.fenceSession(tx, scope, source));
+  assert.deepEqual(await search(adapter), cold);
+  await waitForVectorCache(adapter, scope.owner);
+  assert.deepEqual(await ranking(), [stable.id, added.id]);
+
+  await seedFact(adapter, { ...scope, origin: "forget", actionId: "text", kind: "text", mode: "exact",
+    text: { digests: [{ alg: "sha256", keyId: null, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core,
+      value: sha256("orchard stable") }] } });
+  assert.deepEqual(await search(adapter), cold);
+  await waitForVectorCache(adapter, scope.owner);
+  assert.deepEqual(await ranking(), [added.id]);
+});
+
+test("the vector channel returns exact order and distances after approximate ties", async t => {
+  const { adapter } = await open(t);
+  const closest = await insert(adapter, "orchard close", [1, 0.002, 0], { time: 10 });
+  const farther = await insert(adapter, "orchard farther", [1, 0.003, 0], { time: 20 });
+  const { rows } = await search(adapter, { depth: 2 });
+  assert.deepEqual(rows.map(({ ref }) => ref.id), [closest.id, farther.id]);
+  assert.ok(rows[0].distance > 0 && rows[0].distance < rows[1].distance);
+});
+
+test("vector and lexical client filters preserve stored JSON strings", async t => {
+  const { adapter } = await open(t);
+  await insert(adapter, "orchard unfiltered", axis, { client: "editor" });
+  const escaped = await insert(adapter, "orchard escaped", axis, { client: "editor\0child" });
+  await waitForVectorCache(adapter, scope.owner);
+  const view = { ...selection, clients: ["editor\0child"] };
+  const lexical = await read(adapter, tx => adapter.lexical.lexical(tx, view, "orchard", 2, {}));
+  assert.deepEqual(lexical.rows.map(({ ref }) => ref.id), [escaped.id]);
+  const vector = await search(adapter, { view });
+  assert.deepEqual(vector.rows.map(({ ref }) => ref.id), [escaped.id]);
+  assert.deepEqual(vector.coverage, { eligible: 1, embedded: 1, complete: true });
+});
+
+test("rollbacks keep the warm cache and external commits invalidate it even at the same revision", async t => {
+  const { adapter, path } = await open(t);
+  const original = await insert(adapter, "orchard original", axis);
+  const other = await insert(adapter, "orchard other", [0, 1, 0]);
+  await waitForVectorCache(adapter, scope.owner);
+  const readIds = async () => (await search(adapter)).rows.map(({ ref }) => ref.id);
+  assert.deepEqual(await readIds(), [original.id, other.id]);
+
+  const rollback = new Error("rollback");
+  await assert.rejects(write(adapter, scope, async tx => {
+    await adapter.memories.erase(tx, scope, original.id);
+    const result = await adapter.vector.vector(tx, selection, axis, "test", 2);
+    assert.equal(result.coverage.complete, false);
+    assert.deepEqual(result.rows, []);
+    throw rollback;
+  }), error => error === rollback);
+  assert.deepEqual(await readIds(), [original.id, other.id]);
+
+  const db = new DatabaseSync(path);
+  try {
+    assert.equal(db.prepare(`UPDATE cairn_memories SET body = json_set(body, '$.embedding.vector', json('[-1,0,0]'))
+      WHERE owner_id = ? AND id = ?`).run(scope.owner, original.id).changes, 1);
+  } finally {
+    db.close();
+  }
+  assert.deepEqual(await search(adapter), { rows: [], coverage: { eligible: 0, embedded: 0, complete: false } });
+  await waitForVectorCache(adapter, scope.owner);
+  assert.deepEqual(await readIds(), [other.id, original.id]);
 });

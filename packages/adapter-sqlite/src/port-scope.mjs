@@ -26,8 +26,9 @@ function withoutTrivia(sql) {
 /**
  * @param {DatabaseSync} db
  * @param {<T>(operation: () => T) => T} execute
+ * @param {Map<string, StatementSync>} [cachedStatements]
  */
-export function sqlitePortScope(db, execute) {
+export function sqlitePortScope(db, execute, cachedStatements) {
   let active = true;
   /** @type {Map<RowIterator, StatementSync>} */
   const iterators = new Map();
@@ -46,7 +47,11 @@ export function sqlitePortScope(db, execute) {
       if (outerTransactionControl.test(statement) && !rollbackToSavepoint.test(statement)) {
         throw new CoreError("internal_error");
       }
-      return db.prepare(sql);
+      const cached = cachedStatements?.get(sql);
+      if (cached) return cached;
+      const prepared = db.prepare(sql);
+      if (cachedStatements && cachedStatements.size < 16) cachedStatements.set(sql, prepared);
+      return prepared;
     });
   }
 

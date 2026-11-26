@@ -18,7 +18,7 @@ import { createRawStore } from "./raw.mjs";
 import { createRawLineage, createSpanLineage } from "./raw-lineage.mjs";
 import { createRawReads } from "./raw-read.mjs";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
-import { createRetrievalPorts } from "./retrieval.mjs";
+import { createRetrievalPorts, createVectorCache } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
 import { createTopicStore } from "./topics.mjs";
@@ -43,7 +43,7 @@ export async function openSqliteAdapter(filename, options) {
 }
 
 /** @param {Awaited<ReturnType<typeof openStorage>>} storage @param {Options} [options] */
-export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal },
+export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRawHashing, controls, preserveArrivalRefusal, watchVectorChanges },
   { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, ...topicOptions } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
@@ -74,6 +74,8 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     ? createContextRawRead(port, hashSessionKey, sessionHashKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, captureControls) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(uow, port, hashSessionKey, receiptReadSafety, inspect.identity,
     createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs), monotonicMs, rawContext) : undefined;
+  const vectorClock = () => performance.now();
+  const vectorCache = flags.semanticRetrieval ? createVectorCache(uow, port, hashSessionKey, vectorClock) : undefined;
   const adapter = {
     name: "sqlite",
     capabilities: flags,
@@ -95,7 +97,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
           reconcileRawInventory(db, readSet, contextEpochs(db, readSet), contextDeadline(options, monotonicMs), true)));
       },
     }),
-    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, flags.semanticRetrieval),
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, vectorCache, vectorClock),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
     counters,
@@ -103,8 +105,12 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },
     hashSessionKey,
-    close,
+    close: vectorCache ? async () => { await close(); vectorCache.close(); } : close,
   };
   assertAdapterCapabilities(adapter);
+  if (vectorCache) {
+    watchVectorChanges(vectorCache.prepareCommit);
+    vectorCache.start();
+  }
   return adapter;
 }
