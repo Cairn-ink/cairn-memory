@@ -221,7 +221,7 @@ test("text purge drops quantities across clients from a physical MCP save addres
     await pool.query(`INSERT INTO core_quantity_ledger (user_id, core_namespace, memory_id, receipt_id, source_client,
       source_session_id, source_message_id, ledger_key, text_hash, date_ms, ordinal, kind, measure, category, value,
       unit, quantity_group, period, comparator)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $8, 10, 0, 'record', 'spend', 'tea', 6.25, 'USD', 'food', 'none', 'none')`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $8, 10, 0, 'record', '"spend"', '"tea"', 6.25, '"USD"', 'food', 'none', 'none')`,
     [target.owner, target.namespace, label, randomUUID(), sourceClient, sourceSession, sourceMessage, hash(content)]);
   }
 
