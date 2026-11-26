@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { allDigests, factIncarnationBody } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { createMemoryAdapter } from "../../adapter-memory/src/index.mjs";
 import { openSqliteAdapter } from "../src/index.mjs";
+import { receiptIdentityDenial, receiptIdentityKey } from "../src/receipt-identity.mjs";
+import { scopeKey } from "../src/storage-values.mjs";
 import { scratch, seedFact, sha256 } from "./storage-fixtures.mjs";
 
 const scope = { owner: "owner", namespace: null };
@@ -22,8 +25,7 @@ const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGener
 const search = { query: "compass", types: ["memory"], intent: "current", raw: false, semantic: false };
 const explicitSource = { kind: "mcp", client: null, sessionId: null };
 
-async function open(t, contextRawRead = true) {
-  const file = scratch();
+async function open(t, contextRawRead = true, file = scratch()) {
   let adapter;
   t.after(async () => {
     try {
@@ -51,14 +53,14 @@ function service(storage) {
   });
 }
 
-async function capture(storage) {
+async function capture(storage, turns = messages) {
   const api = service(storage);
-  assert.deepEqual(await api.enqueueCapture(scope, { ...event, messages }), { status: "accepted" });
+  assert.deepEqual(await api.enqueueCapture(scope, { ...event, messages: turns }), { status: "accepted" });
   const finished = await api.runCapture(scope, event);
   assert.equal(finished.status, "done", JSON.stringify(finished));
   assert.equal(finished.result.memories.length, memories.length);
   const raw = await api.listRawMessages(scope, { limit: 10 });
-  assert.deepEqual(raw.items.map(({ messageId }) => messageId).sort(), messages.map(({ id }) => id));
+  assert.deepEqual(raw.items.map(({ messageId }) => messageId).sort(), turns.map(({ id }) => id));
   return api;
 }
 
@@ -231,4 +233,56 @@ test("Address-only receipt evidence is identical on snapshot and cursor replay",
   assert.deepEqual((await page()).items, next.items);
   assert.deepEqual((await api.fetchEvidence(readSet, { refs: next.items.map(({ ref }) => ref), intent: search.intent })).items,
     snapshot.items.filter(item => item.ref.id === next.items[0].ref.id));
+});
+
+const longTurn = { ...messages[0], content: "An amber flag marks the ridge. ".repeat(30).trimEnd() };
+const derivedExcerpt = longTurn.content.slice(0, 800);
+
+async function captureLongTurn(adapter) {
+  const api = await capture(adapter, [longTurn, messages[1]]);
+  assert.deepEqual(memorySources(await read(api))[0], { date: dates[0], excerpt: derivedExcerpt });
+  return api;
+}
+
+test("Forgetting the exact 800-character prefix withholds the derived excerpt and date", async t => {
+  const memory = createMemoryAdapter({ capabilities: { contextRead: true, inspect: true, rawArchive: true } });
+  const sqlite = await open(t);
+  for (const adapter of [memory, sqlite]) {
+    const api = await captureLongTurn(adapter);
+    const saved = await api.save(scope, derivedExcerpt, explicitSource);
+    assert.equal(saved.status, "saved");
+    assert.equal((await api.forget(scope, saved.item.id, explicitSource)).status, "forgotten");
+
+    const result = await read(api);
+    assertWithheld(result, 0);
+    if (adapter === sqlite) {
+      const fetched = await api.fetchEvidence(readSet, { snapshot: result.snapshot });
+      const item = fetched.items.find(item => item.text === memories[0]);
+      assert.ok(item);
+      assert.deepEqual(item.provenance.coverage, { status: "budget_exhausted", included: 0, omitted: 1 });
+    }
+  }
+});
+
+test("A denial for the derived receipt identity withholds the excerpt and date", async t => {
+  const file = scratch();
+  const api = await captureLongTurn(await open(t, true, file));
+  const { id: messageId, role } = longTurn;
+  const key = receiptIdentityKey({ ...session, messageId, role, excerpt: derivedExcerpt });
+  const db = new DatabaseSync(file.path);
+  try {
+    db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?)").run(...scopeKey(scope), receiptIdentityDenial(key));
+  } finally {
+    db.close();
+  }
+  assertWithheld(await read(api), 0);
+});
+
+test("A text fact matching the derived excerpt withholds the excerpt and date", async t => {
+  const adapter = await open(t);
+  const api = await captureLongTurn(adapter);
+  const result = await seedFact(adapter, { ...scope, kind: "text", mode: "exact", origin: "forget",
+    actionId: "suppress-excerpt", text: { digests: await allDigests(derivedExcerpt, null) } });
+  assert.equal(result.created, true);
+  assertWithheld(await read(api), 0);
 });

@@ -4,6 +4,7 @@ import { exactReceiptTurn, reconcileRawInventory } from "./context-raw-read.mjs"
 import { anchorsVisible, receiptProjector, storedEvidence } from "./inspect.mjs";
 import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { readRawRow } from "./raw-rows.mjs";
+import { receiptIdentityKey } from "./receipt-identity.mjs";
 import { archivedReceiptExcerpt, scopeKey } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
@@ -42,7 +43,13 @@ function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, 
       !archived || !exactReceiptTurn(db, scope, memoryId, address, archived)) return;
   const excerpt = archivedReceiptExcerpt(archived.message.content);
   if (!excerpt) return;
-  return withRawEvidence(scope, { ...address, id, eventId: messageId, excerpt,
+  const receipt = { ...address, excerpt };
+  /** @type {RawRow | undefined} */
+  let checkedArchive;
+  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId,
+    row => { checkedArchive = row; }) || !checkedArchive || checkedArchive.client !== archived.client ||
+    checkedArchive.sessionId !== archived.sessionId || checkedArchive.message.id !== archived.message.id) return;
+  return withRawEvidence(scope, { ...receipt, id, eventId: messageId,
     createdAtMs: Number(BigInt(String(time)) / 1000n) }, archived);
 }
 
