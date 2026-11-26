@@ -1,7 +1,8 @@
+// @ts-nocheck -- Node-only test helper shared by the adapter suites; the conformance typecheck has no Node types.
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { createMemoryService } from "../../core/src/service/index.mjs";
-import { syntheticHooks } from "../src/host-write-hooks-cases.mjs";
+import { createMemoryService } from "@cairn-ink/core/service";
+import { syntheticHooks } from "./host-write-hooks-cases.mjs";
 
 export const scope = { owner: "forget-owner", namespace: null };
 export const sessionless = { kind: "mcp", client: null, sessionId: null };

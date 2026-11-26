@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { archive, clock, fork, makeRow, rawForgetCases, root, scope, service, sessionless, sourceTuple, text }
-  from "../../conformance/test/host-forget-raw.mjs";
+  from "@cairn-ink/conformance/host-forget-raw";
 
 function fixture(_t, hostWriteHooks = true) {
   let serial = 0;

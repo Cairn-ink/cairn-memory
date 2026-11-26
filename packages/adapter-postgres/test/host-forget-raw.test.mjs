@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { capabilities, coreFingerprintLabels, userFingerprintKey } from "../../core/src/index.mjs";
 import { archive, clock, fork, makeRow, rawForgetCases, root, scope, service, sessionless, text, unrelated }
-  from "../../conformance/test/host-forget-raw.mjs";
+  from "@cairn-ink/conformance/host-forget-raw";
 import {
   createPostgresCapturePorts, createPostgresHostWriteHookPort, createPostgresMemoryCandidates,
   createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore, createPostgresRawPorts,
