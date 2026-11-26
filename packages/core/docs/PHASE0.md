@@ -1322,3 +1322,36 @@ privacy, pause, lineage, changed inputs, key mismatch, storage or commit
 uncertainty. If the fallback itself fails, the claim is abandoned with the
 original failure, as without the option. A source withdrawn between the
 model failure and the fallback finish is not archived.
+
+## Addendum 28 — Window fence for session-less explicit memories
+
+Forget and correct of a memory whose source names no conversation write
+durable window suppression facts in the same transaction as the rest of the
+operation, before receipts are removed.
+
+A memory is session-less when its source session is `null`, or when one or
+more of its receipts has a session of `null`, `"explicit-tool"` or
+`"explicit"`. These are the placeholders explicit tools use, because an
+explicit tool never learns which conversation it serves. Receipts that name a
+real session keep the existing session fence and add no window.
+
+The anchors are the finite `occurredAtMs` of the placeholder receipts. When
+any placeholder receipt has no time, or the memory has no receipts, the
+memory's `createdAtMs` and `updatedAtMs` are anchors too. For each distinct
+anchor `t`, the operation writes:
+
+```
+{ kind: "window", owner, namespace, actionId, origin,
+  client: null, window: { startMs: t - 1800000, endMs: t + 1800000 },
+  anchor: "pm30min", unknownTime: true }
+```
+
+`client: null` covers every client, because an explicit tool's client name
+is not the captured client's name. `unknownTime: true` also withholds
+messages whose time is unknown. `actionId` is the operation's action. `origin`
+is the operation's fact origin: `"forget"` for forget and `"edit"` for
+correct. The facts carry no text.
+
+Windows are durable. Raw, router cards and captures that arrive later inside
+a window are withheld, as are rows already stored inside it. A store that
+cannot write a window fact fails the whole operation.
