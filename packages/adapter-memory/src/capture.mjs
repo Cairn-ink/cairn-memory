@@ -1,3 +1,5 @@
+import { hostCaptureEffects } from "./host-write-context.mjs";
+import { hostAttachments, hostReceipt } from "../../core/src/service/entry.mjs";
 import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
@@ -185,6 +187,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           }));
           const policy = await readWritePolicy(tx, scope, queries, source, "full");
           const progress = { inserted: new Map(), writeTimes: new Map() };
+          const effects = hostCaptureEffects.get(tx);
+          /** @param {string} id */
+          const activeReceipts = id => (state.rows.get(scope.namespace)?.get(id)?.receipts ?? []).map(hostReceipt);
           /** @type {FinishResult["memories"]} */
           const written = [];
           /** @type {number[]} */
@@ -219,6 +224,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
                 progress.inserted.set(position, id);
                 progress.writeTimes.set(id, updatedAtUs);
                 written.push({ id, revision, outcome: "inserted" });
+                if (effects) effects.push({ itemPosition: position, memory: { id, revision }, outcome: "inserted",
+                  receipts: hostAttachments([], activeReceipts(id), receipts) });
                 break;
               }
               case "duplicate": {
@@ -226,9 +233,12 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
                 const existing = await memories.get(tx, scope, id);
                 if (!existing) throw new CoreError("internal_error");
                 const { merge } = planDuplicateMerge(existing, row);
+                const prior = effects ? activeReceipts(id) : [];
                 const { outcome, revision } = await finishWrites.touchDuplicate(tx, scope, id, receipts, merge, nowMs);
                 progress.writeTimes.set(id, writeTimeUs);
                 written.push({ id, revision, outcome });
+                if (effects) effects.push({ itemPosition: position, memory: { id, revision }, outcome,
+                  receipts: hostAttachments(prior, activeReceipts(id), receipts) });
                 duplicateCount++;
                 break;
               }

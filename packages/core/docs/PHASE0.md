@@ -1369,3 +1369,79 @@ Known limits:
   conversation where the explicit save happened.
 - Where explicit receipts carry finite times, a window also withholds explicit
   saves whose receipts fall inside it.
+
+## Addendum 30 — Hosted write hook implementation boundaries
+
+### 1. Hook mechanism and Postgres snapshot protocol
+
+The engine implements hook registration, the read-only admission callbacks, the write callbacks,
+scoped execution and effect metadata on the live transaction, and failure and replay handling.
+The Postgres host supplies the async context used to carry the run marker across continuations.
+This keeps the engine and Postgres adapter independent of Node-specific runtime APIs.
+The pause-locked Postgres exporter/importer protocol and explicit
+`BEGIN ISOLATION LEVEL READ COMMITTED` for writers remain open. Addendum 20 defines the
+snapshot protocol independently of hook registration. The snapshot protocol changes the
+connection and lock lifecycle even with hooks omitted. Explicit writer isolation changes
+the existing writer SQL trace. Postgres hooks in this implementation use the database's
+default READ COMMITTED isolation, verified in the Postgres hook driver with
+`SHOW transaction_isolation` on the callback's transaction.
+
+The follow-up needs the following test changes and separate pooler qualification.
+
+| Existing test | Required change in the follow-up |
+| --- | --- |
+| `packages/adapter-postgres/test/uow.test.mjs:7,66–82` | Change the writer BEGIN expectation. Replace the single-session pause-read trace with distinct exporter and reader connections, overlapping transaction locks, and exporter acknowledgement before callback entry. |
+| `packages/adapter-postgres/test/read-tx-round-trips.test.mjs:13,74–91,137–151` | Change the batched and individual writer BEGIN expectations. Replace the session lock, timeout restore and unlock trace with export, import, try-lock and handoff traces. |
+| `packages/adapter-postgres/test/pause-shared-postgres.test.mjs:115–185` | Exercise snapshot-after-wait through the importing reader. Replace session unlock/reset assertions and unlock injection with exporter-loss, handoff and reader transaction cleanup assertions. |
+
+The pooler qualification also covers snapshot freshness without a watermark advance, exclusive
+waiters during handoff, failed import and unknown exporter acknowledgement, capacity and lock
+budget exhaustion, transaction-local limits and backend reuse, and pause generation. Hook cases
+use the separate `@cairn-ink/conformance/host-write-hooks` driver. SQLite omits the runtime
+flag and port.
+
+### 2. Failure precedence during Raw fallback
+
+Addendum 20 governs failures originating in `onCaptureFinish` during Addendum 27's Raw fallback.
+A throw, rejection, invalid decision or pending operation at settlement rolls back the
+finish and returns `{ status: "failed", code: "host_write_hook_failed" }`. Claim cleanup uses
+that nonretryable code. A latched SQL failure in the hook keeps its native mapping and
+retryability. For example, SQLSTATE `40001` or `40P01` returns `storage_busy` and releases
+the claim for retry. Other fallback failures retain Addendum 27's abandonment with the
+original model error. Commit acknowledgement uncertainty keeps the existing reconciliation.
+
+### 3. Hosted admission decisions
+
+On every explicit `mcp` or `web` save, `beforeSave` runs after the preflight pause check and
+again in the final locked write run after the pause and generation check, before any mutation.
+The executor is read-only in both calls. The request context has `request: null` for an
+unkeyed save, which can proceed or return `{ status: "refuse" }`. A keyed save can proceed,
+replay, conflict or refuse. Refusal returns the existing suppressed outcome with the
+starting index revision. Replay still passes through the delivery fence.
+
+For a correction that reaches the guarded replacement, `beforeCorrect(tx, { scope, predecessor })`
+runs in the final locked transaction before the predecessor fact, receipt mutation or replacement.
+It uses a read-only executor and accepts `proceed` or `refuse`. Refusal returns the existing
+correct-withheld outcome with the predecessor and its receipts intact. Both admission callbacks
+are required members of the complete registered hook set. Contexts carry metadata only.
+
+### 4. Writer ownership and hosted switch-back
+
+The per-owner writer-ownership marker is deferred. Phase-1 switches explicit save, forget and
+correct to core and keeps capture on the legacy writer for the same owner. A single per-owner
+marker cannot express that split. Phase-1 ownership comes from per-operation routing fixed at the
+authenticated entry and switching under the pause barrier after in-flight work drains. The
+same-transaction legacy mirror keeps a late legacy write privacy-safe. Phase-2 requires an
+adapter-side marker by operation class before capture switches. That check is an opt-in on the
+hosted hook path to preserve the no-hook SQL trace. A follow-up should add opt-in lock-order,
+refusal and routing tests alongside the existing writer trace tests in
+`packages/adapter-postgres/test/uow.test.mjs:7–15,66–82` and
+`packages/adapter-postgres/test/read-tx-round-trips.test.mjs:137–151`. The current owner-lock
+sequence and existing tests remain as filed.
+
+The hosted composition owns and tests legacy mirror writes, their keys and consumers, and the
+switch-back contract. A hosted correction projects an edit-origin legacy suppression for the
+predecessor ID and exact creation time inside `onCorrect`. The engine conformance cases use a
+synthetic host table so they can verify callback order, metadata, the shared transaction and
+rollback. Hosted cutover qualification covers switch-back of reads, writes and queued capture,
+including legacy matching, retained signing domains and suppression of superseded evidence.

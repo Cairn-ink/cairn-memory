@@ -1,5 +1,5 @@
 import {
-  assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES, WRITE_PARITY_CAPABILITIES,
+  assertHostWriteHookCapability, assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES, WRITE_PARITY_CAPABILITIES,
 } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
@@ -9,8 +9,8 @@ import { fetchForAssembly } from "./context-read-assembly-evidence.mjs";
 import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
 import { readContextMethod } from "./context-read.mjs";
-import { entryError } from "./entry.mjs";
 import { findMethod, readCardMethod, readMethod } from "./find.mjs";
+import { bindHostWriteHooks, entryError } from "./entry.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
 import { inspectMethod } from "./inspect.mjs";
@@ -176,7 +176,10 @@ function freezeDeps(input) {
     throw new CoreError("invalid_input");
   }
 
-  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config) });
+  assertHostWriteHookCapability(storage.capabilities, storage.hostWriteHookPort);
+  const hooks = bindHostWriteHooks(deps.hostWriteHooks, storage.hostWriteHookPort);
+  if (hooks) requireMethods(storage.memories, "committedIndexRevision", "readRevision");
+  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config), hooks });
 }
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
@@ -209,6 +212,7 @@ export function createMemoryService(input) {
       requireMethods(storage.uow, "run");
       requireMethods(clock, "hmacHex");
       validateReadRegistration(storage);
+      if ("hostWriteHooks" in input) throw new CoreError("invalid_input");
       if (!storage.inspect) throw new CoreError("capability_unavailable");
       if (storage.capabilities.contextRead === true) {
         if (!("fence" in storage)) throw new CoreError("invalid_input");

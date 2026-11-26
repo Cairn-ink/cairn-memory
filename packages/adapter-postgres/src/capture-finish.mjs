@@ -1,3 +1,6 @@
+import { hostCaptureEffects } from "./host-write-context.mjs";
+import { hostAttachments } from "../../core/src/service/entry.mjs";
+import { readHostReceipts } from "./host-write-hooks.mjs";
 import { CoreError, decideWrite, planDuplicateMerge } from "../../core/src/index.mjs";
 import { receiptExcerpt } from "../../core/src/privacy/text.mjs";
 import { copyArray } from "./capture-input.mjs";
@@ -47,7 +50,7 @@ export async function finishedReceiptMessages(query, tx, scope, receipt, excerpt
 /** @param {Tx} tx @param {Query} query */
 export async function refreshFinishRevisions(tx, query) {
   const finishes = finishedInRun.get(tx);
-  if (!finishes) return;
+  if (!finishes || hostCaptureEffects.get(tx)) return;
   const revision = await readIndexRevision(query, tx.owner);
   for (const { client, eventId, result } of finishes) {
     await query(`UPDATE capture_events SET core_result = jsonb_set(core_result, '{indexRevision}', to_jsonb($4::bigint))
@@ -92,6 +95,7 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
 
   const writeTimeUs = writeTime(nowMs);
   const progress = { inserted: new Map(), writeTimes: new Map() };
+  const effects = hostCaptureEffects.get(tx);
   /** @type {number[]} */
   const suppressedItems = [];
   for (const [position, { row, receipts }] of items.entries()) {
@@ -105,6 +109,8 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
         progress.inserted.set(position, id);
         progress.writeTimes.set(id, updatedAtUs);
         result.memories.push({ id, revision, outcome: "inserted" });
+        if (effects) effects.push({ itemPosition: position, memory: { id, revision }, outcome: "inserted",
+          receipts: hostAttachments([], receipts.length ? await readHostReceipts(tx, scope, id) : [], receipts) });
         saved++;
         break;
       }
@@ -113,9 +119,12 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
         const existing = await memories.get(tx, scope, id);
         if (!existing) throw new CoreError("internal_error");
         const { merge } = planDuplicateMerge(existing, row);
+        const prior = effects && receipts.length ? await readHostReceipts(tx, scope, id) : [];
         const outcome = await memories.touchDuplicate(tx, scope, id, receipts, merge, nowMs);
         progress.writeTimes.set(id, writeTimeUs);
         result.memories.push({ id, ...outcome });
+        if (effects) effects.push({ itemPosition: position, memory: { id, revision: outcome.revision }, outcome: outcome.outcome,
+          receipts: hostAttachments(prior, receipts.length ? await readHostReceipts(tx, scope, id) : [], receipts) });
         result.duplicateCount++;
         break;
       }
@@ -124,4 +133,11 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories) 
   result.suppressedCount = suppressedItems.length;
   if (suppressedItems.length > 0) result.suppressedItems = suppressedItems;
   return { result, saved };
+}
+
+/** @param {Tx} tx @param {import("../../core/src/ports/index.d.ts").CaptureKey} key @param {FinishResult} result */
+export function requireHostFinish(tx, { scope, client, sessionId, eventId }, result) {
+  if (!finishedInRun.get(tx)?.some(finish => finish.result === result && finish.scope.owner === scope.owner &&
+      finish.scope.namespace === scope.namespace && finish.client === client && finish.sessionId === sessionId &&
+      finish.eventId === eventId)) throw new CoreError("internal_error");
 }

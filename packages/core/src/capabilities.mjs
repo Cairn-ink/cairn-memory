@@ -36,7 +36,7 @@ export const READ_CONTRACT_CAPABILITIES = Object.freeze([
   "inspect", // exact-scope Memory and receipt paging
 ]);
 
-export const WRITE_PARITY_CAPABILITIES = Object.freeze(["proceduralTags", "receiptAttachAdvancesRevision"]);
+export const WRITE_PARITY_CAPABILITIES = Object.freeze(["proceduralTags", "receiptAttachAdvancesRevision", "hostWriteHooks"]);
 
 const optionalCapabilities = [...READ_CONTRACT_CAPABILITIES, ...WRITE_PARITY_CAPABILITIES];
 const registeredCapabilities = [...CAPABILITIES, ...optionalCapabilities];
@@ -113,4 +113,17 @@ export function assertAdapterCapabilities(adapter) {
   }
   if (caps.documentCardSearch === true && caps.documentCards !== true) throw new CoreError("capability_unavailable");
   assertReadContractCapabilities(adapter);
+  assertHostWriteHookCapability(caps, adapter.hostWriteHookPort);
+}
+
+/** @param {{hostWriteHooks?: boolean}} caps @param {unknown} port */
+export function assertHostWriteHookCapability(caps, port) {
+  if ((port != null) !== (caps.hostWriteHooks === true)) throw new CoreError("capability_unavailable");
+  if (port != null && (typeof port !== "object" ||
+      ["priorReceipts", "predecessorEvidence", "beginCapture", "captureWrites", "captureSources", "finalizeCapture", "finalizeSave", "statementFailure"]
+        .some(method => typeof Reflect.get(port, method) !== "function") ||
+      typeof Reflect.get(port, "context")?.getStore !== "function" ||
+      typeof Reflect.get(port, "context")?.run !== "function")) {
+    throw new CoreError("invalid_input");
+  }
 }

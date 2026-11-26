@@ -10,7 +10,7 @@ import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { captureDocumentSteps } from "./capture-documents.mjs";
-import { entry, entryError, scopeOf } from "./entry.mjs";
+import { entry, entryError, scopeOf, isHostWriteHookFailure, writeHookResult } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
 
@@ -265,11 +265,11 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
 }
 
 /**
- * @param {import("./index.d.mts").MemoryServiceDeps} deps
+ * @param {import("./entry.mjs").HookedDeps} deps
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "enqueueCapture" | "captureStatus"> & import("./index.d.mts").CaptureRunner}
  */
 export function captureMethods(deps) {
-  const { storage, clock, model, gate, config, diagnostics, embedder } = deps;
+  const { storage, clock, model, gate, config, diagnostics, embedder, hooks } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
   const documents = captureDocumentSteps(deps, untilAborted, captureTransport, checkCaptureAbort);
   const rawOnly = model === null && config.rawCapture?.enabled === true && documents === undefined;
@@ -489,29 +489,63 @@ export function captureMethods(deps) {
 
       /** @type {Set<string>} */
       const excludedSources = new Set();
+      /** @type {WeakMap<import("../ports/index.d.ts").FinishResult, readonly import("../ports/index.d.ts").HostCaptureWrite[]> | undefined} */
+      const hookWrites = hooks ? new WeakMap() : undefined;
       /** @param {Tx} tx @param {readonly FinishItem[]} items */
       async function finish(tx, items) {
         // Snapshot the message IDs that identify admitted source positions before handing items to the adapter.
         const itemSourceIds = items.map(({ receipts }) => receipts.map(({ messageId }) => messageId));
+        if (hooks) await hooks.port.beginCapture(tx, key);
         const result = await capture.finish(tx, token, items);
         const { suppressedItems } = result;
-        if (suppressedItems === undefined) return result;
-        if (!Array.isArray(suppressedItems) || suppressedItems.length > itemSourceIds.length) {
-          throw new CoreError("internal_error");
-        }
-        const seen = new Set();
-        for (let index = 0; index < suppressedItems.length; index++) {
-          const position = suppressedItems[index];
-          if (!Object.hasOwn(suppressedItems, index) || !Number.isInteger(position) ||
-              position < 0 || position >= itemSourceIds.length || seen.has(position)) {
+        if (suppressedItems !== undefined) {
+          if (!Array.isArray(suppressedItems) || suppressedItems.length > itemSourceIds.length) {
             throw new CoreError("internal_error");
           }
-          seen.add(position);
+          const seen = new Set();
+          for (let index = 0; index < suppressedItems.length; index++) {
+            const position = suppressedItems[index];
+            if (!Object.hasOwn(suppressedItems, index) || !Number.isInteger(position) ||
+                position < 0 || position >= itemSourceIds.length || seen.has(position)) {
+              throw new CoreError("internal_error");
+            }
+            seen.add(position);
+          }
+          for (const position of seen) {
+            for (const messageId of itemSourceIds[position]) excludedSources.add(messageId);
+          }
         }
-        for (const position of seen) {
-          for (const messageId of itemSourceIds[position]) excludedSources.add(messageId);
-        }
+        if (hooks && hookWrites) hookWrites.set(result, await hooks.port.captureWrites(tx, key, result));
         return result;
+      }
+
+      /** @param {Tx} tx @param {import("../ports/index.d.ts").FinishResult} result
+       * @param {readonly number[]} positions */
+      async function finishHook(tx, result, positions) {
+        if (!hooks || !hookWrites) return;
+        const writes = hookWrites.get(result);
+        if (!writes) throw new CoreError("internal_error");
+        /** @type {Map<string, number>} */
+        const revisions = new Map();
+        for (const { memory: { id } } of writes) {
+          if (revisions.has(id)) continue;
+          const row = await storage.memories.readRevision?.(tx, scope, id);
+          if (!row) throw new CoreError("internal_error");
+          revisions.set(id, row.revision);
+        }
+        const sources = positions.flatMap(position => {
+          const { id, role, occurredAtMs } = admittedMessages[position];
+          return excludedSources.has(id) ? [] : [{ position, client, sessionId, messageId: id, role, occurredAtMs }];
+        });
+        const verified = archive && sources.length ? await hooks.port.captureSources(tx, key, sources, admittedMessages) : sources;
+        await hooks.invoke("onCaptureFinish", tx, { scope, client, sessionId, eventId, sources: verified,
+          writes: writes.map(write => ({
+            ...write, memory: { id: write.memory.id, revision: revisions.get(write.memory.id) ?? write.memory.revision },
+          })),
+        }, writeHookResult);
+        const indexRevision = await storage.memories.committedIndexRevision?.(tx);
+        if (indexRevision === undefined) throw new CoreError("internal_error");
+        await hooks.port.finalizeCapture(tx, key, result, indexRevision);
       }
 
       let retryableExtraction = false;
@@ -521,7 +555,11 @@ export function captureMethods(deps) {
       let finishRaw;
       try {
         if (positions.length === 0) {
-          const result = await runAtGeneration(tx => finish(tx, []));
+          const result = await runAtGeneration(hooks ? async tx => {
+            const finished = await finish(tx, []);
+            await finishHook(tx, finished, []);
+            return finished;
+          } : tx => finish(tx, []));
           return result === null ? { status: "paused" } : { status: "done", result };
         }
 
@@ -566,6 +604,7 @@ export function captureMethods(deps) {
               await archive.archive(tx, key, rawMessages);
             }
             if (!checkDeadline) checkCaptureAbort(options?.signal);
+            if (hooks) await finishHook(tx, result, allowedPositions);
             return { status: "done", result };
           }, checkDeadline);
         };
@@ -584,7 +623,7 @@ export function captureMethods(deps) {
           readSourcePassages, selectWriteKey, unchangedPositions,
           filterSources: (positions, passages, writeKey) =>
             filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
-          abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
+          abandonKeyMismatch, readEligible, runAtGeneration, finish, finishHook: hooks ? finishHook : undefined, assertSendGeneration,
           generation: preflight.generation, signal: options?.signal });
         /** @type {{request: ModelRequest, messages: CaptureMessage[], policy: {sourceCount: number, itemLimit: number}} | undefined} */
         let extraction;
@@ -592,7 +631,11 @@ export function captureMethods(deps) {
           const dispatch = await runAtGeneration(async tx => {
             const allowed = await screenSourcePositions(tx, positions);
             if (allowed === null) return abandonKeyMismatch(tx);
-            if (!allowed.length) return { result: await finish(tx, []) };
+            if (!allowed.length) {
+              const result = await finish(tx, []);
+              if (hooks) await finishHook(tx, result, []);
+              return { result };
+            }
             if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
             return { allowed };
           });
@@ -736,6 +779,7 @@ export function captureMethods(deps) {
             await archive.archive(tx, key, rawMessages);
             if (supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
           } else if (!archive && supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
+          if (hooks) await finishHook(tx, result, allowedPositions);
           return /** @type {const} */ ({ status: "done", result, withheld: prepared.length - items.length });
         });
         if (completed === null) return { status: "paused" };
@@ -744,7 +788,8 @@ export function captureMethods(deps) {
         if (supplemental) await supplemental.afterCommit();
         return { status: "done", result: completed.result };
       } catch (error) {
-        const failure = entryError(error);
+        let failure = entryError(error);
+        let hookFailure = isHostWriteHookFailure(error);
         if (failure.code === "commit_outcome_unknown") return resolveUnknownCommit();
         if (config.rawCapture?.onModelFailure === true && RAW_FALLBACK_FAILURE_CODES.has(failure.code) &&
             !options?.signal?.aborted) {
@@ -752,20 +797,25 @@ export function captureMethods(deps) {
             const completed = await finishRaw?.(positions, false);
             if (completed?.status === "done") return { ...completed, code: failure.code };
           } catch (fallbackError) {
-            if (entryError(fallbackError).code === "commit_outcome_unknown") return resolveUnknownCommit();
-            // Abandon with the original capture failure when the fallback rolls back.
+            const fallback = entryError(fallbackError);
+            if (fallback.code === "commit_outcome_unknown") return resolveUnknownCommit();
+            if (isHostWriteHookFailure(fallbackError)) {
+              failure = fallback;
+              hookFailure = true;
+            }
+            // Other fallback failures abandon with the original capture failure.
           }
         }
         let paused = failure.kind === "paused";
         try {
           await uow.run(owner, lock, async tx => {
-            paused = await pauseChanged(tx) || paused;
+            if (!hookFailure) paused = await pauseChanged(tx) || paused;
             await capture.abandon(tx, token, paused ? { code: "capture_paused", retryable: false }
               : { code: failure.code, retryable: failure.kind === "retryable" ||
                   (failure.code === "extraction_failed" && retryableExtraction) });
           });
         } catch (cleanupError) {
-          if (entryError(cleanupError).code === "commit_outcome_unknown") return resolveUnknownCommit();
+          if (!hookFailure && entryError(cleanupError).code === "commit_outcome_unknown") return resolveUnknownCommit();
           // A stale or failed cleanup must not replace the original outcome or release a successor.
         }
         return paused ? { status: "paused" } : { status: "failed", code: failure.code };

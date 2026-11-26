@@ -1,3 +1,5 @@
+import { assertOutsideHostWriteHook } from "../../core/src/service/entry.mjs";
+import { nodeHostWriteContext } from "./host-write-context.mjs";
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
 import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
 import { advanceContextEpochs } from "./context-read-state.mjs";
@@ -33,6 +35,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+ * hostTables?: Map<string, Map<Namespace, Map<string, unknown>>>,
  * textPredecessors: Map<bigint, {id: string, createdAtMs: number}>,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, cardGenerations: Map<Namespace, number>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
@@ -194,6 +197,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   /** @type {import("@cairn-ink/core/ports").UnitOfWork} */
   const uow = {
     async run(owner, options, fn) {
+      assertOutsideHostWriteHook();
+      if (nodeHostWriteContext.getStore()) throw new CoreError("storage_transaction_active");
       if (typeof owner !== "string" || !owner || options === null || typeof options !== "object" || typeof fn !== "function") {
         throw new CoreError("invalid_input");
       }
@@ -283,6 +288,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
    * @param {(getState: () => State) => T} body @param {boolean} [pauseLock]
    */
   function readPort(tx, scope, body, pauseLock = false) {
+    assertOutsideHostWriteHook();
+    if (nodeHostWriteContext.getStore()) throw new CoreError("storage_transaction_active");
     return accessPort(tx, scope, false, body, pauseLock);
   }
 
@@ -323,8 +330,16 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
    * @param {() => (getState: () => State, markDirty: () => void, run: IssuedRun) => T} prepare
    * @param {boolean} [pauseLock]
+   * @returns {Promise<Awaited<T>>}
    */
   async function writePort(tx, scope, write, prepare, pauseLock = false) {
+    assertOutsideHostWriteHook();
+    if (nodeHostWriteContext.getStore()) throw new CoreError("storage_transaction_active");
+    return enqueueWrite(tx, scope, write, prepare, pauseLock);
+  }
+
+  /** @type {typeof writePort} */
+  async function enqueueWrite(tx, scope, write, prepare, pauseLock) {
     const run = issued.get(tx);
     if (!run) throw new CoreError("internal_error");
 
@@ -591,7 +606,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner,
+  return { uow, port, dump, hostRead: accessPort, hostWrite: enqueueWrite, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner,
     readTokenIdentity,
     enableContextEpochs() { trackContextEpochs = true; } };
 }
