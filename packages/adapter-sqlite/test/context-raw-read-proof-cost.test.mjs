@@ -35,8 +35,8 @@ function message(id, content, role = "user") {
   return { id, role, content, occurredAtMs: Date.UTC(2025, 0, 2) };
 }
 
-async function cite(adapter, tx, session, turn, index) {
-  const key = { scope, ...session, eventId: turn.id, payloadDigest: sha256(turn.content) };
+async function cite(adapter, tx, session, turn, index, eventId = turn.id) {
+  const key = { scope, ...session, eventId, payloadDigest: sha256(turn.content) };
   assert.equal((await adapter.capture.admit(tx, key, [turn])).status, "admitted");
   const claim = await adapter.capture.claim(tx, key, [turn], { leaseMs: 10_000 });
   assert.equal(claim.status, "claimed");
@@ -188,4 +188,88 @@ test("A Raw deadline during the inventory scan returns no turns", async t => {
   await publish(adapter);
   assert.equal((await search(adapter, "clover")).turns.length, 24);
   assert.deepEqual(await search(adapter, "clover", { deadlineAtMs: clock + 30 }), { turns: [], coverage: "partial" });
+});
+
+test("Large fenced turns leave time for the visible cited turn", async t => {
+  const { adapter, service } = await open(t);
+  const session = { client: "client", sessionId: "visible" };
+  const fenced = { ...session, sessionId: "fenced" };
+  const visible = message("turn", "archive heliotrope by the planter");
+  const text = "青石".repeat(10_000);
+  const hidden = Array.from({ length: 600 }, (_, i) => message(`hidden-${i}`, text));
+  await write(adapter, async tx => {
+    assert.equal((await adapter.raw.importArchive(tx, scope, session, [visible])).archived, 1);
+    await cite(adapter, tx, session, visible, 0);
+    assert.equal((await adapter.raw.importArchive(tx, scope, fenced, hidden)).archived, hidden.length);
+    await adapter.raw.fenceSession(tx, scope, fenced);
+  });
+  await publish(adapter);
+
+  const result = await read(service, "heliotrope");
+  assert.deepEqual(rawItems(result).map(({ messageId }) => messageId), [visible.id]);
+  assert.equal(result.diagnostics.coverage.raw, "included");
+});
+
+test("A receipt-denied nonmatch has no effect on Raw corpus order or delivery", async t => {
+  const fixture = await open(t);
+  const { adapter } = fixture;
+  const session = { client: "client", sessionId: "thread" };
+  const longMatch = message("long", "archive marble marble tile slab grain");
+  const shortMatch = message("short", "archive copper");
+  const nonmatch = message("nonmatch", "archive " + "gravel ".repeat(50));
+  await write(adapter, async tx => {
+    const rows = [longMatch, shortMatch, nonmatch];
+    assert.equal((await adapter.raw.importArchive(tx, scope, session, rows)).archived, rows.length);
+    await cite(adapter, tx, session, nonmatch, 0);
+  });
+  await publish(adapter);
+  const query = "marble copper";
+  const visibleCorpus = await fullCorpus(adapter, 3);
+  assert.deepEqual(visibleCorpus.search(query).map(({ turn }) => turn.messageId), [longMatch.id, shortMatch.id]);
+
+  await denyIdentity(fixture, session, nonmatch);
+  await publish(adapter);
+  const full = await fullCorpus(adapter, 2);
+  const expected = full.search(query).map(({ turn }) => turn);
+  assert.deepEqual(expected.map(({ messageId }) => messageId), [shortMatch.id, longMatch.id]);
+  assert.deepEqual(await search(adapter, query), { turns: expected, coverage: "included" });
+  assert.deepEqual(await search(adapter, query, { limit: 1 }), { turns: expected.slice(0, 1), coverage: "partial" });
+});
+
+test("Raw search and revalidation find a proving capture in a long session", async t => {
+  const { adapter, port } = await open(t);
+  const session = { client: "client", sessionId: "thread" };
+  const turn = message("turn", "archive heliotrope by the planter");
+  const provingEvent = "z-capture";
+  await write(adapter, async tx => {
+    assert.equal((await adapter.raw.importArchive(tx, scope, session, [turn])).archived, 1);
+    await cite(adapter, tx, session, turn, 0, provingEvent);
+    for (let i = 0; i < 1024; i++) {
+      const other = message(`other-${i}`, "archive pebble");
+      const key = { scope, ...session, eventId: `a-capture-${i}`, payloadDigest: sha256(other.content) };
+      assert.equal((await adapter.capture.admit(tx, key, [other])).status, "admitted");
+      const claim = await adapter.capture.claim(tx, key, [other], { leaseMs: 10_000 });
+      assert.equal(claim.status, "claimed");
+      await adapter.capture.beginDispatch(tx, claim.token);
+      assert.equal((await adapter.capture.finish(tx, claim.token, [])).memories.length, 0);
+    }
+    await port(tx, scope.owner, { write: true }, db => db.exec("ANALYZE"));
+  });
+  await publish(adapter);
+
+  const query = "heliotrope";
+  const { turns, coverage } = await search(adapter, query);
+  assert.equal(coverage, "included");
+  assert.deepEqual(turns.map(({ messageId }) => messageId), [turn.id]);
+  const revalidate = () => adapter.uow.run(scope.owner, { readOnly: true }, tx =>
+    adapter.contextRead.raw.revalidate(tx, readSet, turns));
+  assert.equal(await revalidate(), true);
+
+  await write(adapter, tx => port(tx, scope.owner, { write: true }, db => {
+    assert.equal(db.prepare(`UPDATE cairn_capture_outbox SET messages = '[]'
+      WHERE owner_id = ? AND client_key = ? AND event_key = ?`)
+      .run(scope.owner, JSON.stringify(session.client), JSON.stringify(provingEvent)).changes, 1);
+  }));
+  assert.deepEqual(await search(adapter, query), { turns: [], coverage: "included" });
+  assert.equal(await revalidate(), false);
 });
