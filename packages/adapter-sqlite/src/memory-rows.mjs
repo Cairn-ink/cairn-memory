@@ -70,12 +70,19 @@ export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts
   return { id: inserted.id, revision: 1, createdAtMs, ...time, receiptIds };
 }
 
+/** @param {import("node:sqlite").SQLOutputValue} body
+ * @param {import("node:sqlite").SQLOutputValue} legacyKey @returns {StoredReceipt}
+ */
+export function decodeStoredReceipt(body, legacyKey) {
+  return { ...decodeJson(body), ...(legacyKey && { legacyReceiptKey: legacyKey }) };
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} id @returns {StoredReceipt[]} */
 export function readReceipts(db, scope, id) {
   return db.prepare(`SELECT body, legacy_receipt_key FROM cairn_receipts
     WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? ORDER BY ordinal`)
     .all(...scopeKey(scope), id).map(({ body, legacy_receipt_key }) =>
-      ({ ...decodeJson(body), ...(legacy_receipt_key && { legacyReceiptKey: legacy_receipt_key }) }));
+      decodeStoredReceipt(body, legacy_receipt_key));
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id */

@@ -51,7 +51,7 @@ const adapterMembers = {
   'raw-lineage.mjs': { Buffer: ['from'] },
   'raw-read.mjs': { Buffer: ['from'] },
   'retrieval-snapshot.mjs': { Buffer: ['from'] },
-  'retrieval.mjs': { Buffer: ['from'] },
+  'retrieval.mjs': { Buffer: ['from'], Symbol: ['toStringTag'] },
   'suppressions.mjs': { Buffer: ['from'] },
 };
 const compositionEntry = 'openLocalService';

@@ -8,6 +8,7 @@ import { CoreError } from "@cairn-ink/core";
 import { isNativeSqliteError, toSqliteError } from "./errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "./migrate/guard.mjs";
 import { sqlitePortScope } from "./port-scope.mjs";
+import { vectorCacheEpoch } from "./retrieval-snapshot.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
 /** @typedef {{ db: DatabaseSync, pauseLock: boolean, failure?: CoreError, transactionEnded?: boolean, executing?: boolean,
@@ -86,6 +87,14 @@ export function openMigrationUnitOfWork(filename) {
   return openUnitOfWork(filename, true);
 }
 
+/** @param {() => void} work */
+export function scheduleVectorWarmup(work) {
+  // The warm-up owns its transactions even when a read detects invalidation.
+  runContext.exit(() => {
+    AbortSignal.timeout(1).addEventListener("abort", work, { once: true });
+  });
+}
+
 /** @param {string} filename @param {boolean} migration */
 function openUnitOfWork(filename, migration) {
   if (typeof filename !== "string" || !filename || filename === ":memory:") throw new CoreError("invalid_input");
@@ -132,9 +141,13 @@ function openUnitOfWork(filename, migration) {
   const live = new WeakMap();
   /** @type {Set<Promise<unknown>>} */
   const pending = new Set();
+  /** @type {Map<string, import("node:sqlite").StatementSync>} */
+  const warmStatements = new Map();
   /** @type {Promise<void> | undefined} */
   let closing;
   let unusable = false;
+  /** @type {((db: PortConnection, epoch: bigint) => () => void) | undefined} */
+  let prepareVectorChange;
 
   const uow = /** @satisfies {UnitOfWork} */ ({
     run(owner, options, fn) {
@@ -175,8 +188,11 @@ function openUnitOfWork(filename, migration) {
       const run = /** @type {LiveRun} */ ({ db, pauseLock });
       let callbackFailed = false;
       const protectArrival = migratedRaw && pauseLock && !readOnly;
+      /** @type {bigint | null} */
+      let vectorEpoch = null;
       try {
         db.exec(readOnly ? "BEGIN" : "BEGIN IMMEDIATE");
+        if (!readOnly && prepareVectorChange) vectorEpoch = vectorCacheEpoch(db);
         if (protectArrival) db.exec("SAVEPOINT capture_arrival");
         // A deferred BEGIN alone does not establish a SQLite read snapshot.
         if (readOnly) db.prepare("SELECT rootpage FROM main.sqlite_schema LIMIT 1").get();
@@ -192,7 +208,7 @@ function openUnitOfWork(filename, migration) {
         }
         if (run.failure) throw run.failure;
         if (run.transactionEnded || !db.isTransaction) throw new CoreError("internal_error");
-        db.exec("COMMIT");
+        commit(db, vectorEpoch);
         return result;
       } catch (error) {
         const refusal = protectArrival && db.isTransaction && !run.transactionEnded && run.arrivalRefusal;
@@ -204,7 +220,7 @@ function openUnitOfWork(filename, migration) {
             const scope = sqlitePortScope(db, operation => operation());
             try { refusal(scope.connection); }
             finally { scope.revoke(); }
-            db.exec("COMMIT");
+            commit(db, vectorEpoch);
           } else if (db.isTransaction) db.exec("ROLLBACK");
         } catch (cleanupError) {
           unusable = true;
@@ -218,6 +234,28 @@ function openUnitOfWork(filename, migration) {
       releasePause?.();
       if (pause && --pause.users === 0) pauseLocks.delete(owner);
     }
+  }
+
+  /**
+   * Observe real visibility changes, including writes made through the storage
+   * port, without cooling the cache for unrelated sidecar maintenance.
+   * @param {DatabaseSync} db @param {bigint | null} before
+   */
+  function commit(db, before) {
+    const after = before === null ? null : vectorCacheEpoch(db);
+    let publish;
+    if (after !== null && after !== before && prepareVectorChange) {
+      const scope = sqlitePortScope(db, operation => operation());
+      try { publish = prepareVectorChange(scope.connection, after); }
+      finally { scope.revoke(); }
+    }
+    db.exec("COMMIT");
+    publish?.();
+  }
+
+  /** @param {NonNullable<typeof prepareVectorChange>} listener */
+  function watchVectorChanges(listener) {
+    prepareVectorChange = listener;
   }
 
   /** @param {Tx} tx @param {NonNullable<LiveRun["arrivalRefusal"]>} effect */
@@ -245,13 +283,13 @@ function openUnitOfWork(filename, migration) {
    * @template T
    * @param {Tx} tx
    * @param {OwnerId} owner
-   * @param {{ write?: boolean, pauseLock?: boolean }} options
+   * @param {{ write?: boolean, pauseLock?: boolean, cachedStatements?: boolean }} options
    * @param {(db: PortConnection) => T} body
    * @returns {Promise<Awaited<T>>}
    */
-  function port(tx, owner, { write = false, pauseLock = false }, body) {
+  function port(tx, owner, { write = false, pauseLock = false, cachedStatements = false }, body) {
     const run = live.get(tx);
-    if (!run || runContext.getStore() !== tx || owner !== tx.owner || (write && tx.readOnly) ||
+    if (!run || runContext.getStore() !== tx || owner !== tx.owner || (write && tx.readOnly) || (cachedStatements && !tx.readOnly) ||
         (pauseLock && !run.pauseLock) || unusable) {
       return Promise.reject(new CoreError("internal_error"));
     }
@@ -268,7 +306,7 @@ function openUnitOfWork(filename, migration) {
           // SQLite can end the transaction before surfacing a statement error.
           if (!run.db.isTransaction) run.transactionEnded = true;
         }
-      });
+      }, cachedStatements ? warmStatements : undefined);
       let result;
       try {
         result = body(scope.connection);
@@ -296,7 +334,7 @@ function openUnitOfWork(filename, migration) {
     return closing;
   }
 
-  return { uow, port, close, preserveArrivalRefusal };
+  return { uow, port, close, preserveArrivalRefusal, watchVectorChanges };
 }
 
 /** @param {DatabaseSync | undefined} reader @param {DatabaseSync | undefined} writer @param {DatabaseSync | undefined} reservation */
