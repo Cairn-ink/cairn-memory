@@ -24,8 +24,9 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
    * @param {string | undefined} key @param {string | undefined} legacyKey
    * @param {Pick<import("./receipt-identity.mjs").StoredReceipt, "legacy" | "legacyRawAncestryEmpty">} [stored]
    * @param {string} [memoryId]
+   * @param {(row: RawRow) => void} [onVisibleArchive]
    */
-  return function receiptReadSafety(db, scope, policy, receipt, key, legacyKey, stored, memoryId) {
+  return function receiptReadSafety(db, scope, policy, receipt, key, legacyKey, stored, memoryId, onVisibleArchive) {
     const { client, sessionId, messageId, role, excerpt, occurredAtMs } = receipt;
     if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant")) return false;
     if (excerpt !== undefined && (!key || receiptIdentityKey(receipt) !== key || receiptExcerpt(excerpt) !== excerpt)) return false;
@@ -71,8 +72,10 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
         !migratedRaw?.blocks(db, target, row, [message]);
     }
 
-    return visible(scope, archived, policy) &&
+    const allowed = visible(scope, archived, policy) &&
       lineage.receiptRootsVisible(db, scope, archived, (target, row) =>
         visible(target, row, target.namespace === scope.namespace ? policy : scopedSuppression(db, target, hashSession)));
+    if (allowed) onVisibleArchive?.(archived);
+    return allowed;
   };
 }
