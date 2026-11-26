@@ -26,9 +26,10 @@ import { createTopicStore } from "./topics.mjs";
 /** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
 /** @typedef {{ now?: () => number, monotonicMs?: () => number,
  * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean,
- * supersession?: boolean, conflictEdges?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
+ * supersession?: boolean, conflictEdges?: boolean, semanticRetrieval?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
 
 /** Opens the storage ports for a single installation database.
+ * Enable semanticRetrieval when the caller stores memory embeddings and supplies query vectors.
  * @param {string} filename @param {Options} [options]
  */
 export async function openSqliteAdapter(filename, options) {
@@ -47,7 +48,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
     placement: requested?.placement ?? false, supersession: requested?.supersession ?? false,
-    conflictEdges: requested?.conflictEdges ?? false,
+    conflictEdges: requested?.conflictEdges ?? false, semanticRetrieval: requested?.semanticRetrieval ?? false,
     embeddingRequiredOnInsert: false, receiptAttachAdvancesRevision: true, proceduralTags: true });
   if (flags.contextRawRead && !flags.contextRead) throw new CoreError("capability_unavailable");
   const hashSessionKey = sessionHasher(sessionHashKey, legacyRawHashing);
@@ -94,7 +95,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
           reconcileRawInventory(db, readSet, contextEpochs(db, readSet), contextDeadline(options, monotonicMs), true)));
       },
     }),
-    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs),
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, flags.semanticRetrieval),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
     counters,

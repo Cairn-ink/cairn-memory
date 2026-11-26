@@ -1,10 +1,10 @@
 import { compareSortKey, compareUtf8, CoreError, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
-import { decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, readReceipts } from "./memory-rows.mjs";
+import { decodeEntry, decodeJson, decodeStoredReceipt, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, readReceipts } from "./memory-rows.mjs";
 import { compareNamespaces, compareStrings, createSnapshotToken, validateSnapshotToken } from "./retrieval-snapshot.mjs";
 import { invalidInput, ownerKey, scopeKey } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
-/** @import { HydratedItem, ItemRef, MemoryRow, Namespace, RetrievalScope, StorageAdapter } from "@cairn-ink/core/ports" */
+/** @import { HydratedItem, ItemRef, MemoryRow, Namespace, RetrievalScope, StorageAdapter, VectorCandidates, VectorRow } from "@cairn-ink/core/ports" */
 /** @import { Entry } from "./memory-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
@@ -12,6 +12,9 @@ import { scopedSuppression } from "./suppressions.mjs";
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const maxSqlInteger = 9223372036854775807n;
+const receiptsInScan = `(SELECT json_group_array(json_array(r.body, r.legacy_receipt_key) ORDER BY r.ordinal)
+  FROM cairn_receipts AS r WHERE r.owner_id = m.owner_id AND r.namespace_key = m.namespace_key
+    AND r.memory_id = m.id) AS scan_receipts`;
 
 /** @template T @param {readonly T[]} values @returns {T[]} */
 function copyArray(values) {
@@ -111,6 +114,58 @@ export function rankLexical(documents, terms, depth) {
   return rankScores(scored).slice(0, depth);
 }
 
+/** @param {ArrayLike<number>} vector */
+function vectorScale(vector) {
+  let scale = 0;
+  for (let index = 0; index < vector.length; index++) {
+    const value = vector[index];
+    if (!Number.isFinite(value)) return NaN;
+    scale = Math.max(scale, Math.abs(value));
+  }
+  return scale;
+}
+
+/** @param {number[]} query @param {number} queryNorm @param {number[]} vector */
+function cosineDistance(query, queryNorm, vector) {
+  const scale = vectorScale(vector);
+  if (!scale) return undefined;
+  let dot = 0;
+  let norm = 0;
+  for (let index = 0; index < query.length; index++) {
+    const value = vector[index] / scale;
+    dot += query[index] * value;
+    norm += value * value;
+  }
+  return 1 - Math.max(-1, Math.min(1, dot / Math.sqrt(queryNorm * norm)));
+}
+
+/** @template T @param {T[]} heap @param {T} item @param {number} depth @param {(a: T, b: T) => number} order */
+function keepBest(heap, item, depth, order) {
+  // The worst retained candidate is at the root.
+  if (heap.length < depth) {
+    let index = heap.length;
+    heap.push(item);
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (order(item, heap[parent]) <= 0) break;
+      heap[index] = heap[parent];
+      index = parent;
+    }
+    heap[index] = item;
+  } else if (order(item, heap[0]) < 0) {
+    let index = 0;
+    while (2 * index + 1 < heap.length) {
+      const left = 2 * index + 1;
+      const right = left + 1;
+      const child = right < heap.length && order(heap[right], heap[left]) > 0 ? right : left;
+      if (order(heap[child], item) <= 0) break;
+      heap[index] = heap[child];
+      index = child;
+    }
+    heap[index] = item;
+  }
+}
+
 /** @param {Connection} db @param {Entry} entry @returns {HydratedItem} */
 function hydrateRow(db, { row }) {
   const receipts = readReceipts(db, row.scope, row.id).map(({ client, sessionId, messageId, role, occurredAtMs }) =>
@@ -127,30 +182,42 @@ function hydrateRow(db, { row }) {
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
  * @param {(db: Connection, selection: RetrievalScope, refs: readonly ItemRef[]) => ItemRef[]} visibleRawRefs
- * @returns {Pick<StorageAdapter, "lexical" | "fence" | "snapshot" | "hydrate" | "recent">}
+ * @param {boolean} semanticRetrieval
+ * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs) {
+export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, semanticRetrieval) {
   const stateToken = createSnapshotToken(storeKey);
 
   /** @param {Connection} db @param {RetrievalScope} selection @param {RecentKey | null} after
-   * @param {number} perNamespaceLimit
+   * @param {number} perNamespaceLimit @param {boolean} inlineReceipts
    */
-  function* visibleRows(db, selection, after = null, perNamespaceLimit = Infinity) {
+  function* visibleRows(db, selection, after = null, perNamespaceLimit = Infinity, inlineReceipts = false) {
     // Bind the exact time when SQLite can represent it. The remaining keyset
     // comparison also handles equal times across namespaces.
     const timeBound = after && after.updatedAtUs <= maxSqlInteger ? [after.updatedAtUs] : [];
-    const rows = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM cairn_memories WHERE ${LIVE_SCOPE}
+    const rowSource = `FROM cairn_memories AS m WHERE ${LIVE_SCOPE}
       AND historical = 0 ${timeBound.length ? "AND updated_at_us <= ?" : ""}
-      ORDER BY updated_at_us DESC, id DESC`);
+      ORDER BY updated_at_us DESC, id DESC`;
+    const rows = db.prepare(`SELECT ${MEMORY_COLUMNS} ${rowSource}`);
+    /** @type {typeof rows | undefined} */
+    let rowsWithReceipts;
     for (const namespace of selection.namespaces) {
       if (namespace === "") continue; // No rows can be stored in an empty namespace.
       const scope = { owner: selection.owner, namespace };
       const policy = scopedSuppression(db, scope, hashSession);
+      // Stream receipt evidence alongside each row when the vector scan needs it.
+      const scan = inlineReceipts && policy.needsReceipts
+        ? rowsWithReceipts ??= db.prepare(`SELECT ${MEMORY_COLUMNS}, ${receiptsInScan} ${rowSource}`)
+        : rows;
       let remaining = perNamespaceLimit;
-      for (const record of rows.iterate(...scopeKey(scope), ...timeBound)) {
+      for (const record of scan.iterate(...scopeKey(scope), ...timeBound)) {
         const entry = decodeEntry(scope, record);
         if (after && recentOrder(entry.row, after) <= 0) continue;
-        if (!matchesFilters(selection, entry.row) || policy.hides(entry)) continue;
+        if (!matchesFilters(selection, entry.row)) continue;
+        const receipts = record.scan_receipts === undefined ? undefined :
+          /** @type {Array<[string, string | null]>} */ (decodeJson(record.scan_receipts))
+            .map(([body, legacyKey]) => decodeStoredReceipt(body, legacyKey));
+        if (policy.hides(entry, receipts)) continue;
         yield entry.row;
         if (--remaining === 0) break;
       }
@@ -184,7 +251,44 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
     }
   }
 
+  /** @type {VectorCandidates} */
+  const vector = {
+    vector(tx, scope, query, model, depth) {
+      return port(tx, scope?.owner, {}, db => {
+        const selection = readSet(tx.owner, scope);
+        validateLimit(depth);
+        if (!(query instanceof Float32Array) || !query.length || typeof model !== "string" || !model) invalidInput();
+        const values = Array.from(new Float32Array(query));
+        const scale = vectorScale(values);
+        if (!Number.isFinite(scale)) invalidInput();
+        const scaled = scale ? values.map(value => value / scale) : [];
+        const norm = scaled.reduce((sum, value) => sum + value * value, 0);
+        // A complete tie keeps read-set order, as in the reference adapter's stable sort.
+        const namespaceOrder = new Map(selection.namespaces.map((namespace, index) => [namespace, index]));
+        /** @param {VectorRow} a @param {VectorRow} b */
+        const order = (a, b) => a.distance - b.distance || compareSortKey(b.updatedAtUs, a.updatedAtUs) ||
+          compareUtf8(b.ref.id, a.ref.id) || (namespaceOrder.get(a.ref.namespace) ?? 0) - (namespaceOrder.get(b.ref.namespace) ?? 0);
+        /** @type {VectorRow[]} */
+        const heap = [];
+        let eligible = 0;
+        let embedded = 0;
+        for (const row of visibleRows(db, selection, null, Infinity, true)) {
+          eligible++;
+          if (!norm || row.embedding?.model !== model) continue;
+          const stored = row.embedding.vector;
+          if (!Array.isArray(stored) || stored.length !== scaled.length) continue;
+          const distance = cosineDistance(scaled, norm, stored);
+          if (distance === undefined) continue;
+          embedded++;
+          keepBest(heap, { ref: memoryRef(row), distance, updatedAtUs: row.updatedAtUs }, depth, order);
+        }
+        return { rows: heap.sort(order), coverage: { eligible, embedded, complete: embedded === eligible } };
+      });
+    },
+  };
+
   return {
+    ...(semanticRetrieval ? { vector } : {}),
     lexical: {
       lexical(tx, scope, query, depth) {
         return port(tx, scope?.owner, {}, db => {
