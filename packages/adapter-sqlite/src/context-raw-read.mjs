@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import { rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
 import { receiptProjector } from "./inspect.mjs";
@@ -18,13 +18,17 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {ReturnType<typeof contextEpochs>} Epochs */
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} RawLineage */
+/** @typedef {[string, string, string, string]} InventoryPosition */
 
 const CHECKPOINT_ROWS = 1024;
 const MAX_INVENTORY = 4096;
 const MAX_TEXT_UNITS = 4 * 1024 * 1024;
 const MAX_LINKS = 1024;
-/** @type {[string, string, string, string]} */
+/** @type {InventoryPosition} */
 const START_OF_INVENTORY = ["", "", "", ""];
+const CHECKPOINT_PREFIX = "v1.";
+const CHECKPOINT_IV_BYTES = 12;
+const CHECKPOINT_TAG_BYTES = 16;
 
 /** @param {RawRow} row */
 const conversationId = ({ client, sessionId }) => JSON.stringify([client, sessionId]);
@@ -33,14 +37,47 @@ const inventoryKey = ({ owner, namespaces }) => sha256(JSON.stringify(["raw-inve
 /** @param {Epochs} epochs */
 const inventoryFence = ({ canonical, suppression, raw }) => sha256(JSON.stringify([canonical, suppression, raw]));
 
+/** @param {string} storeKey @param {string} projection @param {string} fence */
+function checkpointSeal(storeKey, projection, fence) {
+  const key = createHmac("sha256", Buffer.from(storeKey, "hex")).update("context-raw-checkpoint-v1").digest();
+  const binding = Buffer.from(JSON.stringify([projection, fence]));
+  return {
+    /** @param {InventoryPosition} position */
+    encode(position) {
+      const iv = randomBytes(CHECKPOINT_IV_BYTES);
+      const cipher = createCipheriv("aes-256-gcm", key, iv).setAAD(binding);
+      const ciphertext = Buffer.concat([cipher.update(JSON.stringify(position), "utf8"), cipher.final()]);
+      return CHECKPOINT_PREFIX + Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
+    },
+    /** @param {unknown} stored @returns {InventoryPosition | undefined} */
+    decode(stored) {
+      if (typeof stored !== "string" || !stored.startsWith(CHECKPOINT_PREFIX)) return undefined;
+      const encoded = stored.slice(CHECKPOINT_PREFIX.length);
+      const bytes = Buffer.from(encoded, "base64url");
+      const tagEnd = CHECKPOINT_IV_BYTES + CHECKPOINT_TAG_BYTES;
+      if (bytes.length <= tagEnd || bytes.toString("base64url") !== encoded) return undefined;
+      try {
+        const decipher = createDecipheriv("aes-256-gcm", key, bytes.subarray(0, CHECKPOINT_IV_BYTES)).setAAD(binding);
+        decipher.setAuthTag(bytes.subarray(CHECKPOINT_IV_BYTES, tagEnd));
+        const position = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(tagEnd)), decipher.final()]).toString("utf8"));
+        if (Array.isArray(position) && position.length === 4 && position.every(value => typeof value === "string")) {
+          return /** @type {InventoryPosition} */ (position);
+        }
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}
+
 /**
  * Checkpoint the exact canonical inventory, one bounded keyset page at a time.
  * This is separate from search, which may deliver a qualified prefix before
  * upkeep has completed. No copied Raw content is stored in the checkpoint.
  * @param {Connection} db @param {ContextReadSet} readSet @param {Epochs} epochs
- * @param {() => boolean} stopped @param {boolean} [force]
+ * @param {string} storeKey @param {() => boolean} stopped @param {boolean} [force]
  */
-export function reconcileRawInventory(db, readSet, epochs, stopped, force = false) {
+export function reconcileRawInventory(db, readSet, epochs, storeKey, stopped, force = false) {
   const key = inventoryKey(readSet), captured = inventoryFence(epochs);
   const prior = db.prepare("SELECT * FROM cairn_context_raw_checkpoints WHERE projection = ?").get(key);
   // Prioritize an authoritative Raw or denial change on demand. On a cold
@@ -48,10 +85,12 @@ export function reconcileRawInventory(db, readSet, epochs, stopped, force = fals
   if (!force && !prior && epochs.suppression === "0" && !db.prepare(
     "SELECT 1 FROM cairn_raw_fences WHERE owner_id = ? LIMIT 1").get(readSet.owner)) return false;
   const current = prior?.fence === captured ? prior : undefined;
-  if (current?.published === 1) return true;
+  const seal = checkpointSeal(storeKey, key, captured);
+  const position = seal.decode(current?.last_key);
+  if (position && current?.published === 1) return true;
   if (stopped()) return false;
-  let after = /** @type {[string, string, string, string]} */ (current ? decodeJson(current.last_key) : START_OF_INVENTORY);
-  let examined = Number(current?.examined ?? 0), scanned = 0, complete = true;
+  let after = position ?? START_OF_INVENTORY;
+  let examined = position ? Number(current?.examined) : 0, scanned = 0, complete = true;
   const namespaceKeys = readSet.namespaces.map(namespace => scopeKey({ owner: readSet.owner, namespace })[1]);
   const rows = db.prepare(`SELECT namespace_key, client_key, session_key, message_key FROM cairn_raw_messages
     WHERE owner_id = ? AND namespace_key IN (SELECT value FROM json_each(?))
@@ -70,7 +109,7 @@ export function reconcileRawInventory(db, readSet, epochs, stopped, force = fals
   db.prepare(`INSERT INTO cairn_context_raw_checkpoints VALUES (?, ?, ?, ?, ?)
     ON CONFLICT (projection) DO UPDATE SET fence = excluded.fence, last_key = excluded.last_key,
     examined = excluded.examined, published = excluded.published`)
-    .run(key, captured, JSON.stringify(complete ? START_OF_INVENTORY : after), examined, Number(complete));
+    .run(key, captured, seal.encode(complete ? START_OF_INVENTORY : after), examined, Number(complete));
   return complete;
 }
 
@@ -168,7 +207,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
           const stored = /** @type {StoredReceipt} */ (decodeJson(record.body));
           const legacy = typeof record.legacy_receipt_key === "string" ? record.legacy_receipt_key : undefined;
           if (!receiptReadSafety(db, scope, policy, stored, stored.receiptKey ?? legacy, legacy,
-            stored.legacyRawAncestryEmpty)) return false;
+            stored, id)) return false;
           receipt = stored;
         }
         if (!receipt || (amendment && (receipt.client !== source.client || receipt.sessionId !== source.sessionId ||
@@ -199,18 +238,18 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
         inventory: for (const namespace of readSet.namespaces) {
           const scope = { owner: readSet.owner, namespace };
           for (const record of rawRows(db, scope)) {
-            if (stopped() || examined >= MAX_INVENTORY) {
-              complete = false;
-              break inventory;
-            }
-            const row = decodeRawRow(record);
-            textUnits += row.message.content.length;
-            if (textUnits > MAX_TEXT_UNITS) {
+            if (stopped()) {
               complete = false;
               break inventory;
             }
             examined++;
+            const row = decodeRawRow(record);
             if (!visible(scope, row)) continue;
+            textUnits += row.message.content.length;
+            if (documents.length >= MAX_INVENTORY || textUnits > MAX_TEXT_UNITS) {
+              complete = false;
+              break inventory;
+            }
             const tokens = termFrequencies(row.message.content);
             totalLength += tokens.length;
             for (const term of tokens.frequencies.keys()) df.set(term, (df.get(term) ?? 0) + 1);

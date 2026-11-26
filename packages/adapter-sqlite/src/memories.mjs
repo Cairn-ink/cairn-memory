@@ -1,7 +1,8 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
+import { eraseContextDocuments } from "./context-lexical.mjs";
 import { attachReceipts, clearReceipts, decodeEntry, insertMemory, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
-import { scopedSuppression } from "./suppressions.mjs";
+import { recordTextReplacement, scopedSuppression } from "./suppressions.mjs";
 import {
   copyReceipts, encodeContent, invalidInput, scopeKey, validateBatch, validateId, validateMerge, validateSource, writeTime,
 } from "./storage-values.mjs";
@@ -163,9 +164,10 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkRepla
  * @param {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} index
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @param {ReturnType<typeof import("./document-cards.mjs").createDocumentCards>["purgeErasedMemory"]} [purgeCardSources]
+ * @param {ReturnType<typeof import("./document-card-visibility.mjs").createCardVisibility>["recordReceiptWithdrawals"]} [recordReceiptWithdrawals]
  * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources) {
+export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources, recordReceiptWithdrawals) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -238,11 +240,13 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
         const candidates = exactCandidates(db, scope, true)(textHash, legacyHash);
         if (candidates.some(other => other.row.id !== id && !policy.hides(other))) throw new CoreError("memory_conflict");
         const revision = row.revision + 1;
+        const textVersions = recordTextReplacement(db, tx, entry, policy.facts);
         db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?, text_hash = ?, legacy_hash = ?, body = ?
           WHERE ${LIVE_SCOPE} AND id = ?`)
-          .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify(body), ...scopeKey(scope), id);
+          .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify({ ...body, textVersions }), ...scopeKey(scope), id);
         clearProceduralTag(db, scope, id);
         if (evidence !== null) {
+          recordReceiptWithdrawals?.(db, scope, id);
           clearReceipts(db, scope, id);
           attachReceipts(db, scope, id, evidence, nowMs);
         }
@@ -261,6 +265,8 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
         db.prepare(`UPDATE cairn_memories
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
+        // Memory IDs are allocated as UUIDs or preserved from the legacy global primary key.
+        eraseContextDocuments(db, scopeKey(scope)[1], id);
         suppressReceiptSources(db, scope, id, entry.row.text);
         scrubTitles?.(db, scope);
         deleteProceduralTag(db, scope, id);

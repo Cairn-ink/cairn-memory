@@ -1,15 +1,17 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  DocumentCardSession, EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
+  CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
+  LexicalFindCandidatesResult, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDigest, ContextMemoryEvidence,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDiagnostics, ContextLedgerDigest,
+  ContextLedgerErrorStage, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
-  FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
+  FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult, LexicalFindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
   InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
 } from "../ports/host.d.ts";
@@ -25,7 +27,18 @@ export interface MemoryServiceConfig {
   /** Opt in to capture-time cards and, separately, post-commit amendments. Requires documentCards storage. */
   readonly documentCards?: { readonly enabled: boolean; readonly amendments?: boolean };
   /** Opt in to quantity extraction and persistence. Requires quantityLedger storage and a model. */
-  readonly quantityLedger?: { readonly enabled: boolean };
+  readonly quantityLedger?: {
+    readonly enabled: boolean;
+    /** Include calendar comparisons for “this week” and “this month” when the ledger is enabled. */
+    readonly calendarReading?: boolean;
+  };
+  /**
+   * Addendum 26. Opt in to provider-free capture that stores admitted conversation text in Raw only:
+   * no provider call, no extraction, no memories. Valid only without a model; registration with a
+   * model throws invalid_input. Capture still requires rawArchive storage and capture.admit.
+   * With documentCards enabled, the existing keyless card path runs instead.
+   */
+  readonly rawCapture?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {
@@ -41,7 +54,8 @@ export interface MemoryServiceDeps {
   readonly documentCardSessionKey?: (session: DocumentCardSession) => string | null;
   readonly contextReadCounter?: ContextReadTokenCounter;
   readonly contextReadFormat?: ContextReadBlockFormatter;
-  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
+  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit.
+   * It emits extract/core_validation/ungrounded_extraction_quantity once per ungrounded ledger record. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 
@@ -54,8 +68,12 @@ export interface CaptureRunner {
   ): Promise<{ status: "done" | "duplicate" | "processing" | "paused" | "failed"; code?: string; result?: FinishResult }>;
 }
 
+type LexicalFindCandidates = (set: ContextReadSet, input: FindCandidatesInput, options?: CallOptions) => Promise<LexicalFindCandidatesResult>;
+
 /** The Addendum 17 read entries for the explicit keyless-local composition. */
-export type ContextReadMemoryService = Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
+export type ContextReadMemoryService = Required<Pick<MemoryService, "fetchEvidence" | "readContext" | "inspect">> & {
+  findCandidates: LexicalFindCandidates;
+};
 
 export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps,
   "clock" | "diagnostics" | "contextReadCounter" | "contextReadFormat"> {
@@ -79,10 +97,13 @@ export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "e
     /**
      * Registration requires a model when storage.capabilities.fingerprintKey is true.
      * Model-backed capture requires a model. Opted-in keyless document cards can finish without extraction.
+     * Opted-in Raw-only capture (config.rawCapture, Addendum 26) archives Raw without extraction.
      */
     readonly model?: MemoryServiceDeps["model"] | undefined;
   };
 
 export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
 export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
+export function createMemoryService(deps: MemoryServiceRegistrationDeps & { readonly embedQuery?: undefined }):
+  Omit<MemoryService, "findCandidates"> & CaptureRunner & InspectMemoryService & { findCandidates?: LexicalFindCandidates };
 export function createMemoryService(deps: MemoryServiceRegistrationDeps): MemoryService & CaptureRunner & InspectMemoryService;

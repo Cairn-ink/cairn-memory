@@ -1,4 +1,4 @@
-import { decodeJson } from "./memory-rows.mjs";
+import { decodeJson, scrubAttestedReceipts } from "./memory-rows.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
 import { decodeRawRow, rawSessionKey, rawSessionWhere } from "./raw-rows.mjs";
 import { receiptAddressDenial } from "./receipt-identity.mjs";
@@ -48,6 +48,7 @@ export function eraseRawSessions(db, scope, sessions) {
   let rawDeleted = 0;
   let ledgerBlanked = 0;
   for (const session of sessions) {
+    scrubAttestedReceipts(db, scope, session);
     for (const { message_key } of list.iterate(...rawSessionKey(scope, session))) {
       suppress(session, decodeJson(message_key));
     }
@@ -74,6 +75,10 @@ export function purgeRawMessages(db, scope, facts, hashSession, onDelete, onBlan
     const decoded = decodeRawRow(row);
     if (matches(decoded, decoded.message)) {
       suppress(decoded, decoded.message.id);
+      scrubAttestedReceipts(db, scope, decoded, decoded.message.id);
+      scrubAttestedReceipts(db, scope, {
+        client: decoded.client, sessionId: "legacy-raw:" + hashSession(scope, decoded.client, decoded.sessionId),
+      }, decoded.message.id);
       rawDeleted += Number(remove.run(...rawSessionKey(scope, decoded), row.message_key).changes);
       onDelete?.({ client: decoded.client, sessionId: decoded.sessionId, messageId: decoded.message.id });
     }

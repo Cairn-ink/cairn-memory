@@ -128,6 +128,15 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const selection = { owner: tx.owner, namespace: scope.namespace };
         const counts = { archived: 0, existing: 0, withheld: 0 };
         if (!batch.length) return counts;
+        try {
+          if (controls?.rawDisposition({ scope: selection, client: session.client })) {
+            return { ...counts, withheld: batch.length };
+          }
+        } catch (error) {
+          // Explicit imports count policy refusals per message.
+          if (!(error instanceof CoreError) || error.code !== "capture_disabled") throw error;
+          return { ...counts, withheld: batch.length };
+        }
         const facts = readFacts(db, selection);
         const policy = rawFactPolicy(selection, session, facts, hashSession);
         if (!allowsRawSession(db, selection, session.client, policy.sessionKeyHash, facts)) {
@@ -137,7 +146,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
           migratedRaw.fenceArrival(db, selection, session, batch);
           return { ...counts, withheld: batch.length };
         }
-        if (lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch))) {
+        if (lineage.fenced(db, selection, session, lineage.proofs(selection.owner, session.client, batch), batch)) {
           return { ...counts, withheld: batch.length };
         }
         const legacy = readLegacyDenials(db, selection);
@@ -179,7 +188,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     eraseSessions(tx, scope, closure) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        const sessions = eraseAddresses(db, selection, copyBatch(closure).map(copySession));
+        const sessions = eraseAddresses(selection, copyBatch(closure).map(copySession));
         const counts = eraseRawSessions(db, selection, sessions);
         purgeCards?.(db, tx, selection, sessions);
         return changed(db, tx, selection, counts);
@@ -192,7 +201,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const session = copySession(input);
         // Keep late turns with previously unseen message IDs from restoring the session.
         const fenced = addFence(db, selection, session);
-        const sessions = eraseAddresses(db, selection, [session]);
+        const sessions = eraseAddresses(selection, [session]);
         const counts = eraseRawSessions(db, selection, sessions);
         purgeCards?.(db, tx, selection, sessions);
         const { rawDeleted } = changed(db, tx, selection, counts, fenced);
@@ -238,20 +247,27 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
 
   /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session} session */
-  function addFence(db, scope, { client, sessionId }) {
-    const added = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
-      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`).run(...scopeKey(scope), hashSession(scope, client, sessionId));
-    if (added.changes) advanceSuppressionEpoch(db, scope.owner);
-    return !!added.changes;
+  function addFence(db, scope, session) {
+    const hashes = migratedRaw?.fenceHashes(scope, session) ?? [hashSession(scope, session.client, session.sessionId)];
+    const insert = db.prepare(`INSERT INTO cairn_raw_fences (owner_id, namespace_key, session_hash)
+      VALUES (?, ?, ?) ON CONFLICT DO NOTHING`);
+    const keys = scopeKey(scope);
+    let added = false;
+    for (const hash of hashes) if (insert.run(...keys, hash).changes) added = true;
+    if (added) advanceSuppressionEpoch(db, scope.owner);
+    return added;
   }
 
-  /** @param {Connection} db @param {import("@cairn-ink/core/ports").Scope} scope
+  /** @param {import("@cairn-ink/core/ports").Scope} scope
    * @param {import("./raw-rows.mjs").Session[]} sessions */
-  function eraseAddresses(db, scope, sessions) {
+  function eraseAddresses(scope, sessions) {
     if (!migratedRaw) return sessions;
     return sessions.flatMap(session => {
-      const alias = migratedRaw.storageSession(db, scope, session);
-      return alias === session ? [session] : [session, alias];
+      const { client, sessionId } = session;
+      const hash = hashSession(scope, client, sessionId);
+      // Converted archives may retain the original legacy session address.
+      return [...new Set([sessionId, "legacy-raw:" + hash, "s1:" + hash])]
+        .map(sessionId => ({ client, sessionId }));
     });
   }
 

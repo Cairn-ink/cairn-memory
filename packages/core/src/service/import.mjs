@@ -105,7 +105,7 @@ export function importMethod(deps) {
         digesters ??= await keys.retainedDigesters?.(owner) ?? [];
         const prepared = await Promise.all(batch.map(async ({ raw, ...item }) => {
           const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text), digesters);
-          return { ...item, query, passages };
+          return { ...item, raw, query, passages };
         }));
         const embeddings = await embedImport(owner, prepared.map(({ text }) => text), key);
         if (embeddings === null) return paused();
@@ -174,8 +174,7 @@ function prepareRawMessage(value) {
       (role !== "user" && role !== "assistant") || typeof content !== "string" ||
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs) ||
         occurredAtMs < firstTimestampMs || occurredAtMs > lastTimestampMs))) return null;
-  const originalContent = cleanContent(content);
-  return { message: { id, role, content: prepareMessageContent(originalContent), occurredAtMs }, originalContent };
+  return { message: { id, role, content: prepareMessageContent(cleanContent(content)), occurredAtMs }, originalContent: content };
 }
 
 /** @param {unknown} input */
@@ -218,7 +217,7 @@ export function importRawMethod({ storage }) {
           const { passages } = await suppressions.snapshot(tx, scope, {
             ...session, occurredAtMs: messages.map(({ message }) => message.occurredAtMs),
           });
-          const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+          const { legacyKeyUnavailable, matches } = captureTextWithholding(passages, scope);
           const prepared = messages.map(({ message }) => message);
           /** @type {number[]} */
           let withheld = [];

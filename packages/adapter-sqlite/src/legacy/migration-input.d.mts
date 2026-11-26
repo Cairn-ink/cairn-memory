@@ -16,10 +16,11 @@ export interface LegacySafetyFact extends NamespaceRow {
 export interface LegacyMemory extends NamespaceRow {
   id: string; fingerprint: string; content: string | null; kind: string; origin: string; confidence: number;
   revision: bigint; deleted: bigint; created_at: string; updated_at: string; review_state: string; currentness: string;
+  filing_status: "filed" | "unfiled";
 }
 export interface LegacyReceipt {
   id: string; memory_id: string; receipt_key: string; client: string; session_id: string; event_id: string;
-  role: "user" | "assistant"; excerpt: string; created_at: string;
+  role: "user" | "assistant"; excerpt: string; created_at: string; occurred_at?: string | null;
 }
 export interface LegacyHistory extends NamespaceRow {
   previous_memory_id: string; previous_revision: bigint; replacement_memory_id: string;
@@ -32,6 +33,7 @@ export interface LegacyInput {
   target: string;
   checkSource(): void;
   withheldReceipts: number;
+  hiddenReceiptIds: Array<[{ownerId: string; scope: string; projectId: string | null}, string]>;
   inspect: {
     cursorSecret: string;
     receiptPositions: Map<string, number>;
@@ -48,6 +50,16 @@ export interface LegacyInput {
   };
   memories: LegacyMemory[];
   receipts: LegacyReceipt[];
+  placement: {
+    topics: Array<NamespaceRow & {id: string; level: bigint; title: string; revision: bigint; created_at: string; updated_at: string}>;
+    edges: Array<{parent_id: string; parent_revision: bigint; child_id: string; child_revision: bigint}>;
+    sources: Array<{moc_id: string; memory_id: string; memory_revision: bigint}>;
+    members: Array<{moc_id: string; memory_id: string; memory_revision: bigint; moc_revision: bigint}>;
+    conflicts: Array<{left_memory_id: string; left_revision: bigint; right_memory_id: string; right_revision: bigint;
+      relation: "contradicts"; source: "explicit-hint" | "inferred-hint"}>;
+    completed: Array<NamespaceRow & {id: string; revision: bigint}>;
+    withheld: Set<string>;
+  };
   denials: Array<NamespaceRow & { fingerprint: string }>;
   namespaceEpochs: Array<NamespaceRow & { epoch: bigint }>;
   history: LegacyHistory[];
@@ -58,12 +70,14 @@ export interface LegacyInput {
     key: string;
     fences: string[][];
     rules: string[][];
+    exactOnlyUuidRules: string[][];
     actions: unknown[];
     effects: unknown[];
   } | null;
   localRawPrivacy: boolean;
   archive: {
     rows: import("node:sqlite").SQLInputValue[][];
+    fencedAnchors: string[][];
     anchors: Array<{scope: import("@cairn-ink/core/ports").Scope; client: string; sessionId: string;
       message: import("@cairn-ink/core/ports").CaptureMessage}>;
     spans: Map<string, Array<{sessionId: string; start: number; end: number; precision: string}>>;

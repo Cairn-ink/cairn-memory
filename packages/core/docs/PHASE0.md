@@ -1233,3 +1233,64 @@ It consumes one item slot. Include the complete body and all sources only
 when they fit the budget. Each `memory` is a distinct qualified compact ref
 for attribution. The `items` array retains ordinary refs and ranks, and
 snapshot tokens cover the selected ordinary Memory and Card evidence.
+
+## Addendum 24 — Legacy SHA passage withholding
+
+At write time, full-mode text facts with a keyless hosted-v1 SHA-256 digest
+and no usable shingles match every contiguous run of whole sentences in
+the incoming text. Use the writing owner's scoped facts and the historical
+hosted hash normalization and redaction spellings. Sentence boundaries
+include line breaks and terminal punctuation in Latin and CJK text. When
+closing quotes or brackets immediately follow a terminator, boundaries fall
+both after the terminator and after the closing marks.
+A fullwidth period always marks a boundary. A lone ASCII period immediately
+before an ASCII letter or digit stays inside the sentence, as in `3.14` and
+`v1.2`.
+If the NFKC text contains Greek capital sigma (Σ), also match the spelling lowercased in whole-text context using the same boundaries.
+
+A match has the same outcome as a whole-text digest match on explicit save,
+capture, import, document routing and correction. Apply this check before
+the explicit-save shingle exemption. With an applicable fact, suppress
+texts over 2,000 sentences or 200,000 UTF-16 code units even when the vector
+is distant. With no applicable fact, skip sentence processing.
+
+SHA-only matching has limited coverage for substrings inside a sentence,
+bullet-prefixed lines and paraphrases. Keyed shingle containment and
+exact-mode matching keep their existing rules.
+
+Capture re-screens after admission use the prepared text. If preparation
+changed the spelling of a secret-bearing passage that was forgotten after
+admission, detection at finish depends on the stored source checks.
+
+## Addendum 25 — Context Read semantic candidates
+
+`findCandidates` and `readContext` attempt semantic retrieval for `semantic: true` with a query embedder. Omission selects it when the query embedder, `semanticRetrieval` capability and vector port are available. `semantic: false` selects lexical retrieval. Without a query embedder, omission selects lexical retrieval and `semantic: true` returns `invalid_input` with candidate diagnostics.
+
+Embed the prepared query once per call within the read deadline through the recall embedding dependency and budget class. An embedding error or timeout leaves lexical evidence available. Semantic candidates are current memories only. Before fusion, core checks vector candidates against the same visibility predicate as lexical candidates, including owner and namespace scope, applicable session and window fences, and suppressions including embedding similarity, and hydrates their revisions in the same read transaction. Fuse the qualified rows with lexical candidates under `rrf-k60-d12` when vector coverage is complete and at least one row qualifies. History, card-only selection, missing vector support, incomplete coverage and empty qualified results leave the semantic channel absent. Card candidates enter through the lexical channel.
+
+Semantic cursors bind the request's semantic choice, embedding model ID and channel state. A continuation rechecks model and state before paging the retained ranking and returns `cursor_stale` on change. Request mismatches retain `invalid_cursor`. Snapshot and evidence fetch use the qualified refs and existing delivery fences. Fetch makes no embedding call.
+
+Every find or context read diagnostics payload includes `channels.semantic` with state and content-free causes and `coverage.depths.semantic` with the number of semantic candidates contributed to fusion (zero unless ready), and hybrid rankings retain the per-channel ranks for each candidate. Candidate diagnostics also report requested and effective modes, embedding model ID and elapsed embedding time. Vector results supply the semantic omission count and the memory embedding and scan counts and fractions. An embedding timeout reports state `unavailable` with cause `timeout`. Diagnostic data excludes query text and vectors.
+
+## Addendum 26 — Raw-only capture
+
+`config.rawCapture = { enabled: true }` opts a service registered without a
+model into provider-free capture that stores admitted conversation text in
+Raw only. Registration with both a model and `rawCapture.enabled` throws
+`invalid_input`. The rule that a fingerprint-keyed store requires a model is
+unchanged. Without `rawArchive` storage, `raw.archive` or `capture.admit`,
+`enqueueCapture` and `runCapture` return `capability_unavailable`, as they do
+when the option is off. With `documentCards` enabled, the existing keyless
+card path runs and this option adds nothing.
+
+`enqueueCapture` is unchanged: pause, blocked session, admission-time text
+withholding and the stored outbox. `runCapture` claims the event and runs the
+existing source screening. It then finishes in one transaction, in this
+order: withdraw blank or changed slots, `assertEligible` on the survivors,
+re-read the passages, apply the core source filter, `finish(tx, token, [])`,
+`archiveAllowed`, and `archive` of the admitted copies of the allowed
+positions. It never calls `beginDispatch`, the model gate, a provider, an
+embedder, extraction or the quantity ledger. The result is `done` with no
+memories and the finish's index revision. Pause, generation, lease and
+durable-deletion rules are the same as for model-backed capture. A source
+withdrawn between admission and finish is not archived.

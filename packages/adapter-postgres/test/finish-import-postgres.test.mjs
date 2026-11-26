@@ -11,7 +11,7 @@ const leaseMs = 60_000;
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const message = (content, id = randomUUID()) => ({ id, role: "user", content, occurredAtMs: 10 });
 
-async function fixture(t, { namespace = null, allowNonNullNamespace } = {}) {
+async function fixture(t, { namespace = null, allowNonNullNamespace, hashSessionKey } = {}) {
   const { pool } = await migrationDatabase(t);
   const owner = randomUUID();
   const otherOwner = randomUUID();
@@ -28,8 +28,8 @@ async function fixture(t, { namespace = null, allowNonNullNamespace } = {}) {
   });
   let now = Date.now();
   const lineageSecret = randomBytes(32).toString("hex");
-  const capture = createPostgresCapturePorts({ lineageSecret, nearDuplicate: false, allowNonNullNamespace, now: () => now });
-  const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret });
+  const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey, nearDuplicate: false, allowNonNullNamespace, now: () => now });
+  const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret, hashSessionKey });
   const run = (operation) => uow.run(owner, write, operation);
   const acquire = (messages, admit = true) => run(async (tx) => {
     if (admit) assert.deepEqual(await capture.admit(tx, key, messages), { status: "admitted" });
@@ -90,6 +90,60 @@ test("a mid-finish statement failure rolls back memory rows, receipts, revision 
   assert.equal(pending.core_lease_token, token);
   assert.equal(pending.core_result, null);
   assert.equal((await run((tx) => capture.finish(tx, token, [first]))).memories.length, 1);
+});
+
+test("a finish cache cannot supply a receipt for a Raw-withheld span", migrationDbTest, async t => {
+  const hashSessionKey = (client, sessionId) => hash(JSON.stringify([client, sessionId]));
+  const { key, capture, raw, acquire, run } = await fixture(t, { hashSessionKey });
+  const suppressions = createPostgresSuppressionStore({ hashSessionKey });
+  const source = message("Tea cost 6.25 USD.");
+  const token = await acquire([source]);
+  const finished = item(source.content, key, source);
+  const receipt = { ...finished.receipts[0], excerpt: source.content };
+  const withheld = tx => suppressions.receiptWithheld(tx, key.scope, receipt);
+  assert.equal(await run(withheld), true);
+  await run(async tx => {
+    assert.equal((await capture.finish(tx, token, [finished])).memories.length, 1);
+    assert.equal(await withheld(tx), false);
+    const fact = { ...key.scope, actionId: randomUUID(), origin: "forget", kind: "rawSpan",
+      sessionKeyHash: hashSessionKey(key.client, key.sessionId), messageKey: source.id,
+      startUtf16: 0, endUtf16: 3, contentDigest: hash("Tea") };
+    await suppressions.writeFact(tx, fact, hash(factIncarnationBody(fact)));
+    assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 0 });
+    assert.equal(await withheld(tx), true);
+  });
+});
+
+test("an existing Raw row cannot supply a receipt for a Raw-withheld span", migrationDbTest, async t => {
+  const hashSessionKey = (client, sessionId) => hash(JSON.stringify([client, sessionId]));
+  const { key, pool, capture, raw, acquire, run } = await fixture(t, { hashSessionKey });
+  const suppressions = createPostgresSuppressionStore({ hashSessionKey });
+  const source = message("Tea cost 6.25 USD.");
+  const other = message("The kettle sits on the counter.");
+  const token = await acquire([source, other]);
+  const finished = item(source.content, key, source);
+  const receipt = { ...finished.receipts[0], excerpt: source.content };
+  const withheld = (tx, input = receipt) => suppressions.receiptWithheld(tx, key.scope, input);
+  await run(async tx => {
+    assert.equal((await capture.finish(tx, token, [finished])).memories.length, 1);
+    assert.deepEqual(await raw.archive(tx, key, [source, other]), { archived: 2 });
+    assert.equal(await withheld(tx), false);
+    const fact = { ...key.scope, actionId: randomUUID(), origin: "forget", kind: "rawSpan",
+      sessionKeyHash: hashSessionKey(key.client, key.sessionId), messageKey: source.id,
+      startUtf16: 0, endUtf16: 3, contentDigest: hash("Tea") };
+    const disjoint = { ...fact, actionId: randomUUID(),
+      startUtf16: source.content.length, endUtf16: source.content.length + 3 };
+    await suppressions.writeFact(tx, disjoint, hash(factIncarnationBody(disjoint)));
+    assert.equal(await withheld(tx), false);
+    await suppressions.writeFact(tx, fact, hash(factIncarnationBody(fact)));
+    assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 0 });
+    assert.equal(await withheld(tx), true);
+    assert.equal(await withheld(tx, { ...receipt, excerpt: "cost 6.25 USD." }), true);
+    assert.equal(await withheld(tx, { ...receipt, messageId: other.id, excerpt: other.content }), false);
+  });
+  const { rows } = await pool.query("SELECT content FROM raw_messages WHERE message_id = $1", [source.id]);
+  assert.deepEqual(rows, [{ content: source.content }]);
+  assert.equal(await run(withheld), true);
 });
 
 test("finish rejects foreign and expired tokens and only the replacement can complete", migrationDbTest, async (t) => {

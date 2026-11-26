@@ -128,6 +128,14 @@ export async function canonicalPath(path) {
     return join(await canonicalPath(parent), path.slice(parent.length));
   }
 }
+// The cutover owns both names in one private store directory. This moves the
+// closed SQLite file without opening an independent filesystem descriptor.
+export async function publishCaptureStore(staged, serving) {
+  if (dirname(staged) !== dirname(serving) || await canonicalPath(staged) !== staged ||
+      await canonicalPath(serving) !== serving) throw new Error('cutover_target_changed');
+  await rename(staged, serving);
+}
+
 export function requestedRoot(env = process.env) {
   const path = env.CAIRN_MEMORY_HOME ?? join(env.HOME || homedir(), '.cairn-memory');
   if (!validPath(path)) throw new SetupError('local_root_invalid', 2);
@@ -279,32 +287,15 @@ export async function deletionPath(root, name, { purge = false, databasePath, re
   } catch (error) { throw localFilesystemError(error); }
 }
 
-// Cutover file operations use the same filesystem boundary as the v1 journal.
-// A retired file keeps the reserved basename even across a partially completed rename.
-export async function retireCutoverTarget(path) {
-  const parent = dirname(path), stale = path + '.stale';
-  const exists = async file => {
-    try { await lstat(file); return true; }
-    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
-  };
-  const current = await exists(path), retired = await exists(stale);
-  if (!current && !retired) return false;
-  await ownedDirectory(parent);
-  if (await realpath(parent) !== parent || current && retired) throw recovery(parent);
-  if (current) await rename(path, stale);
-  for (const suffix of ['-wal', '-shm', '-journal']) {
-    if (await exists(path + suffix)) await rename(path + suffix, stale + suffix);
-  }
-  return true;
-}
-
-export async function removeCutoverMaintenance(root, id) {
-  const path = join(root, '.cutover-' + id);
-  if (await ownedDirectory(path, { missing: true })) await rm(path, { recursive: true });
+// Callers authorize each entry in the private directory before removal.
+export async function removeCutoverDirectory(path, allowsFiles) {
+  if (!await ownedDirectory(path, { missing: true })) return;
+  if (await realpath(path) !== path || !allowsFiles(await readdir(path))) throw recovery(path);
+  await rm(path, { recursive: true });
 }
 
 const locks = new Map();
-export async function withLocalLock(root, work) {
+export async function withLocalLock(root, work, { cutover = false } = {}) {
   await ownedLocalTree(root);
   const path = join(root, '.setup.lock'); let file;
   try { file = await open(path, 'wx', 0o600); }
@@ -317,7 +308,8 @@ export async function withLocalLock(root, work) {
     throw new SetupError(stale ? 'local_lock_stale' : 'lock_retry', 2, { path });
   }
   try {
-    const value = { pid: process.pid, startedAt: new Date().toISOString(), child: null };
+    const value = { pid: process.pid, startedAt: new Date().toISOString(), child: null,
+      ...(cutover ? { cutover: true } : {}) };
     const updateChild = async child => {
       value.child = child;
       const bytes = Buffer.from(JSON.stringify(value) + '\n');

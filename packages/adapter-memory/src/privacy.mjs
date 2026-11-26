@@ -2,6 +2,7 @@ import {
   CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
+import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
 import { copySuppressionCandidates, createFactMatcher } from "./fact-match.mjs";
 import { advanceInspectEpoch, advanceRawInspectEpoch } from "./unit-of-work.mjs";
 import { readEmbedding, snapshotArray } from "./validation.mjs";
@@ -10,9 +11,11 @@ import { readEmbedding, snapshotArray } from "./validation.mjs";
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} UnitOfWork */
 /** @typedef {(owner: string) => Promise<import("@cairn-ink/core").FingerprintKey[]>} RingKeys */
-/** @import { FingerprintKey, TextDigest } from "@cairn-ink/core" */
+/** @import { FingerprintKey, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { RetainedDigester } from "@cairn-ink/core/ports" */
 /** @import { RetainedDigestFixture } from "@cairn-ink/conformance/factory" */
+/** @import { Scope } from "@cairn-ink/core/ports" */
+/** @import { Entry, Row, State } from "./unit-of-work.mjs" */
 
 // This reference adapter can supply a public key fixture for tests. The fixture is unsuitable for production.
 export const TEST_FINGERPRINT_SECRET = "test-secret-a";
@@ -31,6 +34,79 @@ export function addKeyedDigest(digests, keyed) {
       digest.redactionVersion === keyed.redactionVersion && digest.value === keyed.value)) {
     digests.push(keyed);
   }
+}
+
+/** @param {State} state @param {Scope} scope */
+function* scopedReplacementFacts(state, scope) {
+  for (const { fact, epoch } of state.facts.values()) {
+    if (fact.kind === "text" && (fact.origin === "edit" || fact.origin === "correct") &&
+        fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace) yield { fact, epoch };
+  }
+}
+
+/** @param {TextFact} fact @param {Row} row */
+function predecessorTextMatch(fact, row) {
+  const legacyHash = fact.legacyTextHash;
+  if (legacyHash !== undefined && (legacyHash === row.legacyHash || legacyHash === row.textHash)) return true;
+  return compareValidatedDigests(row.digests, fact.text.digests);
+}
+
+/** @param {State} state @param {Entry} entry @param {bigint} startFactEpoch */
+export function recordTextReplacement(state, { row, textVersions }, startFactEpoch) {
+  const { id, createdAtMs, revision, scope } = row;
+  const current = textVersions.at(-1);
+  for (const { fact, epoch } of scopedReplacementFacts(state, scope)) {
+    if (epoch <= (current?.factEpoch ?? 0n) || state.textPredecessors.has(epoch)) continue;
+    const source = fact.sourceMemory;
+    if (source && (source.id !== id || source.createdAtMs !== createdAtMs)) continue;
+    // A sourced fact written in this update identifies a replacement for this memory.
+    // Exact digests can also associate an unsourced or previously stored fact.
+    if ((source && epoch > startFactEpoch) || predecessorTextMatch(fact, row) === true) {
+      state.textPredecessors.set(epoch, { id, createdAtMs });
+    }
+  }
+  textVersions.push({ revision: revision + 1, factEpoch: state.epoch ?? 0n });
+}
+
+/** @param {State} state @param {Scope} scope @param {{id: string, revision: number}} link */
+export function memoryCorrectionEvidence(state, scope, { id, revision }) {
+  const entry = state.rows.get(scope.namespace)?.get(id);
+  let version;
+  for (const candidate of entry?.textVersions ?? []) {
+    if (candidate.revision > revision) break;
+    version = candidate;
+  }
+  const current = entry?.textVersions.at(-1);
+  let hasReplacement = false;
+  let unresolvedCorrection = false;
+  for (const { fact, epoch } of scopedReplacementFacts(state, scope)) {
+    const predecessor = state.textPredecessors.get(epoch);
+    const source = predecessor ?? fact.sourceMemory;
+    if (source && (source.id !== id || (entry && source.createdAtMs !== entry.row.createdAtMs))) continue;
+    if (predecessor) {
+      hasReplacement = true;
+      if (!current) unresolvedCorrection = true;
+    } else if ((!version || epoch > version.factEpoch) &&
+        (!entry || version !== current || predecessorTextMatch(fact, entry.row) !== false)) {
+      // A missing association leaves older cited text uncertain. A later text
+      // version or a comparable miss on the stored text can rule the fact out.
+      unresolvedCorrection = true;
+    }
+  }
+  // A replacement invalidates every earlier revision, including revisions that only
+  // changed metadata or receipts. Memory revisions start at 1, and later metadata
+  // and receipt writes leave the replacement cutoff intact.
+  const cutoff = hasReplacement ? current?.revision ?? 1 : 1;
+  const correctedRevisions = Array.from({ length: cutoff }, (_, revision) => revision);
+  return { correctedRevisions, unresolvedCorrection };
+}
+
+/** @param {State} state @param {Pick<import("./document-cards.mjs").CardWrite, "scope" | "sourceMemories">} card */
+export function hasReplacedCitation(state, { scope, sourceMemories }) {
+  return sourceMemories.some(link => {
+    const { correctedRevisions, unresolvedCorrection } = memoryCorrectionEvidence(state, scope, link);
+    return unresolvedCorrection || correctedRevisions.includes(link.revision);
+  });
 }
 
 /** @param {Pick<TextDigest, "alg" | "keyId" | "label" | "pipeline" | "redactionVersion">} digest */

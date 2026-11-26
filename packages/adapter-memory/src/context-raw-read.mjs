@@ -3,7 +3,7 @@ import { currentMemoryReceipts } from "./context-read.mjs";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
 
 /** @import { ContextEvidenceRow, ContextMemoryRef, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore,
- * DocumentCardSourceMessage, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
+ * DocumentCardSourceMessage, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { RawEntry } from "./raw.mjs" */
 /** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @import { State } from "./unit-of-work.mjs" */
@@ -42,7 +42,7 @@ function exactLineage(state, { scope, id }, receipt, raw) {
 }
 
 /** @param {State} state @param {Pick<ContextReadSet, "owner" | "namespaces">} readSet
- * @param {Set<string>} candidates @param {() => boolean} expired */
+ * @param {Set<string> | undefined} candidates @param {() => boolean} expired */
 function receiptLinks(state, readSet, candidates, expired) {
   /** @type {Map<string, { ref: ContextMemoryRef, receipt: StoredReceipt }[]>} */
   const links = new Map();
@@ -54,7 +54,7 @@ function receiptLinks(state, readSet, candidates, expired) {
       if (scanned > MAX_RECEIPT_SCAN || expired()) return null;
       for (const receipt of receipts) {
         const slot = sourceSlot(scope, receipt);
-        if (!candidates.has(slot)) continue;
+        if (candidates && !candidates.has(slot)) continue;
         const matches = links.get(slot) ?? [];
         matches.push({ ref: { type: "memory", scope, id: row.id, revision: row.revision }, receipt });
         links.set(slot, matches);
@@ -128,9 +128,11 @@ export function createCardRawSourceChecks({ findVisibleSource, sourceLineageVisi
 
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {Archive} archive @param {ContextReadStore} store
+ * @param {Parameters<typeof createCardRawSourceChecks>[1]} matchFacts
+ * @param {Parameters<typeof createCardRawSourceChecks>[2]} receiptReadSafety
  * @param {{ raw: boolean, amendmentLineage?: ReturnType<typeof createCardRawSourceChecks>["lineageVisible"] }} options
  * @returns {ContextReadStore} */
-export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible, amendmentSource }, store,
+export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible, amendmentSource }, store, matchFacts, receiptReadSafety,
   { raw: rawEnabled, amendmentLineage }) {
   /** @type {ContextReadStore} */
   const context = amendmentLineage ? {
@@ -143,46 +145,40 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
   } : store;
   if (!rawEnabled) return context;
 
-  /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
-  function currentLineage(tx, readSet, state, links) {
-    return checkLineage(state, links, sourceLineageVisible, async ref => {
-      const [evidence] = await store.evidence(tx, readSet, [ref], "current");
-      return evidence?.type === "memory" && evidence.sourceAccess === "available" ? evidence.receipts : [];
-    });
+  /** @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
+  function currentLineage(state, links) {
+    return checkLineage(state, links, sourceLineageVisible, ref =>
+      currentMemoryReceipts(state, ref, matchFacts(state.facts, ref.scope), receiptReadSafety));
   }
   /** @type {ContextRawReadStore} */
   const raw = {
     async search(tx, readSet, query, { limit, deadlineAtMs, signal }) {
       return port(tx, readSet, false, async state => {
         const expired = () => signal?.aborted || performance.now() >= (deadlineAtMs ?? Infinity);
-        /** @type {{scope: Scope, row: RawEntry}[]} */
-        const inventory = [];
-        let textUnits = 0, complete = true;
-        // This adapter scans the canonical Raw inventory in its read snapshot.
-        // Legacy Raw completeness instead requires a published sidecar inventory
-        // fence (raw-search-authority.mjs:678–684). An empty scan can be complete.
+        /** @type {ReturnType<ContextRawReadStore["search"]> extends Promise<infer T> ? T : never} */
+        const partial = { turns: [], coverage: "partial" };
+        /** @type {ReturnType<typeof currentLineage> | undefined} */
+        let current;
+        const documents = [];
+        const df = new Map(), terms = tokenizeT1(query);
+        let textUnits = 0, complete = true, totalLength = 0;
         for (const row of state.rawRows.values()) {
+          if (expired()) return partial;
           if (!readSet.namespaces.includes(row.ref.namespace)) continue;
-          if (expired() || inventory.length >= MAX_INVENTORY || (textUnits += row.content.length) > MAX_TEXT_UNITS) {
+          const scope = { owner: readSet.owner, namespace: row.ref.namespace };
+          const visible = await findVisibleSource(state, scope, row);
+          if (!visible) continue;
+          if (!current) {
+            const links = receiptLinks(state, readSet, undefined, expired);
+            if (!links) return partial;
+            current = currentLineage(state, links);
+          }
+          if (!await current(scope, visible)) continue;
+          textUnits += visible.content.length;
+          if (documents.length >= MAX_INVENTORY || textUnits > MAX_TEXT_UNITS) {
             complete = false;
             break;
           }
-          inventory.push({ scope: { owner: readSet.owner, namespace: row.ref.namespace }, row });
-        }
-        /** @type {ReturnType<ContextRawReadStore["search"]> extends Promise<infer T> ? T : never} */
-        const partial = { turns: [], coverage: "partial" };
-        if (expired()) return partial;
-        if (!inventory.length) return complete ? { turns: [], coverage: "included" } : partial;
-        const links = receiptLinks(state, readSet, new Set(inventory.map(({ scope, row }) => sourceSlot(scope, row))), expired);
-        if (!links) return partial;
-        const current = currentLineage(tx, readSet, state, links);
-        const documents = [];
-        const df = new Map(), terms = tokenizeT1(query);
-        let totalLength = 0;
-        for (const { scope, row } of inventory) {
-          if (expired()) return partial;
-          const visible = await findVisibleSource(state, scope, row);
-          if (!visible || !await current(scope, visible)) continue;
           const tokens = termFrequencies(visible.content);
           totalLength += tokens.length;
           for (const term of tokens.frequencies.keys()) df.set(term, (df.get(term) ?? 0) + 1);
@@ -217,7 +213,7 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
         }
         const links = receiptLinks(state, readSet, new Set(requested.map(({ slot }) => slot)), () => false);
         if (!links) return false;
-        const current = currentLineage(tx, readSet, state, links);
+        const current = currentLineage(state, links);
         for (const { turn, source } of requested) {
           const row = await findVisibleSource(state, turn.scope, source);
           if (!row || !await current(turn.scope, row) ||

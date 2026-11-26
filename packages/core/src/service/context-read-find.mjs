@@ -1,6 +1,8 @@
 import { validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
-import { fuseCandidates } from "../retrieval/fusion.mjs";
+import { prepareCoreText } from "../privacy/text.mjs";
+import { canonicalKey } from "../retrieval/bm25.mjs";
+import { fuseCandidates, RRF_PRESETS } from "../retrieval/fusion.mjs";
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from "../retrieval/tokenize.mjs";
 import { entry } from "./entry.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, legacyRef, responseBytes, snapshotContextCall } from "./context-read-evidence.mjs";
@@ -8,15 +10,23 @@ import { checkRow } from "./context-read-fetch.mjs";
 import { CONTEXT_HORIZON, contextReadSet, findCandidatesInput, itemRef, readSetBinding,
   namespaceSlot } from "./context-read-input.mjs";
 import { CONTEXT_VERSION, isReadMac, newRankingId, readTokenSigner } from "./context-read-tokens.mjs";
+import { hydrateMemoryRows } from "./reads.mjs";
+import { embedRecallQuery } from "./recall.mjs";
 
 /** @import { CallOptions, ClockAndHash, ContextCandidateDiagnostics, ContextReadSet, FindCandidatesInput,
-  FindCandidatesResult, ContextIndexObservation, ContextReadRef, ContextReadStore, ContextReadType,
-  ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
+  FindCandidatesResult, ContextIndexObservation, ContextMemoryRef, ContextReadRef, ContextReadStore, ContextReadType,
+  EmbedQuery, ItemRef, ModelGate, ReadContractStorage, StoredDocumentCardRecord, Tx } from "../ports/index.d.ts" */
 /** @typedef {Awaited<ReturnType<ContextReadStore["snapshotState"]>>} Generations */
 /** @typedef {FindCandidatesResult["items"]} Items */
 /** @typedef {{ items: Items, diagnostics: ContextCandidateDiagnostics, token: Cursor }} Ranking */
-/** @typedef {{v: 1, r: string, b: string, c: string, a: string, g: string, e: number, p: number}} Cursor */
+/** @typedef {{v: 1, r: string, b: string, c: string, a: string, g: string, e: number, p: number, q?: string}} Cursor */
 /** @typedef {ReturnType<typeof readTokenSigner>} Signer */
+/** @typedef {Awaited<ReturnType<EmbedQuery["embedQuery"]>>} Embedding */
+/** @typedef {{ result?: Promise<EmbeddingAttempt> }} QueryEmbedding */
+/** @typedef {{ embedding: Embedding, elapsed: number } | { cause: "unavailable" | "timeout", elapsed: number }} EmbeddingAttempt */
+/** @typedef {{ ref: ItemRef, score: number, qualified: ContextMemoryRef }} SemanticRow */
+/** @typedef {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities" | "documentCards"> &
+ * Partial<Pick<ReadContractStorage, "vector" | "hydrate">>} Storage */
 
 const RANKING_LIMIT = 128;
 const RANKING_TTL_MS = 300_000;
@@ -29,13 +39,15 @@ const cursorFields = ["v", "r", "b", "c", "a", "g", "e", "p"];
 /** @param {unknown} value @returns {Cursor} */
 function cursorPayload(value) {
   try {
-    const data = validateObject(value, cursorFields);
-    const { v, r, b, c, a, g, e, p } = data;
-    if (Object.keys(data).length !== cursorFields.length || v !== 1 || typeof r !== "string" || !r || r.length > 200 ||
+    const data = validateObject(value, [...cursorFields, "q"]);
+    const { v, r, b, c, a, g, e, p, q } = data;
+    const withQuery = Object.hasOwn(data, "q");
+    if (Object.keys(data).length !== cursorFields.length + Number(withQuery) || (withQuery && !isReadMac(q)) ||
+        v !== 1 || typeof r !== "string" || !r || r.length > 200 ||
         !isReadMac(b) || !isReadMac(c) || !isReadMac(a) || !isReadMac(g) ||
         typeof e !== "number" || !Number.isSafeInteger(e) || typeof p !== "number" ||
         !Number.isSafeInteger(p) || p < 1 || p > CONTEXT_HORIZON) throw new CoreError("invalid_cursor");
-    return { v, r, b, c, a, g, e, p };
+    return { v, r, b, c, a, g, e, p, ...(typeof q === "string" && { q }) };
   } catch {
     throw new CoreError("invalid_cursor");
   }
@@ -85,6 +97,68 @@ function applyCoverage(diagnostics, types, observed, matched) {
   coverage.omitted.horizon = 0;
 }
 
+/** @param {EmbedQuery} embedQuery @param {ModelGate | undefined} gate @param {string} owner @param {string} query
+ * @param {() => number} now @param {CallOptions & {deadlineAtMs: number}} options
+ * @returns {Promise<EmbeddingAttempt>} */
+async function attemptEmbedding(embedQuery, gate, owner, query, now, options) {
+  const started = now();
+  // Reserve time for vector retrieval, lexical fallback and assembly.
+  const allowance = (options.deadlineAtMs - started) / 2;
+  if (allowance < 1 || options.signal?.aborted) return { cause: "timeout", elapsed: 0 };
+  const timeout = AbortSignal.timeout(Math.ceil(allowance));
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const deadlineAtMs = started + allowance;
+  let onAbort = () => {};
+  const expired = new Promise(resolve => {
+    onAbort = () => resolve(undefined);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  async function request() {
+    await gate?.assertOpen(owner, "dispatch");
+    if (signal.aborted || now() >= deadlineAtMs) return;
+    return embedRecallQuery(embedQuery, owner, prepareCoreText(query), { signal, deadlineAtMs });
+  }
+  try {
+    const embedding = await Promise.race([request(), expired]);
+    const ended = now();
+    const elapsed = ended - started;
+    if (signal.aborted || ended >= deadlineAtMs) return { cause: "timeout", elapsed };
+    if (embedding && typeof embedding.model === "string" && embedding.model &&
+        embedding.vector instanceof Float32Array && embedding.vector.length > 0) return { embedding, elapsed };
+    return { cause: "unavailable", elapsed };
+  } catch (error) {
+    const ended = now();
+    const timeout = signal.aborted || ended >= deadlineAtMs || (error instanceof CoreError && error.code === "model_timeout");
+    return { cause: timeout ? "timeout" : "unavailable", elapsed: ended - started };
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+/** @param {Storage} storage @param {Tx} tx @param {ContextReadSet} readSet @param {Embedding} embedding */
+async function semanticCandidates({ vector, hydrate, fence }, tx, readSet, { vector: query, model }) {
+  if (!vector || !hydrate) return;
+  const result = await vector.vector(tx, readSet, query, model, CONTEXT_HORIZON);
+  const candidates = result.rows.filter(({ ref, distance }) =>
+    ref.type === "memory" && readSet.namespaces.includes(ref.namespace) && Number.isFinite(distance));
+  if (candidates.length === 0) return { rows: [], coverage: result.coverage };
+  const visible = new Set((await fence.assertVisible(tx, readSet, candidates.map(({ ref }) => ref))).map(canonicalKey));
+  const qualified = candidates.filter(({ ref }) => visible.has(canonicalKey(ref)));
+  const memories = await hydrateMemoryRows(hydrate, tx, readSet, qualified.map(({ ref }) => ref), "recall");
+  const seen = new Set();
+  /** @type {SemanticRow[]} */
+  const rows = [];
+  for (const { ref, distance } of qualified) {
+    const key = canonicalKey(ref);
+    const memory = memories.get(key);
+    if (!memory || memory.historical || !Number.isSafeInteger(memory.revision) || memory.revision < 1 || seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ ref, score: 1 - distance, qualified: { type: "memory", id: ref.id, scope: memory.scope, revision: memory.revision } });
+  }
+  return { rows, coverage: result.coverage };
+}
+
 /** @param {Ranking} ranking @param {number} position @param {number} limit @param {Signer} signer
  * @returns {Promise<FindCandidatesResult>} */
 async function page({ items, diagnostics, token }, position, limit, signer) {
@@ -100,13 +174,13 @@ async function page({ items, diagnostics, token }, position, limit, signer) {
   throw new CoreError("context_item_too_large");
 }
 
-/** @param {{storage: Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities" | "documentCards">,
- * clock: ClockAndHash}} deps
+/** @param {{storage: Storage, clock: ClockAndHash, embedQuery?: EmbedQuery, gate?: ModelGate}} deps
  */
-export function findCandidatesMethod({ storage, clock }) {
+export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
   const { contextRead: store, fence, uow, documentCards } = storage;
   const cardsEnabled = hasContextCardLoader(documentCards);
   const documentCardsOnly = storage.capabilities.documentCards && !storage.capabilities.cards;
+  const now = () => clock.monotonicMs();
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadRef} ref
    * @param {FindCandidatesInput["intent"]} intent @param {Generations | undefined} generations */
   async function visibleCard(tx, readSet, ref, intent, generations) {
@@ -126,15 +200,18 @@ export function findCandidatesMethod({ storage, clock }) {
     for (const [id, { token }] of rankings) if (now >= token.e) rankings.delete(id);
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {FindCandidatesInput} */ args,
-    /** @type {CallOptions} */ options, /** @type {boolean} */ forAssembly) => {
+    /** @type {CallOptions} */ options, /** @type {boolean} */ forAssembly, /** @type {QueryEmbedding} */ memo) => {
     const readSet = contextReadSet(value);
     const input = findCandidatesInput(args);
     if (!store || storage.capabilities.contextRead !== true) throw new CoreError("capability_unavailable");
     const { query, types, intent, semantic, cursor, limit } = input;
     const selection = { types, intent };
+    const hasVector = storage.capabilities.semanticRetrieval === true && !!storage.vector;
+    const semanticRequested = semantic ?? (!!embedQuery && hasVector);
+    const queryEmbedder = semanticRequested && hasVector && intent === "current" && types.includes("memory") ? embedQuery : undefined;
     const deadlineAtMs = Math.min(clock.monotonicMs() + input.deadlineMs, options.deadlineAtMs ?? Infinity);
     const stopped = () => options.signal?.aborted || clock.monotonicMs() >= deadlineAtMs;
-    const diagnostics = preflight(types, semantic, store.maintenanceAvailable);
+    const diagnostics = preflight(types, semanticRequested, store.maintenanceAvailable);
     const unavailable = () => {
       if (stopped()) {
         diagnostics.channels.lexical = { state: "timeout", causes: ["timeout"] };
@@ -144,8 +221,30 @@ export function findCandidatesMethod({ storage, clock }) {
     };
     const portOptions = { signal: options.signal, deadlineAtMs };
 
+    async function prepareSemantic() {
+      if (!queryEmbedder) return;
+      const attempt = await (memo.result ??= attemptEmbedding(queryEmbedder, gate, readSet.owner, query, now, portOptions));
+      diagnostics.trace.timings.embeddingMs = attempt.elapsed;
+      if ("cause" in attempt) diagnostics.channels.semantic = { state: "unavailable", causes: [attempt.cause] };
+      else diagnostics.trace.embedder = attempt.embedding.model;
+    }
+
+    /** @param {Tx} tx */
+    async function readSemantic(tx) {
+      if (!memo.result) return;
+      const attempt = await memo.result;
+      if ("cause" in attempt) return;
+      try {
+        const result = await semanticCandidates(storage, tx, readSet, attempt.embedding);
+        if (result?.coverage.complete === true && result.rows.length) diagnostics.channels.semantic = { state: "ready", causes: [] };
+        return result;
+      } catch {
+        diagnostics.channels.semantic = { state: "unavailable", causes: ["unavailable"] };
+      }
+    }
+
     if (cursor === undefined) {
-      if (semantic) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
+      if (semanticRequested && !embedQuery) return { diagnostics, code: /** @type {const} */ ("invalid_input") };
       if (stopped()) return unavailable();
       if (store.prepareLexical) {
         const started = clock.monotonicMs();
@@ -158,22 +257,39 @@ export function findCandidatesMethod({ storage, clock }) {
           diagnostics.trace.timings.maintenanceMs = clock.monotonicMs() - started;
         }
       }
+      if (queryEmbedder) await prepareSemantic();
     }
 
-    return uow.run(readSet.owner, { readOnly: true }, async tx => {
+    const rank = () => uow.run(readSet.owner, { readOnly: true }, async tx => {
       const signer = readTokenSigner(await store.identity(tx));
-      const request = await signer.bind("ranking-request", [readSetBinding(readSet), query, types, intent, semantic]);
+      const requestArgs = [readSetBinding(readSet), query, types, intent];
+      const semanticArgs = [...requestArgs, semantic ?? "auto"];
+      const request = await signer.bind("ranking-request", semanticRequested ? semanticArgs : [...requestArgs, false]);
       const configuration = await signer.bind("ranking-config", [config, diagnostics.trace.requested, diagnostics.trace.effective]);
       const access = await signer.bind("access", readSet.accessGenerations);
+      const semanticRequest = () => signer.bind("ranking-request", [...semanticArgs, diagnostics.trace.embedder]);
+      const semanticConfig = () => signer.bind("ranking-config", [config, "hybrid", diagnostics.channels.semantic.state]);
       if (cursor !== undefined) {
         const token = cursorPayload(await signer.decode("cursor", cursor));
-        if (token.b !== request || token.c !== configuration) throw new CoreError("invalid_cursor");
+        if (token.q === undefined) {
+          if (semanticRequested || token.b !== request || token.c !== configuration) throw new CoreError("invalid_cursor");
+        } else if (token.q !== (semanticRequested ? request : await signer.bind("ranking-request", semanticArgs))) {
+          throw new CoreError("invalid_cursor");
+        }
         expireRankings();
         const ranking = rankings.get(token.r);
         if (!ranking || token.a !== access || token.g !== ranking.token.g || token.e !== ranking.token.e ||
             token.p >= ranking.items.length) throw new CoreError("cursor_stale");
         const current = await store.observeIndex(tx, readSet, selection);
         if (!current.ready || await signer.bind("index", current.indexState) !== token.g) throw new CoreError("cursor_stale");
+        if (token.q !== undefined) {
+          if (!semanticRequested) throw new CoreError("cursor_stale");
+          // Validate the cursor before dispatch. Recheck the index in the
+          // transaction that qualifies the channel and delivers the page.
+          if (queryEmbedder && !memo.result) return { embed: true };
+          await readSemantic(tx);
+          if (token.b !== await semanticRequest() || token.c !== await semanticConfig()) throw new CoreError("cursor_stale");
+        }
         const result = await page(ranking, token.p, limit, signer);
         const generations = !cardsEnabled && result.items.some(({ ref }) => ref.type === "card")
           ? await store.snapshotState(tx, readSet, types) : undefined;
@@ -199,6 +315,7 @@ export function findCandidatesMethod({ storage, clock }) {
       }
       if (stopped()) return unavailable();
 
+      const semanticResult = semanticRequested ? await readSemantic(tx) : undefined;
       const fusionStarted = clock.monotonicMs();
       const lexicalRows = lexical.rows.map(({ ref, score }) => {
         if (namespaceSlot(readSet, ref.scope) < 0 || !types.includes(ref.type)) throw new CoreError("index_unavailable");
@@ -210,13 +327,24 @@ export function findCandidatesMethod({ storage, clock }) {
         (await Promise.all(lexicalRows.map(async row =>
           row.ref.type !== "card" || await visibleCard(tx, readSet, row.qualified, intent, generations) ? row : null
         ))).filter(row => row !== null) : lexicalRows;
-      const fused = fuseCandidates(accepted, [], { preset: config.preset });
-      if (fused.mode !== "lexical") throw new CoreError("internal_error");
+      const semanticState = diagnostics.channels.semantic.state;
+      const fused = fuseCandidates(accepted, semanticResult?.rows ?? [], {
+        preset: config.preset, semanticState, coverageComplete: semanticState === "ready",
+      });
+      diagnostics.trace.effective = fused.mode;
       const items = fused.rows.map(({ qualified: ref, fusionScore, channels }, i) => ({ ref, rank: i + 1, fusionScore, channels }));
       diagnostics.trace.timings.fusionMs = clock.monotonicMs() - fusionStarted;
       const coverage = types.includes("card") && !cardsEnabled && documentCardsOnly && !accepted.some(({ ref }) => ref.type === "card")
         ? { ...observed, byType: { ...observed.byType, card: { eligible: 0, indexed: 0 } } } : observed;
       applyCoverage(diagnostics, types, coverage, accepted.length === lexical.rows.length ? lexical.matched : null);
+      const memoryCoverage = diagnostics.coverage.byType.memory;
+      if (semanticResult && memoryCoverage) {
+        const { eligible, embedded } = semanticResult.coverage;
+        const depth = semanticState === "ready" ? Math.min(semanticResult.rows.length, RRF_PRESETS[config.preset].depth) : 0;
+        diagnostics.coverage.depths.semantic = depth;
+        diagnostics.coverage.omitted.semantic = Math.max(0, embedded - depth);
+        Object.assign(memoryCoverage, { embedded, scanned: eligible, embeddedFraction: eligible ? embedded / eligible : 1, scannedFraction: 1 });
+      }
 
       // Assembly consumes the qualified horizon and its namespace fence in
       // the search snapshot (legacy context-read-facade.mjs:773–796).
@@ -228,7 +356,8 @@ export function findCandidatesMethod({ storage, clock }) {
       }
 
       const ranking = structuredClone(/** @type {Ranking} */ ({
-        items, diagnostics, token: { v: 1, r: newRankingId(), b: request, c: configuration, a: access,
+        items, diagnostics, token: { v: 1, r: newRankingId(), b: semanticRequested ? await semanticRequest() : request,
+          c: semanticRequested ? await semanticConfig() : configuration, ...(semanticRequested && { q: request }), a: access,
           g: await signer.bind("index", observed.indexState), e: clock.nowMs() + RANKING_TTL_MS, p: 0 },
       }));
       const result = await page(ranking, 0, limit, signer);
@@ -241,23 +370,30 @@ export function findCandidatesMethod({ storage, clock }) {
       }
       return { result };
     });
-  }, undefined, ([readSet, input, options, forAssembly]) => {
+    const ranked = await rank();
+    if (!("embed" in ranked)) return ranked;
+    await prepareSemantic();
+    const continued = await rank();
+    if ("embed" in continued) throw new CoreError("internal_error");
+    return continued;
+  }, undefined, ([readSet, input, options, forAssembly, memo]) => {
     const [set, request, call] = snapshotContextCall([readSet, input, options]);
-    return /** @type {[ContextReadSet, FindCandidatesInput, CallOptions, boolean]} */ ([set, request, call, forAssembly]);
+    return /** @type {[ContextReadSet, FindCandidatesInput, CallOptions, boolean, QueryEmbedding]} */ ([set, request, call, forAssembly, memo]);
   });
 
-  /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options @param {boolean} forAssembly */
-  async function search(readSet, input, options, forAssembly) {
-    const result = await run(readSet, input, options, forAssembly);
+  /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options
+   * @param {boolean} forAssembly @param {QueryEmbedding} [memo] */
+  async function search(readSet, input, options, forAssembly, memo = {}) {
+    const result = await run(readSet, input, options, forAssembly, memo);
     if ("code" in result) throw Object.assign(new CoreError(result.code), { diagnostics: result.diagnostics });
     return result;
   }
   return {
     /** @type {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
     findCandidates: async (readSet, input, options = {}) => (await search(readSet, input, options, false)).result,
-    /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options */
-    async findForAssembly(readSet, input, options) {
-      const { result, generations } = await search(readSet, input, options, true);
+    /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options @param {QueryEmbedding} memo */
+    async findForAssembly(readSet, input, options, memo) {
+      const { result, generations } = await search(readSet, input, options, true, memo);
       if (generations === undefined) throw new CoreError("internal_error");
       return { result, generations };
     },

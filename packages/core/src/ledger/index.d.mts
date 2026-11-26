@@ -46,6 +46,11 @@ export interface LedgerWindow extends QuantityLedgerRange {
   label: string;
 }
 
+export interface ParsedLedgerWindow extends LedgerWindow {
+  /** The optional calendar reading shares the rolling window's exclusive end. */
+  readonly calendar?: LedgerWindow;
+}
+
 export interface LedgerDigest {
   body: string;
   sources: string[];
@@ -55,8 +60,9 @@ export function validateQuantities(value: unknown, itemCount: number): QuantityV
 /** Attribute a batch without a store snapshot. Use reconciliation for capture writes. */
 export function attributeLedgerQuantities(memoryId: string, quantities: readonly ExtractedQuantity[],
   receipts: readonly LedgerReceipt[], captureTimeMs: number): LedgerRowAttribution[];
-/** Return only additional rows for a memory in the supplied capture. */
-export function reconcileLedgerQuantities(capture: LedgerReconciliation): QuantityLedgerRow[];
+/** Return only additional rows. Capture supplies normalized record values keyed by cited message ID. */
+export function reconcileLedgerQuantities(capture: LedgerReconciliation,
+  recordValues?: ReadonlyMap<string, ReadonlySet<number>>): QuantityLedgerRow[];
 /** Run inside the same live unit of work as the memory and receipt writes. */
 export function writeLedgerQuantities(tx: Tx, scope: Scope, store: QuantityLedgerStore, capture: LedgerCapture):
   Promise<{ inserted: number }>;
@@ -67,6 +73,6 @@ export function ledgerRowKey(row: LedgerRowAttribution): string;
 export function ledgerRowDeliverable(row: QuantityLedgerRow, state: LedgerReadState): boolean;
 export function ledgerRowInRange(row: Pick<QuantityLedgerRow, 'date'>, range: QuantityLedgerRange): boolean;
 export function readIntent(query: string, terms: readonly string[]): boolean;
-export function parseWindow(query: string, asOfMs: number): LedgerWindow;
+export function parseWindow(query: string, asOfMs: number): ParsedLedgerWindow;
 /** Pass only rows that have passed the delivery check. */
-export function digest(rows: readonly QuantityLedgerRow[], goals: readonly QuantityLedgerRow[], window: LedgerWindow): LedgerDigest | null;
+export function digest(rows: readonly QuantityLedgerRow[], goals: readonly QuantityLedgerRow[], window: ParsedLedgerWindow, calendarReading?: boolean): LedgerDigest | null;

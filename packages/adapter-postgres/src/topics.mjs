@@ -314,8 +314,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const owner = personalOwner(tx, scope);
       const { limit } = options;
       validateLimit(limit, BATCH_LIMIT);
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const cutoff = new Date(now() - topicRetryAfterMs);
         const rows = await visiblePage(visibility, owner, (after, size) => query(`
@@ -337,7 +337,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       validateLimit(limit);
       return runOperation(tx, async (query, run) => {
         const page = await readPage(query, owner, "catalog", null, limit, cursor, run);
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const sources = await visibleTitleSources(query, owner, visibility);
         const { rows } = await query(`
           SELECT * FROM (SELECT ${topicColumns("$2")} FROM topics t WHERE t.user_id = $1) catalog
@@ -358,7 +358,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
 
       return runOperation(tx, async (query, run) => {
         if (await readIndexRevision(query, owner, run) !== indexRevision) throw new CoreError("revision_conflict");
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const { rows: candidates } = await query(`
           SELECT ${columns}, p.status, ARRAY(
@@ -418,8 +418,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       if (!isErrorCode(code)) throw new CoreError("invalid_input");
       const ids = snapshotArray(memoryIds, undefined, false);
       if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const { rows } = await query(`SELECT ${columns} FROM memories m
           WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${currentMemory("m")}`, [owner, ids.filter(sqlText)]);
@@ -445,7 +445,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
       return runOperation(tx, async (query, run) => {
         const page = await readPage(query, owner, "list", level ?? null, limit, cursor, run);
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const members = await visiblePage(visibility, owner, (after, size) => query(`
           SELECT ${columns} FROM memories m ${currentPlacementJoin}
@@ -496,7 +496,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       return runOperation(tx, async (query, run) => {
         const page = await readPage(query, owner, "members", topicId, limit, cursor, run);
         if (!sqlText(topicId)) return { items: [], nextCursor: null };
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const rows = await visiblePage(visibility, owner, (after, size) => query(`
           WITH child_topics AS (
@@ -522,8 +522,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
     async forMemory(tx, scope, memoryId) {
       const owner = personalOwner(tx, scope);
       if (!sqlText(memoryId)) return [];
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const { rows } = await query(`
           SELECT ${columns}, ARRAY(
@@ -542,8 +542,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const ids = snapshotArray(memoryIds, 100);
       validateLimit(ids.length);
       if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
-      return runOperation(tx, async (query) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const { rows } = await query(`
           WITH requested AS (

@@ -7,6 +7,7 @@ import { passageWithholding, requiresLegacyMacDomain } from "../../core/src/priv
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { memoryCorrectionEvidence } from "./privacy.mjs";
 import { matchesMemoryFilters, withinWindow } from "./retrieval-window.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
@@ -130,8 +131,9 @@ async function passage(text, key) {
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
  * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceChecks>["sourceVisible"]} [rawSourceVisible]
- * @param {RawSourceWithholding} [rawSourceWithholding] */
-export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, rawSourceWithholding) {
+ * @param {RawSourceWithholding} [rawSourceWithholding]
+ * @param {ReturnType<typeof import("./document-cards.mjs").createForgottenReceiptCheck>} [forgottenReceiptCheck] */
+export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, rawSourceWithholding, forgottenReceiptCheck) {
   /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
   const fingerprintKeys = new WeakMap();
   /** @param {Tx} tx */
@@ -151,9 +153,11 @@ export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, r
     const definiteOnly = purgeFacts !== undefined;
     const policy = matchFacts(purgeFacts ?? state.facts, scope);
     const rows = state.rows.get(scope.namespace);
+    const checkReceipt = definiteOnly ? undefined : forgottenReceiptCheck?.(state, scope);
     /** @type {Map<string, DocumentCardMemoryState>} */
     const memoryStates = new Map();
-    for (const { id } of card.sourceMemories) {
+    for (const link of card.sourceMemories) {
+      const { id } = link;
       const entry = rows?.get(id);
       const forgotten = policy.factsFor(id, entry, definiteOnly).some(({ fact }) => fact.kind === "identity");
       if (forgotten) memoryStates.set(id, { status: "forgotten" });
@@ -161,7 +165,18 @@ export function createCardVisibilityInputs(matchFacts, keys, rawSourceVisible, r
       else if (definiteOnly && policy.hides(entry) && !policy.definitelyHides(entry)) {
         memoryStates.set(id, { status: "unknown" });
       } else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
-      else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
+      else if (checkReceipt && await checkReceipt(entry)) memoryStates.set(id, { status: "suppressed" });
+      else {
+        const previous = memoryStates.get(id);
+        const evidence = memoryCorrectionEvidence(state, scope, link);
+        memoryStates.set(id, {
+          status: entry.row.historical ? "historical" : "visible",
+          revision: entry.row.revision,
+          correctedRevisions: evidence.correctedRevisions,
+          unresolvedCorrection: evidence.unresolvedCorrection ||
+            (!!previous && "unresolvedCorrection" in previous && previous.unresolvedCorrection === true),
+        });
+      }
     }
     const { id, scope: cardScope, origin, sourceMessage, sourceMemories, title, body } = card;
     let canonicalSessionKey = null;

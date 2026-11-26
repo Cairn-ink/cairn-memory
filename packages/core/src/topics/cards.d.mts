@@ -8,7 +8,7 @@ export interface PlacePendingCardsBatchOptions {
   uow: UnitOfWork;
   scope: Scope;
   placement: TopicStore;
-  documentCards: Pick<DocumentCardStore<StoredDocumentCardRecord>, 'get'>;
+  documentCards: Pick<DocumentCardStore<StoredDocumentCardRecord>, 'get' | 'visibilityInputs'>;
   fence: VisibilityFence;
   classify(snapshot: { cards: Array<TopicCardGuard & { content: string }> }, catalog: ClassificationCatalog,
     options: { validateFresh(): Promise<void> }): Promise<CardPlacementProposal>;

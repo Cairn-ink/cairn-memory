@@ -36,14 +36,17 @@ export function rawSpanFilter(facts, { scope, client, sessionId }, hashSessionKe
   } catch {
     // The matcher treats unavailable session evidence as ineligible.
   }
-  return (/** @type {CaptureMessage} */ { id }) => spans.some(stored => {
+  /** @param {Pick<CaptureMessage, "id">} message @param {number} [storedLength] */
+  const withheld = ({ id }, storedLength) => spans.some(stored => {
     const { fact } = stored;
     // Raw imports are whole-message replays, including shorter copies of the original span.
     return fact.kind === "rawSpan" && factHidesRow(stored, {
       type: "raw", scope, source: { client, sessionId }, sessionKeyHash: hash, messageKey: id,
-      startUtf16: fact.startUtf16, endUtf16: fact.endUtf16,
+      startUtf16: storedLength === undefined ? fact.startUtf16 : 0,
+      endUtf16: storedLength ?? fact.endUtf16,
     }) !== false;
   });
+  return withheld;
 }
 
 /** @param {readonly StoredFact[]} factRows @param {Scope} scope @param {RawOptions["fingerprintKeys"]} fingerprintKeys */

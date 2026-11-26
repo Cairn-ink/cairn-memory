@@ -1,11 +1,12 @@
 import { advanceCardGeneration, cardColumns, cardWhere, copyCardSource, decodeCard, decodeCardAmendment,
   readCardAmendments, readCardLinks, readCardRow, readCardSource, sourceKeys, unionCardLinks,
   writeCardLinks } from "./document-card-rows.mjs";
-import { decodeJson } from "./memory-rows.mjs";
+import { decodeJson, readEntry } from "./memory-rows.mjs";
 import { opaqueSessionHash } from "./migrate/raw-privacy.mjs";
 import { exactScope, placementPort } from "./placement-visibility.mjs";
 import { copySession } from "./raw-rows.mjs";
 import { invalidInput, scopeKey, validateId, writeTime } from "./storage-values.mjs";
+import { memoryCorrectionEvidence, readFacts } from "./suppressions.mjs";
 
 /** @import { DocumentCardHideSelector, DocumentCardSourceMessage, DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-card-rows.mjs" */
@@ -15,6 +16,32 @@ import { invalidInput, scopeKey, validateId, writeTime } from "./storage-values.
 /** @typedef {{ cards: Set<string>, amendments: Map<string, Set<string>> }} Selection */
 
 const write = { write: true };
+
+/** @param {Connection} db @param {Scope} scope @param {CardWrite["sourceMemories"]} links */
+function rejectFutureLinks(db, scope, links) {
+  for (const { id, revision } of links) {
+    const row = readEntry(db, scope, id)?.row;
+    if (row && revision > row.revision) invalidInput();
+  }
+}
+
+/** @param {Connection} db @param {Scope} scope @param {CardWrite["sourceMemories"]} previous
+ * @param {CardWrite["sourceMemories"]} incoming @param {boolean} bodyChanged @param {boolean} union */
+function updateLinks(db, scope, previous, incoming, bodyChanged, union) {
+  if (!previous.length || (bodyChanged && !union)) return incoming;
+  const facts = readFacts(db, scope);
+  const pinned = new Set();
+  const retained = previous.filter(link => {
+    const { correctedRevisions, unresolvedCorrection } = memoryCorrectionEvidence(facts, readEntry(db, scope, link.id), link);
+    const corrected = unresolvedCorrection || correctedRevisions.includes(link.revision);
+    if (corrected && !bodyChanged) {
+      pinned.add(link.id);
+      return true;
+    }
+    return union && !corrected;
+  });
+  return unionCardLinks(incoming.filter(link => !pinned.has(link.id)), retained);
+}
 
 /** @param {unknown} input */
 function requireText(input) {
@@ -173,6 +200,8 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
             !Array.isArray(sentences) || !Array.isArray(stale)) invalidInput();
         const existing = readCardRow(db, scope, id);
         if (existing && existing.state !== "active") return { status: "tombstoned" };
+        const incoming = unionCardLinks(input.sourceMemories);
+        rejectFutureLinks(db, scope, incoming);
         if (existing?.content_hash === contentHash) return { status: "unchanged" };
         const source = sourceMessage === null ? null : copyCardSource(sourceMessage);
         const oldOrigin = existing ? existing.origin : origin ?? null;
@@ -186,7 +215,8 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
           validateId(replacementMemoryId);
           return { memoryId, replacementMemoryId };
         });
-        const links = unionCardLinks(input.sourceMemories, source && existing ? readCardLinks(db, scope, id) : []);
+        const links = existing ? updateLinks(db, scope, readCardLinks(db, scope, id), incoming,
+          existing.body !== body, source !== null) : incoming;
         const time = writeTime(now());
         db.prepare(`INSERT INTO cairn_document_cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, 'active', NULL)
           ON CONFLICT (owner_id, namespace_key, id) DO UPDATE SET
@@ -210,9 +240,11 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
         const row = readCardRow(db, scope, id);
         if (!row) return { status: "not_found" };
         if (row.state !== "active") return { status: "tombstoned" };
+        rejectFutureLinks(db, scope, incoming);
         const previous = readCardLinks(db, scope, id);
-        const next = unionCardLinks(incoming, previous);
-        if (next.length === previous.length && next.every(({ revision }, i) => revision === previous[i].revision)) {
+        const next = updateLinks(db, scope, previous, incoming, false, true);
+        if (next.length === previous.length && next.every(({ id, revision }, i) =>
+          id === previous[i].id && revision === previous[i].revision)) {
           return { status: "unchanged" };
         }
         writeCardLinks(db, scope, id, next);
@@ -308,10 +340,9 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
         const card = readCardRow(db, scope, id);
         if (card?.state !== "active") return;
         const stale = /** @type {CardWrite["stale"]} */ (decodeJson(card.stale));
-        if (!stale.some(item => item.memoryId === memoryId && item.replacementMemoryId === replacementMemoryId)) {
-          db.prepare(`UPDATE cairn_document_cards SET stale = ?, revision = revision + 1 WHERE ${exactScope} AND id = ?`)
-            .run(JSON.stringify([...stale, { memoryId, replacementMemoryId }]), ...scopeKey(scope), id);
-        }
+        if (stale.some(item => item.memoryId === memoryId && item.replacementMemoryId === replacementMemoryId)) return;
+        db.prepare(`UPDATE cairn_document_cards SET stale = ?, revision = revision + 1 WHERE ${exactScope} AND id = ?`)
+          .run(JSON.stringify([...stale, { memoryId, replacementMemoryId }]), ...scopeKey(scope), id);
         changed(db, tx, scope);
       });
     },
@@ -332,8 +363,10 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
       });
     },
 
-    visibilityInputs(tx, callerScope, refs) {
+    visibilityInputs(tx, callerScope, refs, { newCard } = {}) {
       return access(tx, callerScope, {}, (db, scope) => {
+        // Raw is always available on SQLite. Provider refreshes with
+        // requireRaw: false still use the same live evidence for existing cards.
         const build = visibility.inputReader(db, scope);
         return Array.from({ length: refs.length }, (_, i) => {
           try {
@@ -341,6 +374,8 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
             if (ref?.type !== "card" || ref.namespace !== scope.namespace || typeof ref.id !== "string" ||
                 !ref.id || /[\u0000\uD800-\uDFFF]/u.test(ref.id)) return null;
             const row = readCardRow(db, scope, ref.id);
+            if (!row && newCard?.card.id === ref.id && newCard.card.scope.owner === scope.owner &&
+                newCard.card.scope.namespace === scope.namespace) return structuredClone(newCard);
             return row?.state === "active" ? build(decodeCard(db, scope, row)) : null;
           } catch {
             return null;
@@ -350,13 +385,20 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
     },
   };
 
-  /** @param {Connection} db @param {Tx} tx @param {Scope} scope @param {readonly (ReturnType<typeof copySession> & {messageId?: string})[]} sources */
-  function purgeSources(db, tx, scope, sources) {
+  /** @param {Connection} db @param {Tx} tx @param {Scope} scope
+   * @param {Iterable<ReturnType<typeof copySession> & {messageId?: string}>} sources */
+  function purgeSources(db, tx, scope, sources, reason = "raw_deleted") {
     const selection = cardSelection();
     for (const source of sources) {
       selectAddress(db, scope, source, selection, source.messageId, legacyHashSession);
     }
-    hide(db, tx, scope, selection, "raw_deleted", true);
+    hide(db, tx, scope, selection, reason, true);
+  }
+
+  /** @param {Connection} db @param {Tx} tx @param {Scope} scope
+   * @param {import("@cairn-ink/core").StoredFact<import("@cairn-ink/core").RawSpanFact>} stored */
+  function purgeForgottenSpan(db, tx, scope, stored) {
+    purgeSources(db, tx, scope, visibility.forgottenSpanSources(db, scope, stored), "forget");
   }
 
   /** @param {Connection} db @param {Tx} tx @param {Scope} scope @param {string} id */
@@ -377,5 +419,5 @@ export function createDocumentCards(port, index, visibility, now, dropPlacement,
     hide(db, tx, scope, selection, "source_memory_forgotten", true);
   }
 
-  return { store, purgeSources, purgeErasedMemory };
+  return { store, purgeSources, purgeForgottenSpan, purgeErasedMemory };
 }
