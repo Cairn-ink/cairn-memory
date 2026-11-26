@@ -250,15 +250,24 @@ export function visibilityFactsSql({
     FROM (${liveFacts}) f` : liveFacts}`;
 }
 
+/** @template {object} T @param {T} value @returns {T} */
+function freezeFactTree(value) {
+  for (const child of Object.values(value)) {
+    if (child !== null && typeof child === "object") freezeFactTree(child);
+  }
+  return Object.freeze(value);
+}
+
 /** @param {any[]} rows @param {string} owner @param {boolean} [allowPendingLegacy] */
 export function decodeVisibilityFacts(rows, owner, allowPendingLegacy = false) {
   if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
-  return rows.map(row => row.legacy ? {
+  // Branch selection and prepared matching must use the same immutable evidence.
+  return rows.map(row => freezeFactTree(row.legacy ? {
     fact: legacySuppressionToFact({ ...row.body, created_at_us: row.created_at_us }, owner),
     factId: row.fact_id, incarnation: "", epoch: 0n,
     createdAtMs: row.created_at_us === "Infinity" || row.created_at_us === "-Infinity"
       ? Number(row.created_at_us) : readCreatedAtMs(row.created_at_us),
-  } : decodeCoreFact(row, owner));
+  } : decodeCoreFact(row, owner)));
 }
 
 const filteredVisibilityFactsSql = visibilityFactsSql({
