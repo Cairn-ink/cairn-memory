@@ -173,3 +173,29 @@ test("a timeless archived Raw turn is still hidden from list and search", async 
   assert.deepEqual((await search()).segments, []);
   assert.equal(await f.withheld(), true);
 });
+
+for (const [label, windowClient] of [["global", null], ["client-scoped", "codex"]]) {
+  test(`a placeholder receipt citing an archived timeless Raw turn stays withheld under a ${label} window`, async () => {
+    const f = fixture();
+    const { raw } = f.adapter;
+    const cited = { ...receipt, client: "codex" };
+    const key = { scope, client: cited.client, sessionId: cited.sessionId, eventId: "event", payloadDigest: "a".repeat(64) };
+    assert.deepEqual(await f.write(tx => raw.archive(tx, key, [message])), { archived: 1 });
+    assert.equal(await f.withheld(cited), false);
+
+    await f.window(windowClient);
+    assert.equal(await f.withheld(cited), true);
+    assert.equal(await f.withheld(cited, message), true);
+    const service = createMemoryService({
+      storage: f.adapter, model: null, embedder: null, config: {},
+      gate: { async assertOpen() {} },
+      clock: {
+        nowMs: () => 25, monotonicMs: () => 0,
+        async sha256Hex(value) { return createHash("sha256").update(value).digest("hex"); },
+        hmacHex: () => assert.fail("Unexpected keyed hashing"),
+      },
+      tokens: { countTokens: () => 1 },
+    });
+    assert.equal((await service.save(scope, cited.excerpt, source, "fact", { receipt: cited })).status, "suppressed");
+  });
+}
