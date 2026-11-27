@@ -1,4 +1,4 @@
-import type { CaptureClaim, CaptureFinish, SourceFilter } from "../../core/src/ports/capture.d.ts";
+import type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, SourceFilter } from "../../core/src/ports/capture.d.ts";
 import type { Connection } from "./driver.mjs";
 
 export interface CaptureOptions {
@@ -16,3 +16,7 @@ export function createPostgresCapturePorts(options: CaptureOptions): Required<Ca
 export function terminateDirectClaims(
   query: Connection["query"], owner: string, source: { client: string; sessionId: string },
 ): Promise<boolean>;
+
+export function blankForgottenMessages(
+  query: Connection["query"], key: Pick<CaptureKey, "scope" | "client" | "sessionId">, batch: CaptureMessage[],
+): Promise<void>;

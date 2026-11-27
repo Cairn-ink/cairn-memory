@@ -128,7 +128,7 @@ export async function terminateDirectClaims(query, owner, { client, sessionId })
 
 /** @param {Query} query @param {Pick<CaptureKey, "scope" | "client" | "sessionId">} key
  * @param {CaptureMessage[]} batch */
-async function blankForgottenMessages(query, { scope, client, sessionId }, batch) {
+export async function blankForgottenMessages(query, { scope, client, sessionId }, batch) {
   const ids = batch.map(({ id }) => id).filter(pgText);
   const { rows } = await query(`SELECT DISTINCT message_id FROM core_memory_receipts
     WHERE user_id = $1 AND client = $2 AND session_id = $3 AND forgotten_at IS NOT NULL AND message_id = ANY($4::text[])`,
