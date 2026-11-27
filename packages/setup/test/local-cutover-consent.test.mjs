@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
-import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { claude, confirm, credentialPattern, keyedRefusal, launch, legacyFixture, linux, operator, prepare,
+import { claude, confirm, credentialPattern, launch, legacyFixture, linux, operator, prepare,
   providerFixture, readJSON, setup, tool } from './local-cutover-fix-support.mjs';
 
 const env = { OPENAI_API_KEY: providerFixture, CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY: providerFixture };
@@ -54,34 +52,9 @@ function serve(f, probe, input) {
   return reply.stdout.trim().split('\n').map(line => JSON.parse(JSON.parse(line).result.content[0].text));
 }
 
-async function cardsEnabledInstaller(t) {
-  const repo = fileURLToPath(new URL('../../../', import.meta.url));
-  const scratch = createTestWorkspace(t).path;
-  for (const name of ['LICENSE', 'packaging', 'packages', 'core', 'adapters', 'integrations', 'plugins',
-    'tools/testing/vendor/acorn/acorn.mjs']) {
-    const destination = join(scratch, name);
-    mkdirSync(dirname(destination), { recursive: true });
-    cpSync(join(repo, name), destination, { recursive: true, filter: path => !path.includes('/node_modules') &&
-      !path.includes('/test/') && !path.includes('/packages/setup/runtime/cutover') });
-  }
-  symlinkSync(join(repo, 'packages/adapter-sqlite/node_modules'), join(scratch, 'packages/adapter-sqlite/node_modules'));
-  const config = join(scratch, 'packaging/core-local/provider-config.mjs');
-  const original = readFileSync(config, 'utf8');
-  const gate = 'documentCardsReady = false';
-  assert.equal(original.split(gate).length, 2);
-  writeFileSync(config, original.replace(gate, 'documentCardsReady = true'));
-  const { buildSetupCoreLocal } = await import(pathToFileURL(join(dirname(config), 'setup-runtime.mjs')));
-  const root = join(scratch, 'packages/setup');
-  buildSetupCoreLocal(join(root, 'runtime'), { check: false });
-  return join(root, 'bin/memory.mjs');
-}
-
-test('a stray key leaves active MCP keyless and setup refuses consent while Cards are gated', linux, async t => {
+test('a stray key keeps MCP keyless until explicit local setup records consent', linux, async t => {
   const f = await legacyFixture(t);
-  operator(f, prepare);
-  const verified = operator(f, setup, { env, code: 2 });
-  assert.ok(verified.includes(keyedRefusal));
-  assert.equal(verified.split('\n').filter(line => warning.test(line)).length, 1);
+  assert.match(operator(f, prepare, { env }), /Local cutover verified/u);
   operator(f, confirm, { env });
   assert.throws(() => readFileSync(consentPath(f)), { code: 'ENOENT' });
   const probe = observer(f);
@@ -91,30 +64,38 @@ test('a stray key leaves active MCP keyless and setup refuses consent while Card
   assert.equal(saved.ok, true);
   assert.ok(JSON.stringify(found.value.items).includes(phrase));
   assert.deepEqual(probe.read(), []);
-  const active = claude(f);
-  for (const [args, code] of [[['status'], 0], [setup, 2]]) {
-    const output = operator(f, args, { env, code });
-    assert.equal(output.split('\n').filter(line => warning.test(line) && /later release/u.test(line)).length, 1);
-    if (code === 2) assert.ok(output.includes(keyedRefusal));
-    assert.deepEqual(claude(f), active);
-  }
-});
 
-test('with the Card gate enabled, a cutover stays keyless until explicit local setup records consent', linux, async t => {
-  const f = await legacyFixture(t);
-  const entry = await cardsEnabledInstaller(t);
-  operator(f, prepare, { entry, env });
-  operator(f, confirm, { entry, env });
-  const probe = observer(f);
-  assert.equal(serve(f, probe, tool('remember_memory', { content: 'Synthetic keyless jasper.' }))[0].ok, true);
-  assert.deepEqual(probe.read(), []);
-  const status = operator(f, ['status'], { entry, env });
-  assert.equal(status.split('\n').filter(line => warning.test(line) && /Run setup/u.test(line)).length, 1);
-  operator(f, setup, { entry, env });
+  const active = claude(f);
+  for (const args of [['status'], [...setup, '--dry-run'], setup]) {
+    const output = operator(f, args, { env });
+    assert.equal(output.split('\n').filter(line => warning.test(line) && /Run setup --local/u.test(line)).length, 1);
+    if (args === setup) {
+      const repaired = claude(f);
+      assert.deepEqual(repaired.args, active.args);
+      assert.equal(repaired.command, realpathSync(active.command));
+    } else {
+      assert.deepEqual(claude(f), active);
+      assert.throws(() => readFileSync(consentPath(f)), { code: 'ENOENT' });
+    }
+  }
+  const { ownerId, projectId } = readJSON(join(f.root, 'installation.json'));
+  assert.deepEqual(readJSON(consentPath(f)), { version: 1, owner: ownerId, project: projectId, profile: 'openai-baseline-v1' });
   assert.equal(serve(f, probe, tool('remember_memory', { content: 'Synthetic consented jasper.' }))[0].ok, true);
   assert.equal(probe.read().filter(row => row.fetch).length, 1);
   assert.ok(probe.read().some(row => row.read === 'OPENAI_API_KEY'));
-  assert.doesNotMatch(operator(f, ['status'], { entry, env }), warning);
+  assert.doesNotMatch(operator(f, ['status'], { env }), warning);
+});
+
+test('explicit setup records consent on an already verified cutover', linux, async t => {
+  const f = await legacyFixture(t);
+  operator(f, prepare);
+  const legacy = claude(f);
+  const verified = operator(f, setup, { env });
+  assert.match(verified, /Local cutover verified/u);
+  assert.equal(verified.split('\n').filter(line => warning.test(line) && /Run setup --local/u.test(line)).length, 1);
+  assert.deepEqual(claude(f), legacy);
   const { ownerId, projectId } = readJSON(join(f.root, 'installation.json'));
   assert.deepEqual(readJSON(consentPath(f)), { version: 1, owner: ownerId, project: projectId, profile: 'openai-baseline-v1' });
+  operator(f, confirm);
+  assert.notDeepEqual(claude(f), legacy);
 });

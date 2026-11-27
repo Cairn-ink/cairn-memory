@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { transportFixture } from '../../../integrations/client/test/fixtures/local-transport-workspace.mjs';
-import { claude, confirm, credentialPattern, installer, keyedRefusal, launch, legacyFixture, linux, makeCapturePayload,
+import { claude, confirm, credentialPattern, installer, launch, legacyFixture, linux, makeCapturePayload,
   operator, prepare, providerFixture, readJSON, recordClientPresence, rpc, setup } from './local-cutover-fix-support.mjs';
 
 test('local setup, cutover, repair, Raw, capture, MCP and uninstall pass no provider key to any child', linux, async t => {
@@ -44,8 +44,8 @@ syncBuiltinESMExports();
   const env = { OPENAI_API_KEY: providerFixture, CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY: providerFixture,
     CAIRN_SYNTHETIC_API_KEY: providerFixture };
   const secret = { preload, env };
-  const output = operator(f, setup, { ...secret, code: 2 });
-  assert.ok(output.includes(keyedRefusal));
+  const output = operator(f, setup, secret);
+  assert.match(output, /Local cutover verified/u);
   assert.ok(read().some(row => row.child === 'claude'));
   assert.deepEqual(read().filter(row => row.key), [], 'local setup passed a credential to a child');
   // Local status also probes the two clients for coexisting hosted registrations.
@@ -70,7 +70,10 @@ assert.equal(result.status, 200);
   operator(f, prepare, secret);
   operator(f, confirm, secret);
   const { command: node, args: [entry, ...vector] } = claude(f);
-  const mcp = launch(f, entry, vector, { ...secret, node, input: rpc('ping', {}) });
+  const keyed = launch(f, entry, vector, { ...secret, node, input: rpc('ping', {}) });
+  assert.equal(keyed.status, 0, keyed.stderr);
+  assert.deepEqual(JSON.parse(keyed.stdout).result, {});
+  const mcp = launch(f, entry, vector, { preload, node, input: rpc('ping', {}) });
   assert.equal(mcp.status, 0, mcp.stderr);
   assert.deepEqual(JSON.parse(mcp.stdout).result, {});
   const { cutover } = readJSON(join(f.root, 'installation.json')).migration;
@@ -83,7 +86,7 @@ assert.equal(result.status, 200);
     assert.equal(hook.status, 0, hook.stderr);
   }
   assert.equal(JSON.parse(operator(f, ['raw', 'list', '--client', 'claude'], secret)).messageCount, 1);
-  operator(f, setup, { ...secret, code: 2 });
+  operator(f, setup, secret);
   // The repair path is also exercised with a stray provider alias, which never requests consent.
   operator(f, setup, { preload, env: { CAIRN_SYNTHETIC_API_KEY: providerFixture } });
   operator(f, ['uninstall', '--local', '--yes'], { ...secret, entry: installer });

@@ -168,8 +168,12 @@ export async function routeLocalMode(options, selection, context) {
   context.beforeRouting?.();
   const requestModel = action === 'setup' && options.local && !flags.includes('--dry-run');
   if (descriptor && !detection.descriptorError && (action === 'status' || action === 'setup' && options.local)) {
-    const { showKeylessProviderNotice } = await import('./local-cutover-command.mjs');
+    const { showKeylessProviderNotice, showLegacyCutoverLimit } = await import('./local-cutover-command.mjs');
     await showKeylessProviderNotice(detection.root, descriptor, context);
+    if (action === 'status' && descriptor.state === 'installed' && descriptor.installerVersion === '0.6.11' &&
+        !descriptor.migration?.cutover && ['linux', 'darwin'].includes(context.platform ?? process.platform)) {
+      await showLegacyCutoverLimit(detection.root, descriptor, context);
+    }
   }
   if (descriptor?.migration?.cutover && !detection.descriptorError) {
     if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };

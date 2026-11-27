@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, readFileSync, realpathSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { runDaemonCommand } from '../../adapters/mcp/local-daemon-liveness.mjs';
 import { initLocalRawStore } from '../../integrations/client/raw/local-setup-init.mjs';
@@ -99,7 +99,7 @@ require('node:child_process').execFileSync(process.execPath, [${JSON.stringify(n
   return fixture;
 }
 
-test('the shipped Card gate keeps a configured upgrade on the legacy vector', { skip: process.platform !== 'linux' }, async t => {
+test('a legacy interpreting capture configuration still keeps the legacy vector', { skip: process.platform !== 'linux' }, async t => {
   const fixture = await prepareFixture(t);
   const descriptor = join(fixture.root, 'installation.json'), native = join(fixture.home, '.claude.json');
   const original = [descriptor, native, fixture.database].map(path => readFileSync(path));
@@ -110,41 +110,18 @@ test('the shipped Card gate keeps a configured upgrade on the legacy vector', { 
     assert.match(result.stdout, /Local cutover is unavailable for model-configured installations\. Legacy service remains active\./u);
     assert.deepEqual([descriptor, native, fixture.database].map(path => readFileSync(path)), original);
   };
-  assertRefused(['setup', '--local']);
   mkdirSync(configured, { recursive: true, mode: 0o700 });
   writeFileSync(join(configured, 'installation.json'),
     JSON.stringify({ request: { interpretationConsent: true } }), { mode: 0o600 });
+  assertRefused(['setup', '--local']);
   delete fixture.env.OPENAI_API_KEY;
   assertRefused(['local-cutover', '--activate']);
 });
 
-async function buildWithCards(t) {
-  const { path } = createTestWorkspace(t);
-  for (const name of ['LICENSE', 'packaging', 'packages', 'core', 'adapters', 'integrations', 'plugins',
-    'tools/testing/vendor/acorn/acorn.mjs']) {
-    const destination = join(path, name);
-    mkdirSync(dirname(destination), { recursive: true });
-    cpSync(join(repo, name), destination, { recursive: true, filter: source => !source.includes('/node_modules') &&
-      !source.includes('/test/') && !source.includes('/packages/setup/runtime/cutover') });
-  }
-  symlinkSync(join(repo, 'packages/adapter-sqlite/node_modules'), join(path, 'packages/adapter-sqlite/node_modules'));
-  const root = join(path, 'packaging/core-local');
-  const config = join(root, 'provider-config.mjs');
-  const source = readFileSync(config, 'utf8');
-  const gate = 'documentCardsReady = false';
-  assert.equal(source.split(gate).length, 2);
-  writeFileSync(config, source.replace(gate, 'documentCardsReady = true'));
-  const { buildSetupCoreLocal } = await import(pathToFileURL(join(root, 'setup-runtime.mjs')));
-  const setup = join(path, 'packages/setup');
-  buildSetupCoreLocal(join(setup, 'runtime'), { check: false });
-  return setup;
-}
-
-test('a test-only build with the single gate enabled activates and reaches the synthetic provider through the registered vector',
+test('the shipped installer records consent and reaches the synthetic provider through the registered vector',
   { skip: process.platform !== 'linux', timeout: 120_000 }, async t => {
-    const setup = await buildWithCards(t);
     const fixture = await prepareFixture(t);
-    const invoke = args => run(join(setup, 'bin/memory.mjs'), [...args, '--lang', 'en'], fixture.env);
+    const invoke = args => run(join(repo, 'packages/setup/bin/memory.mjs'), [...args, '--lang', 'en'], fixture.env);
     const prepare = invoke(['setup', '--local']);
     assert.equal(prepare.code, 0, prepare.stdout + prepare.stderr);
     assert.match(prepare.stdout, /With OPENAI_API_KEY available to the Cairn MCP server/u);

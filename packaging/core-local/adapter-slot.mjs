@@ -27,6 +27,8 @@ export async function openStorage(database, localAuthority, { model = null, embe
     };
     const service = createMemoryService({
       storage, ...ports, config,
+      ...(config.documentCards && { documentCardSessionKey: ({ client, sessionId }) =>
+        storage.hashSessionKey(localAuthority.scope, client, sessionId) }),
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
     });
     return { service, storage, async close() {

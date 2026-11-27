@@ -16,7 +16,6 @@ const { nativeSettingsLock } = await cutoverImport('settings');
 const { captureStoreIdentity, trustedBinding } = await cutoverImport('binding');
 const { entry } = await cutoverImport('paths');
 const { byteDigest } = await cutoverImport('backup');
-const { documentCardsReady } = await cutoverImport('provider');
 
 const clients = { claude: 'claude-code', codex: 'codex' };
 const stages = ['capture-paused', 'capture-store-staged', 'capture-binding-staged', 'capture-native-published', 'capture-armed'];
@@ -152,7 +151,7 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
   const { saved, request, paused } = record;
   // The standalone migration command retains its original admission check.
   // Release confirmation has already checked consent at the installation level.
-  if (env && !documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
+  if (env && Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
   // Capture can use only the same installed owner and namespace as the client.
   if (!descriptor.clients[client] || request.namespace.ownerId !== descriptor.ownerId ||
       request.namespace.projectId !== descriptor.projectId) throw refuse('cutover_capture_changed');

@@ -72,17 +72,17 @@ const record = event => appendFileSync(${JSON.stringify(trace)}, JSON.stringify(
 const mcpEntry = entry?.endsWith('/core-local/cli.mjs') && process.argv[2] === '--db';
 const worker = entry?.endsWith('/core-local/daemon-worker.mjs');
 if (worker) record({ operation: 'worker' });
-const enabled = process.env.CAIRN_FIXTURE_CARDS === '1';
-if (enabled) registerHooks({ load(url, context, next) {
+const downgraded = process.env.CAIRN_FIXTURE_CARDS === '0';
+if (downgraded) registerHooks({ load(url, context, next) {
   const result = next(url, context);
   if (!url.endsWith('/packaging/core-local/provider-config.mjs')) return result;
-  const source = result.source.toString().replace('documentCardsReady = false', 'documentCardsReady = true');
+  const source = result.source.toString().replace('documentCardsReady = true', 'documentCardsReady = false');
   return { ...result, source };
 } });
 
 let sends = 0;
 globalThis.fetch = async (url, options) => {
-  if (!mcpEntry || !enabled || !firstKey) {
+  if (!mcpEntry || downgraded || !firstKey) {
     record({ operation: 'unexpected-fetch' });
     throw new Error('unexpected fixture fetch');
   }
@@ -119,7 +119,7 @@ for (const name of ['spawn', 'spawnSync']) {
       record({ operation: 'child-credential' });
       throw new Error('credential in child inputs');
     }
-    if (mcpEntry && enabled && firstKey) record({ operation: 'keyed-child' });
+    if (mcpEntry && !downgraded && firstKey) record({ operation: 'keyed-child' });
     if (command.startsWith('/') && realpathSync(command) === process.execPath) args = ['--import', preload, ...args];
     return original(command, args, options);
   };
@@ -184,7 +184,7 @@ function assertCredentialAbsent(directory, key) {
   }
 }
 
-test('installed local cutover enforces the Card gate, keeps keyed fetch in process and gives keyless operations zero fetches',
+test('installed local cutover keeps keyed fetch in process and gives keyless operations zero fetches',
   { skip: process.platform !== 'linux', timeout: 180_000 }, async t => {
     const { withUpgradeInstallers } = await import('../../tools/testing/local-cutover-upgrade.qualification.mjs');
     await withUpgradeInstallers(async ({ baseline, candidate, testClients }) => {
@@ -236,28 +236,29 @@ test('installed local cutover enforces the Card gate, keeps keyed fetch in proce
         }
       });
 
-      await t.test('shipped keyed refusal and a test-only gate enable at the registered MCP entry', () => {
+      await t.test('shipped keyed consent and a gated-build refusal at the registered MCP entry', () => {
         const f = testClients('fetch-keyed'), probe = observer(f);
         const key = randomUUID(), aliasKey = randomUUID();
         start(f);
         const legacy = registration(f);
         const env = { [keyName]: key, [alias]: aliasKey };
-        const enabled = { ...env, CAIRN_FIXTURE_CARDS: '1', OPENAI_BASE_URL: 'https://unconsented.invalid' };
+        const keyed = { ...env, OPENAI_BASE_URL: 'https://unconsented.invalid' };
+        const downgraded = { ...env, CAIRN_FIXTURE_CARDS: '0' };
         const refusal = /Local cutover is unavailable for model-configured installations/u;
-        assert.match(operator(f, probe, setup, { env, code: 2 }), refusal);
+        assert.match(operator(f, probe, setup, { env: downgraded, code: 2 }), refusal);
         assert.match(operator(f, probe, ['local-cutover', '--activate'], { env }), /Local cutover verified/u);
         assert.deepEqual(registration(f), legacy);
-        assert.match(operator(f, probe, setup, { env: enabled }), /With OPENAI_API_KEY available to the Cairn MCP server/u);
-        assert.match(operator(f, probe, ['local-cutover', '--activate'], { env, code: 2 }), refusal);
-        assert.match(operator(f, probe, ['local-cutover', '--confirm'], { env, code: 2 }), refusal);
-        operator(f, probe, ['local-cutover', '--confirm'], { env: enabled });
+        assert.match(operator(f, probe, setup, { env: keyed }), /With OPENAI_API_KEY available to the Cairn MCP server/u);
+        assert.match(operator(f, probe, ['local-cutover', '--activate'], { env: downgraded, code: 2 }), refusal);
+        assert.match(operator(f, probe, ['local-cutover', '--confirm'], { env: downgraded, code: 2 }), refusal);
+        operator(f, probe, ['local-cutover', '--confirm']);
         assert.notEqual(registration(f).args[0], legacy.args[0]);
-        const refused = mcp(f, probe, rpc('ping', {}), { env, code: 1 });
+        const refused = mcp(f, probe, rpc('ping', {}), { env: downgraded, code: 1 });
         assert.equal(refused.stdout, '');
         assert.equal(refused.stderr, 'daemon_configuration\n');
         const requests = ['agate', 'basalt', 'cuprite'].map((name, index) =>
           tool('remember_memory', { content: `A synthetic ${name} fixture.` }, index + 1)).join('');
-        const active = mcp(f, probe, requests, { env: enabled });
+        const active = mcp(f, probe, requests, { env: keyed });
         const replies = lines(active.stdout);
         assert.equal(replies.length, 3);
         assert.equal(value(replies[0]).ok, true);

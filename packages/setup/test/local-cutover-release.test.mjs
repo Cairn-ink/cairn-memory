@@ -226,9 +226,9 @@ test('a legacy change after verification refuses early, and a late writer blocks
   assert.equal((await f.run('confirm-activation')).state, 'active');
 });
 
-test('an explicit request to configure a model is refused before touching the descriptor or client', linux, async t => {
+test('an invalid explicit model key is refused before touching the descriptor or client', linux, async t => {
   const f = await fixture(t);
-  await assert.rejects(runLocalCutover({ ...f.options, env: { ...f.env, OPENAI_API_KEY: 'synthetic-present' },
+  await assert.rejects(runLocalCutover({ ...f.options, env: { ...f.env, OPENAI_API_KEY: 'synthetic\ninvalid' },
     action: 'prepare-activation', requestModel: true }), refused('cutover_model_configured'));
   assert.equal((await readDescriptor(f.root)).version, 'cairn-local-installation-v1');
   assert.deepEqual(await readFile(f.database), f.initial);

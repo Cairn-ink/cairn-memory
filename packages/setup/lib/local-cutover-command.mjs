@@ -77,6 +77,30 @@ export async function showKeylessProviderNotice(root, descriptor, { env, write, 
   write.literal(t(documentCardsReady ? 'local_keyless_provider_ready' : 'local_keyless_provider_later'));
 }
 
+function writeTimelessRawNotice({ write, t }, count) {
+  write.literal(t(count === 1 ? 'local_cutover_timeless_raw_one' : 'local_cutover_timeless_raw_many', { count }));
+}
+
+export async function showLegacyCutoverLimit(root, descriptor, context) {
+  const { activationModelConfigured, assertSupportedLegacyContents } = await import('./local-cutover-release.mjs');
+  const { withColdStoreLease } = await import('./local-cutover-lease.mjs');
+  const { path } = descriptor.database;
+  let count;
+  try {
+    const { keyed } = await activationModelConfigured(root, descriptor, context.env);
+    if (keyed) return;
+    count = await withColdStoreLease(path, async assertLease => {
+      const timeless = await assertSupportedLegacyContents(path, { keyless: false });
+      await assertLease();
+      return timeless;
+    });
+  } catch {
+    // Status leaves a running or unreadable legacy store alone.
+    return;
+  }
+  if (count > 0) writeTimelessRawNotice(context, count);
+}
+
 export async function checkSetupProvider(root, descriptor, context, requestModel) {
   const { activationModelConfigured, recordProviderConsent } = await import('./local-cutover-release.mjs');
   try {
@@ -158,8 +182,7 @@ export async function runInstalledCutover(action, context, { requestModel = fals
     return 0;
   } catch (error) {
     if (error.key === 'cutover_timeless_raw') {
-      const count = error.params.timeless;
-      write.literal(`Local cutover paused. Found ${count} Raw ${count === 1 ? 'session' : 'sessions'} without event times. Legacy service remains active until a follow-up release addresses this.`);
+      writeTimelessRawNotice(context, error.params.timeless);
       return 2;
     }
     const refusal = error.params?.code ?? error.code;
