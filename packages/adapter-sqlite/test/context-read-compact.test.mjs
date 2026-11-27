@@ -47,7 +47,8 @@ async function openAdapters(t, options = { capabilities }) {
     try { await sqlite?.close(); }
     finally { file.remove(); }
   });
-  sqlite = await openSqliteAdapter(file.path, options);
+  // Core's deadline comes from the fixture clock fixed at 0, so SQLite checks it on the same clock.
+  sqlite = await openSqliteAdapter(file.path, { monotonicMs: () => 0, ...options });
   return [sqlite, createMemoryAdapter(options)];
 }
 
