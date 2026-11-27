@@ -57,6 +57,7 @@ export declare const IMPORT_ARCHIVE_CASES: readonly ConformanceCase[];
 export declare const PROVEN_FORK_CASES: readonly ConformanceCase[];
 export declare const RELATION_CASES: readonly ConformanceCase[];
 export declare const RELATION_HINT_CASES: readonly ConformanceCase[];
+export declare const RELATION_JUDGE_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CARD_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_AMENDMENT_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_LINK_CASES: readonly ConformanceCase[];
