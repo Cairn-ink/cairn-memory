@@ -82,19 +82,21 @@ function preflight(types, semantic, available, preset) {
 
 /** @param {ContextCandidateDiagnostics} diagnostics @param {readonly ContextReadType[]} types
  * @param {ContextIndexObservation} observed @param {number | null} matched @param {number} horizon */
-function completeCoverage(diagnostics, types, observed, matched, horizon) {
+function applyCoverage(diagnostics, types, observed, matched, horizon) {
   const { coverage, channels } = diagnostics;
-  channels.lexical = { state: "ready", causes: [] };
-  coverage.status = "complete";
+  const { cardPending } = observed;
+  channels.lexical = { state: "ready", causes: cardPending ? ["card_index_rebuilding"] : [] };
+  coverage.status = cardPending ? "partial" : "complete";
   coverage.freshness = "current";
   for (const type of types) {
+    if (type === "card" && cardPending) continue;
     const counts = observed.byType[type];
     if (!counts) throw new CoreError("internal_error");
     coverage.byType[type] = { ...counts, embedded: null, scanned: 0,
       embeddedFraction: null, scannedFraction: counts.eligible === 0 ? 1 : 0 };
   }
   coverage.depths.lexical = horizon;
-  coverage.omitted.lexical = matched === null ? null : Math.max(0, matched - horizon);
+  coverage.omitted.lexical = cardPending || matched === null ? null : Math.max(0, matched - horizon);
   coverage.omitted.horizon = 0;
 }
 
@@ -380,7 +382,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       diagnostics.trace.timings.fusionMs = clock.monotonicMs() - fusionStarted;
       const coverage = types.includes("card") && !cardsEnabled && documentCardsOnly && !accepted.some(({ ref }) => ref.type === "card")
         ? { ...observed, byType: { ...observed.byType, card: { eligible: 0, indexed: 0 } } } : observed;
-      completeCoverage(diagnostics, types, coverage, accepted.length === lexical.rows.length ? lexical.matched : null, horizon);
+      applyCoverage(diagnostics, types, coverage, accepted.length === lexical.rows.length ? lexical.matched : null, horizon);
       if (compact) diagnostics.coverage.omitted.horizon = fused.unionSize - items.length;
       const memoryCoverage = diagnostics.coverage.byType.memory;
       if (semanticResult && memoryCoverage) {

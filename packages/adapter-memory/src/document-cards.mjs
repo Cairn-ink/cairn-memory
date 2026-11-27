@@ -1,4 +1,4 @@
-import { CoreError, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, compareUtf8 } from "@cairn-ink/core";
 import { DOCUMENT_CARD_SEARCH_TEXT_VERSION, documentCardVisible } from "@cairn-ink/core/routing";
 import { hasReplacedCitation, memoryCorrectionEvidence } from "./privacy.mjs";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
@@ -159,11 +159,38 @@ export function purgeDeletedDocumentSources(state, namespace, isDeleted) {
   }, "raw_deleted", { purge: true });
 }
 
+/** @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
+ * @param {import("./privacy.mjs").RingKeys} ringKeys */
+export function createForgottenReceiptCheck(matchFacts, ringKeys) {
+  /** @param {State} state @param {Scope} scope */
+  return (state, scope) => {
+    const facts = new Map([...state.facts].filter(([, { fact }]) => fact.kind === "text" &&
+      fact.origin === "forget" && fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace));
+    if (!facts.size) return undefined;
+    const policy = matchFacts(facts, scope);
+    /** @type {ReturnType<typeof ringKeys> | undefined} */
+    let keys;
+    /** @param {import("./unit-of-work.mjs").Entry} entry */
+    return async entry => {
+      for (const receipt of entry.receipts) {
+        if (receipt.excerpt === undefined) continue;
+        const digests = await allDigests(receipt.excerpt);
+        keys ??= ringKeys(scope.owner);
+        for (const key of await keys) digests.push(await coreDigest(receipt.excerpt, key));
+        if (policy.withholdsRaw(receipt, digests)) return true;
+      }
+      return false;
+    };
+  };
+}
+
 /** @param {Port} port @param {() => number} now
  * @param {CardVisibilityInputs["cardVisibilityInput"]} buildVisibilityInput
  * @param {CardVisibilityInputs["amendmentWithheld"]} amendmentWithheld
- * @param {boolean} searchEnabled @returns {DocumentCardStore<StoredDocumentCardRecord>} */
-export function createDocumentCardStore(port, now, buildVisibilityInput, amendmentWithheld, searchEnabled) {
+ * @param {boolean} searchEnabled
+ * @param {ReturnType<typeof createForgottenReceiptCheck>} forgottenReceiptCheck
+ * @returns {DocumentCardStore<StoredDocumentCardRecord>} */
+export function createDocumentCardStore(port, now, buildVisibilityInput, amendmentWithheld, searchEnabled, forgottenReceiptCheck) {
   /** @param {Tx} tx @param {State} state @param {Scope} scope @param {CardEntry | undefined} entry */
   async function readStoredCard(tx, state, scope, entry) {
     const card = entry?.card;
@@ -171,6 +198,15 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
     if (hasReplacedCitation(state, card)) {
       const input = await buildVisibilityInput(tx, state, scope, card);
       if (!input || !(await documentCardVisible(input)).visible) return null;
+    } else {
+      const checkReceipt = forgottenReceiptCheck(state, scope);
+      if (checkReceipt) {
+        const rows = state.rows.get(scope.namespace);
+        for (const { id } of card.sourceMemories) {
+          const memory = rows?.get(id);
+          if (memory && await checkReceipt(memory)) return null;
+        }
+      }
     }
     return readCard(entry);
   }

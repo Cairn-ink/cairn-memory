@@ -6,6 +6,7 @@ import { assertMigrationComplete, assertServingFilename } from "../migrate/guard
 import { readMigratedControls } from "../migrate/capture-controls.mjs";
 import { openAdapterUnitOfWork } from "../uow.mjs";
 import { CONTEXT_READ_TABLES, installContextReadSchema } from "./context-read.mjs";
+import { DOCUMENT_CARD_TABLES } from "./document-cards.mjs";
 import { INSPECT_TABLES, installInspectSchema } from "./inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 import { PLACEMENT_RELATION_TABLES } from "./placement-relations.mjs";
@@ -46,6 +47,7 @@ function classifyStore(db) {
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
   const migrated = tables.some(table => table.name === "cairn_migration");
   const expected = [...layoutTables, ...INSPECT_TABLES, ...CONTEXT_READ_TABLES, ...PLACEMENT_RELATION_TABLES,
+    ...DOCUMENT_CARD_TABLES,
     ...(migrated ? ["cairn_migration"] : [])];
   if (tables.length !== expected.length || !expected.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");

@@ -443,10 +443,18 @@ function keepBest(heap, item, depth, order) {
   }
 }
 
-/** @param {Connection} db @param {Entry} entry @returns {HydratedItem} */
-function hydrateRow(db, { row }) {
-  const receipts = readReceipts(db, row.scope, row.id).map(({ client, sessionId, messageId, role, occurredAtMs }) =>
-    ({ client, sessionId, messageId, role, occurredAtMs }));
+/** @param {Connection} db @param {Entry} entry @param {SessionHasher} [lineageHash] @returns {HydratedItem} */
+function hydrateRow(db, { row }, lineageHash) {
+  const receipts = readReceipts(db, row.scope, row.id).flatMap(receipt => {
+    const { client, sessionId, messageId, role, occurredAtMs, legacyReceiptKey, legacy } = receipt;
+    const address = { client, sessionId, messageId, role, occurredAtMs };
+    if (!lineageHash) return [address];
+    // Forget joins opaque span keys to the retained clear source selectors.
+    const sessions = legacyReceiptKey !== undefined && legacy?.spans?.length
+      ? new Set(legacy.spans.map(span => span.sessionId)) : [sessionId];
+    return Array.from(sessions, spanSession => ({ ...address, messageKey: messageId,
+      sessionKeyHash: lineageHash(row.scope, client, spanSession) }));
+  });
   let firstMs = null;
   let lastMs = null;
   for (const { occurredAtMs } of receipts) {
@@ -460,9 +468,10 @@ function hydrateRow(db, { row }) {
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
  * @param {ReturnType<typeof import("./raw-read.mjs").createRawReads>["visibleRawRefs"]} visibleRawRefs
  * @param {ReturnType<typeof createVectorCache> | undefined} cache @param {() => number} now
+ * @param {(tx: import("@cairn-ink/core/ports").Tx, scope: RetrievalScope, refs: readonly ItemRef[]) => Promise<ItemRef[]>} [visibleCardRefs]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, cache, now) {
+export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, cache, now, visibleCardRefs) {
   const stateToken = createSnapshotToken(storeKey);
   const memoryStateToken = createSnapshotToken(storeKey, true);
 
@@ -664,14 +673,18 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       },
     },
     fence: {
-      assertVisible(tx, scope, refs, intent, matchesRawVersion) {
+      async assertVisible(tx, scope, refs, intent, matchesRawVersion) {
         // Core supplies a new read transaction for the final delivery check.
-        return port(tx, scope?.owner, {}, db => {
+        const { selection, references, visible, raw } = await port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           const references = copyArray(refs);
           const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
-          return [...visible, ...visibleRawRefs(db, selection, references, matchesRawVersion)];
+          return { selection, references, visible, raw: visibleRawRefs(db, selection, references, matchesRawVersion) };
         });
+        if (!visibleCardRefs || !references.some(ref => ref.type === "card")) return [...visible, ...raw];
+        const cards = await visibleCardRefs(tx, selection, references);
+        const qualified = new Set([...visible, ...cards].map(({ type, namespace, id }) => JSON.stringify([type, namespace, id])));
+        return [...references.filter(({ type, namespace, id }) => qualified.has(JSON.stringify([type, namespace, id]))), ...raw];
       },
     },
     hydrate: {
@@ -679,7 +692,8 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
         return port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") invalidInput();
-          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), entry => hydrateRow(db, entry));
+          const lineageHash = visibleCardRefs && intent === "read" && !tx.readOnly ? hashSession : undefined;
+          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), entry => hydrateRow(db, entry, lineageHash));
         });
       },
     },
