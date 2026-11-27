@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-7d9e94d2432ee80926e092a4f242f835959190af864838be767e9a30666cf861",
+  "engineId": "core-local-v1-43193902bafa19cee69b966d99af550ec1030fecac2c60d44416d04da996a36d",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2928174,
-    "sha256": "7713ddc84c1e1d4576a41093773a5e97377ec8444eeb52676ef80f4975f86013"
+    "bytes": 2928414,
+    "sha256": "b151ccbe2924fb085c8eac2897fea185af78f841b0ba2891bec91bd9760c0078"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -163,7 +163,7 @@
     "packages/core/src/service/context-read-raw.mjs": "4d8415ef1cb3b949c95780109373217ea6e690b4b0a0f2cf94ca071d95d70f0d",
     "packages/core/src/service/context-read-tokens.mjs": "0ec21f4889e5f93e40fd59a4dd493edfdb02e4c85595307eec7106605472662e",
     "packages/core/src/service/context-read.mjs": "71bfafad36d84cedd5576f656eafeb4f2b826f76b8d8ee2c82000b402a2492d1",
-    "packages/core/src/service/entry.mjs": "4d9304ceaf8dc712cc36c6531670a18bc468e31003221950bb739bc99fd5f961",
+    "packages/core/src/service/entry.mjs": "55cecfc6216cfddc02d4157358d75a5018c4e35c1e09066c5862005d6e78b21f",
     "packages/core/src/service/find.mjs": "42737b7f68db9c922d49521e04dd5a5f7f1f505acdb5bf96d67be8f2faa469c1",
     "packages/core/src/service/forget.mjs": "ec4c84d7eeb75990a091484d8771f1eef7149aa79b748a6aa2e953bb0952b987",
     "packages/core/src/service/import.mjs": "05b727a16f0f06bdcdc9f78c7b1e8dd25d921a4d5a21e4660832e36a86d4580b",

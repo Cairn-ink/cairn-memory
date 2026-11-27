@@ -1,7 +1,7 @@
 import { hostCaptureEffects, nodeHostWriteContext } from "./host-write-context.mjs";
 import { CoreError } from "@cairn-ink/core";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
-import { createHookAuthorizer, hostOperation, hostReceipt } from "../../core/src/service/entry.mjs";
+import { createHookAuthorizer, hostOperation, hostReceipt, registerHostWriteContext } from "../../core/src/service/entry.mjs";
 
 /** @import { HostWriteHookPort, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { State } from "./unit-of-work.mjs" */
@@ -15,6 +15,7 @@ export function createMemoryHostWriteHooks({ uow, port, hostRead, hostWrite }, r
     getState => (getState().rows.get(scope.namespace)?.get(id)?.receipts ?? []).map(hostReceipt), true);
   /** @type {WeakMap<Tx, ((state: State, indexRevision: number) => void)[]>} */
   const finalizers = new WeakMap();
+  registerHostWriteContext(nodeHostWriteContext);
   const authority = createHookAuthorizer();
 
   /** @type {HostWriteHookPort} */
