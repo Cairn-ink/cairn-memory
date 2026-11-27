@@ -23,7 +23,7 @@ await serveStdio(process.stdin, process.stdout, options);
 `, { mode: 0o600 });
   const original = 'The synthetic feldspar marker is red.';
   const corrected = 'The synthetic feldspar marker is blue.';
-  const context = { query: 'feldspar', types: ['memory'], intent: 'current' };
+  const context = { query: 'feldspar', types: ['memory'], intent: 'current', representation: 'representation-v2-dated' };
   const rawContext = { ...context, query: 'zirconium' };
   const checkRaw = (items, fenced) => {
     const result = JSON.stringify(items);

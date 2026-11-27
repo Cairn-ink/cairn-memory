@@ -55,7 +55,7 @@ const bound = /^[A-Za-z0-9_-]{43}$/u;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const timestamp = /^\d{4}-\d{2}-\d{2}T\d\d:\d\d:\d\d\.\d{3}Z$/u;
 const uuidKeys = ['id', 'memoryId', 'receiptId', 'eventId'];
-const reservedPlaceholder = /^<(?:(?:uuid|snapshot|content-identity|ref-fence)-\d+|timestamp|work-metrics|owner-index-revision|tokens-in-wire-text)>$/u;
+const reservedPlaceholder = /^<(?:(?:uuid|snapshot|content-identity|ref-fence|item-fence)-\d+|timestamp|work-metrics|owner-index-revision|tokens-in-wire-text)>$/u;
 
 function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
   const identities = new Map();
@@ -100,8 +100,10 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     const timestampField = key === 'createdAt' || key === 'updatedAt';
     const snapshotField = key === 'snapshot' || key === snapshotKey;
     const contentIdentityField = key === 'contentIdentity';
-    const refFenceField = key === 'f' && path.at(-1) === 'ref';
-    if (!allowPlaceholders && (uuidField || timestampField || snapshotField || contentIdentityField || refFenceField)) {
+    const itemDiagnostic = path.at(-2) === 'items' && path.at(-3) === diagnosticsKey;
+    const refFenceField = key === 'f' && (path.at(-1) === 'ref' || itemDiagnostic);
+    const itemFenceField = key === 'fence' && itemDiagnostic;
+    if (!allowPlaceholders && (uuidField || timestampField || snapshotField || contentIdentityField || refFenceField || itemFenceField)) {
       assert.ok(!reservedPlaceholder.test(value), 'reserved normalization placeholder in ' + key);
     }
     if (uuidField) {
@@ -114,6 +116,7 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     if (snapshotField && bound.test(value)) return handle('snapshot', value);
     if (contentIdentityField && bound.test(value)) return handle('content-identity', value);
     if (refFenceField && /^[A-Za-z0-9_-]{8}$/u.test(value)) return handle('ref-fence', value);
+    if (itemFenceField && bound.test(value)) return handle('item-fence', value);
     return value;
   }
   return visit;
