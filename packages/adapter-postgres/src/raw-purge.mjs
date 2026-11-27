@@ -70,16 +70,15 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
   return facts.some((fact) => passages.some((passage) => factHidesRow(fact, { type: "raw", scope, sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: content.length, ...passage }) === true));
 }
 
-/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses
- * @param {{exact?: boolean}} [options] */
-export async function dropSourceQuantities(query, scope, addresses, { exact = false } = {}) {
+/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
+export async function dropSourceQuantities(query, scope, addresses) {
   if (!addresses.length) return false;
   /** @type {Map<string, {client: string | null, sessionId: string}[]>} */
   const sessions = new Map();
   const targets = [];
   for (const { client, sessionId, messageId } of addresses) {
     const key = JSON.stringify([client, sessionId]);
-    let resolved = exact ? [{ client, sessionId }] : sessions.get(key);
+    let resolved = sessions.get(key);
     if (!resolved) {
       try {
         // The reverse lookup can omit clients with mixed save provenance.
@@ -152,13 +151,11 @@ export async function eraseReceiptRaw(query, scope, memoryId) {
     RETURNING r.client, r.session_id AS "sessionId", r.message_id AS "messageId"`, [scope.owner, JSON.stringify(receipts)]);
   /** @type {MessageAddress[]} */
   const deleted = rows;
-  if (!deleted.length) return;
-
-  await dropSourceQuantities(query, scope, deleted, { exact: true });
+  await dropSourceQuantities(query, scope, deleted);
   const sessions = new Map();
   /** @type {Map<string, Set<string>>} */
   const messageIds = new Map();
-  for (const { client, sessionId, messageId } of deleted) {
+  for (const { client, session_id: sessionId, message_id: messageId } of receipts) {
     const key = JSON.stringify([client, sessionId]);
     let ids = messageIds.get(key);
     if (!ids) {

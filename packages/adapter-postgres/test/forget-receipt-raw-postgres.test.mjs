@@ -110,13 +110,19 @@ async function fixture(t, keyed, overrides) {
     embedder: { model: "fixture", dimensions: vector.length, async embed(texts) { return texts.map(() => vector); } },
   });
   const service = createService();
-  async function capture(event, messages, text) {
-    extraction = text ? [{ content: text, kind: "fact", confidence: 1, sourceIndices: [0] }] : [];
+  const enqueue = async (event, messages) => {
     assert.equal((await service.enqueueCapture(scope, { ...event, messages })).status, "accepted");
+  };
+  async function runCapture(event, text) {
+    extraction = text ? [{ content: text, kind: "fact", confidence: 1, sourceIndices: [0] }] : [];
     const result = await service.runCapture(scope, event);
     assert.equal(result.status, "done", result.code);
     assert.equal(result.result.memories.length, extraction.length);
     return result.result.memories[0]?.id;
+  }
+  async function capture(event, messages, text) {
+    await enqueue(event, messages);
+    return runCapture(event, text);
   }
 
   const rawRows = async () => (await pool.query(`SELECT id, user_id AS owner, client, session_id AS "sessionId",
@@ -175,8 +181,9 @@ async function fixture(t, keyed, overrides) {
       decodeOutboxMessages(raw_request, core_outbox_metadata).map(({ id, ...message }) =>
         ({ client, sessionId, messageId: id, ...message })));
 
-  return { write, raw, rawRows, receiptRows, attach, capture, forget, importRaw, insert, seedSecondary, assertRawViews,
-    seedQuantities, quantities, ledgerMessages, createService, dump: async () => (await pool.query(dumpSql)).rows[0].snapshot };
+  return { write, raw, rawRows, receiptRows, attach, enqueue, runCapture, capture, forget, importRaw, insert,
+    seedSecondary, assertRawViews, seedQuantities, quantities, ledgerMessages, createService, pool,
+    dump: async () => (await pool.query(dumpSql)).rows[0].snapshot };
 }
 
 for (const keyed of [false, true]) {
@@ -217,7 +224,7 @@ for (const keyed of [false, true]) {
     assert.deepEqual(await f.ledgerMessages(), ledger.map(row => isTarget(row) ? { ...row, content: "" } : row));
   });
 
-  test(`Postgres ${mode} forget withholds a receipt tuple first archived later`, migrationDbTest, async t => {
+  test(`Postgres ${mode} forget hides a receipt tuple first archived later`, migrationDbTest, async t => {
     const f = await fixture(t, keyed);
     const id = await f.capture(primary, [primaryTurn], memoryText);
     await f.attach(id, [receipt(secondary, delayed)]);
@@ -306,5 +313,66 @@ for (const keyed of [false, true]) {
     await assert.rejects(f.forget(id), { code: "host_write_hook_failed" });
     assert.equal(reachedHook, true);
     assert.deepEqual(await f.dump(), before);
+  });
+
+  test(`Postgres ${mode} forget blanks a queued receipt before its first archive`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const id = await f.capture(primary, [primaryTurn], memoryText);
+    await f.enqueue(secondary, [secondaryTurn, neighbor]);
+    const evidence = receipt(secondary, secondaryTurn);
+    await f.attach(id, [evidence]);
+    const queuedMessages = async () => (await f.ledgerMessages()).filter(row => row.sessionId === secondary.sessionId);
+    assert.ok((await f.rawRows()).every(row => row.sessionId !== secondary.sessionId));
+    const before = await queuedMessages();
+    assert.deepEqual(before.map(({ content }) => content), [secondaryTurn.content, neighbor.content]);
+    const expected = [{ ...before[0], content: "" }, before[1]];
+    const receipts = await f.receiptRows(id);
+    assert.ok(receipts.some(row => row.messageId === evidence.messageId && !row.marked));
+
+    assert.equal((await f.forget(id)).status, "forgotten");
+    assert.deepEqual(await queuedMessages(), expected);
+    assert.deepEqual(await f.receiptRows(id), receipts.map(row => ({ ...row, marked: true })));
+
+    await f.runCapture(secondary);
+    assert.deepEqual(await queuedMessages(), expected);
+    assert.deepEqual((await f.rawRows()).map(({ client, sessionId, messageId, content }) =>
+      [client, sessionId, messageId, content]), [[...tuple(receipt(secondary, neighbor)), neighbor.content]]);
+  });
+
+  test(`Postgres ${mode} forget drops quantities across clients for a physical MCP save receipt`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const id = await f.capture(primary, [primaryTurn], memoryText);
+    const physical = { ...secondary, client: "mcp", sessionId: "mcp-save:fixture" };
+    const reported = { ...physical, client: "reported-client" };
+    assert.deepEqual(await f.importRaw(physical, secondaryTurn), { archived: 1, existing: 0, withheld: 0 });
+    const evidence = receipt(physical, secondaryTurn);
+    await f.attach(id, [evidence]);
+    await f.seedQuantities([receipt(reported, secondaryTurn), evidence, receipt(reported, neighbor), receipt(separate, sameId)]);
+    const targets = row => row.sessionId === physical.sessionId && row.messageId === evidence.messageId;
+    const before = await f.quantities();
+    assert.deepEqual(before.filter(targets).map(({ client }) => client), [reported.client, physical.client]);
+    assert.equal(before.filter(row => !targets(row)).length, 2);
+    assert.deepEqual((await f.rawRows()).filter(targets).map(tuple), [tuple(evidence)]);
+
+    assert.equal((await f.forget(id)).status, "forgotten");
+    assert.ok((await f.rawRows()).every(row => !targets(row)));
+    assert.deepEqual(await f.quantities(), before.filter(row => !targets(row)));
+  });
+
+  test(`Postgres ${mode} forget removes invalid ledger timestamps only from selected messages`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const id = await f.seedSecondary();
+    const event = [scope.owner, secondary.client, secondary.eventId];
+    const { rows: [{ raw_request: before }] } = await f.pool.query(`UPDATE capture_events SET raw_request =
+      jsonb_set(jsonb_set(raw_request, '{messages,0,occurred_at}', '"invalid"'), '{messages,1,occurred_at}', '"invalid"')
+      WHERE user_id = $1 AND client = $2 AND event_id = $3 RETURNING raw_request`, event);
+    assert.deepEqual(before.messages.map(({ occurred_at }) => occurred_at), ["invalid", "invalid"]);
+    const [{ occurred_at, ...selected }, unselected] = before.messages;
+
+    // Isolate the receipt scrub from the text purge, which cleans timestamps across the ledger.
+    assert.equal((await f.createService({ rawEnabled: false }).forget(scope, id, source)).status, "forgotten");
+    const { rows: [{ raw_request: after }] } = await f.pool.query(`SELECT raw_request FROM capture_events
+      WHERE user_id = $1 AND client = $2 AND event_id = $3`, event);
+    assert.deepEqual(after, { ...before, messages: [{ ...selected, content: "" }, unselected] });
   });
 }

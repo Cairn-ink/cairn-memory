@@ -174,6 +174,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         if (!deleted.rows.length) return false;
         // Postgres Raw is null-namespace only.
         if (ns === null) {
+          // Core forget holds the pause lock while erasing receipt Raw and scrubbing the capture ledger.
           await eraseReceiptRaw(query, { owner, namespace: null }, key);
           await query(`UPDATE core_memory_receipts SET forgotten_at = now()
             WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [owner, key]);
