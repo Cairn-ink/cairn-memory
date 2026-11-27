@@ -89,6 +89,7 @@ test('consented keyed recall packs compact memories and restores rank order', { 
         for (const object of weaker) await save('The albatross keeps a ' + object + '.');
         for (const animal of semanticOnly) await save('Semantic decoy ' + animal + ' swims upstream.');
         const forgotten = await save(removed);
+        const recallStart = requests().length;
 
         const recall = async (args = {}) => {
           const request = { query, ...args };
@@ -150,8 +151,9 @@ test('consented keyed recall packs compact memories and restores rank order', { 
         assert.equal(count('/v1/responses'), 0);
         assert.equal(count('/v1/responses/input_tokens'), 0);
         assert.equal(count('/v1/embeddings'), observed.length);
-        assert.deepEqual(observed.slice(-queries.length).map(({ input }) => input), queries.map(query => [query]));
-        t.diagnostic(JSON.stringify({ recallEmbeddings: queries.length, responses: 0, inputTokens: 0 }));
+        const recallRequests = observed.slice(recallStart);
+        assert.deepEqual(recallRequests, queries.map(query => ({ endpoint: '/v1/embeddings', input: [query] })));
+        t.diagnostic(JSON.stringify({ recallEmbeddings: recallRequests.length, responses: 0, inputTokens: 0 }));
       }, { key: syntheticKey, preload });
     } finally {
       f.run(installers.candidate, ['daemon', 'stop', '--local']);
