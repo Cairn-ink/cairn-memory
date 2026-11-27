@@ -224,7 +224,7 @@ for (const keyed of [false, true]) {
     assert.deepEqual(await f.ledgerMessages(), ledger.map(row => isTarget(row) ? { ...row, content: "" } : row));
   });
 
-  test(`Postgres ${mode} forget hides a receipt tuple first archived later`, migrationDbTest, async t => {
+  test(`Postgres ${mode} forget refuses a receipt tuple first archived later`, migrationDbTest, async t => {
     const f = await fixture(t, keyed);
     const id = await f.capture(primary, [primaryTurn], memoryText);
     await f.attach(id, [receipt(secondary, delayed)]);
@@ -234,10 +234,8 @@ for (const keyed of [false, true]) {
     assert.deepEqual(await f.importRaw(secondary, delayed), { archived: 0, existing: 0, withheld: 1 });
     assert.ok((await f.rawRows()).every(row => row.sessionId !== secondary.sessionId));
     const key = { scope, ...secondary, payloadDigest: sha256Hex(delayed.content) };
-    assert.deepEqual(await f.write(tx => f.raw.archive(tx, key, [delayed])), { archived: 1 });
-    const [stored] = await f.rawRows();
-    assert.equal(stored.messageId, delayed.id);
-    await f.assertRawViews("otter", [], [stored]);
+    assert.deepEqual(await f.write(tx => f.raw.archive(tx, key, [delayed])), { archived: 0, withheld: 1 });
+    assert.deepEqual(await f.rawRows(), []);
     assert.deepEqual((await f.receiptRows(id)).map(({ marked }) => marked), [true, true]);
   });
 
