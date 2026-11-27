@@ -105,6 +105,35 @@ export function createPostgresMemoryReads(options = {}) {
   const visibleRawIds = "lineageSecret" in options ? createRawRefReader(options) : undefined;
   // Raw delivery accepts mixed scopes and returns only personal raw refs.
   const { hashSessionKey, allowNonNullNamespace = visibleRawIds !== undefined } = options;
+
+  /** @type {ReadSnapshot["stateToken"]} */
+  async function memoryStateToken(tx, scope) {
+    guardOwner(tx, scope);
+    const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
+    return runOperation(tx, async query => {
+      // The owner revision also advances for Raw writes. Use only the rows
+      // and suppression facts that can affect memory ranking or delivery.
+      const { rows: [row] } = await query(`WITH selected AS MATERIALIZED (
+        SELECT id, xmin::text AS version FROM memories WHERE ${MEMORY_FILTER}
+      ), versions AS (
+        SELECT jsonb_build_array('memory', id, version) AS row FROM selected
+        UNION ALL
+        SELECT jsonb_build_array('receipt', r.memory_id, r.client, r.session_id, r.message_id, r.xmin::text)
+          FROM core_memory_receipts r JOIN selected m ON m.id = r.memory_id WHERE r.user_id = $1
+        UNION ALL
+        SELECT jsonb_build_array('fact', fact_id, xmin::text) FROM core_suppression_facts
+          WHERE user_id = $1 AND kind <> 'rawSpan'
+          AND array_position($2::text[], body ->> 'namespace') IS NOT NULL
+        UNION ALL
+        SELECT jsonb_build_array('legacy', id, xmin::text) FROM suppressions
+          WHERE user_id = $1 AND array_position($2::text[], NULL::text) IS NOT NULL
+      )
+      SELECT encode(sha256(convert_to(COALESCE(string_agg(row::text, E'\\n' ORDER BY row), ''), 'UTF8')), 'hex') AS token
+      FROM versions`, memoryScopeParams(selection, false));
+      return row.token;
+    });
+  }
+
   return {
     recent: {
       async recent(tx, scope, page) {
@@ -113,6 +142,12 @@ export function createPostgresMemoryReads(options = {}) {
       },
     },
     snapshot: {
+      findMemory: {
+        stateToken: memoryStateToken,
+        async assertUnchanged(tx, scope, token) {
+          if (await memoryStateToken(tx, scope) !== token) throw new CoreError("cursor_stale");
+        },
+      },
       async stateToken(tx, scope) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);

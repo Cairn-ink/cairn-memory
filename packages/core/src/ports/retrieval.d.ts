@@ -65,9 +65,16 @@ export interface RawSegment {
 }
 
 export interface RawCandidates {
-  raw(tx: Tx, scope: RetrievalScope, query: string, intent: "search" | "context", options: CallOptions & { limit: number; queryVector?: Float32Array }): Promise<{
+  raw(tx: Tx, scope: RetrievalScope, query: string, intent: "search" | "context", options: CallOptions & {
+    limit: number;
+    queryVector?: Float32Array;
+    /** When present, take a page of the first 100 ranked candidates after store visibility checks. */
+    offset?: number;
+  }): Promise<{
     segments: RawSegment[];
     coverage: { complete: boolean };
+    /** Present for paged reads. State identifies the ranked pool in this snapshot. */
+    page?: { state: string; hasMore: boolean };
   }>;
 }
 
@@ -82,6 +89,8 @@ export interface ReadSnapshot {
   stateToken(tx: Tx, scope: RetrievalScope): Promise<string>;
   /** Throws cursor_stale when the token no longer matches. */
   assertUnchanged(tx: Tx, scope: RetrievalScope, token: string): Promise<void>;
+  /** Memory-only snapshot for Find when the general revision also tracks other indexes. */
+  findMemory?: Pick<ReadSnapshot, "stateToken" | "assertUnchanged">;
 }
 
 export interface HydratedItem {

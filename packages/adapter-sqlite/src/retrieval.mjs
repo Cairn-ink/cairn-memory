@@ -464,6 +464,7 @@ function hydrateRow(db, { row }) {
  */
 export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, cache, now) {
   const stateToken = createSnapshotToken(storeKey);
+  const memoryStateToken = createSnapshotToken(storeKey, true);
 
   /** @param {Connection} db @param {RetrievalScope} selection @param {RecentKey | null} after
    * @param {number} perNamespaceLimit
@@ -700,6 +701,16 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       },
     },
     snapshot: {
+      findMemory: {
+        stateToken(tx, scope) {
+          return port(tx, scope?.owner, {}, db => memoryStateToken(db, readSet(tx.owner, scope)));
+        },
+        assertUnchanged(tx, scope, token) {
+          return port(tx, scope?.owner, {}, db => {
+            if (token !== memoryStateToken(db, readSet(tx.owner, scope))) throw new CoreError("cursor_stale");
+          });
+        },
+      },
       stateToken(tx, scope) {
         return port(tx, scope?.owner, {}, db => stateToken(db, readSet(tx.owner, scope)));
       },

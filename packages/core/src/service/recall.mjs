@@ -33,14 +33,16 @@ export function recallMethod(deps) {
   });
 }
 
-/** @param {import("./index.d.mts").MemoryServiceDeps} deps */
-export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) {
+/** @param {import("./index.d.mts").MemoryServiceDeps} deps
+ * @param {typeof fuseHostedLexicalOnly} [lexicalPage] Optional Find-only paging order.
+ */
+export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, lexicalPage = fuseHostedLexicalOnly) {
   const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
   /**
    * @param {import("../ports/common.d.ts").Scope} scope
    * @param {string} query Prepared by the service entry.
    * @param {{ cursor: unknown; limit: number; mode: "search" | "plugin" }} options
-   * @param {Pick<import("../ports/retrieval.d.ts").RetrievalScope, "clients" | "window">} [filters] Used by find for its first page.
+   * @param {Pick<import("../ports/retrieval.d.ts").RetrievalScope, "clients" | "window">} [filters] Used by Find.
    */
   return async (scope, query, { cursor, limit, mode }, filters) => {
     // Refuse an unsupported search before any dependency call, as the other placeholders do.
@@ -117,7 +119,7 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
       const page = { offset, limit, floor: mode === "plugin" };
       const { rows, total } = complete
         ? fuseHosted(lexicalRows, semantic.rows.filter(row => isScopedMemory(row.ref)), page)
-        : fuseHostedLexicalOnly(lexicalRows, page);
+        : lexicalPage(lexicalRows, page);
       const nextOffset = offset + limit;
       const nextCursor = nextOffset < total ? encodeCursor([...binding, token, nextOffset, path]) : null;
       const memories = await hydrateMemoryRows(hydrate, tx, readScope, rows.map(row => row.ref), "recall");

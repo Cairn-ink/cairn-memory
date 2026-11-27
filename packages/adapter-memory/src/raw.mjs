@@ -1,6 +1,6 @@
-import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
+import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1, RAW_FIND_DEPTH,
   legacyExactMac, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
-import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+import { fingerprintMemoryPassages, sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { redactDocumentText } from "../../core/src/routing/redaction.mjs";
 import { prepareMessageContent } from "../../core/src/service/capture.mjs";
@@ -652,13 +652,20 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         const selection = copyReadScope(tx.owner, scope);
         if (typeof query !== "string" || (intent !== "search" && intent !== "context") ||
             !options || typeof options !== "object") throw new CoreError("invalid_input");
-        const { limit } = options;
+        const { limit, offset } = options;
         validateLimit(limit);
+        if (offset !== undefined && (!Number.isSafeInteger(offset) || offset < 0)) throw new CoreError("invalid_input");
         const terms = tokenizeT1(query);
         const coverage = { complete: true };
         if (terms.length === 0) return { segments: [], coverage };
         const rows = await visibleRows(getState(), selection);
         const documents = rows.map((row) => ({ ...row, text: row.content }));
+        if (offset !== undefined) {
+          const pool = rankLexical(documents, terms, RAW_FIND_DEPTH).map(publicSegment);
+          const members = rows.map(({ ref }) => ref.id).sort();
+          const state = await sha256Hex(JSON.stringify([members, pool]));
+          return { segments: pool.slice(offset, offset + limit), coverage, page: { state, hasMore: offset + limit < pool.length } };
+        }
         return { segments: rankLexical(documents, terms, limit).map(publicSegment), coverage };
       });
     },

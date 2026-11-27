@@ -21,7 +21,7 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { DocumentCardSourceMessage, FingerprintKeyProvider, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { DocumentCardSourceMessage, FingerprintKeyProvider, ReadSnapshot, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 /** @typedef {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceWithholding"]} RawSourceWithholding */
 
@@ -287,6 +287,12 @@ export function createDocumentCardCandidates(port, cardVisible) {
   }
 
   return {
+    stateToken(tx, scope) {
+      return port.read(tx, scope, getState => {
+        const selection = copyReadScope(tx.owner, scope);
+        return JSON.stringify(selection.namespaces.map(namespace => getState().cardGenerations.get(namespace) ?? 0));
+      });
+    },
     async lexical(tx, scope, query, depth) {
       return port.read(tx, scope, async getState => {
         const selection = copyReadScope(tx.owner, scope);
@@ -401,6 +407,12 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     },
   };
 
+  /** @type {ReadSnapshot["stateToken"]} */
+  const memoryStateToken = (tx, scope) => port.read(tx, scope, getState => {
+    const selection = copyReadScope(tx.owner, scope);
+    return JSON.stringify(selection.namespaces.map(namespace => getState().inspectEpochs.get(namespace) ?? 1));
+  });
+
   return {
     ...(capabilities.semanticRetrieval ? { vector } : {}),
     lexical: {
@@ -421,6 +433,12 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       },
     },
     snapshot: {
+      findMemory: {
+        stateToken: memoryStateToken,
+        async assertUnchanged(tx, scope, token) {
+          if (await memoryStateToken(tx, scope) !== token) throw new CoreError("cursor_stale");
+        },
+      },
       async stateToken(tx, scope) {
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);

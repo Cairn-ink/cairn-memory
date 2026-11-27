@@ -1,5 +1,7 @@
 import { CoreError } from "../errors.mjs";
 
+export const RAW_FIND_DEPTH = 100;
+
 export function pageLimit(limit = 10) {
   return Number.isNaN(limit) ? 10 : Math.min(50, Math.max(1, Math.trunc(limit)));
 }
