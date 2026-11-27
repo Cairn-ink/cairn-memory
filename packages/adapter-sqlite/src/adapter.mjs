@@ -26,7 +26,7 @@ import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
 import { clearCardPlacement } from "./topic-card-placement.mjs";
 import { createTopicStore } from "./topics.mjs";
 
-/** @import { CallOptions, ContextReadSet, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
+/** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
 /** @typedef {{ now?: () => number, monotonicMs?: () => number, legacyInspectPlacements?: boolean,
  * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean, documentCards?: boolean,
  * supersession?: boolean, conflictEdges?: boolean, semanticRetrieval?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
@@ -95,36 +95,22 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const contextRead = flags.contextRead ? createContextReadStore(uow, port, hashSessionKey, receiptReadSafety, inspect.identity,
     createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs, loadCards), sessionHashKey, monotonicMs, rawContext,
     loadCards && contextSources?.documentCardAmendmentSource) : undefined;
-  /** @type {UnitOfWork["run"]} */
-  const run = contextRead && loadCards ? async (owner, options, work) => {
-    if (typeof work !== "function") return index.run(owner, options, work);
-    /** @type {Tx | undefined} */
-    let readTx;
-    try {
-      return await index.run(owner, options, tx => {
-        if (tx.readOnly) readTx = tx;
-        return work(tx);
-      });
-    } finally {
-      if (readTx) contextRead.afterRead(readTx);
-    }
-  } : index.run;
   const vectorClock = () => performance.now();
   const vectorCache = flags.semanticRetrieval ? createVectorCache(uow, port, hashSessionKey, vectorClock) : undefined;
   const adapter = {
     name: "sqlite",
     capabilities: flags,
-    uow: { run },
+    uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw, captureControls, preserveArrivalRefusal),
     memories: createMemoryStore(port, hashSessionKey, index, scrubTitles, cards.purgeErasedMemory,
-      cardVisibility.recordReceiptWithdrawals, !!(loadCards && contextRead)),
+      cardVisibility.recordReceiptWithdrawals),
     ...(placement && { placement }),
     ...(supersession && { supersession }),
     ...(conflicts && { conflicts }),
     ...(documentCards && { documentCards }),
     proceduralTags,
     inspect,
-    ...(contextRead && { contextRead: contextRead.store }),
+    ...(contextRead && { contextRead }),
     ...(rawContext && {
       /** Advance the full-inventory checkpoint by one bounded upkeep pass.
        * @param {ContextReadSet} readSet @param {CallOptions} [options]
@@ -144,11 +130,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },
     hashSessionKey,
-    async close() {
-      await contextRead?.close();
-      await close();
-      vectorCache?.close();
-    },
+    close: vectorCache ? async () => { await close(); vectorCache.close(); } : close,
   };
   assertAdapterCapabilities(adapter);
   if (vectorCache) {

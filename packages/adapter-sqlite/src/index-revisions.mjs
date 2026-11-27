@@ -1,12 +1,11 @@
 import { CoreError } from "@cairn-ink/core";
-import { advanceCardNeutralEpoch, CARD_NEUTRAL_WRITES } from "./context-read-state.mjs";
 import { ownerKey } from "./storage-values.mjs";
 
 /** @import { FinishResult, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @typedef {readonly [string, string, string]} Identity */
 /** @typedef {{ revision: number | undefined }} RevisionView */
-/** @typedef {{ ordinaryWrite: boolean, cardNeutralWrite: boolean, start?: number, view: RevisionView,
+/** @typedef {{ ordinaryWrite: boolean, start?: number, view: RevisionView,
  *   finishes: Map<string, { identity: Identity, revision: number }> }} IndexRun */
 
 /** @param {Connection} db @param {string} owner @param {boolean} advance */
@@ -54,13 +53,10 @@ export function createIndexRevisions(uow, port) {
       if (typeof work !== "function") return uow.run(owner, options, work);
       return uow.run(owner, options, async tx => {
         /** @type {IndexRun} */
-        const run = { ordinaryWrite: false, cardNeutralWrite: false, view: { revision: undefined }, finishes: new Map() };
+        const run = { ordinaryWrite: false, view: { revision: undefined }, finishes: new Map() };
         runs.set(tx, run);
         try {
           const value = await work(tx);
-          if (run.cardNeutralWrite) {
-            await port(tx, owner, { write: true }, db => advanceCardNeutralEpoch(db, ownerKey(owner), CARD_NEUTRAL_WRITES));
-          }
           const revision = run.view.revision;
           const earlier = [...run.finishes.values()].filter(finish => finish.revision !== revision);
           if (earlier.length) {
@@ -80,16 +76,13 @@ export function createIndexRevisions(uow, port) {
     },
 
     /** Ordinary index mutations share one advance per unit of work.
-     * @param {Connection} db @param {Tx} tx @param {boolean} [cardNeutral]
+     * @param {Connection} db @param {Tx} tx
      */
-    markDirty(db, tx, cardNeutral = false) {
+    markDirty(db, tx) {
       const run = indexRun(tx);
       if (!run.ordinaryWrite) {
         advance(db, tx, run);
         run.ordinaryWrite = true;
-        run.cardNeutralWrite = cardNeutral;
-      } else if (!cardNeutral) {
-        run.cardNeutralWrite = false;
       }
     },
 
