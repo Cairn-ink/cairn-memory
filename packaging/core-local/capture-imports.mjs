@@ -180,9 +180,11 @@ export const captureImports = {
     "process": [
       "argv",
       "env",
+      "exitCode",
       "once",
       "removeListener",
-      "stdin"
+      "stdin",
+      "stdout"
     ],
     "globals": [
       "AbortController"

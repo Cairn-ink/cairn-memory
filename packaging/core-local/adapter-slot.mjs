@@ -1,35 +1,47 @@
-import { createHash, createHmac } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
 import { openSqliteAdapter } from '../../packages/adapter-sqlite/src/adapter.mjs';
+import { findCandidatesMethod } from '../../packages/core/src/service/context-read-find.mjs';
 import { createMemoryService } from '../../packages/core/src/service/index.mjs';
+import { inspectRecallEvidence } from '../../packages/core/src/service/inspect.mjs';
 import tokenizer from './vendor/tiktoken/tiktoken.cjs';
+import { createLocalProvider, localClock } from './local-provider.mjs';
+import { documentCardsReady } from './provider-config.mjs';
 import { formatBlock } from './wire-tools.mjs';
 
-const clock = {
-  nowMs: Date.now,
-  monotonicMs: () => performance.now(),
-  sha256Hex: async text => createHash('sha256').update(text).digest('hex'),
-  hmacHex: async (key, text) => createHmac('sha256', key).update(text).digest('hex'),
-};
-
-export async function openStorage(database, localAuthority) {
+export async function openStorage(database, localAuthority, { model = null, embedder = null, provider } = {}) {
+  if (provider && !documentCardsReady) throw new Error('cutover_model_configured');
   const storage = await openSqliteAdapter(database, {
-    capabilities: { contextRead: true, contextRawRead: true }, legacyInspectPlacements: true,
+    capabilities: { contextRead: true, contextRawRead: true, documentCards: documentCardsReady,
+      semanticRetrieval: provider !== undefined }, legacyInspectPlacements: true,
     ...(localAuthority && { localAuthority }),
   });
   let encoding;
   try {
     encoding = tokenizer.get_encoding('o200k_base');
     const countTokens = text => encoding.encode(text, [], []).length;
-    const config = localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {};
-    const service = createMemoryService({
-      storage, embedder: null, clock, tokens: { countTokens }, config,
-      // The fixed local connection has no provider. The service checks the
-      // persisted write pause separately from its model gate.
+    const ports = provider ? createLocalProvider({ ...provider, countTokens }) : {
+      model, embedder: model ? embedder : null, clock: localClock, tokens: { countTokens },
       gate: { assertOpen() {} },
+    };
+    const config = {
+      ...(ports.model ? { rawCapture: { onModelFailure: true } }
+        : localAuthority && storage.capabilities.fingerprintKey !== true ? { rawCapture: { enabled: true } } : {}),
+      explicitWindowFence: { enabled: true },
+      ...(documentCardsReady && localAuthority && { documentCards: { enabled: true, amendments: !!ports.model } }),
+    };
+    const { vector: _vector, ...lexicalStorage } = storage;
+    const service = createMemoryService({
+      // Only recall adds query embedding dispatch to the installed tools.
+      storage: provider ? { ...lexicalStorage, capabilities: { ...storage.capabilities, semanticRetrieval: false } } : storage,
+      ...ports, config,
+      ...(config.documentCards && { documentCardSessionKey: ({ client, sessionId }) =>
+        storage.hashSessionKey(localAuthority.scope, client, sessionId) }),
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
     });
-    return { service, storage, async close() {
+    const recall = provider && {
+      findCandidates: findCandidatesMethod({ storage, clock: ports.clock, gate: ports.gate, embedQuery: ports.embedQuery }).findCandidates,
+      inspect: inspectRecallEvidence.bind(null, storage),
+    };
+    return { service, storage, recall, async close() {
       try { encoding.free(); } finally { await storage.close(); }
     } };
   } catch (error) {

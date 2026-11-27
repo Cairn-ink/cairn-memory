@@ -5,10 +5,12 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { SetupError } from './errors.mjs';
+import { boundedJSON } from './local-descriptor.mjs';
 import { legacyEngineIdPattern as engineIdPattern, coreLocalEngineIdPattern, legacyEngine,
   coreLocalEngine, engineExecutable } from './local-engine-generation.mjs';
 
 const bundle = new URL('../runtime/engine/', import.meta.url);
+const coreLocalBundle = new URL('../runtime/core-local/', import.meta.url);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = { '@modelcontextprotocol/server': '2.3.1', '@modelcontextprotocol/core': '2.3.1',
   zod: '4.6.7', tiktoken: '1.0.22' };
@@ -84,6 +86,14 @@ function validateCandidateManifest(manifest, engineId) {
   return files;
 }
 
+export async function readBundledCoreLocal() {
+  try {
+    const manifest = await boundedJSON(fileURLToPath(new URL('candidate-manifest.json', coreLocalBundle)), 262144);
+    validateCandidateManifest(manifest, manifest.engineId);
+    return manifest;
+  } catch { throw failure('engine_bundle_invalid'); }
+}
+
 async function regularFiles(directory, prefix = '') {
   const entries = [];
   for (const name of await readdir(directory)) {
@@ -96,20 +106,24 @@ async function regularFiles(directory, prefix = '') {
   return entries.sort();
 }
 
+export async function verifyInstalledFiles(directory, hashes) {
+  if (!(await lstat(directory)).isDirectory()) throw new Error('invalid_directory');
+  const files = await regularFiles(directory);
+  if (JSON.stringify(files) !== JSON.stringify(Object.keys(hashes).sort())) throw new Error('inventory');
+  for (const name of files) {
+    if (hash(await readFile(join(directory, name))) !== hashes[name]) throw new Error('hash');
+  }
+}
+
 export async function verifyInstalledTree(appDirectory, manifest, { candidateEngineId } = {}) {
   try {
     const candidate = candidateEngineId !== undefined;
     const hashes = candidate ? validateCandidateManifest(manifest, candidateEngineId) : validateManifest(manifest);
     const directory = join(appDirectory, 'node_modules', manifest.package.name);
-    for (const path of [appDirectory, join(appDirectory, 'node_modules'), directory]) {
+    for (const path of [appDirectory, join(appDirectory, 'node_modules')]) {
       if (!(await lstat(path)).isDirectory()) throw new Error('invalid_directory');
     }
-    const files = await regularFiles(directory);
-    const expected = (candidate ? Object.keys(hashes) : [...manifest.files]).sort();
-    if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('inventory');
-    for (const name of files) {
-      if (hash(await readFile(join(directory, name))) !== hashes[name]) throw new Error('hash');
-    }
+    await verifyInstalledFiles(directory, hashes);
     for (const [name, version] of candidate ? [] : Object.entries(pins)) {
       let parent = join(appDirectory, 'node_modules');
       for (const part of name.split('/')) {
@@ -291,7 +305,7 @@ async function ownedDirectory(directory, { generation = false } = {}) {
 // The caller holds the setup lock and supplies a canonical, private root. The
 // optional identity arguments let the coordinator check the registration vector;
 // defaults are safe for the non-opening configuration check in standalone use.
-async function install({ root, engineId, node, references, onChild, timeoutMs = 120000,
+async function install({ root, engineId, node, references, onChild, timeoutMs = 120000, candidate = false,
   env = process.env, write = () => {},
   t = key => key, databasePath = join(root, 'data', 'memory.sqlite'),
   ownerId = 'local-setup-check', projectId = null }) {
@@ -302,15 +316,24 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
     throw failure('local_engine_install_failed', { code: 'invalid_timeout' });
   }
   const published = new Set(references);
-  let manifest, archive;
+  let manifest, archive, sha256, expectedBytes;
   try {
-    manifest = JSON.parse(await readFile(new URL('manifest.json', bundle), 'utf8'));
-    validateManifest(manifest);
-    archive = fileURLToPath(new URL(`${manifest.package.name}-${manifest.package.version}.tgz`, bundle));
+    if (candidate) {
+      manifest = await readBundledCoreLocal();
+      engineId ??= manifest.engineId;
+      validateCandidateManifest(manifest, engineId);
+      archive = fileURLToPath(new URL(manifest.archive.filename, coreLocalBundle));
+      ({ sha256, bytes: expectedBytes } = manifest.archive);
+    } else {
+      manifest = JSON.parse(await readFile(new URL('manifest.json', bundle), 'utf8'));
+      validateManifest(manifest);
+      archive = fileURLToPath(new URL(`${manifest.package.name}-${manifest.package.version}.tgz`, bundle));
+      ({ sha256, bytes: expectedBytes } = manifest);
+    }
     const bytes = await readFile(archive);
-    if (hash(bytes) !== manifest.sha256 || bytes.length !== manifest.bytes) throw new Error('bundle');
+    if (hash(bytes) !== sha256 || bytes.length !== expectedBytes) throw new Error('bundle');
   } catch { throw failure('engine_bundle_invalid'); }
-  if (typeof engineId !== 'string' || !engineIdPattern.test(engineId) ||
+  if (typeof engineId !== 'string' || !(candidate ? coreLocalEngineIdPattern : engineIdPattern).test(engineId) ||
       !isAbsolute(root) || !isAbsolute(node)) throw failure('local_engine_install_failed');
   let childEnv;
   try { childEnv = await childEnvironment(root, node, env); }
@@ -343,6 +366,10 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
   }
   async function verify(directory, app, executable) {
     if (!(await lstat(directory)).isDirectory()) throw failure('local_engine_verification_failed');
+    if (candidate) {
+      await checkCoreLocalConfig({ appDirectory: app, manifest, engineId, node });
+      return;
+    }
     await verifyInstalledTree(app, manifest);
     const checked = await run(node, [executable, '--check-config', '--db', databasePath,
       '--owner', ownerId, ...(projectId === null ? [] : ['--project', projectId])],
@@ -355,8 +382,8 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
   for (;;) {
     const directory = join(root, 'engine', engineId);
     const app = join(directory, 'app');
-    const executable = engineExecutable(app);
-    const result = { executable, engineId, sha256: manifest.sha256 };
+    const executable = engineExecutable(app, candidate ? coreLocalEngine : legacyEngine);
+    const result = { executable, engineId, sha256 };
     let exists = false;
     try { await lstat(directory); exists = true; }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -385,7 +412,7 @@ async function install({ root, engineId, node, references, onChild, timeoutMs = 
       }
       write(t('local_engine_installing'));
       await run('npm', ['install', '--prefix', app, '--ignore-scripts', '--no-audit', '--no-fund',
-        ...(env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive],
+        ...(candidate || env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive],
       app, childEnv, 'npm', onChild, timeoutMs);
       await verify(directory, app, executable);
       return result;

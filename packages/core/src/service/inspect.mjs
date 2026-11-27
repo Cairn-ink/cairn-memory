@@ -1,5 +1,6 @@
 import { detach, identifier, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
+import { assertContextVisible } from "./context-read-evidence.mjs";
 import { entry, scopeOf } from "./entry.mjs";
 import { encodeListAnchor, encodeReceiptAnchor, inspectTokens, listAnchor, receiptAnchor } from "./inspect-cursor.mjs";
 
@@ -45,6 +46,28 @@ function inspectInput(request) {
     states: allStates.filter(state => requested.includes(state)),
     limit: limitOf(value.limit), cursor: cursorOf(value.cursor),
   };
+}
+
+/** Read the ranked revisions and their retained receipts in one current-visibility transaction.
+ * @param {Pick<import("../ports/index.d.ts").ReadContractStorage, "uow" | "inspect" | "fence" | "memories">} storage
+ * @param {import("../ports/index.d.ts").ContextReadSet} readSet
+ * @param {readonly import("../ports/index.d.ts").ContextReadRef[]} refs
+ * @param {{ includeQualification: boolean, includeIndexRevision: boolean }} options */
+export function inspectRecallEvidence({ uow, inspect, fence, memories }, readSet, refs,
+  { includeQualification, includeIndexRevision }) {
+  if (!inspect) throw new CoreError("capability_unavailable");
+  return uow.run(readSet.owner, { readOnly: true }, async tx => {
+    const items = [];
+    for (const { scope, id, revision } of refs) {
+      const { item } = await inspect.item(tx, scope, id, { limit: 100, includeQualification });
+      if (!item || item.memory.state !== "active") throw new CoreError("evidence_unavailable");
+      if (item.memory.revision !== revision) throw new CoreError("revision_conflict");
+      items.push(item);
+    }
+    const indexRevision = includeIndexRevision ? await memories.committedIndexRevision?.(tx) : undefined;
+    await assertContextVisible(fence, tx, readSet, refs, "current", "evidence_unavailable");
+    return { items, indexRevision };
+  });
 }
 
 /**
