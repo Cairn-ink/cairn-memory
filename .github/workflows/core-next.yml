@@ -78,6 +78,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci --prefix adapters/mcp --ignore-scripts
       - run: npm ci --prefix packages/adapter-sqlite --ignore-scripts --omit=dev
+      # The legacy engine's stdio host loads its tokenizer from the OpenAI adapter.
+      - run: npm ci --prefix adapters/openai --ignore-scripts
       # Committed generated runtime must match its sources.
       - run: node packages/setup/build-runtime.mjs --check
       - run: node --test packages/setup/test/local-cutover*.test.mjs
