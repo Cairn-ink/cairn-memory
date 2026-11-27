@@ -1531,3 +1531,15 @@ For `representation-v2` and `representation-v2-dated`, a `maxItems` above the co
 Fusion retains the preset's `k` and channel weights and uses a union maximum of at least twice the resulting depth.
 Semantic coverage reports the depth used and the resulting semantic omissions.
 Candidate searches and reads at or below the preset depth retain preset ranking, and evidence snapshots replay the exact delivered refs.
+
+## Addendum 37 — Hook authority hardening
+
+Only trusted host code runs as a hook callback. User input never supplies callbacks.
+The guards prevent accidental misuse. A malicious host, or a host that calls adapter
+internals or uses its own async context directly, is outside this contract.
+
+Each hook port instance is meant to serve exactly one service. The port accepts one
+authority reader for its lifetime. A second registration throws `invalid_input`.
+
+While a hook is active, the port context refuses to run without a hook record. It throws
+`host_write_hook_failed` before calling the supplied callback.
