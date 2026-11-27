@@ -31,6 +31,8 @@ export type RationaleFixtureChange = "revision" | "content" | "currentness" | "r
 export type RetainedDigestFixture = { keyId: string; label: string; secret: string };
 
 export type TestHarness = {
+  /** Use the core instance that supplies the adapter's CoreError when it differs from the kit's. */
+  placePendingBatch?: typeof import("@cairn-ink/core").placePendingBatch;
   /** Seed inspect data on adapters without a public metadata mutation route. */
   markInspectHistorical?(scope: Scope, id: string): Promise<void>;
   seedInspectEvidence?(scope: Scope, id: string, evidence: Pick<InspectItemEvidence, "procedural" | "qualification">): Promise<void>;

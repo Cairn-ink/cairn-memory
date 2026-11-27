@@ -1,4 +1,4 @@
-import { compareUtf8 } from "@cairn-ink/core";
+import { compareUtf8, placePendingBatch } from "@cairn-ink/core";
 import { check, equal, evidence, readDump, rejects, row } from "./support.mjs";
 
 /** @import {ErrorCode, PlacementItem} from "@cairn-ink/core" */
@@ -14,6 +14,7 @@ function setup(ctx, scope = ctx.scope(null)) {
   check(placement, "placement port is required");
   return {
     placement, scope,
+    placePendingBatch: ctx.harness.placePendingBatch ?? placePendingBatch,
     /** @template T @param {(tx: Tx) => Promise<T>} fn */
     write: (fn) => uow.run(scope.owner, {}, fn),
     /** @param {string} content @param {number} [now] @param {readonly Receipt[]} [receipts] @returns {Promise<Guard>} */
@@ -357,5 +358,169 @@ export const topicCases = [
       "Catalog must null the suppressed member's sourced title");
     equal(await store.forMemory(source), [], "A suppressed member must have no visible topic ids");
     equal(await store.pending(), [], "A suppressed memory must leave pending");
+  }),
+
+  topicCase(16, "an edit before classification dispatch leaves the live revision pending", async (ctx) => {
+    const store = setup(ctx);
+    const original = await store.seed("Before classification edit");
+    const { uow, memories } = ctx.adapter;
+    const { scope, placement } = store;
+    const options = { uow, memories, scope, placement };
+    const editedText = "After classification edit";
+    const stale = await store.placePendingBatch({
+      ...options,
+      async classify({ memories: snapshot }, _catalog, { validateFresh }) {
+        equal(snapshot.map(({ id, revision }) => ({ memoryId: id, revision })), [original], "Expected the original revision");
+        await store.correct(original, editedText);
+        await validateFresh();
+        throw new Error("A stale snapshot reached dispatch");
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Expected a stale batch");
+    const edited = { ...original, revision: original.revision + 1 };
+    equal(await store.pending(), [edited], "A conflict receipt must not consume the edited revision");
+
+    const next = await store.placePendingBatch({
+      ...options,
+      async classify({ memories: snapshot }, _catalog, { validateFresh }) {
+        equal(snapshot.map(({ revision, content }) => ({ revision, content })),
+          [{ revision: edited.revision, content: editedText }], "Expected the new revision and content");
+        await validateFresh();
+        return { items: [item(edited, [], topic("Edited memory"))] };
+      },
+    });
+    check(next.status === "applied" && next.createdTopics.length === 1, "The next batch must file the edited memory");
+    equal(await store.forMemory(edited), [next.createdTopics[0].id], "The edited memory must have a current filing");
+    equal(await store.pending(), [], "The current filing must consume the edited revision");
+  }),
+
+  topicCase(17, "a late failure preserves filed and unfiled outcomes at the same revision", async (ctx) => {
+    const store = setup(ctx);
+    const filed = await store.seed("Filed by another writer", 1);
+    const unfiled = await store.seed("Left unfiled by another writer", 2);
+    const snapshot = await store.pending();
+    equal(snapshot, [filed, unfiled], "Both memories must be pending when the stale worker starts");
+    const { createdTopics } = await store.apply(snapshot, [item(filed, [], topic("Concurrent filing")), item(unfiled)]);
+    const before = await readDump(ctx.harness);
+    await store.write((tx) => store.placement.markFailed(tx, store.scope, snapshot.map(({ memoryId }) => memoryId), "provider_error"));
+    equal(await store.forMemory(filed), [createdTopics[0].id], "A late failure must preserve the filing");
+    equal(await store.forMemory(unfiled), [], "A late failure must preserve the unfiled outcome");
+    equal(await store.pending(), [], "Neither outcome may return to the queue");
+
+    // Postgres keeps failures and outcomes in one row and exposes it in the
+    // harness dump. Memory and SQLite store them separately.
+    if (before && typeof before === "object" && "memoryPlacements" in before) {
+      const after = await readDump(ctx.harness);
+      check(after && typeof after === "object" && "memoryPlacements" in after, "Expected placement rows in the dump");
+      equal(after.memoryPlacements, before.memoryPlacements, "A late failure must preserve every outcome column");
+    }
+  }),
+
+  topicCase(18, "deterministic title conflicts write receipts and let the next memory run", async (ctx) => {
+    const store = setup(ctx);
+    const title = "Existing topic";
+    const source = await store.seed("Source for the existing title");
+    await store.apply([source], [item(source, [], topic(title))]);
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(await store.seed(`Pending memory ${i}`, i + 2));
+
+    /** @type {string[][]} */
+    const batches = [];
+    const options = { uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement };
+    const run = () => store.placePendingBatch({
+      ...options,
+      async classify({ memories }, _catalog, { validateFresh }) {
+        await validateFresh();
+        batches.push(memories.map(({ id }) => id));
+        return { items: memories.map(({ id, revision }) => item({ memoryId: id, revision }, [], topic(title))) };
+      },
+    });
+    const failure = { status: "failed", error: { code: "moc_title_conflict", retryable: false } };
+    equal(await run(), failure, "The existing title must be rejected");
+    equal(await store.pending(), queue.slice(5), "Title conflict receipts must consume the oldest five memories");
+    equal(await run(), failure, "The sixth memory must reach the same classifier");
+    equal(batches, [queue.slice(0, 5), queue.slice(5)].map(batch => batch.map(({ memoryId }) => memoryId)),
+      "The second batch must reach the sixth memory");
+    equal(await store.pending(), [], "A terminal receipt must also consume the sixth memory");
+  }),
+
+  topicCase(19, "an index change after validation defers the memory until a fresh catalog can be read", async (ctx) => {
+    if (!ctx.harness.advanceClock) return "needs a controllable clock to verify retries";
+    const store = setup(ctx);
+    const pending = await store.seed("Awaiting a catalog update");
+    const title = "Concurrent topic";
+    const options = { uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement };
+    const stale = await store.placePendingBatch({
+      ...options,
+      async classify({ memories }, { map }, { validateFresh }) {
+        equal(memories.map(({ id }) => id), [pending.memoryId], "Expected the original pending memory");
+        equal(map, [], "The original catalog must be empty");
+        await validateFresh();
+        const writer = await store.seed("Concurrent writer's memory");
+        await store.apply([writer], [item(writer, [], topic(title))]);
+        return { items: [item(pending)] };
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the old index revision");
+    equal(await store.pending(), [], "An index-only failure must start the retry cooldown");
+    await ctx.harness.advanceClock(3_600_000);
+    equal(await store.pending(), [pending], "The unchanged revision must become eligible after cooldown");
+
+    const next = await store.placePendingBatch({
+      ...options,
+      async classify({ memories }, { map }, { validateFresh }) {
+        equal(memories.map(({ id }) => id), [pending.memoryId], "Expected to classify the same memory again");
+        const entry = map.find(({ moc }) => moc.title === title);
+        check(entry, "The next batch must read the concurrent topic");
+        await validateFresh();
+        return { items: [item(pending, [entry.moc.id])] };
+      },
+    });
+    check(next.status === "applied" && next.placed[0]?.topicIds.length === 1, "The re-read must file the memory");
+    equal(await store.pending(), [], "The current filing must consume the pending memory");
+  }),
+
+  topicCase(20, "continuous index movement lets the sixth memory run and caps deterministic failures", async (ctx) => {
+    if (!ctx.harness.advanceClock) return "needs a controllable clock to verify retries";
+    const store = setup(ctx);
+    const title = "Existing topic";
+    const source = await store.seed("Source for the existing topic");
+    await store.apply([source], [item(source, [], topic(title))]);
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(await store.seed(`Waiting memory ${i}`, i + 2));
+    const [failing] = queue;
+    const sixth = queue[5];
+    const oldestIds = queue.slice(0, 5).map(({ memoryId }) => memoryId);
+    /** @type {string[][]} */
+    const batches = [];
+    let tick = 0;
+    const run = () => store.placePendingBatch({
+      uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement,
+      async classify({ memories }, _catalog, { validateFresh }) {
+        await validateFresh();
+        const ids = memories.map(({ id }) => id);
+        batches.push(ids);
+        const writer = await store.seed(`Concurrent writer ${++tick}`, tick + 10);
+        await store.apply([writer], [item(writer, [], topic(`Concurrent topic ${tick}`))]);
+        if (ids.includes(failing.memoryId)) {
+          // Use the fresh index for the deterministic rejection after the original snapshot has gone stale.
+          await store.apply([failing], [item(failing, [], topic(title))]);
+        }
+        return { items: memories.map(({ id }) => ({ memoryId: id, parentIds: [] })) };
+      },
+    });
+    const deterministic = { status: "failed", error: { code: "moc_title_conflict", retryable: false } };
+    equal(await run(), deterministic, "The first memory must fail deterministically");
+    await run();
+    equal(batches, [oldestIds, [sixth.memoryId]], "The sixth memory must run while the oldest five are cooling down");
+
+    for (let attempt = 2; attempt <= 3; attempt++) {
+      await ctx.harness.advanceClock(3_600_000);
+      equal(await store.pending(), queue.slice(0, 5), `The oldest five must be eligible for attempt ${attempt}`);
+      equal(await run(), deterministic, `The first memory must fail on attempt ${attempt}`);
+    }
+    equal(batches, [oldestIds, [sixth.memoryId], oldestIds, oldestIds], "The index must advance on every classification tick");
+    await ctx.harness.advanceClock(3_600_000);
+    equal(await store.pending(), [sixth], "The deterministic failure and its four batchmates must leave the queue at the cap");
   }),
 ];

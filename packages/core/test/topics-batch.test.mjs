@@ -13,6 +13,7 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
   const stored = new Map(rows.map((memory) => [memory.id, memory]));
   let indexRevision = 13;
   let active = null;
+  let receiptWriteExpected = false;
   const calls = [];
   const runModes = [];
   const catalogRequests = [];
@@ -30,7 +31,9 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
         assert.equal(owner, scope.owner);
         assert.equal(active, null);
         runModes.push(readOnly ? 'read' : 'write');
-        active = { owner, readOnly };
+        const receiptWrite = !readOnly && receiptWriteExpected;
+        receiptWriteExpected = false;
+        active = { owner, readOnly, receiptWrite };
         try { return await fn(active); }
         finally { active = null; }
       },
@@ -43,7 +46,8 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
           call.method === 'markFailed' && call.memoryIds.includes(memoryId))).slice(0, query.limit);
       },
       async catalog(tx, scope, query) {
-        check(tx, scope, true);
+        check(tx, scope, !tx.receiptWrite);
+        if (tx.receiptWrite) assert.deepEqual(query, { cursor: null, limit: 1 });
         catalogRequests.push(query);
         const start = Number(query.cursor ?? 0);
         const items = topics.slice(start, start + Math.min(query.limit, pageSize));
@@ -56,11 +60,15 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
         calls.push({ method: 'apply', basedOn, proposal });
         if (basedOn.indexRevision !== indexRevision || basedOn.memoryRevisions.some(
           ({ memoryId, revision }) => stored.get(memoryId)?.revision !== revision,
-        )) throw new CoreError('revision_conflict');
+        )) {
+          receiptWriteExpected = true;
+          throw new CoreError('revision_conflict');
+        }
         return { placed: proposal.items.map(({ memoryId, parentIds: topicIds }) => ({ memoryId, topicIds })), createdTopics: [] };
       },
       async markFailed(tx, scope, memoryIds, code) {
         check(tx, scope, false);
+        assert.equal(tx.receiptWrite, true);
         calls.push({ method: 'markFailed', memoryIds, code });
       },
     },
@@ -70,7 +78,7 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
         return stored.get(id) ?? null;
       },
       async readRevision(tx, scope, id) {
-        check(tx, scope, true);
+        check(tx, scope, !tx.receiptWrite);
         const memory = stored.get(id);
         return memory ? { revision: memory.revision, textHash: 'unused' } : null;
       },
@@ -78,7 +86,11 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
     async classify(snapshot, catalog, hooks) {
       assert.equal(active, null);
       calls.push({ method: 'classify', snapshot, catalog });
-      return classify(snapshot, catalog, hooks);
+      try { return await classify(snapshot, catalog, hooks); }
+      catch (error) {
+        receiptWriteExpected = true;
+        throw error;
+      }
     },
   };
   return {
@@ -159,10 +171,10 @@ test('a provider_error on the oldest five pending memories lets the sixth run ne
   });
 });
 
-test('CoreError reports retryability and records every failure except paused kinds', async () => {
+test('CoreError reports retryability and writes a fresh failure receipt unless paused', async () => {
   for (const [code, retryable, recorded] of [
     ['storage_busy', true, true], ['provider_error', true, true],
-    ['capture_evidence_closed', false, false], ['invalid_model_output', false, true],
+    ['capture_evidence_closed', false, false], ['memory_conflict', false, true], ['invalid_model_output', false, true],
   ]) {
     const f = fixture({ classify: () => { throw new CoreError(code); } });
     assert.deepEqual(await f.run(), { status: 'failed', error: { code, retryable } });
@@ -171,20 +183,21 @@ test('CoreError reports retryability and records every failure except paused kin
   }
 });
 
-test('forget between classification and apply records the conflict without retrying', async () => {
+test('forget between classification and apply reports the conflict without a receipt', async () => {
   const f = fixture({ classify: async (snapshot, _catalog, { validateFresh }) => {
     await validateFresh();
     f.forget(a.id);
     return abstain(snapshot);
   } });
   assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'revision_conflict', retryable: false } });
-  assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'apply', 'markFailed']);
-  assert.deepEqual(f.calls.at(-1), { method: 'markFailed', memoryIds: [a.id, b.id], code: 'revision_conflict' });
+  assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'apply']);
   assert.deepEqual(f.runModes, ['read', 'read', 'write', 'write']);
 });
 
 test('validateFresh catches a changed revision or index before the model call', async () => {
-  for (const change of ['changeMemory', 'changeIndex']) {
+  for (const [change, code, retryable] of [
+    ['changeMemory', 'revision_conflict', false], ['changeIndex', 'topic_index_moved', true],
+  ]) {
     let modelCalls = 0;
     const f = fixture({ classify: async (snapshot, _catalog, { validateFresh }) => {
       f[change](a.id);
@@ -192,10 +205,10 @@ test('validateFresh catches a changed revision or index before the model call', 
       modelCalls++;
       return abstain(snapshot);
     } });
-    assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'revision_conflict', retryable: false } });
+    assert.deepEqual(await f.run(), { status: 'failed', error: { code, retryable } });
     assert.equal(modelCalls, 0);
-    assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'markFailed']);
-    assert.deepEqual(f.runModes, ['read', 'read', 'write']);
+    assert.deepEqual(f.calls.slice(1), retryable ? [{ method: 'markFailed', memoryIds: [a.id, b.id], code }] : []);
+    assert.deepEqual(f.runModes, retryable ? ['read', 'read', 'write'] : ['read', 'read']);
   }
 });
 

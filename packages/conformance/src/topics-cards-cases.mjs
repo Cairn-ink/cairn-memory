@@ -1,4 +1,5 @@
-import { compareUtf8 } from "@cairn-ink/core";
+import { compareUtf8, CoreError, placePendingCardsBatch } from "@cairn-ink/core";
+import { buildDocumentCard } from "@cairn-ink/core/routing";
 import { check, equal, readDump, rejects, row } from "./support.mjs";
 
 /** @import { Scope, SourceLessDocumentCardRecord, TopicCardGuard, Tx } from "@cairn-ink/core/ports" */
@@ -71,7 +72,7 @@ function setup(ctx, scope = ctx.scope(null)) {
   };
 }
 
-/** @param {SourceLessDocumentCardRecord} card @returns {TopicCardGuard} */
+/** @param {Pick<SourceLessDocumentCardRecord, "id" | "contentHash">} card @returns {TopicCardGuard} */
 const guard = ({ id, contentHash }) => ({ cardId: id, contentHash });
 
 /** @param {CaseContext} ctx @param {() => Promise<unknown>} attempt */
@@ -81,8 +82,10 @@ async function conflicts(ctx, attempt) {
   equal(await readDump(ctx.harness), before, "A rejected placement must leave the store unchanged");
 }
 
-/** @param {number} number @param {string} title @param {ConformanceCase["run"]} run @returns {ConformanceCase} */
-const topicCardCase = (number, title, run) => ({ id: `T-TCARD-${number}`, title, needs: ["placement", "documentCards"], run });
+/** @param {number} number @param {string} title @param {ConformanceCase["run"]} run
+ * @param {...ConformanceCase["needs"][number]} extraNeeds @returns {ConformanceCase} */
+const topicCardCase = (number, title, run, ...extraNeeds) =>
+  ({ id: `T-TCARD-${number}`, title, needs: ["placement", "documentCards", ...extraNeeds], run });
 
 export const TOPIC_CARD_CASES = [
   topicCardCase(1, "cards mix with memories and count once across L1 children", async (ctx) => {
@@ -238,4 +241,245 @@ export const TOPIC_CARD_CASES = [
     const replacement = await store.replace(card);
     equal(await store.pending(), [guard(replacement)], "Failure receipts cannot block a different hash");
   }),
+  topicCardCase(11, "a card edit leaves the replacement and its batchmate pending", async (ctx) => {
+    const store = setup(ctx);
+    const source = await store.memory("Seed for card classification");
+    const { child } = await store.topics(source, "Card filing");
+    const original = await store.card("a-edited-card");
+    const unchanged = await store.card("b-unchanged-card");
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const options = { uow, fence, scope, placement, documentCards };
+    const stale = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(original), guard(unchanged)],
+          "Expected both original card guards");
+        await store.replace(original);
+        await validateFresh();
+        throw new Error("A stale card batch reached dispatch");
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Expected a stale card batch");
+    const replacementHash = await ctx.hash(original.body + " revised");
+    const expected = [{ cardId: original.id, contentHash: replacementHash }, guard(unchanged)];
+    equal(await store.pending(), expected, "The replacement and its unchanged batchmate must both remain pending");
+
+    const next = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), expected,
+          "The next batch must read both current card hashes");
+        await validateFresh();
+        return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [child] })) };
+      },
+    });
+    equal(next, { status: "applied", placed: expected.map(({ cardId }) => ({ cardId, topicIds: [child] })) },
+      "The next batch must file both cards");
+    equal(await store.pending(), [], "Current filings must consume both card hashes");
+  }),
+  topicCardCase(12, "deterministic invalid card parents write receipts and let the next card run", async (ctx) => {
+    const store = setup(ctx);
+    const source = await store.memory("Source for the invalid parent");
+    const { parent } = await store.topics(source, "Child topic");
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(guard(await store.card(`card-${i}`)));
+
+    /** @type {string[][]} */
+    const batches = [];
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const run = () => placePendingCardsBatch({
+      uow, fence, scope, placement, documentCards,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        await validateFresh();
+        batches.push(cards.map(({ cardId }) => cardId));
+        return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [parent] })) };
+      },
+    });
+    const failure = { status: "failed", error: { code: "revision_conflict", retryable: false } };
+    equal(await run(), failure, "An L2 topic cannot be a card parent");
+    equal(await store.pending(), queue.slice(5), "Invalid parent receipts must consume the oldest five cards");
+    equal(await run(), failure, "The sixth card must reach the same classifier");
+    equal(batches, [queue.slice(0, 5), queue.slice(5)].map(batch => batch.map(({ cardId }) => cardId)),
+      "The second batch must reach the sixth card");
+    equal(await store.pending(), [], "A terminal receipt must also consume the sixth card");
+  }),
+  topicCardCase(13, "an index change after validation defers the card until a fresh catalog can be read", async (ctx) => {
+    if (!ctx.harness.advanceClock) return "needs a controllable clock to verify retries";
+    const store = setup(ctx);
+    const source = await store.memory("Source for the concurrent topic");
+    const card = await store.card("awaiting-index-update");
+    const title = "Concurrent card topic";
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const options = { uow, fence, scope, placement, documentCards };
+    const stale = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, { map }, { validateFresh }) {
+        equal(cards.map(({ cardId }) => cardId), [card.id], "Expected the original pending card");
+        equal(map, [], "The original catalog must be empty");
+        await validateFresh();
+        await store.topics(source, title);
+        return { items: [{ cardId: card.id, parentIds: [] }] };
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the old index revision");
+    equal(await store.pending(), [], "An index-only failure must start the card retry cooldown");
+    await ctx.harness.advanceClock(3_600_000);
+    equal(await store.pending(), [guard(card)], "The unchanged hash must become eligible after cooldown");
+
+    const next = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, { map }, { validateFresh }) {
+        equal(cards.map(({ cardId }) => cardId), [card.id], "Expected to classify the same card again");
+        const entry = map.find(({ moc }) => moc.title === title);
+        check(entry, "The next batch must read the concurrent topic");
+        await validateFresh();
+        return { items: [{ cardId: card.id, parentIds: [entry.moc.id] }] };
+      },
+    });
+    check(next.status === "applied" && next.placed[0]?.topicIds.length === 1, "The re-read must file the card");
+    equal(await store.pending(), [], "The current filing must consume the pending card");
+  }),
+  topicCardCase(14, "a visibility-only abort leaves the healthy card pending for the next batch", async (ctx) => {
+    const store = setup(ctx);
+    const { child } = await store.topics(await store.memory("Seed for visible cards"), "Visible card topic");
+    const excluded = await store.card("a-newly-excluded");
+    const healthy = await store.card("b-still-visible");
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    let exclude = false;
+    /** @type {Array<{ ids: readonly string[], code: string }>} */
+    const receipts = [];
+    const options = {
+      uow, scope, documentCards,
+      fence: {
+        ...fence,
+        /** @type {typeof fence.assertVisible} */
+        async assertVisible(tx, scope, refs) {
+          const visible = await fence.assertVisible(tx, scope, refs);
+          return visible.filter(({ id }) => !exclude || id !== excluded.id);
+        },
+      },
+      placement: {
+        ...placement,
+        /** @type {typeof placement.markCardsFailed} */
+        async markCardsFailed(tx, scope, ids, code) {
+          await placement.markCardsFailed(tx, scope, ids, code);
+          receipts.push({ ids, code });
+        },
+      },
+    };
+    const { indexRevision } = await store.catalog();
+    const aborted = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(excluded), guard(healthy)],
+          "Both original cards must be visible");
+        exclude = true;
+        await validateFresh();
+        throw new Error("The newly excluded card reached classification");
+      },
+    });
+    equal(aborted, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "The visibility change must abort");
+    equal((await store.catalog()).indexRevision, indexRevision, "The index must remain unchanged");
+    equal(await store.pending(), [guard(healthy)], "The healthy batchmate must remain pending");
+    equal(receipts, [{ ids: [excluded.id], code: "source_excluded" }], "Only the newly excluded card may receive a receipt");
+    const next = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(healthy)],
+          "The next batch must contain the healthy card at its original hash");
+        await validateFresh();
+        return { items: [{ cardId: healthy.id, parentIds: [child] }] };
+      },
+    });
+    equal(next, { status: "applied", placed: [{ cardId: healthy.id, topicIds: [child] }] }, "The next batch must file the healthy card");
+    equal(await store.pending(), [], "The excluded card must stay out of the queue");
+  }),
+  topicCardCase(15, "a visibility change after freshness leaves the healthy card pending for the next batch", async (ctx) => {
+    const store = setup(ctx);
+    const { child } = await store.topics(await store.memory("Seed for replayed card"), "Card filing");
+    const { uow, fence, raw } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const importArchive = raw?.importArchive?.bind(raw);
+    check(importArchive, "Expected Raw archive import");
+    const client = "fixture";
+    const sessionId = "card-source";
+    const message = { id: "message", role: /** @type {const} */ ("user"), occurredAtMs: 1, content: "Inventory\n\nSpare keys." };
+    const canonicalSessionKey = ctx.harness.hashSessionKey?.(client, sessionId) ??
+      (ctx.sessionRefs === "plain" ? sessionId : undefined);
+    check(canonicalSessionKey, "Expected the capture session key");
+    const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
+    check(card, "Expected a message-backed card");
+    const archive = (/** @type {string} */ content) => uow.run(scope.owner, { pauseLock: true }, tx =>
+      importArchive(tx, scope, { client, sessionId }, [{ ...message, content }]));
+    equal(await archive(message.content), { archived: 1, existing: 0, withheld: 0 }, "Expected the original Raw message");
+    const excluded = { id: card.id, contentHash: await ctx.hash(card.body) };
+    equal((await store.write(tx => documentCards.put(tx, scope, { ...excluded, scope, origin: "router",
+      title: card.title, body: card.body, date: card.date, sourceMessage: { client, sessionId, messageId: message.id },
+      sourceMemories: [], sentences: [], stale: [] }))).status, "inserted", "Expected a new router card");
+    const healthy = await store.card("healthy");
+    const { indexRevision } = await store.catalog();
+    // Replay changes only visibility in the plain-session Memory harness.
+    // The hashed-session SQLite harness advances the index and withholds get on replay.
+    const replayChangesOnlyVisibility = ctx.sessionRefs === "plain";
+    let excludedByFence = false;
+    /** @type {Array<{ ids: readonly string[], code: string }>} */
+    const receipts = [];
+    const options = {
+      uow, scope, documentCards,
+      fence: {
+        ...fence,
+        /** @type {typeof fence.assertVisible} */
+        async assertVisible(tx, scope, refs) {
+          const visible = await fence.assertVisible(tx, scope, refs);
+          return visible.filter(({ id }) => !excludedByFence || id !== excluded.id);
+        },
+      },
+      placement: {
+        ...placement,
+        /** @type {typeof placement.applyCardPlacement} */
+        async applyCardPlacement(tx, scope, basedOn, proposal) {
+          if (excludedByFence && basedOn.cards.some(({ cardId }) => cardId === excluded.id)) {
+            throw new CoreError("revision_conflict");
+          }
+          return placement.applyCardPlacement(tx, scope, basedOn, proposal);
+        },
+        /** @type {typeof placement.markCardsFailed} */
+        async markCardsFailed(tx, scope, ids, code) {
+          await placement.markCardsFailed(tx, scope, ids, code);
+          receipts.push({ ids, code });
+        },
+      },
+    };
+    const run = (/** @type {TopicCardGuard[]} */ expected, /** @type {boolean} */ excludeAfterFresh) => placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })).sort((a, b) => compareUtf8(a.cardId, b.cardId)),
+          expected.sort((a, b) => compareUtf8(a.cardId, b.cardId)), "Expected the current batch of visible cards");
+        await validateFresh();
+        if (excludeAfterFresh && replayChangesOnlyVisibility) {
+          equal(await archive("Inventory\n\nReplacement locks."), { archived: 0, existing: 1, withheld: 0 },
+            "Expected a conflicting replay of the same Raw message");
+        } else if (excludeAfterFresh) {
+          excludedByFence = true;
+        }
+        return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [child] })) };
+      },
+    });
+    equal(await run([guard(excluded), guard(healthy)], true),
+      { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the excluded source");
+    equal((await store.catalog()).indexRevision, indexRevision, "The index must remain unchanged");
+    for (const original of [excluded, healthy]) {
+      equal((await store.read(tx => documentCards.get(tx, scope, original.id)))?.contentHash, original.contentHash,
+        "The stored card hash must remain unchanged");
+    }
+    equal(receipts, [{ ids: [excluded.id], code: "source_excluded" }], "Only the newly excluded card may receive a receipt");
+    equal(await store.pending(), [guard(healthy)], "The healthy batchmate must remain pending");
+    equal(await run([guard(healthy)], false),
+      { status: "applied", placed: [{ cardId: healthy.id, topicIds: [child] }] }, "The next batch must file the healthy card");
+    equal(await store.pending(), [], "The excluded card must stay out of the queue");
+  }, "rawArchive"),
 ];

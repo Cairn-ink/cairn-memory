@@ -24,7 +24,7 @@ export type ErrorCode =
   | "model_not_configured" | "model_timeout" | "model_cancelled" | "token_count_unavailable"
   | "rationale_failed" | "rationale_limit"
   | "qualification_failed" | "reconciliation_failed" | "classification_failed"
-  | "moc_title_conflict";
+  | "moc_title_conflict" | "topic_index_moved";
 
 export declare const ERROR_CODES: Readonly<Record<ErrorCode, ErrorKind>>;
 

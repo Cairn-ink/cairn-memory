@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-43193902bafa19cee69b966d99af550ec1030fecac2c60d44416d04da996a36d",
+  "engineId": "core-local-v1-44449325df9475a34092c073e12961ff403e1846bda8b5d3b4c348be98d13f4b",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2928414,
-    "sha256": "b151ccbe2924fb085c8eac2897fea185af78f841b0ba2891bec91bd9760c0078"
+    "bytes": 2928722,
+    "sha256": "075fae07e1c05259b33fb79f942d6d69dd15a6454a19a0340e2d6db6a0cee05d"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -102,7 +102,7 @@
     "packages/core/src/capture/wire-schemas.mjs": "3a1e1c51d76d79f3aea1c7e4fe33f2321040c8f5c44548c185246add80aa44b2",
     "packages/core/src/capture/wire.mjs": "8900c3dd59d84a76521e094165655fe53c6f1a66513613ad05502e40c632ccc6",
     "packages/core/src/decisions.mjs": "3cea8d936a77de56baabeaf4319ede9b10e57b8b9878104f0ad8bbc498843397",
-    "packages/core/src/errors.mjs": "8dee922a6abd63a1eaf0045309e8fbbb3c4177adb99b78b8b9c68be4daa6981b",
+    "packages/core/src/errors.mjs": "511c10bcdc48a7e87f999136f985683cd68b2f52ac9f9e8e6541c048dcda6c19",
     "packages/core/src/extraction/extraction.mjs": "5b199195788aab1762de9074247f27772f8317a7f4d29557f2e3f0efcc1d85da",
     "packages/core/src/extraction/generated/extract-memories-prompt.mjs": "b29e0c76c2c073361ed6c6d6fc19e2096381a46f2a1cf1fc6df20702d092ce31",
     "packages/core/src/extraction/quantity-spec.mjs": "ffa85820958831d54833372c71ff2ad4201b4fe62d95a63069190f9c1251e3cd",
@@ -178,8 +178,8 @@
     "packages/core/src/service/signed-read-token.mjs": "33f3085097ffec7aa2795bef53fab2531e299da70980ff6f68fff65d61dcc075",
     "packages/core/src/service/writes.mjs": "d012e87481b3d7fc914cbead4bfe22424a41d55a2c732a2b993bf24208ea0e18",
     "packages/core/src/suppression-fact.mjs": "d45b707ba0430a37c016792a915d90962b337827b13694b0bb396003f77beb13",
-    "packages/core/src/topics/batch.mjs": "5b0a2f3eae182babd6d917ba36ea748fd9c4be94285084b8873234f2f394815a",
-    "packages/core/src/topics/cards.mjs": "dca92566a55340a4b0d090a1f9d3cd635e7a743d22c2a3793cf90ed1895a3e85",
+    "packages/core/src/topics/batch.mjs": "ebf003671d070fd7e58bb4264d80cbf8f7e0bf627587f248e9b3875869012de8",
+    "packages/core/src/topics/cards.mjs": "e421a0abeef0e63c663632433a0c81f1857882102f02c1c4db93c005ea51bf67",
     "packages/core/src/topics/catalog.mjs": "048eab001bdf85e779d5760c4f6c6c61b53a7007a8c47f84834bf50bea11c7d5",
     "packages/core/src/topics/classify.mjs": "32de2f62d5e593aee9fcf01aa4576046ed31fbc8f148078eeff7ff9ff94e37c0",
     "packages/core/src/topics/generated/prompt.mjs": "ffbddf98b4d1f600eff1a48faa5ff5c088c4b025267793de73cacf17c2b616cf",
