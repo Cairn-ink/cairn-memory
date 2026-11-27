@@ -15,6 +15,7 @@ import { conversationSessions } from "./raw-session.mjs";
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{client: string, sessionId: string}} Session */
 /** @typedef {Session & {messageId?: string}} SourceAddress */
+/** @typedef {Session & {messageId: string}} MessageAddress */
 /** @typedef {{id: string, content: string, occurred_at?: string, normalized_empty?: true,
  *   legacy_fingerprint?: {text_hmac: string, key_id: string, shingles: string[]}, document_ill_formed?: true}} LedgerMessage */
 
@@ -69,15 +70,16 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
   return facts.some((fact) => passages.some((passage) => factHidesRow(fact, { type: "raw", scope, sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: content.length, ...passage }) === true));
 }
 
-/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
-export async function dropSourceQuantities(query, scope, addresses) {
+/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses
+ * @param {{exact?: boolean}} [options] */
+export async function dropSourceQuantities(query, scope, addresses, { exact = false } = {}) {
   if (!addresses.length) return false;
   /** @type {Map<string, {client: string | null, sessionId: string}[]>} */
   const sessions = new Map();
   const targets = [];
   for (const { client, sessionId, messageId } of addresses) {
     const key = JSON.stringify([client, sessionId]);
-    let resolved = sessions.get(key);
+    let resolved = exact ? [{ client, sessionId }] : sessions.get(key);
     if (!resolved) {
       try {
         // The reverse lookup can omit clients with mixed save provenance.
@@ -136,12 +138,41 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys, deleted
     }
     after = rows.at(-1).id;
   }
-  return { rawDeleted, ...await scrubLedger(query, scope, [], matches) };
+  return { rawDeleted, ...await scrubLedger(query, scope, [], { matches }) };
+}
+
+/** @param {Query} query @param {Scope} scope @param {string} memoryId */
+export async function eraseReceiptRaw(query, scope, memoryId) {
+  const { rows: receipts } = await query(`SELECT client, session_id, message_id FROM core_memory_receipts
+    WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [scope.owner, memoryId]);
+  if (!receipts.length) return;
+  const { rows } = await query(`DELETE FROM raw_messages r
+    USING jsonb_to_recordset($2::jsonb) AS p(client text, session_id text, message_id text)
+    WHERE r.user_id = $1 AND (r.client, r.session_id, r.message_id) = (p.client, p.session_id, p.message_id)
+    RETURNING r.client, r.session_id AS "sessionId", r.message_id AS "messageId"`, [scope.owner, JSON.stringify(receipts)]);
+  /** @type {MessageAddress[]} */
+  const deleted = rows;
+  if (!deleted.length) return;
+
+  await dropSourceQuantities(query, scope, deleted, { exact: true });
+  const sessions = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const messageIds = new Map();
+  for (const { client, sessionId, messageId } of deleted) {
+    const key = JSON.stringify([client, sessionId]);
+    let ids = messageIds.get(key);
+    if (!ids) {
+      sessions.set(key, { client, sessionId });
+      messageIds.set(key, ids = new Set());
+    }
+    ids.add(messageId);
+  }
+  await scrubLedger(query, scope, [...sessions.values()], { messageIds });
 }
 
 /** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions
- * @param {(message: LedgerMessage) => boolean | Promise<boolean>} [matches] */
-export async function scrubLedger(query, scope, sessions, matches) {
+ * @param {{matches?: (message: LedgerMessage) => boolean | Promise<boolean>, messageIds?: Map<string, Set<string>>}} [options] */
+export async function scrubLedger(query, scope, sessions, { matches, messageIds } = {}) {
   const targets = JSON.stringify(sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId })));
   let ledgerBlanked = 0;
   let ledgerChanged = false;
@@ -163,13 +194,15 @@ export async function scrubLedger(query, scope, sessions, matches) {
     for (const { client, session_id, event_id, raw_request, core_outbox_metadata } of rows) {
       const legacy = typeof raw_request === "string";
       const request = /** @type {{messages: LedgerMessage[]}} */ (decodeRequest(raw_request));
-      const metadata = matches ? decodeRequest(core_outbox_metadata) : null;
+      const metadata = matches || messageIds ? decodeRequest(core_outbox_metadata) : null;
+      const ids = messageIds?.get(JSON.stringify([client, session_id]));
       const removed = [];
       let changed = false;
       for (const [index, message] of request.messages.entries()) {
-        if (!matches || await matches(message)) {
+        const messageId = metadata?.[index]?.id ?? message.id;
+        const selected = messageIds ? ids?.has(messageId) : !matches || await matches(message);
+        if (selected) {
           if (message.content !== "") {
-            const messageId = metadata?.[index]?.id ?? message.id;
             // Outbox IDs can escape characters that a ledger source's text column cannot store.
             if (matches && pgText(messageId)) removed.push({ client, sessionId: session_id, messageId });
             message.content = "";
@@ -183,7 +216,7 @@ export async function scrubLedger(query, scope, sessions, matches) {
             }
           }
         }
-        if (Object.hasOwn(message, "occurred_at") && !validHostedTime(message.occurred_at)) {
+        if ((!messageIds || selected) && Object.hasOwn(message, "occurred_at") && !validHostedTime(message.occurred_at)) {
           delete message.occurred_at;
           changed = true;
         }
