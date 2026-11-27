@@ -12,7 +12,7 @@ import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, is
 /** @import { PackDiagnostics, PackOptions, Projection, meter } from "./context-read-pack.mjs" */
 /** @import { PreparedItem } from "./context-read-projection.mjs" */
 /** @typedef {{ turns: readonly ContextRawTurn[], coverage: ContextRawCoverage }} Channel */
-/** @typedef {ContextAssemblyRawExcerpt & { body: string }} RawExcerpt */
+/** @typedef {ContextAssemblyRawExcerpt & { start: number, end: number, body: string }} RawExcerpt */
 /** @typedef {{key: string, session: string, rank: number, wire: RawExcerpt}} Excerpt */
 /** @typedef {{members: PreparedItem[], evidence: Excerpt[], turns: string[]}} Group */
 
@@ -171,6 +171,14 @@ function groupContext(items, excerpts, rankWhole) {
   return groups;
 }
 
+/** @param {RawExcerpt} wire @param {ContextAssemblyRepresentation} representation */
+function projectRawExcerpt(wire, representation) {
+  if (representation !== "representation-v2-dated") return wire;
+  const { start, end, ...row } = wire;
+  if (row.date !== undefined) delete row.occurredAt;
+  return row;
+}
+
 /** @param {Group} group @param {ContextAssemblyRepresentation} representation @param {number} count */
 function projectUnit(group, representation, count) {
   const members = group.members.slice().sort((a, b) => a.rank - b.rank);
@@ -193,7 +201,7 @@ function projectUnit(group, representation, count) {
   const id = first ? JSON.stringify(first.compact) : evidence[0].key;
 
   if (!first) return { ...group, members, evidence, date, turns, sessions, lexical, rank, id,
-    wire: { layer: /** @type {const} */ ("Raw"), ...evidence[0].wire } };
+    wire: { layer: /** @type {const} */ ("Raw"), ...projectRawExcerpt(evidence[0].wire, representation) } };
 
   // Legacy context-read-three-layer.mjs:247–289. Keep secondary date-only
   // sources qualified by their individual refs, then attach exact Raw slices.
@@ -209,8 +217,9 @@ function projectUnit(group, representation, count) {
   const originalDate = [...members.flatMap(item => item.receiptDate ? [item.receiptDate] : []), ...rawDates].sort(compareUtf8)[0];
   const itemDate = originalDate ?? members.flatMap(item => item.date ? [item.date] : []).sort(compareUtf8)[0];
   const attached = evidence.map(({ wire }) => {
-    const { body, ...ref } = wire;
-    return body === text ? { ...ref, sameAsBody: /** @type {const} */ (true) } : wire;
+    const row = projectRawExcerpt(wire, representation);
+    const { body, ...ref } = row;
+    return body === text ? { ...ref, sameAsBody: /** @type {const} */ (true) } : row;
   });
   const wire = { ...wireItem(first, representation, sources, first.sourcesComplete && sources.length === primarySources, text),
     ...(attached.length && { evidence: attached }) };

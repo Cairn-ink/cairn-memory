@@ -392,8 +392,8 @@ export interface ContextAssemblyRawExcerpt {
   role: Role;
   occurredAt?: string;
   date?: string;
-  start: number;
-  end: number;
+  start?: number;
+  end?: number;
 }
 
 export type ContextRawCoverage = "included" | "partial" | "unavailable" | "unsupported_store" | "lexical_unsupported";
@@ -442,6 +442,8 @@ export interface ContextAssemblyDiagnostics {
   counter: { id: "tiktoken-o200k_base" };
   items: readonly {
     ref: ContextReadRef;
+    /** Candidate rank when the compact reader opts in to item ranks. */
+    rank?: number;
     metadata: ContextMemoryMetadata | ContextReadFields;
     body?: { tokens: number };
     sourceAccess?: "available" | "unavailable-for-noncurrent-memory" | "unsupported";
@@ -626,6 +628,10 @@ export interface SaveOptions {
   receipt?: ExplicitWriteReceipt;
   /** Requires proceduralTags. Offsets refer to the explicit receipt excerpt. */
   procedural?: { anchors: readonly { receiptIndex: 0; start: number; end: number }[] };
+  relations?: {
+    replaces?: { id: string; expectedRevision: Revision };
+    contradicts?: readonly { id: string; expectedRevision: Revision }[];
+  };
 }
 
 interface CorrectOptions {
@@ -648,10 +654,11 @@ export interface MemoryService {
   readContext?(readSet: ContextReadSet, input: ReadContextInput, options?: CallOptions): Promise<ReadContextResult>;
   inspect?(scope: Scope, input: InspectListInput | InspectItemInput, options?: CallOptions): Promise<InspectListResult | InspectItemResult>;
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
-  /** Throws capability_unavailable if procedural options are supplied without proceduralTags. */
+  /** Procedural and relation options require their corresponding storage ports. */
   save(scope: Scope, text: string, source: SourceRef, kind?: MemoryKind, options?: SaveOptions): Promise<
-    { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number } |
-    { status: "suppressed" | "paused" | "invalid"; indexRevision?: number }
+    { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number;
+      relations?: { replaced: string | null; contradicts: string[] } } |
+    { status: "suppressed" | "paused" | "invalid" | "not_found"; indexRevision?: number }
   >;
   correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef, options?: CorrectOptions): Promise<
     { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |

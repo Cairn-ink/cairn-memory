@@ -1,7 +1,7 @@
 import { identifier, isWellFormedText, revision, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
-import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
+import { decideWrite, planConflictInsert, planCorrect, planDuplicateMerge, planSupersede, RELATION_LIMIT } from "../memory-policy/index.mjs";
 import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants, unkeyedForgetDigests } from "../privacy/fingerprint.mjs";
 import { legacyPassageMatcher } from "../privacy/legacy-passages.mjs";
 import { collectRedactedSecretValues, PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
@@ -12,7 +12,7 @@ import { factIncarnationBody, validateSuppressionFact } from "../suppression-fac
 import { entry, entryError, scopeOf, correctRequestDecision, factReference, hostAttachments, hostRequestOf, predecessorOf, saveRequestDecision, spanReference, writeHookResult } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 
-/** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Receipt, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
+/** @import {ClockAndHash, DuplicateQuery, InsertRow, ItemRef, MemoryRow, PassageFingerprint, Receipt, RetainedDigester, SaveOptions, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
 /** @import {IdentityFact, TextDigest, TextFact, WindowFact} from "../suppression-fact.mjs" */
 
@@ -372,15 +372,38 @@ export function writeMethods(deps) {
       /** @type {Scope} */
       let scope;
       let source, kind;
+      /** @type {NonNullable<SaveOptions["relations"]>["replaces"]} */
+      let replaces;
+      /** @type {NonNullable<SaveOptions["relations"]>["contradicts"]} */
+      let contradicts;
       try {
         scope = scopeOf(input);
         source = sourceOf(inputSource);
         kind = memoryKindOf(inputKind);
         if (typeof raw !== "string") return invalid();
+        const relations = options?.relations;
+        if (relations !== undefined) {
+          const hints = validateObject(relations, ["replaces", "contradicts"]);
+          const targetOf = (/** @type {unknown} */ value) => {
+            const { id, expectedRevision } = validateObject(value, ["id", "expectedRevision"]);
+            return { id: identifier(id), expectedRevision: revision(expectedRevision) };
+          };
+          replaces = hints.replaces === undefined ? undefined : targetOf(hints.replaces);
+          if (hints.contradicts !== undefined) {
+            contradicts = validateDenseArray(hints.contradicts, 1, RELATION_LIMIT).map(targetOf);
+            const ids = new Set(contradicts.map(({ id }) => id));
+            if (ids.size !== contradicts.length || (replaces && ids.has(replaces.id))) return invalid();
+          }
+          if (!replaces && !contradicts) return invalid();
+        }
       } catch {
         return invalid();
       }
 
+      const supersession = replaces && storage.supersession;
+      const conflicts = contradicts && storage.conflicts;
+      if ((replaces && !supersession) || (contradicts && !conflicts)) throw new CoreError("capability_unavailable");
+      const targets = replaces ? [replaces, ...(contradicts ?? [])] : contradicts ?? [];
       if (embedder === null && capabilities.embeddingRequiredOnInsert === true) {
         throw new CoreError("capability_unavailable");
       }
@@ -424,11 +447,13 @@ export function writeMethods(deps) {
           }
         }
       }
-      /** @param {{status: "saved" | "duplicate", id: string, revision: number, indexRevision?: number}} result */
+      /** @param {{status: "saved" | "duplicate", id: string, revision: number, indexRevision?: number,
+       * relations?: { replaced: string | null, contradicts: string[] }}} result */
       async function deliverSave(result) {
         const item = await deliver(scope, result.id, result.revision);
         const index = reportedIndex(result.indexRevision);
-        return item ? { status: result.status, item, ...index } : /** @type {const} */ ({ status: "suppressed", ...index });
+        return item ? { status: result.status, item, ...index, ...(result.relations && { relations: result.relations }) }
+          : /** @type {const} */ ({ status: "suppressed", ...index });
       }
       const preflight = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
@@ -452,6 +477,10 @@ export function writeMethods(deps) {
       });
 
       await gate.assertOpen(owner, "post-send");
+      // Keep relation errors distinct from the existing receipt-bearing invalid result.
+      class InvalidRelation extends CoreError {
+        constructor() { super("invalid_input"); }
+      }
       const result = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
         if (state.paused || state.generation !== preflight.generation) return paused(tx);
@@ -462,12 +491,32 @@ export function writeMethods(deps) {
         if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
+        let previous = null;
+        if (targets.length) {
+          const selection = { owner, namespaces: [scope.namespace] };
+          const refs = targets.map(({ id }) => /** @satisfies {ItemRef} */ ({ type: "memory", id, namespace: scope.namespace }));
+          const visibleRefs = await fence.assertVisible(tx, selection, refs, "read");
+          const visibleIds = new Set(visibleRefs.filter(ref => ref.type === "memory" && ref.namespace === scope.namespace)
+            .map(ref => ref.id));
+          const rows = [];
+          for (const { id } of targets) {
+            const target = visibleIds.has(id) ? await scopedRow(memories, scope, id, tx) : null;
+            if (target === null) return /** @type {const} */ ({ status: "not_found", ...reportedIndex(await memories.indexRevision?.(tx)) });
+            rows.push(target);
+          }
+          for (const [index, target] of rows.entries()) {
+            if (target.historical) throw new CoreError("memory_historical");
+            if (target.revision !== targets[index].expectedRevision) throw new CoreError("memory_conflict");
+          }
+          if (replaces) previous = rows[0];
+        }
         if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
             await withheld(suppressions, tx, scope, source, raw, passages, key)) return suppressed(tx);
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
         const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
         if (decision.status === "suppressed") return suppressed(tx);
         let id, written;
+        let textHash = row.textHash;
         /** @type {readonly import("../ports/index.d.ts").HostReceipt[]} */
         let priorReceipts = [];
         if (decision.status === "saved") {
@@ -479,7 +528,10 @@ export function writeMethods(deps) {
           const current = await scopedRow(memories, scope, duplicateId, tx);
           const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === duplicateId &&
             match.revision === current?.revision);
-          if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed(tx);
+          if (current === null || !matched) return suppressed(tx);
+          if (targets.length && (current.historical || targets.some(target => target.id === duplicateId))) throw new InvalidRelation();
+          if (!await visible(scope, duplicateId, tx)) return suppressed(tx);
+          textHash = current.textHash;
           const { merge } = planDuplicateMerge(current, current);
           if (tag && kind !== current.kind) merge.kind = kind;
           if (saveHooks && receipts.length) priorReceipts = await saveHooks.port.priorReceipts(tx, scope, id);
@@ -493,24 +545,64 @@ export function writeMethods(deps) {
             anchors: tag.spans.map(span => ({ receiptId, digest: tag.digest, ...span })),
           });
         }
+        const memory = { id, revision: written.revision };
+        if (replaces && supersession) {
+          try {
+            planSupersede(previous, replaces.expectedRevision, textHash, await supersession.incomingCount(tx, scope, id));
+            await supersession.record(tx, scope, {
+              previous: { id: replaces.id, revision: replaces.expectedRevision }, replacement: memory,
+            }, (written.receiptIds ?? []).slice(0, 4), clock.nowMs());
+          } catch (error) {
+            if (entryError(error).code === "invalid_ref") throw new InvalidRelation();
+            throw error;
+          }
+          await supersession.markHistorical(tx, scope, replaces.id, clock.nowMs());
+        }
+        if (contradicts && conflicts) {
+          const ids = contradicts.map(target => target.id);
+          const edgeSource = explicit ? "explicit-hint" : "inferred-hint";
+          const existing = await conflicts.list(tx, scope, id);
+          const revisions = new Map([[id, memory.revision]]);
+          const degreeAfter = new Map();
+          let additions = 0;
+          for (const { id: targetId, expectedRevision } of contradicts) {
+            const alreadyLinked = existing.some(edge => edge.memoryId === targetId &&
+              edge.revision === expectedRevision && edge.source === edgeSource);
+            const added = alreadyLinked ? 0 : 1;
+            additions += added;
+            revisions.set(targetId, expectedRevision);
+            degreeAfter.set(targetId, (await conflicts.degree(tx, scope, targetId)) + added);
+          }
+          degreeAfter.set(id, (await conflicts.degree(tx, scope, id)) + additions);
+          for (const [left, right] of planConflictInsert(id, ids, degreeAfter)) {
+            await conflicts.insert(tx, scope, {
+              left: { id: left, revision: /** @type {number} */ (revisions.get(left)) },
+              right: { id: right, revision: /** @type {number} */ (revisions.get(right)) },
+              relation: "contradicts", source: edgeSource,
+            }, clock.nowMs());
+          }
+        }
+        const linked = targets.length
+          ? { relations: { replaced: replaces?.id ?? null, contradicts: contradicts?.map(target => target.id) ?? [] } }
+          : {};
         if (!saveHooks || !context) {
           return { status: decision.status, id, revision: written.revision,
-            ...reportedIndex(await memories.committedIndexRevision?.(tx)) };
+            ...reportedIndex(await memories.committedIndexRevision?.(tx)), ...linked };
         }
         const attached = receipts.length
           ? hostAttachments(priorReceipts, await saveHooks.port.priorReceipts(tx, scope, id), receipts) : [];
-        const saved = { ...context, status: decision.status, memory: { id, revision: written.revision }, receipts: attached };
+        const saved = { ...context, status: decision.status, memory, receipts: attached };
         await saveHooks.invoke("onSave", tx, saved, writeHookResult);
         const indexRevision = await memories.committedIndexRevision?.(tx);
         if (indexRevision === undefined) throw new CoreError("internal_error");
         if (request) await saveHooks.port.finalizeSave(tx, saved, indexRevision);
-        return { status: decision.status, id, revision: written.revision, indexRevision };
+        return { status: decision.status, id, revision: written.revision, indexRevision, ...linked };
       }).catch(error => {
-        if (receipts.length && entryError(error).code === "invalid_input") return invalid();
+        if (receipts.length && !(error instanceof InvalidRelation) && entryError(error).code === "invalid_input") return invalid();
         throw error;
       });
 
-      if (result.status === "paused" || result.status === "suppressed" || result.status === "invalid") return result;
+      if (!("id" in result)) return result;
       return deliverSave(result);
     }, invalid),
 

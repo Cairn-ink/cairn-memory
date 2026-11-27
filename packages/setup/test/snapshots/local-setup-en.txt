@@ -3,13 +3,20 @@ Cairn.ink Memory setup <version>
 2. Cloud: memory is shared across computers and tools, with cairn.ink sign-in.
 ? Where should memory live? (1/2)
 Memory stays on this computer. Setup sends no user data.
-With OPENAI_API_KEY available to the Cairn MCP server, memories and search text
-  go to OpenAI for semantic search, up to an estimated US$1 per day per running
-  Cairn server. Saved conversations are sent only if you opt in with
-  --raw-semantic (or explicitly configure --context-embedder). To keep
-  everything on this computer, don't give the server a key.
-  --no-context-semantic only turns off embeddings; with a key, recall and other
-  model features still send memory text to OpenAI.
+The upgraded local engine sends memory text to OpenAI for embeddings when
+  saving, correcting or importing memories. Semantic recall sends the recall
+  query for embeddings. These requests require recorded consent and an OpenAI
+  key in the Cairn MCP server’s environment. Conversation capture builds Cards
+  locally. No saved conversation text is sent for extraction. Keyless installs
+  send nothing to OpenAI. Run setup --local with OPENAI_API_KEY to record
+  consent. If you add the key later, run setup --local again with the key to
+  enable embeddings. Semantic search costs up to an estimated US$1 per day per
+  running Cairn server.
+The previous local engine uses a key from the MCP server’s environment. On that
+  engine, saved conversations go to OpenAI only with --raw-semantic or an
+  explicit --context-embedder configuration. On the previous engine,
+  --no-context-semantic turns off embeddings only. With a key, recall and other
+  model features can still send memory text to OpenAI.
 ? Connect Claude Code? (Y/n)
 ? Connect Codex? (y/N)
 Installing the local memory engine…
@@ -23,13 +30,20 @@ Claude Code local capture: on by default. Conversation text from this tool's
   conversations about the same subject. To remove one, use raw list, then raw
   delete <conversation-id> (preview); add --yes to delete. Turn off with setup
   --local --no-capture or config --local-capture off; turn on with config
-  --local-capture on. With OPENAI_API_KEY available to the Cairn MCP server,
-  memories and search text go to OpenAI for semantic search, up to an estimated
-  US$1 per day per running Cairn server. Saved conversations are sent only if
-  you opt in with --raw-semantic (or explicitly configure --context-embedder).
-  To keep everything on this computer, don't give the server a key.
-  --no-context-semantic only turns off embeddings; with a key, recall and other
-  model features still send memory text to OpenAI.
+  --local-capture on. The upgraded local engine sends memory text to OpenAI for
+  embeddings when saving, correcting or importing memories. Semantic recall
+  sends the recall query for embeddings. These requests require recorded
+  consent and an OpenAI key in the Cairn MCP server’s environment. Conversation
+  capture builds Cards locally. No saved conversation text is sent for
+  extraction. Keyless installs send nothing to OpenAI. Run setup --local with
+  OPENAI_API_KEY to record consent. If you add the key later, run setup --local
+  again with the key to enable embeddings. Semantic search costs up to an
+  estimated US$1 per day per running Cairn server.
+The previous local engine uses a key from the MCP server’s environment. On that
+  engine, saved conversations go to OpenAI only with --raw-semantic or an
+  explicit --context-embedder configuration. On the previous engine,
+  --no-context-semantic turns off embeddings only. With a key, recall and other
+  model features can still send memory text to OpenAI.
 Claude Code local capture: on (on). Raw cap: 200,000,000 bytes.
 Codex local capture: on by default. Conversation text from this tool's sessions
   on this computer is saved as plaintext Raw in the local store, without a key
@@ -39,13 +53,20 @@ Codex local capture: on by default. Conversation text from this tool's sessions
   the same subject. To remove one, use raw list, then raw delete
   <conversation-id> (preview); add --yes to delete. Turn off with setup --local
   --no-capture or config --local-capture off; turn on with config
-  --local-capture on. With OPENAI_API_KEY available to the Cairn MCP server,
-  memories and search text go to OpenAI for semantic search, up to an estimated
-  US$1 per day per running Cairn server. Saved conversations are sent only if
-  you opt in with --raw-semantic (or explicitly configure --context-embedder).
-  To keep everything on this computer, don't give the server a key.
-  --no-context-semantic only turns off embeddings; with a key, recall and other
-  model features still send memory text to OpenAI.
+  --local-capture on. The upgraded local engine sends memory text to OpenAI for
+  embeddings when saving, correcting or importing memories. Semantic recall
+  sends the recall query for embeddings. These requests require recorded
+  consent and an OpenAI key in the Cairn MCP server’s environment. Conversation
+  capture builds Cards locally. No saved conversation text is sent for
+  extraction. Keyless installs send nothing to OpenAI. Run setup --local with
+  OPENAI_API_KEY to record consent. If you add the key later, run setup --local
+  again with the key to enable embeddings. Semantic search costs up to an
+  estimated US$1 per day per running Cairn server.
+The previous local engine uses a key from the MCP server’s environment. On that
+  engine, saved conversations go to OpenAI only with --raw-semantic or an
+  explicit --context-embedder configuration. On the previous engine,
+  --no-context-semantic turns off embeddings only. With a key, recall and other
+  model features can still send memory text to OpenAI.
 Codex: approve the new entries in /hooks.
 Codex local capture: blocked (qualification_required). Raw cap: 200,000,000
   bytes.

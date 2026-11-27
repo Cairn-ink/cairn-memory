@@ -13,6 +13,8 @@ const allowlist = {
   "topics/cards.mjs: placement.pendingCards(tx, scope, { limit: 5 })": "Pending guards feed the fetched card batch that is fenced before classification.",
   "rationale/store-plan.mjs: store.sourceEvidence(tx, scope, refs)": "Receipt admission enforces Raw and excerpt visibility before evidence is used by rationale.",
   "rationale/store-plan.mjs: store.degree(tx, scope, id)": "The incident count is internal to the insertion limit check.",
+  "service/writes.mjs: conflicts.degree(tx, scope, targetId)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/writes.mjs: conflicts.degree(tx, scope, id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'supports-decision', page)":
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'challenges-premise', page)":

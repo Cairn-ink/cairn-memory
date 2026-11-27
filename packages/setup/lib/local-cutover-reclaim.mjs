@@ -1,9 +1,11 @@
 import { basename, dirname, join } from 'node:path';
-import { privateList, privateRead, privateRemove, syncDirectory } from '../../../integrations/client/private-state.mjs';
-import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { captureTargetFor, cutoverId, legacyTargetFor, taggedCutoverAttemptForName, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse } from './local-cutover-lease.mjs';
 import { canonicalPath, inside, ownedDirectory, parseStrictJSON, removeCutoverDirectory } from './local-descriptor.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { privateList, privateRead, privateRemove, syncDirectory } = await cutoverImport('state');
+const { entry } = await cutoverImport('paths');
 
 const suffixes = ['', '-wal', '-shm', '-journal'];
 const uid = BigInt(process.getuid?.() ?? -1);
@@ -28,7 +30,7 @@ async function storeDirectory(source) {
 async function reclaimTargets(source, targets, checkpoint) {
   const parent = await storeDirectory(source);
   if (parent) {
-    const { cleanMigrationBootstraps } = await import('../../adapter-sqlite/src/legacy/migration-bootstrap.mjs');
+    const { cleanMigrationBootstraps } = await cutoverImport('bootstraps');
     for (const path of targets) {
       cleanMigrationBootstraps(path);
       const names = ['', '.stale'].flatMap(tail => suffixes.map(suffix => path + tail + suffix));
@@ -57,6 +59,11 @@ async function reclaimBackup(directory, name) {
   }));
 }
 
+export async function removeActivationBackup(maintenance, attemptId) {
+  await reclaimBackup(maintenance, 'backup-' + attemptId);
+  await syncDirectory(maintenance);
+}
+
 export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targetPath, reclaimCapture = false }, checkpoint) {
   if (inside(maintenance, sourcePath)) throw refuse('cutover_unsafe_artifact');
   // A journal supplies the exact target. Historical maintenance receipts
@@ -75,7 +82,7 @@ export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targe
 function metadataOnly(directory, names) {
   const records = new Map();
   for (const name of names) {
-    const match = /^(maintenance|stale|claude|codex|capture-claude|capture-codex)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
+    const match = /^(maintenance|stale|claude|codex|capture-claude|capture-codex|activation|provider-consent)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
     const info = entry(join(directory, name));
     if (match?.[0] !== name || (match[2] && !cutoverId(match[2])) || !privateFile(info)) return false;
     const key = match[1] + ':' + info.dev + ':' + info.ino;

@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "b9840dd9191c1b4a24f84dbd49ecb51b3f41236f59833d91b5a66eda1d621e8a",
-  "bytes": 1487657,
+  "sha256": "d44ee5f860b921f1e1e81ea52024759836ca300dc1f7436391bb75b490a2c054",
+  "bytes": 1487706,
   "files": [
     "LICENSE",
     "README.md",
@@ -601,7 +601,7 @@
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
     "adapters/mcp/local-daemon.mjs": "d00a1b3ab1bd23c213f3c9604797f512ae198ec664844bf807c6a809bc1d36cf",
-    "adapters/mcp/local-daemon-identity.mjs": "bf1e35cb3480f394803421417d2477a0e311b016763c0d2b864b04581c24da73",
+    "adapters/mcp/local-daemon-identity.mjs": "6dad217779df9004da166cecf91ff4eb84ffc81ef860ff88eb770cd77bf9e963",
     "adapters/mcp/local-daemon-liveness.mjs": "c3d69b1875215476d8ddc20f02f2b691028ed9f7b0ab53aef540659c245e9dfa",
     "adapters/mcp/local-daemon-state.mjs": "d9825bc4ea7932b0b35564f16654e137d7442a9130a325366267f604107abc4a",
     "adapters/mcp/local-daemon-wire.mjs": "c11f78b561651d2eaf9546d172f5ff53ba08bdda6a620723e4847260e537e7ec",
@@ -636,7 +636,7 @@
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
     "integrations/client/raw/local-process.mjs": "644e65560c883018244c4fee126cb92a399128c1c62116ad68bb79574abcb764",
     "integrations/client/raw/local-reply.mjs": "ec1cd9df94a594e2a31adc4ab7e00abd92697fab5f6f6ccf34a15e65e1b10a91",
-    "integrations/client/raw/local-transport.mjs": "4667b69cc9a8cf4ae84aee3fe837be8cf6c5f5a3199bbfdae7caf38369a01b16",
+    "integrations/client/raw/local-transport.mjs": "518667d44bc7e6e858fac4da6b27aceebac23ea22a95423edf0388ac476eb5da",
     "integrations/client/raw/local-worker.mjs": "6e3f1db3e913d579084ff33310f6b5ab55fe5eea1eae4b68ffbb287490609c85",
     "integrations/client/raw/local-worker-input.mjs": "4bed6dd911c34a1feb6a7cd3678b3c631256bee1dc013ddefb3847aa4d1c5649",
     "integrations/client/raw/local-worker-progress.mjs": "81f264adf0349919fed015b9fd4c3c8effd9af1b160119c33e954828955445e2",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "bdcfbc6eca686808f8c8ad79f61d5bc212ddd985769d750776a8dce2de313738"
+    "engine-build.json": "c6a3146946442e61c297b88f99e70d486576fc3fb424293f5f039883149928f9"
   }
 }

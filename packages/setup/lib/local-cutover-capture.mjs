@@ -1,8 +1,10 @@
 import { join } from 'node:path';
-import { privateRead, privateWrite } from '../../../integrations/client/private-state.mjs';
-import { stateLock } from '../../../integrations/client/state-lock.mjs';
 import { canonicalPath, ownedDirectory, parseStrictJSON } from './local-descriptor.mjs';
 import { cutoverRefusal } from './local-cutover-lease.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { privateRead, privateWrite } = await cutoverImport('state');
+const { stateLock } = await cutoverImport('lock');
 
 const clients = [['claude', 'claude-code'], ['codex', 'codex']];
 const disabled = record => JSON.stringify({ ...record, phase: 'disabled' }, null, 2) + '\n';

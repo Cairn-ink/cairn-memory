@@ -5,6 +5,12 @@ import { sameVector, vectorArguments, boundedJSON, pidIsDead, localFilesystemErr
 import { observedVector } from './local-claude.mjs';
 import { tomlString } from './output.mjs';
 import { SetupError } from './errors.mjs';
+import { localClientEnvironment } from './local-client-environment.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+export function inspectLocalCodexServers({ env, ...options }) {
+  return inspectCodexServers({ ...options, env: localClientEnvironment(env) });
+}
 
 export const codexAddArguments = (root, vector) => ['mcp', 'add', 'cairn-local', '--', vector.node, ...vectorArguments(root, vector)];
 export const codexSnippet = (root, vector) => '[mcp_servers."cairn-local"]\ncommand = ' + tomlString(vector.node) +
@@ -17,7 +23,27 @@ export async function checkCodexLock(home) {
   try { stale = pidIsDead((await boundedJSON(path, 1024, { privateFile: true })).pid); } catch { /* Hosted locks are empty. */ }
   throw new SetupError(stale ? 'codex_lock_stale' : 'codex_lock', 2, { path, local: true });
 }
-async function withCodexLock(home, work) {
+export async function recoverCutoverCodexLock(home, root) {
+  const path = join(home, '.cairn-setup.lock');
+  let owner;
+  try {
+    // An empty lock can belong to a live hosted setup, so it is never removed
+    // automatically. The refusal names the path for manual removal.
+    if ((await lstat(path)).size === 0) throw new SetupError('codex_lock_empty', 2, { path, local: true });
+    owner = await boundedJSON(path, 1024, { privateFile: true });
+  }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  if (owner.cutover !== root) return;
+  const { processStart } = await cutoverImport('liveness');
+  const dead = pid => pidIsDead(pid) || (process.platform === 'linux' &&
+    Number.isSafeInteger(pid) && pid > 0 && processStart(pid)?.zombie === true);
+  if (!dead(owner.pid) || (owner.child !== null && !dead(owner.child))) {
+    throw new SetupError('codex_lock', 2, { path, local: true });
+  }
+  await rm(path);
+}
+
+async function withCodexLock(home, work, cutover) {
   try {
   await mkdir(home, { recursive: true, mode: 0o700 });
   const info = await lstat(home);
@@ -31,12 +57,20 @@ async function withCodexLock(home, work) {
     throw new SetupError('codex_lock', 2, { path, local: true });
   }
   try {
-    await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + '\n');
-    await lock.sync(); return await work();
+    const owner = { pid: process.pid, startedAt: new Date().toISOString(), ...(cutover && { cutover, child: null }) };
+    await lock.writeFile(JSON.stringify(owner) + '\n');
+    await lock.sync();
+    return await work(cutover ? async child => {
+      const bytes = Buffer.from(JSON.stringify({ ...owner, child }) + '\n');
+      await lock.write(bytes, 0, bytes.length, 0);
+      await lock.truncate(bytes.length);
+      await lock.sync();
+    } : undefined);
   } finally { await lock.close(); await rm(path); }
   } catch (error) { throw localFilesystemError(error, 'codex_mcp_unverified'); }
 }
 export async function codexCapabilities(env) {
+  env = localClientEnvironment(env);
   for (const [args, pattern] of [[['mcp', 'add', '--help'], /--\s+<?COMMAND>/u],
     [['mcp', 'remove', '--help'], /./u], [['mcp', 'list', '--help'], /./u]]) {
     const result = await runCodex(args, { env });
@@ -44,7 +78,8 @@ export async function codexCapabilities(env) {
   }
   return true;
 }
-export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable }) {
+export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable, allowCoreLocal, cutover }) {
+  env = localClientEnvironment(env);
   const home = dirname(checkpoint.destination), { desired } = checkpoint;
   try {
     const original = await lstat(codexHome(env));
@@ -52,22 +87,33 @@ export async function registerCodex({ root, checkpoint, env = process.env, write
   } catch (error) { if (error.code !== 'ENOENT') throw localFilesystemError(error, 'codex_mcp_unverified'); }
   const manual = () => { write(t('local_manual_codex')); write.literal(codexSnippet(root, desired)); };
   if (!(capable ?? await codexCapabilities(env))) { write(t('codex_mcp_required')); manual(); return 'manual'; }
-  return withCodexLock(home, async () => {
+  return withCodexLock(home, async onChild => {
     await snapshot(join(home, 'config.toml'));
-    const result = await runCodex(codexAddArguments(root, desired), { env: { ...env, CODEX_HOME: home } });
+    if (allowCoreLocal) {
+      const entries = await inspectCodexServers({ ...inspection, home, env, includeLaunchOptions: true });
+      const current = entries.find(entry => entry.name === 'cairn-local');
+      const observed = observedVector(root, current, true);
+      if (current?.customEnvironment || current?.enabled === false ||
+          (current && !sameVector(observed, checkpoint.previous) && !sameVector(observed, desired))) {
+        throw new SetupError('codex_changed', 2);
+      }
+      if (sameVector(observed, desired)) return 'done';
+    }
+    const result = await runCodex(codexAddArguments(root, desired), { env: { ...env, CODEX_HOME: home }, onChild });
     let verified = false, environmentCause;
     if (!result.error && result.status === 0) {
       try {
         const entries = await inspectCodexServers({ ...inspection, home, env });
         const local = entries.filter(entry => entry.name === 'cairn-local');
-        verified = local.length === 1 && sameVector(observedVector(root, local[0]), desired);
+        verified = local.length === 1 && sameVector(observedVector(root, local[0], allowCoreLocal), desired);
       } catch (error) { environmentCause = codexEnvironmentCause(error); }
     }
     if (!verified) { manual(); if (environmentCause) write(t(environmentCause)); throw new SetupError('codex_mcp_unverified'); }
     return 'done';
-  });
+  }, cutover ? root : undefined);
 }
 export async function detachCodex({ env = process.env, home = codexHome(env), inspection, write, t }) {
+  env = localClientEnvironment(env);
   return withCodexLock(home, async () => {
     await snapshot(join(home, 'config.toml'));
     const result = await runCodex(['mcp', 'remove', 'cairn-local'], { env: { ...env, CODEX_HOME: home } });

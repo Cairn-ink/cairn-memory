@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { compareUtf8, CoreError, tokenizeT1 } from "@cairn-ink/core";
 import { rawFactPolicy } from "./raw-facts.mjs";
+import { decodeJson } from "./memory-rows.mjs";
 import { hasRawFence } from "./raw-lineage.mjs";
 import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
 import { rankLexical, readSet, validateLimit } from "./retrieval.mjs";
@@ -15,6 +16,8 @@ import { readFacts } from "./suppressions.mjs";
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @typedef {Pick<RawSegment, "occurredAtMs"> & {ref: {id: string}}} PageKey */
+/** @typedef {{id: string, client: string, sessionId: string, firstEventAt: string | null, lastEventAt: string | null,
+ * messageCount: number, byteCount: number, fenced: boolean, hidden: boolean}} Conversation */
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const encode = (/** @type {unknown[]} */ payload) => Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -62,7 +65,7 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
   const stateToken = createSnapshotToken(storeKey);
   const binding = randomUUID();
 
-  /** @param {Connection} db @param {Scope} scope @param {RetrievalScope} selection */
+  /** @param {Connection} db @param {Scope} scope @param {Pick<RetrievalScope, "clients" | "window">} selection */
   function visibility(db, scope, { clients, window }) {
     if (controls && !controls.rawReadable(scope)) return () => false;
     const facts = readFacts(db, scope);
@@ -100,8 +103,49 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
     }
   }
 
-  /** @type {RawCandidates & ListRawMessages} */
+  /** @type {RawCandidates & ListRawMessages & {
+   * conversations(tx: import("@cairn-ink/core/ports").Tx, scope: Scope, id?: string): Promise<Conversation[]>
+   * }} */
   const reads = {
+    conversations(tx, scope, id) {
+      return port(tx, scope?.owner, {}, db => {
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const visible = visibility(db, selection, {});
+        /** @type {Map<string, Conversation>} */
+        const conversations = new Map();
+        const encodeText = new TextEncoder();
+        /** @type {Map<unknown, Map<unknown, string>>} */
+        const addresses = new Map();
+        for (const record of rawRows(db, selection)) {
+          let address = addresses.get(record.client_key);
+          if (!address) addresses.set(record.client_key, address = new Map());
+          let key = address.get(record.session_key);
+          if (key === undefined) {
+            key = "raw-" + hashSession(selection, decodeJson(record.client_key), decodeJson(record.session_key));
+            address.set(record.session_key, key);
+          }
+          if (id !== undefined && key !== id) continue;
+          const row = decodeRawRow(record);
+          const { client, sessionId, message } = row;
+          let summary = conversations.get(key);
+          if (!summary) {
+            const hashes = migratedRaw?.fenceHashes(selection, row) ?? [hashSession(selection, client, sessionId)];
+            summary = { id: key, client, sessionId, firstEventAt: null, lastEventAt: null,
+              messageCount: 0, byteCount: 0, fenced: hashes.some(hash => hasRawFence(db, selection, hash)), hidden: true };
+            conversations.set(key, summary);
+          }
+          const time = message.occurredAtMs === null ? null : new Date(message.occurredAtMs).toISOString();
+          if (time !== null) {
+            if (summary.firstEventAt === null || time < summary.firstEventAt) summary.firstEventAt = time;
+            if (summary.lastEventAt === null || time > summary.lastEventAt) summary.lastEventAt = time;
+          }
+          summary.messageCount++;
+          summary.byteCount += encodeText.encode(message.content).length;
+          if (summary.hidden && visible(row)) summary.hidden = false;
+        }
+        return [...conversations.values()].sort((left, right) => compareUtf8(left.id, right.id));
+      });
+    },
     raw(tx, scope, query, intent, options) {
       return port(tx, scope?.owner, {}, db => {
         const selection = readSet(tx.owner, scope);

@@ -161,7 +161,7 @@ test('runtime raw filesystem access has an exact, justified allowlist', () => {
 });
 test('generated setup runtime and archived engine obey the same guard', () => {
   const runtime = join(root, 'packages/setup/runtime');
-  assert.deepEqual(audit(runtime, files(runtime)), []);
+  assert.deepEqual(audit(runtime, files(runtime), path => path.replace(/^cutover\/files\//u, '')), []);
   const directory = mkdtempSync(join(tmpdir(), 'cairn-fd-guard-'));
   try {
     const engine = join(runtime, 'engine');

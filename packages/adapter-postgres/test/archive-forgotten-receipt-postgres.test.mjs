@@ -133,7 +133,8 @@ for (const keyed of [false, true]) {
     await f.forget(originalId);
     assert.deepEqual(await f.rawRows(), []);
 
-    const id = await f.capture(replay, [secondaryTurn, neighbor], neighborText, [1]);
+    // Admission blanks the forgotten turn, so the model sees only the neighbor, at index 0.
+    const id = await f.capture(replay, [secondaryTurn, neighbor], neighborText, [0]);
     assert.deepEqual(await f.rawRows(), [rawRow(replay, neighbor)]);
     assert.deepEqual((await f.receiptRows()).filter(row => row.memoryId !== originalId), [{
       memoryId: id, client: replay.client, sessionId: replay.sessionId, messageId: neighbor.id, marked: false,

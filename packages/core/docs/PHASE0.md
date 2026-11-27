@@ -1516,6 +1516,15 @@ Pack whole `{ date, body }` items in ascending date order with undated items las
 Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
 Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.
 
+## Addendum 34 — Dated Raw evidence projection
+
+In `representation-v2-dated`, attached Raw evidence and standalone Raw items omit excerpt offsets
+and omit `occurredAt` when the row carries a minute-level `date`.
+The packer keeps the full excerpt data internally and uses the original timestamps to determine
+evidence order and item dates.
+Packing uses the delivered shape for ranking cost and budget checks.
+`representation-v2` retains its existing Raw wire bytes.
+
 ## Addendum 35 — Find layer cursors
 
 Find without `cursors` keeps the original response and omits `nextCursor` throughout.
@@ -1527,6 +1536,14 @@ The MAC binds owner, namespace, prepared query, layer, clients, time bounds and 
 The card binding reserves a versioned scope field for future use. Malformed, oversized, forged or mismatched tokens return `invalid_cursor`.
 The signed payload carries the memory continuation or the layer's offset and index state, with an 8,192-character token limit.
 Plain and paged Find check delivery visibility for all selected items in one fresh read after every layer has ranked.
+Delivered items are built from the rows that fresh read returns, never from the ranking reads.
 A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
 Pages follow one deterministic order per layer, with a stable ID tie-break.
 The page size remains at most 20. Hybrid memory uses fixed lexical and vector pools, lexical memory can page through all matches, cards use the existing hosted fusion pool, and Raw pages through up to 100 segments.
+
+## Addendum 36 — Context Read fusion depth
+
+For `representation-v2` and `representation-v2-dated`, a `maxItems` above the configured preset depth raises the fusion depth to `maxItems`, capped by the retrieval horizon.
+Fusion retains the preset's `k` and channel weights and uses a union maximum of at least twice the resulting depth.
+Semantic coverage reports the depth used and the resulting semantic omissions.
+Candidate searches and reads at or below the preset depth retain preset ranking, and evidence snapshots replay the exact delivered refs.

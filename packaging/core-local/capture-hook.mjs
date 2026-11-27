@@ -134,7 +134,15 @@ async function capture(binding, legacy, input, operation) {
         return await advanceCapture({ options, identity, context, opened, cursor, operation, bytes,
           dispatch: (selection, message, recovering) => runtime.run(selection.sessionId, async ({ service, scope }) => {
             await markUsed(input.directory);
-            return dispatchCapture(service, scope, selection, message, operation.signal, recovering);
+            const result = await dispatchCapture(service, scope, selection, message, operation.signal, recovering);
+            if (result.status === 'done' && /^[a-z_]{1,64}$/u.test(result.code ?? '')) {
+              // A status I/O error must not replay an already committed chunk.
+              try {
+                await privateWrite(join(input.directory, 'last-model-failure.json'),
+                  JSON.stringify({ code: result.code }) + '\n');
+              } catch { /* The durable Raw finish still owns cursor advancement. */ }
+            }
+            return result;
           }) });
       } finally { await opened.close(); }
     }, { signal: operation.signal });
@@ -154,10 +162,7 @@ export async function runBoundCapture(input, signal) {
     check() { if (controller.signal.aborted || performance.now() >= end - 2000) fault(signal.aborted ? 'cancelled' : 'work_limit'); } };
   try {
     return await withCaptureBinding(input.directory, input.executable, operation.signal,
-      (binding, legacy, providerKeyName) => {
-        if (input.hasProviderKey?.(providerKeyName)) fault('authority_changed');
-        return capture(binding, legacy, input, operation);
-      });
+      (binding, legacy) => capture(binding, legacy, input, operation));
   } catch (error) {
     return { status: 'blocked', reason: error.reason ?? error.code ?? 'authority_changed' };
   } finally {

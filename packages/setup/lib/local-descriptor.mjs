@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { SetupError } from './errors.mjs';
 import { legacyEngineIdPattern as engineIdPattern, coreLocalEngineIdPattern, legacyEngine,
   coreLocalEngine, engineExecutable } from './local-engine-generation.mjs';
-import { validCutover } from './local-cutover-journal.mjs';
+import { activeVector, validCutover } from './local-cutover-journal.mjs';
 
 export { engineIdPattern };
 const version1 = 'cairn-local-installation-v1';
@@ -183,11 +183,13 @@ function validEngine(value, allowCoreLocal) {
 function validMigration(journal, engine) {
   const failure = journal?.state === 'failed' || journal?.state === 'paused-recovery';
   const cutover = journal && Object.hasOwn(journal, 'cutover');
+  const detached = cutover && journal.state === 'verified' && engine === null;
+  const attached = cutover && journal.state === 'verified' && engine?.id === journal.targetEngineId;
   if (!keys(journal, ['state', 'sourceEngineId', 'targetEngineId', ...(failure ? ['resumeFrom'] : []),
     ...(cutover ? ['cutover'] : [])]) ||
       typeof journal.sourceEngineId !== 'string' || !engineIdPattern.test(journal.sourceEngineId) ||
       !coreLocalId(journal.targetEngineId) ||
-      engine?.id !== (journal.state === 'activated' ? journal.targetEngineId : journal.sourceEngineId)) return false;
+      (!detached && !attached && engine?.id !== (journal.state === 'activated' ? journal.targetEngineId : journal.sourceEngineId))) return false;
   // resumeFrom records the last completed checkpoint. Quiescing can fail
   // after admissions close, so paused recovery can also resume from staged.
   if (journal.state === 'failed') return journal.resumeFrom === null || journal.resumeFrom === 'staged';
@@ -212,7 +214,8 @@ export function validateDescriptor(value, root) {
   const databaseSafe = path => ![join(root, 'engine'), ...['.setup.lock', 'installation.json', '.npmrc'].map(name => join(root, name))]
     .some(target => inside(target, path));
   if (!databaseSafe(value.database.path)) fail();
-  const consistent = vector => vector.ownerId === value.ownerId && vector.projectId === value.projectId && vector.databasePath === value.database.path;
+  const consistent = vector => vector.ownerId === value.ownerId && vector.projectId === value.projectId &&
+    (coreLocalId(vector.engineId) && value.migration?.cutover ? activeVector(value, vector) : vector.databasePath === value.database.path);
   if (value.engine !== null && !validEngine(value.engine, allowCoreLocal)) fail();
   if (hasMigration && !validMigration(value.migration, value.engine)) fail();
   if (value.migration?.cutover && !validCutover(value, iso, validIdentifier)) fail();

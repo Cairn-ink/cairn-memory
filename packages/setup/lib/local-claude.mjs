@@ -2,10 +2,11 @@ import { join } from 'node:path';
 import { boundedJSON, sameVector, vectorArguments, executableFor, engineIdPattern } from './local-descriptor.mjs';
 import { shellArgument } from './output.mjs';
 import { SetupError } from './errors.mjs';
+import { coreLocalEngineIdPattern } from './local-engine-generation.mjs';
 
 // Only the two named registrations are projected out. In particular, sibling
 // entries and all authentication fields are discarded, including on failure.
-export async function readClaudeServers(home) {
+export async function readClaudeServers(home, { includeLaunchOptions = false } = {}) {
   let config;
   try { config = await boundedJSON(join(home, '.claude.json'), 4 * 1024 * 1024, { strict: false }); }
   catch (error) { if (error.code === 'ENOENT') return {}; throw new SetupError('mode_unknown', 2, { client: 'Claude Code', probe: '~/.claude.json' }); }
@@ -18,17 +19,19 @@ export async function readClaudeServers(home) {
   for (const name of ['cairn', 'cairn-local']) if (Object.hasOwn(config.mcpServers, name)) {
     const entry = config.mcpServers[name];
     result[name] = entry && typeof entry === 'object' ? { type: entry.type, command: entry.command,
-      args: Array.isArray(entry.args) && entry.args.every(arg => typeof arg === 'string') ? entry.args : null } : {};
+      args: Array.isArray(entry.args) && entry.args.every(arg => typeof arg === 'string') ? entry.args : null,
+      ...(includeLaunchOptions && { customEnvironment: entry.env != null && Object.keys(entry.env).length > 0 }) } : {};
   }
   return result;
 }
-export function observedVector(root, entry) {
+export function observedVector(root, entry, allowCoreLocal = false) {
   if (!entry || (entry.type !== 'stdio') || typeof entry.command !== 'string' || !Array.isArray(entry.args)) return null;
   const args = entry.args;
   if (![5, 7].includes(args.length) || args[1] !== '--db' || args[3] !== '--owner' ||
       (args.length === 7 && args[5] !== '--project')) return null;
   const id = args[0]?.slice((join(root, 'engine') + '/').length).split('/')[0];
-  if (!engineIdPattern.test(id) || args[0] !== executableFor(root, id)) return null;
+  if (!(engineIdPattern.test(id) || allowCoreLocal && coreLocalEngineIdPattern.test(id)) ||
+      args[0] !== executableFor(root, id)) return null;
   return { engineId: id, node: entry.command, databasePath: args[2], ownerId: args[4], projectId: args[6] ?? null };
 }
 export const claudeAddArguments = (root, vector) => ['mcp', 'add', '--transport', 'stdio', '--scope', 'user',
@@ -42,12 +45,13 @@ export async function claudeCapabilities(run) {
   }
   return true;
 }
-export async function registerClaude({ root, home, checkpoint, run, write, t }) {
+export async function registerClaude({ root, home, checkpoint, run, write, t, allowCoreLocal }) {
   const { previous, desired } = checkpoint;
   const manual = (replace = false) => { write(t('local_manual_claude')); if (replace) write.literal('claude mcp remove --scope user cairn-local'); write.literal(claudeSnippet(root, desired)); };
   if (!await claudeCapabilities(run)) { write(t('claude_mcp_required')); manual(); return 'manual'; }
-  const entry = (await readClaudeServers(home))['cairn-local'];
-  const observed = entry ? observedVector(root, entry) : null;
+  const entry = (await readClaudeServers(home, { includeLaunchOptions: allowCoreLocal === true }))['cairn-local'];
+  const observed = entry ? observedVector(root, entry, allowCoreLocal) : null;
+  if (entry?.customEnvironment) throw new SetupError('claude_mcp_drifted', 2);
   if (entry && sameVector(observed, desired)) return 'done';
   if (entry && (!previous || !sameVector(observed, previous))) {
     manual(true); throw new SetupError('claude_mcp_drifted', 2);
@@ -58,13 +62,13 @@ export async function registerClaude({ root, home, checkpoint, run, write, t }) 
     if (entry && previous) {
       const restored = await run(claudeAddArguments(root, previous));
       if (restored.error || restored.status !== 0 || !sameVector(observedVector(root,
-        (await readClaudeServers(home))['cairn-local']), previous)) {
+        (await readClaudeServers(home))['cairn-local'], allowCoreLocal), previous)) {
         write.literal(claudeSnippet(root, previous)); throw new SetupError('claude_mcp_restore_failed');
       }
     }
     manual(Boolean(entry)); throw new SetupError('claude_mcp_unverified');
   }
-  if (!sameVector(observedVector(root, (await readClaudeServers(home))['cairn-local']), desired)) {
+  if (!sameVector(observedVector(root, (await readClaudeServers(home))['cairn-local'], allowCoreLocal), desired)) {
     manual(); throw new SetupError('claude_mcp_unverified');
   }
   return 'done';

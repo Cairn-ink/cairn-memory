@@ -72,7 +72,7 @@ export function createLocalCaptureTransport(options) {
         // The single configured own-data value is snapshotted here, not at
         // constructor time; unrelated environment properties are never read.
         stage = 'credential_check';
-        const key = selectedKey(env, snapshot.config.provider.apiKeyEnv);
+        const key = snapshot.config.interpretation === 'raw-only' ? {} : selectedKey(env, snapshot.config.provider.apiKeyEnv);
         stage = 'home_check';
         const home = await stat(input.home); scope.check();
         if (!home.isDirectory() || typeof process.getuid === 'function' && home.uid !== process.getuid()) throw Error();

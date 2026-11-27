@@ -334,7 +334,10 @@ test("mixed reads keep serving memories and publish cards across unrelated saves
 });
 
 test("mixed reads checkpoint long card postings within the default deadline", async t => {
-  const monotonic = () => performance.now();
+  // A work-driven clock: each reading advances 0.01 ms, so the deadline and the
+  // elapsed bound depend on the work the reads do, not on the speed of the machine.
+  let readings = 0;
+  const monotonic = () => readings++ / 100;
   const storage = await fixture(t, {}, monotonic);
   const insert = (tx, content) => storage.memories.insert(tx, scope, memoryRow(content), [], now());
   const cardCount = 320;

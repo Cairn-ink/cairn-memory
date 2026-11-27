@@ -29,6 +29,7 @@ export { RAW_LEDGER_CASES } from "./raw-ledger-cases.mjs";
 export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
 export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
 export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
+export { relationHintCases as RELATION_HINT_CASES } from "./relation-hint-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
@@ -43,6 +44,7 @@ export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
 export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 export { DURABLE_DELETE_CASES } from "./durable-delete-cases.mjs";
 export { COMMITTED_INDEX_CASES } from "./committed-index-cases.mjs";
+export { PROCEDURAL_TAG_CASES, RECEIPT_ID_CASES } from "./procedural-tag-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
