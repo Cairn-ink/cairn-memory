@@ -1,4 +1,4 @@
-import { compareUtf8 } from "@cairn-ink/core";
+import { compareUtf8, placePendingCardsBatch } from "@cairn-ink/core";
 import { check, equal, readDump, rejects, row } from "./support.mjs";
 
 /** @import { Scope, SourceLessDocumentCardRecord, TopicCardGuard, Tx } from "@cairn-ink/core/ports" */
@@ -237,5 +237,42 @@ export const TOPIC_CARD_CASES = [
     equal(await store.pending(), [], "Exhausted retries and excluded cards stay out of the queue");
     const replacement = await store.replace(card);
     equal(await store.pending(), [guard(replacement)], "Failure receipts cannot block a different hash");
+  }),
+  topicCardCase(11, "a card edit leaves the replacement and its batchmate pending", async (ctx) => {
+    const store = setup(ctx);
+    const source = await store.memory("Seed for card classification");
+    const { child } = await store.topics(source, "Card filing");
+    const original = await store.card("a-edited-card");
+    const unchanged = await store.card("b-unchanged-card");
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const options = { uow, fence, scope, placement, documentCards };
+    const stale = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(original), guard(unchanged)],
+          "Expected both original card guards");
+        await store.replace(original);
+        await validateFresh();
+        throw new Error("A stale card batch reached dispatch");
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Expected a stale card batch");
+    const replacementHash = await ctx.hash(original.body + " revised");
+    const expected = [{ cardId: original.id, contentHash: replacementHash }, guard(unchanged)];
+    equal(await store.pending(), expected, "The replacement and its unchanged batchmate must both remain pending");
+
+    const next = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), expected,
+          "The next batch must read both current card hashes");
+        await validateFresh();
+        return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [child] })) };
+      },
+    });
+    equal(next, { status: "applied", placed: expected.map(({ cardId }) => ({ cardId, topicIds: [child] })) },
+      "The next batch must file both cards");
+    equal(await store.pending(), [], "Current filings must consume both card hashes");
   }),
 ];

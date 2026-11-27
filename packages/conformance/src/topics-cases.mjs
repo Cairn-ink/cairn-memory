@@ -1,4 +1,4 @@
-import { compareUtf8 } from "@cairn-ink/core";
+import { compareUtf8, placePendingBatch } from "@cairn-ink/core";
 import { check, equal, evidence, readDump, rejects, row } from "./support.mjs";
 
 /** @import {ErrorCode, PlacementItem} from "@cairn-ink/core" */
@@ -357,5 +357,61 @@ export const topicCases = [
       "Catalog must null the suppressed member's sourced title");
     equal(await store.forMemory(source), [], "A suppressed member must have no visible topic ids");
     equal(await store.pending(), [], "A suppressed memory must leave pending");
+  }),
+
+  topicCase(16, "an edit before classification dispatch leaves the live revision pending", async (ctx) => {
+    const store = setup(ctx);
+    const original = await store.seed("Before classification edit");
+    const { uow, memories } = ctx.adapter;
+    const { scope, placement } = store;
+    const options = { uow, memories, scope, placement };
+    const editedText = "After classification edit";
+    const stale = await placePendingBatch({
+      ...options,
+      async classify({ memories: snapshot }, _catalog, { validateFresh }) {
+        equal(snapshot.map(({ id, revision }) => ({ memoryId: id, revision })), [original], "Expected the original revision");
+        await store.correct(original, editedText);
+        await validateFresh();
+        throw new Error("A stale snapshot reached dispatch");
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Expected a stale batch");
+    const edited = { ...original, revision: original.revision + 1 };
+    equal(await store.pending(), [edited], "A conflict receipt must not consume the edited revision");
+
+    const next = await placePendingBatch({
+      ...options,
+      async classify({ memories: snapshot }, _catalog, { validateFresh }) {
+        equal(snapshot.map(({ revision, content }) => ({ revision, content })),
+          [{ revision: edited.revision, content: editedText }], "Expected the new revision and content");
+        await validateFresh();
+        return { items: [item(edited, [], topic("Edited memory"))] };
+      },
+    });
+    check(next.status === "applied" && next.createdTopics.length === 1, "The next batch must file the edited memory");
+    equal(await store.forMemory(edited), [next.createdTopics[0].id], "The edited memory must have a current filing");
+    equal(await store.pending(), [], "The current filing must consume the edited revision");
+  }),
+
+  topicCase(17, "a late failure preserves filed and unfiled outcomes at the same revision", async (ctx) => {
+    const store = setup(ctx);
+    const filed = await store.seed("Filed by another writer", 1);
+    const unfiled = await store.seed("Left unfiled by another writer", 2);
+    const snapshot = await store.pending();
+    equal(snapshot, [filed, unfiled], "Both memories must be pending when the stale worker starts");
+    const { createdTopics } = await store.apply(snapshot, [item(filed, [], topic("Concurrent filing")), item(unfiled)]);
+    const before = await readDump(ctx.harness);
+    await store.write((tx) => store.placement.markFailed(tx, store.scope, snapshot.map(({ memoryId }) => memoryId), "provider_error"));
+    equal(await store.forMemory(filed), [createdTopics[0].id], "A late failure must preserve the filing");
+    equal(await store.forMemory(unfiled), [], "A late failure must preserve the unfiled outcome");
+    equal(await store.pending(), [], "Neither outcome may return to the queue");
+
+    // Postgres keeps failures and outcomes in one row and exposes it in the
+    // harness dump. Memory and SQLite store them separately.
+    if (before && typeof before === "object" && "memoryPlacements" in before) {
+      const after = await readDump(ctx.harness);
+      check(after && typeof after === "object" && "memoryPlacements" in after, "Expected placement rows in the dump");
+      equal(after.memoryPlacements, before.memoryPlacements, "A late failure must preserve every outcome column");
+    }
   }),
 ];

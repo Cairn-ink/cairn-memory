@@ -119,8 +119,10 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     if (kind !== 'paused') {
       try {
         if (newlyExcluded.length) await markFailed(newlyExcluded, 'source_excluded');
-        const remaining = basedOn.cards.filter(({ cardId }) => !newlyExcluded.some((guard) => guard.cardId === cardId));
-        if (remaining.length) await markFailed(remaining, code);
+        if (kind !== 'conflict') {
+          const remaining = basedOn.cards.filter(({ cardId }) => !newlyExcluded.some((guard) => guard.cardId === cardId));
+          if (remaining.length) await markFailed(remaining, code);
+        }
       } catch {
         // A failed receipt write cannot replace the original error.
       }

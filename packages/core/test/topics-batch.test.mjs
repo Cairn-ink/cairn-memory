@@ -159,10 +159,10 @@ test('a provider_error on the oldest five pending memories lets the sixth run ne
   });
 });
 
-test('CoreError reports retryability and records every failure except paused kinds', async () => {
+test('CoreError reports retryability and skips receipts for paused and conflict kinds', async () => {
   for (const [code, retryable, recorded] of [
     ['storage_busy', true, true], ['provider_error', true, true],
-    ['capture_evidence_closed', false, false], ['invalid_model_output', false, true],
+    ['capture_evidence_closed', false, false], ['memory_conflict', false, false], ['invalid_model_output', false, true],
   ]) {
     const f = fixture({ classify: () => { throw new CoreError(code); } });
     assert.deepEqual(await f.run(), { status: 'failed', error: { code, retryable } });
@@ -171,16 +171,15 @@ test('CoreError reports retryability and records every failure except paused kin
   }
 });
 
-test('forget between classification and apply records the conflict without retrying', async () => {
+test('forget between classification and apply reports the conflict without a receipt', async () => {
   const f = fixture({ classify: async (snapshot, _catalog, { validateFresh }) => {
     await validateFresh();
     f.forget(a.id);
     return abstain(snapshot);
   } });
   assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'revision_conflict', retryable: false } });
-  assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'apply', 'markFailed']);
-  assert.deepEqual(f.calls.at(-1), { method: 'markFailed', memoryIds: [a.id, b.id], code: 'revision_conflict' });
-  assert.deepEqual(f.runModes, ['read', 'read', 'write', 'write']);
+  assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'apply']);
+  assert.deepEqual(f.runModes, ['read', 'read', 'write']);
 });
 
 test('validateFresh catches a changed revision or index before the model call', async () => {
@@ -194,8 +193,8 @@ test('validateFresh catches a changed revision or index before the model call', 
     } });
     assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'revision_conflict', retryable: false } });
     assert.equal(modelCalls, 0);
-    assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'markFailed']);
-    assert.deepEqual(f.runModes, ['read', 'read', 'write']);
+    assert.deepEqual(f.calls.map(({ method }) => method), ['classify']);
+    assert.deepEqual(f.runModes, ['read', 'read']);
   }
 });
 
