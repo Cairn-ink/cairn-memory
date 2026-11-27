@@ -541,14 +541,14 @@ async function uninstallLocal(options, selection, detection, context) {
     let activeTarget, activeDaemon, disableCapture;
     if (active) {
       if (JSON.stringify(descriptor) !== JSON.stringify(detection.descriptor)) throw new SetupError('local_recovery_required', 2);
-      const { activeCutoverTarget, runActiveDaemon } = await import('./local-cutover-command.mjs');
+      const { activeCutoverTarget, activeDaemonStopped, runActiveDaemon } = await import('./local-cutover-command.mjs');
       activeTarget = await activeCutoverTarget(root, descriptor);
       if (!activeTarget) throw new SetupError('local_recovery_required', 2);
       const { maintenanceFor } = await import('./local-cutover-reclaim.mjs');
       const { disableActiveCapture } = await import('./local-cutover-detach.mjs');
       const maintenance = maintenanceFor(root, active.id);
       disableCapture = client => disableActiveCapture(root, maintenance, descriptor, client, context);
-      activeDaemon = () => runActiveDaemon('stop', root, descriptor);
+      activeDaemon = async () => activeDaemonStopped(await runActiveDaemon('stop', root, descriptor));
     }
     if (descriptor?.operation?.kind === 'setup') {
       const previous = descriptor.operation;
@@ -590,8 +590,7 @@ async function uninstallLocal(options, selection, detection, context) {
         // so an identical setup request can reactivate without rewriting authority.
         const retained = await retainedCapture(root);
         if (activeDaemon && descriptor.state !== 'uninstalled') {
-          const stopped = await activeDaemon();
-          if (stopped.code || JSON.parse(stopped.stdout).still_running) {
+          if (!await activeDaemon()) {
             write(t('local_uninstall_retained')); write.literal(shellArgument(join(root, 'engine'))); return 2;
           }
         } else if (!retained && descriptor.engine && descriptor.node) {

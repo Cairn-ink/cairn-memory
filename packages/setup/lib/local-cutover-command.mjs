@@ -44,6 +44,15 @@ export async function activeCutoverTarget(root, descriptor) {
   return (await installedCutoverState(root, descriptor))?.target;
 }
 
+// macOS has no local daemon: each session runs its own stdio engine, and the
+// daemon command reports the platform instead of JSON. Nothing is left to stop.
+export function activeDaemonStopped(result) {
+  if (result.code !== 0) return false;
+  if (result.stdout === 'daemon_platform\n') return true;
+  try { return !JSON.parse(result.stdout).still_running; }
+  catch { return false; }
+}
+
 export async function runActiveDaemon(action, root, descriptor) {
   const target = await activeCutoverTarget(root, descriptor).catch(() => undefined);
   if (!target) throw new SetupError('local_recovery_required', 2);

@@ -5,7 +5,7 @@ import { registerCodex } from './local-codex.mjs';
 import { readDescriptor, sameVector, withLocalLock, writeDescriptor } from './local-descriptor.mjs';
 import { engineBaseId, installEngine, readBundledCoreLocal } from './local-engine.mjs';
 import { coreLocalEngineIdPattern } from './local-engine-generation.mjs';
-import { activeCutoverTarget, runActiveDaemon } from './local-cutover-command.mjs';
+import { activeCutoverTarget, activeDaemonStopped, runActiveDaemon } from './local-cutover-command.mjs';
 import { maintenanceFor } from './local-cutover-reclaim.mjs';
 import { finishCaptureSetup } from './local-capture.mjs';
 import { repairActiveCapture } from './local-cutover-capture-repair.mjs';
@@ -55,8 +55,7 @@ export async function repairActiveLocal(options, selection, detection, context) 
         if (!states[client].available || states[client].localUnknown) throw recovery();
       }
       await privateWrite(intentPath, JSON.stringify({ version: 1, from: intent?.from ?? old, to: next }) + '\n');
-      const stopped = await runActiveDaemon('stop', root, current);
-      if (stopped.code || JSON.parse(stopped.stdout).still_running) throw recovery();
+      if (!activeDaemonStopped(await runActiveDaemon('stop', root, current))) throw recovery();
     }
     let manual = false;
     for (const client of repairing) {
