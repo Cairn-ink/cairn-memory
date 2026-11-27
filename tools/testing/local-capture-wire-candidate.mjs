@@ -244,7 +244,8 @@ async function qualifyRouterCards({ fixture, database, executable, client, opera
   const scope = scopeOf(client.request.namespace);
   const source = { kind: 'mcp', client: null, sessionId: null };
   const initial = cardIds();
-  for (const action of ['forget', 'delete']) {
+  // Forgetting the sessionless MCP save fences the current capture window.
+  for (const action of ['delete', 'forget']) {
     const session = randomUUID();
     const sourcePath = join(client.request.sourceRoot, session + '.jsonl');
     privateWrite(sourcePath, '');
@@ -284,7 +285,7 @@ async function qualifyRouterCards({ fixture, database, executable, client, opera
       if (action === 'forget') {
         const saved = await service.save(scope, card.body, source, 'fact');
         assert.equal(saved.status, 'saved');
-        assert.equal((await service.forget(scope, saved.memory.id, source)).status, 'forgotten');
+        assert.equal((await service.forget(scope, saved.item.id, source)).status, 'forgotten');
       } else {
         const { client, sessionId } = card.sourceMessage;
         const removed = await storage.uow.run(scope.owner, { pauseLock: true }, tx =>
