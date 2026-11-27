@@ -5,7 +5,7 @@ import {
 import { refreshFinishRevisions } from "./capture-finish.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
-import { terminateDirectClaims } from "./capture.mjs";
+import { blankForgottenMessages, terminateDirectClaims } from "./capture.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
 import { readVisibilityFacts } from "./memory-visibility.mjs";
@@ -165,8 +165,14 @@ export function createPostgresRawPorts(options) {
           // Admission or forget can clear content while keeping the position and message ID.
           const matches = stored && stored.length === batch.length && batch.every(({ id, content }, index) =>
             stored[index].id === id && (stored[index].content === "" || stored[index].content === content));
-          const effective = matches ? stored : batch;
-          const proofs = await captureProofs(capture, effective);
+          if (!matches) {
+            for (const [index, message] of batch.entries()) {
+              const slot = stored?.[index];
+              if (slot?.id === message.id && slot.content === "") message.content = "";
+            }
+            await blankForgottenMessages(query, capture, batch);
+          }
+          const proofs = await captureProofs(capture, matches ? stored : batch);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const stamp = "content:" + await captureProofs.keyId();
           if (matches && outbox.raw_lineage_key_id !== stamp) {

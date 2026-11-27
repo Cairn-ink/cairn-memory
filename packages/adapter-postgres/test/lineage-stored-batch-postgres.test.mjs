@@ -107,7 +107,7 @@ async function fixture(t, keyed) {
   const proofs = async ({ client, sessionId }) => (await pool.query(`
     SELECT message_mac, content_mac FROM capture_raw_lineage WHERE user_id = $1 AND client = $2 AND session_id = $3`,
   [scope.owner, client, sessionId])).rows;
-  return { pool, write, capture, raw, enqueue, forgetReceipt, outbox, proofs };
+  return { pool, database, write, capture, raw, enqueue, forgetReceipt, outbox, proofs };
 }
 
 for (const keyed of [false, true]) {
@@ -158,5 +158,73 @@ for (const keyed of [false, true]) {
 
     assert.equal((await f.outbox(replay)).raw_lineage_key_id, null);
     assert.deepEqual(new Set(await f.proofs(replay)), new Set([proof(replay, resent), proof(replay, control)]));
+  });
+
+  test(`Postgres ${mode} re-reads a stamped outbox after a forget scrub`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const messages = [resent, control];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    await f.write(async tx => {
+      assert.deepEqual(await f.capture.admit(tx, key, messages), { status: "admitted" });
+      await f.raw.recordLineage(tx, key, messages);
+    });
+    const before = await f.outbox(replay);
+    assert.equal(before.raw_lineage_key_id, stamp);
+    assert.deepEqual(before.raw_request.messages.map(({ content }) => content), [resent.content, control.content]);
+    const originalProofs = new Set([proof(replay, resent), proof(replay, control)]);
+    assert.deepEqual(new Set(await f.proofs(replay)), originalProofs);
+
+    await f.forgetReceipt();
+    assert.deepEqual((await f.outbox(replay)).raw_request.messages.map(({ content }) => content), ["", control.content]);
+    assert.deepEqual(new Set(await f.proofs(replay)), originalProofs);
+
+    const queries = [];
+    const retry = createPostgresUnitOfWork({
+      async connect() {
+        const connection = await f.database.connect();
+        return {
+          ...connection,
+          query(sql, values) {
+            queries.push(sql);
+            return connection.query(sql, values);
+          },
+        };
+      },
+    });
+    await retry.run(scope.owner, { pauseLock: true }, tx => f.raw.recordLineage(tx, key, messages));
+    assert.equal((await f.outbox(replay)).raw_lineage_key_id, before.raw_lineage_key_id);
+    assert.deepEqual(new Set(await f.proofs(replay)), new Set([
+      ...originalProofs, proof(replay, { ...resent, content: "" }),
+    ]));
+    // The tombstone would also blank the turn on the fallback path.
+    assert.ok(queries.every(sql => !sql.includes("core_memory_receipts")),
+      "the stamped outbox must still match without a receipt lookup");
+  });
+
+  test(`Postgres ${mode} honors a stored blank in a mismatched outbox`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const messages = [resent, control];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    const replacement = "An otter swam past the bridge.";
+    const stored = [{ ...resent, content: "" }, { ...control, content: replacement }];
+    assert.deepEqual(await f.write(tx => f.capture.admit(tx, key, stored)), { status: "admitted" });
+    await f.write(tx => f.raw.recordLineage(tx, key, messages));
+
+    assert.equal((await f.outbox(replay)).raw_lineage_key_id, null);
+    assert.deepEqual(new Set(await f.proofs(replay)), new Set([proof(replay, stored[0]), proof(replay, control)]));
+  });
+
+  test(`Postgres ${mode} honors a tombstoned receipt without an outbox`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    await f.forgetReceipt();
+    const messages = [resent, control];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    assert.equal(await f.outbox(replay), undefined);
+    await f.write(tx => f.raw.recordLineage(tx, key, messages));
+
+    assert.equal(await f.outbox(replay), undefined);
+    assert.deepEqual(new Set(await f.proofs(replay)), new Set([
+      proof(replay, { ...resent, content: "" }), proof(replay, control),
+    ]));
   });
 }
