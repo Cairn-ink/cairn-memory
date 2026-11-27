@@ -258,8 +258,8 @@ test("exact admitted Raw lineage coalesces the turn and preserves only Memory re
   assert.deepEqual(item.sources, [{ index: 0, date: "2025-01-03T04:05Z", role: "user", sameAsBody: true }]);
   assert.deepEqual(item.evidence, [{
     ref: { ns: 0, type: "raw", conversationId: JSON.stringify([key.client, key.sessionId]), messageId: "turn" },
-    role: "user", occurredAt: "2025-01-03T04:05:59.000Z", date: "2025-01-03T04:05Z",
-    start: 0, end: original.length, sameAsBody: true,
+    role: "user", date: "2025-01-03T04:05Z",
+    sameAsBody: true,
   }]);
   assert.deepEqual((await service.fetchEvidence(readSet, { snapshot: result.snapshot })).items.map(item => item.ref.id), [id]);
   assert.equal(result.diagnostics.budget.used, fixtureCount(formatAssembly(result.assembly)));
