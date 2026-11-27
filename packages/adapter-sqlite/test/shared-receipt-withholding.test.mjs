@@ -130,6 +130,28 @@ test("an unrepresentable receipt marker refuses before changing the source or cr
   assert.equal(existsSync(input.destination), false);
 });
 
+test("carried Raw time windows leave attested independent receipts visible", async t => {
+  const directory = scratch(t);
+  const legacy = await fixture(directory, 29, { localPrivacy: true });
+  const input = prepareInput(directory, legacy);
+  const engine = openMemoryCore({ path: input.path, raw: true, rawSearch: false });
+  let survivor;
+  try {
+    const independent = { client, sessionId, eventId: messageId, role: receipt.role, excerpt: receipt.excerpt };
+    const forgotten = admit(engine, forgottenText, project);
+    survivor = admit(engine, survivingText, project, [independent]);
+    ok(engine.forget({ namespace: project, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
+    assert.deepEqual(ok(engine.get({ namespace: project, memoryId: survivor.id })).receipts.map(r => r.excerpt), [receipt.excerpt]);
+  } finally {
+    await engine.close();
+  }
+  await createLegacyBackup(input);
+  await migrateLegacyStore(input);
+  const api = contextReadTestService(await open(t, input.destination));
+  const view = await api.inspect(scope, { memoryId: survivor.id });
+  assert.deepEqual(view.receipts.map(r => r.excerpt), [receipt.excerpt]);
+});
+
 async function forgetShared(adapter, { archived = false } = {}) {
   const api = contextReadTestService(adapter);
   const save = text => api.save(scope, text, source, "fact", { receipt });
