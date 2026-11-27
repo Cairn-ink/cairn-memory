@@ -51,8 +51,8 @@ export function scoreBM25(terms, document, { N, totalLength, df }) {
   return matched ? score : null;
 }
 
-/** @template {RefRow & { text: string }} T @param {readonly T[]} documents */
-export function createBM25(documents) {
+/** @template {RefRow & { text: string }} T @param {readonly T[]} documents @param {number} [maxDepth] */
+export function createBM25(documents, maxDepth = MAX_DEPTH) {
   /** @type {Map<string, number>} */
   const df = new Map();
   const seen = new Set();
@@ -67,7 +67,7 @@ export function createBM25(documents) {
   const N = docs.length, totalLength = docs.reduce((sum, doc) => sum + doc.length, 0);
   /** @param {string} text @param {number} depth */
   function searchWithCount(text, depth = MAX_DEPTH) {
-    if (!Number.isSafeInteger(depth) || depth < 1 || depth > MAX_DEPTH) throw new TypeError("invalid_depth");
+    if (!Number.isSafeInteger(depth) || depth < 1 || depth > maxDepth) throw new TypeError("invalid_depth");
     const terms = tokenizeT1(text), matches = [];
     for (const doc of docs) {
       const score = scoreBM25(terms, doc, { N, totalLength, df });

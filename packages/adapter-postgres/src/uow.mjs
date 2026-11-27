@@ -1,3 +1,4 @@
+import { assertOutsideHostWriteHook } from "../../core/src/service/entry.mjs";
 import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 import { isReadStatement } from "./read-only.mjs";
@@ -78,6 +79,7 @@ export function queryBatchInRun(run, readOnly, text, commands) {
  * @param {unknown[]} [values]
  */
 export function query(tx, text, values) {
+  assertOutsideHostWriteHook();
   const run = liveRuns.get(tx);
   if (!run) return Promise.reject(new CoreError("internal_error"));
   // Keep direct queries outside the ANN operation's temporary planner settings.
@@ -91,8 +93,18 @@ export function query(tx, text, values) {
  * @param {Tx} tx
  * @param {(query: Connection["query"], run: Run) => Promise<T>} body
  * @param {boolean} [checkAfterFailure] Allow read-only precondition checks after a logical failure.
+ * @returns {Promise<T>}
  */
 export function runOperation(tx, body, checkAfterFailure = false) {
+  assertOutsideHostWriteHook();
+  return enqueueOperation(tx, body, checkAfterFailure);
+}
+
+/** @type {typeof runOperation} */
+export const runHostOperation = enqueueOperation;
+
+/** @type {typeof runOperation} */
+function enqueueOperation(tx, body, checkAfterFailure) {
   const run = liveRuns.get(tx);
   if (!run) return Promise.reject(new CoreError("internal_error"));
 
@@ -169,6 +181,7 @@ export function createPostgresUnitOfWork(source) {
    * @param {(tx: Tx) => Promise<T>} fn
    */
   async function run(owner, { pauseLock, readOnly = false }, fn) {
+    assertOutsideHostWriteHook();
     const callbackFailure = { caught: false, error: /** @type {unknown} */ (undefined) };
     try {
       const connection = await source.connect();

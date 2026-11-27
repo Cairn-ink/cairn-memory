@@ -16,7 +16,7 @@ import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, 
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { CaptureKey, CaptureMessage, DocumentCardSourceMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureKey, CaptureMessage, DocumentCardSourceMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RawSourceTuple, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
@@ -445,8 +445,14 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [fence] */
-  function deleteSessions(tx, scope, prepare, fence = false) {
+  /** @param {RawSourceTuple} row */
+  function sourceTuple({ client, sessionId, messageId, role, occurredAtMs }) {
+    return { client, sessionId, messageId, role, occurredAtMs };
+  }
+
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare
+   * @param {boolean} [fence] @param {boolean} [includeDeletedSources] */
+  function deleteSessions(tx, scope, prepare, fence = false, includeDeletedSources = false) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -492,7 +498,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         if (fenced || deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (fenced || deleted.length) advanceRevision(run);
         if (ledgerBlanked || deletedMessages.size !== before) run.stateWritten = true;
-        return { rawDeleted: deleted.length, ledgerBlanked };
+        return { rawDeleted: deleted.length, ledgerBlanked,
+          ...(includeDeletedSources && { deletedSources: deleted.map(sourceTuple) }) };
       };
     });
   }
@@ -688,10 +695,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)], true);
       return { rawDeleted };
     },
-    async eraseSessions(tx, scope, closure) {
-      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
+    async eraseSessions(tx, scope, closure, { includeDeletedSources } = {}) {
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), false, includeDeletedSources);
     },
-    async purgeWithheld(tx, scope, facts, { onDelete } = {}) {
+    async purgeWithheld(tx, scope, facts, { onDelete, includeDeletedSources } = {}) {
       return port.write(tx, scope, "conditional", () => {
         const target = { owner: tx.owner, namespace: writeNamespace(scope) };
         const candidates = snapshotArray(facts).map(copyStoredFact).filter(({ fact }) =>
@@ -699,7 +706,9 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           (fact.namespace ?? null) === target.namespace);
         const project = readEvidence(target, candidates);
         return async (getState, _markDirty, run) => {
-          if (!candidates.length) return { rawDeleted: 0, ledgerBlanked: 0 };
+          /** @type {RawSourceTuple[] | undefined} */
+          const sources = includeDeletedSources ? [] : undefined;
+          if (!candidates.length) return { rawDeleted: 0, ledgerBlanked: 0, ...(sources && { deletedSources: sources }) };
           const state = getState();
           const deleted = [];
           const deletedSources = new Set();
@@ -714,6 +723,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               const { client, sessionId, messageId } = row;
               deletedSources.add(id);
               onDelete?.({ client, sessionId, messageId });
+              sources?.push(sourceTuple(row));
               rawDeleted++;
             }
           }
@@ -765,7 +775,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           if (rawDeleted || ledgerBlanked) advanceRawInspectEpoch(state);
           if (rawDeleted) advanceRevision(run);
           if (ledgerBlanked) run.stateWritten = true;
-          return { rawDeleted, ledgerBlanked };
+          return { rawDeleted, ledgerBlanked, ...(sources && { deletedSources: sources }) };
         };
       });
     },

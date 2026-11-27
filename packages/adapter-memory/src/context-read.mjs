@@ -1,4 +1,4 @@
-import { canonicalKey, compareUtf8, CoreError, createBM25, rankScores } from "@cairn-ink/core";
+import { canonicalKey, COMPACT_RRF_PRESETS, compareUtf8, CoreError, createBM25, rankScores } from "@cairn-ink/core";
 import { documentCardSearchText, visibleDocumentCardRows } from "@cairn-ink/core/routing";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 
@@ -195,7 +195,7 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
           if (oldest !== undefined) projections.delete(oldest);
         }
         const ids = new Set(documents.map(canonicalKey));
-        projections.set(key, { binding, index: createBM25(memories),
+        projections.set(key, { binding, index: createBM25(memories, COMPACT_RRF_PRESETS["rrf-k60-d64-compact"].depth),
           ...(cards.length && { cardIndex: createBM25(cards) }), ids, observation });
         return {
           canonicalRows: documents.length,

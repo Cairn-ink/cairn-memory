@@ -1,8 +1,9 @@
+import { createMemoryHostWriteHooks } from "./host-write-hooks.mjs";
 import { CoreError, assertAdapterCapabilities, capabilities, receiptExcerpt, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
 import { createCardRawSourceChecks, withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
-import { createDocumentCardStore } from "./document-cards.mjs";
+import { createDocumentCardStore, createForgottenReceiptCheck } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { createInspectStore } from "./inspect.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
@@ -29,6 +30,7 @@ const nativeErrorMap = Object.freeze({});
  */
 export function createMemoryAdapter(options = {}) {
   const flags = capabilities({ ...options.capabilities,
+    ...(options.hostWriteHooks !== undefined && { hostWriteHooks: options.hostWriteHooks }),
     ...(options.receiptAttachAdvancesRevision === true && { receiptAttachAdvancesRevision: true }),
     ...(options.proceduralTags === true && { proceduralTags: true }),
     ...(options.documentCardSearch !== undefined && { documentCardSearch: options.documentCardSearch }),
@@ -50,17 +52,19 @@ export function createMemoryAdapter(options = {}) {
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges, flags.documentCards) : undefined;
+  const hooks = flags.hostWriteHooks ? createMemoryHostWriteHooks(work, archive) : undefined;
   const { receiptReadSafety, receiptWithheld } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const cardRawSources = archive && createCardRawSourceChecks(archive, matchFacts, receiptReadSafety);
+  const forgottenReceiptCheck = createForgottenReceiptCheck(matchFacts, ringKeys);
   const { cardVisibilityInput, amendmentWithheld } = createCardVisibilityInputs(matchFacts, keys, cardRawSources?.sourceVisible,
-    archive?.sourceWithholding);
+    archive?.sourceWithholding, forgottenReceiptCheck);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const documentCards = flags.documentCards ? handleWriteRejections(
-    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch),
+    createDocumentCardStore(port, now, cardVisibilityInput, amendmentWithheld, flags.documentCardSearch, forgottenReceiptCheck),
     ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive, documentCards) : undefined;
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
@@ -76,6 +80,7 @@ export function createMemoryAdapter(options = {}) {
   const adapter = {
     name: "memory",
     capabilities: flags,
+    ...(hooks && { hostWriteHookPort: hooks.port }),
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
     capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags),
@@ -115,6 +120,7 @@ export function createMemoryAdapter(options = {}) {
     ...(flags.documentCardSearch && { documentCardCandidates: createDocumentCardCandidates(port, cardVisible) }),
     nativeErrorMap,
     harness: {
+      ...(hooks && { createHostHookTable: hooks.createTable }),
       async dump() { return dump(flags.rawArchive, flags.documentCards, flags.rationaleEdges); },
       ...(archive && { seedClientlessRaw: archive.seedClientlessRaw }),
       async seedFact(owner, fact) {

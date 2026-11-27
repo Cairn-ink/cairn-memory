@@ -1,5 +1,6 @@
 import { CoreError } from "@cairn-ink/core";
 import { captureKey, copyBatch, copyMessages } from "./capture.mjs";
+import { cardSourceConflictKey } from "./document-card-visibility.mjs";
 import { importTextBlocked, purgeFacts, rawFactPolicy } from "./raw-facts.mjs";
 import { allowsRawSession } from "./raw-lineage.mjs";
 import { eraseRawSessions, purgeRawMessages } from "./raw-purge.mjs";
@@ -8,7 +9,7 @@ import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { invalidInput, scopeKey } from "./storage-values.mjs";
 import { advanceSuppressionEpoch, readFacts, readLegacyDenials } from "./suppressions.mjs";
 
-/** @import { CaptureMessage, RawCapture, RawStore } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, DocumentCardSourceMessage, RawCapture, RawStore, Scope } from "@cairn-ink/core/ports" */
 /** @import { IndexRevisions } from "./capture.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
@@ -49,8 +50,10 @@ function withheldPositions(options, length) {
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {MigratedCaptureControls} [controls]
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
+ * @param {ReturnType<typeof import("./document-cards.mjs").createDocumentCards>["purgeSources"]} [purgeCards]
+ * @param {boolean} [documentCards]
  */
-export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls, scrubTitles) {
+export function createRawStore(port, hashSession, lineage, index, migratedRaw, controls, scrubTitles, purgeCards, documentCards = false) {
   let rawKeyConflict = 0;
 
   /** @type {RawStore & RawCapture} */
@@ -95,15 +98,22 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const session = migratedRaw?.storageSession(db, scope, key) ?? key;
         const insert = rawWriter(db, scope, session);
         let archived = 0;
+        let conflict = false;
         for (const item of batch) {
           if (hasSourceTombstone(legacy, key, item.id, policy.sessionKeyHash) ||
               policy.refusesSource(item, false) || importTextBlocked([], item.content, legacy) ||
               migratedRaw?.blocksSpan(db, scope, key, item.id) ||
               migratedRaw?.reservesMessage(db, scope, key, item.id)) continue;
           if (insert(item)) archived++;
-          else if (readRawRow(db, scope, session, item.id)?.message.content !== item.content) rawKeyConflict++;
+          else {
+            const previous = readRawRow(db, scope, session, item.id)?.message;
+            if (previous?.content !== item.content) rawKeyConflict++;
+            if (previous?.content !== item.content || previous.role !== item.role) {
+              conflict = noteConflict(db, scope, { ...session, messageId: item.id }) || conflict;
+            }
+          }
         }
-        if (archived) index.advanceRaw(db, tx);
+        if (archived || conflict) index.advanceDerived(db, tx);
         return { archived };
       });
     },
@@ -140,7 +150,9 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
           return { ...counts, withheld: batch.length };
         }
         const legacy = readLegacyDenials(db, selection);
-        const insert = rawWriter(db, selection, migratedRaw?.storageSession(db, selection, session) ?? session);
+        const storedSession = migratedRaw?.storageSession(db, selection, session) ?? session;
+        const insert = rawWriter(db, selection, storedSession);
+        let conflict = false;
         for (const [position, item] of batch.entries()) {
           if (withheld.has(position) || hasSourceTombstone(legacy, session, item.id, policy.sessionKeyHash) ||
               policy.refusesSource(item, true) || importTextBlocked(facts, item.content, legacy) ||
@@ -151,10 +163,14 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
             counts.archived++;
           } else {
             counts.existing++;
+            const previous = readRawRow(db, selection, storedSession, item.id)?.message;
+            if (previous?.content !== item.content || previous.role !== item.role) {
+              conflict = noteConflict(db, selection, { ...storedSession, messageId: item.id }) || conflict;
+            }
           }
         }
         migratedRaw?.recordRange(db, selection, session, batch);
-        if (counts.archived) index.advanceRaw(db, tx);
+        if (counts.archived || conflict) index.advanceDerived(db, tx);
         return counts;
       });
     },
@@ -164,7 +180,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const selection = { owner: tx.owner, namespace: scope.namespace };
         if (addFence(db, selection, copySession(input))) {
           scrubTitles?.(db, selection);
-          index.advanceRaw(db, tx);
+          index.advanceDerived(db, tx);
         }
       });
     },
@@ -172,7 +188,10 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
     eraseSessions(tx, scope, closure) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(selection, copyBatch(closure).map(copySession))));
+        const sessions = eraseAddresses(selection, copyBatch(closure).map(copySession));
+        const counts = eraseRawSessions(db, selection, sessions);
+        purgeCards?.(db, tx, selection, sessions);
+        return changed(db, tx, selection, counts);
       });
     },
 
@@ -182,18 +201,40 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
         const session = copySession(input);
         // Keep late turns with previously unseen message IDs from restoring the session.
         const fenced = addFence(db, selection, session);
-        const { rawDeleted } = changed(db, tx, selection, eraseRawSessions(db, selection, eraseAddresses(selection, [session])), fenced);
+        const sessions = eraseAddresses(selection, [session]);
+        const counts = eraseRawSessions(db, selection, sessions);
+        purgeCards?.(db, tx, selection, sessions);
+        const { rawDeleted } = changed(db, tx, selection, counts, fenced);
         return { rawDeleted };
       });
     },
 
-    purgeWithheld(tx, scope, supplied) {
+    purgeWithheld(tx, scope, supplied, { onDelete } = {}) {
       return port(tx, scope?.owner, write, db => {
         const selection = { owner: tx.owner, namespace: scope.namespace };
-        return changed(db, tx, selection, purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession));
+        /** @type {DocumentCardSourceMessage[]} */
+        const erased = [];
+        const counts = purgeRawMessages(db, selection, purgeFacts(selection, supplied), hashSession, source => {
+          erased.push(source);
+          onDelete?.(source);
+        }, purgeCards && (source => {
+          const session = migratedRaw?.storageSession(db, selection, source) ?? source;
+          if (!readRawRow(db, selection, session, source.messageId)) erased.push(source);
+        }));
+        purgeCards?.(db, tx, selection, erased);
+        return changed(db, tx, selection, counts);
       });
     },
   };
+
+  /** @param {Connection} db @param {Scope} scope @param {DocumentCardSourceMessage} source */
+  function noteConflict(db, scope, source) {
+    // Retain only the scoped address digest. Raw's existing first-write rule is unchanged.
+    if (!documentCards && !db.prepare(`SELECT 1 FROM cairn_document_card_generations
+      WHERE owner_id = ? AND namespace_key = ?`).get(...scopeKey(scope))) return false;
+    return !!db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING")
+      .run(...scopeKey(scope), cardSourceConflictKey(source)).changes;
+  }
 
   /** @param {ReadonlySet<string>} legacy @param {import("./raw-rows.mjs").Session} session
    * @param {string} messageId @param {string} sessionHash */
@@ -238,7 +279,7 @@ export function createRawStore(port, hashSession, lineage, index, migratedRaw, c
   function changed(db, tx, selection, counts, fenced = false) {
     if (fenced || counts.rawDeleted || counts.ledgerBlanked) {
       scrubTitles?.(db, selection);
-      index.advanceRaw(db, tx);
+      index.advanceDerived(db, tx);
     }
     return counts;
   }

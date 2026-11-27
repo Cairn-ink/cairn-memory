@@ -35,6 +35,12 @@ export function createIndexRevisions(uow, port) {
     return run.start ??= readRevision(db, tx.owner, false);
   }
 
+  /** @param {Connection} db @param {Tx} tx */
+  function current(db, tx) {
+    const run = indexRun(tx);
+    return run.view.revision ?? startRevision(db, tx, run);
+  }
+
   /** @param {Connection} db @param {Tx} tx @param {IndexRun} run */
   function advance(db, tx, run) {
     startRevision(db, tx, run);
@@ -80,10 +86,10 @@ export function createIndexRevisions(uow, port) {
       }
     },
 
-    /** Each changing Raw operation advances the owner revision.
+    /** Each changing Raw or document-card operation advances the owner revision.
      * @param {Connection} db @param {Tx} tx
      */
-    advanceRaw(db, tx) {
+    advanceDerived(db, tx) {
       advance(db, tx, indexRun(tx));
     },
 
@@ -97,12 +103,11 @@ export function createIndexRevisions(uow, port) {
       return port(tx, tx?.owner, {}, db => startRevision(db, tx, indexRun(tx)));
     },
 
+    current,
+
     /** @param {Tx} tx */
     committedIndexRevision(tx) {
-      return port(tx, tx?.owner, {}, db => {
-        const run = indexRun(tx);
-        return run.view.revision ?? startRevision(db, tx, run);
-      });
+      return port(tx, tx?.owner, {}, db => current(db, tx));
     },
 
     /** @param {Connection} db @param {Tx} tx @param {Identity} identity @param {boolean} changed */

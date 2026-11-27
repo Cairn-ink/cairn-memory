@@ -13,16 +13,19 @@ const factory = owner => ({
   async open({ capabilities }) {
     const { path, remove } = scratch();
     let storage;
+    let now = 1;
     try {
       storage = await openStorage(path);
       const adapter = createSqliteAdapter(storage, {
         capabilities: { ...capabilities, placement: true, supersession: true, conflictEdges: true },
+        now: () => now,
       });
       return {
         adapter,
         embeddingDimensions: null,
         sessionRefs: "hashed",
         harness: {
+          advanceClock(ms) { now += ms; },
           hashSessionKey: (client, sessionId) => adapter.hashSessionKey({ owner: owner(), namespace: null }, client, sessionId),
           seedFact(factOwner, fact) {
             assert.equal(factOwner, fact.owner);
