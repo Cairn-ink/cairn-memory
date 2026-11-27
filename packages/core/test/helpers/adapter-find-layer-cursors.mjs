@@ -3,7 +3,7 @@ import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import { coreDigest } from "../../src/index.mjs";
 import { serviceFake } from "./service-fake.mjs";
-import { skipped, takeCursors, unavailable } from "./find-layer-cursor-fixture.mjs";
+import { skipped, stripCursors, takeCursors, unavailable } from "./find-layer-cursor-fixture.mjs";
 
 const query = "cedar";
 const client = "fixture";
@@ -76,12 +76,15 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     const baseline = await service.find(scope, query, { kinds, limit: 20 });
     const activeKinds = storage.documentCardCandidates ? kinds : ["memory", "raw"];
     const options = { kinds, limit };
-    let page = await service.find(scope, query, options);
+    const plain = await service.find(scope, query, options);
+    let page = await service.find(scope, query, { ...options, cursors: {} });
+    assert.deepEqual(stripCursors(page), plain);
     if (!storage.documentCardCandidates) {
       assert.deepEqual(page.layers.card, { ...skipped, code: "capability_unavailable" });
     }
     const seen = Object.fromEntries(activeKinds.map(kind => [kind, []]));
     const firstCursors = takeCursors(page.layers);
+    const continued = createService(await fixture.reopen?.() ?? storage, createMemoryService);
     for (let index = 0; index < 3; index++) {
       for (const kind of activeKinds) {
         assert.equal(page.layers[kind].status, "ok", JSON.stringify(page.layers[kind]));
@@ -91,7 +94,7 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       const cursors = takeCursors(page.layers);
       if (index < 2) {
         assert.equal(Object.keys(cursors).length, activeKinds.length);
-        page = await service.find(scope, query, { ...options, cursors });
+        page = await continued.find(scope, query, { ...options, cursors });
       } else assert.deepEqual(cursors, {});
     }
     for (const kind of activeKinds) {
@@ -100,8 +103,8 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       assert.equal(new Set(seen[kind].map(item => item.ref?.id ?? item.id)).size, 9);
     }
     for (const target of [otherOwner, otherScope]) {
-      const rejected = await service.find(target, query, { ...options, cursors: firstCursors });
-      const own = await service.find(target, query, options);
+      const rejected = await continued.find(target, query, { ...options, cursors: firstCursors });
+      const own = await continued.find(target, query, options);
       for (const kind of activeKinds) {
         assert.deepEqual(rejected.layers[kind], unavailable("invalid_cursor"));
         assert.deepEqual(rejected[fields[kind]], []);
@@ -126,7 +129,7 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     assert.equal(memory.length, 105, "lexical recall reaches beyond the hybrid pool");
     assert.equal(raw.length, 105, "the unpaged Raw port retains its larger limit");
     const found = { memory: [], card: [], raw: [] };
-    let page = await service.find(scope, query, options);
+    let page = await service.find(scope, query, { ...options, cursors: {} });
     for (let index = 0; ; index++) {
       assert.ok(index < 6, "the bounded data should exhaust in six pages");
       for (const kind of kinds) {
@@ -150,16 +153,18 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     const { storage, scope, embedding } = fixture;
     await seed(fixture, scope, "change");
     const service = createService(storage, createMemoryService);
+    const continued = createService(storage, createMemoryService);
     const options = { kinds, limit: 2 };
-    const next = async result => service.find(scope, query, { ...options, cursors: takeCursors(result.layers) });
-    const first = await service.find(scope, query, options);
+    const paging = { ...options, cursors: {} };
+    const next = async result => continued.find(scope, query, { ...options, cursors: takeCursors(result.layers) });
+    const first = await service.find(scope, query, paging);
     await archive(storage, scope, [{ id: "later-message", content: "Maple late archive.", role: "user", occurredAtMs: 2_000 }], "later");
     const rawMoved = await next(first);
     assert.deepEqual(rawMoved.layers.raw, unavailable("cursor_stale"));
     assert.equal(rawMoved.layers.memory.status, "ok");
 
     if (storage.documentCardCandidates) {
-      const cardFirst = await service.find(scope, query, options);
+      const cardFirst = await service.find(scope, query, paging);
       const second = await next(cardFirst);
       const target = second.cards[0].id;
       await write(storage, scope, tx => storage.documentCards.hide(tx, scope, target, "forget"));
@@ -170,7 +175,7 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       assert.ok(!(await service.find(scope, query, { kinds, limit: 20 })).cards.some(item => item.id === target));
     }
 
-    const memoryFirst = await service.find(scope, query, options);
+    const memoryFirst = await service.find(scope, query, paging);
     const memoryTarget = (await next(memoryFirst)).memories[0];
     const forgotten = await service.forget(scope, memoryTarget.id, source);
     assert.equal(forgotten.status, "forgotten");
@@ -185,14 +190,15 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       storage.raw.raw(tx, viewOf(scope), query, "search", { limit: 2, offset: 2 }));
     const rawTarget = stalePage.segments[0];
     const linked = await insertMemory(storage, scope, rawTarget.content, 2_100, embedding);
-    const fencedService = createService({ ...storage, raw: {
+    const fencedStorage = { ...storage, raw: {
       ...storage.raw,
       async raw(tx, readScope, text, intent, opts) {
         return opts.offset === 2 ? stalePage : storage.raw.raw(tx, readScope, text, intent, opts);
       },
-    } }, createMemoryService);
-    const rawFirst = await fencedService.find(scope, query, { kinds: ["raw"], limit: 2 });
-    assert.equal((await fencedService.forget(scope, linked.id, source)).status, "forgotten");
+    } };
+    const rawFirst = await service.find(scope, query, { kinds: ["raw"], limit: 2, cursors: {} });
+    assert.equal((await service.forget(scope, linked.id, source)).status, "forgotten");
+    const fencedService = createService(fencedStorage, createMemoryService);
     const rawResult = await fencedService.find(scope, query, {
       kinds: ["raw"], limit: 2, cursors: { raw: rawFirst.layers.raw.nextCursor },
     });

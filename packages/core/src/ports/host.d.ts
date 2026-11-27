@@ -52,7 +52,7 @@ export interface ImportResult {
 }
 
 export type Layer = { count: number; code?: ErrorCode } & (
-  { status: "ok" | "unavailable"; nextCursor: string | null } |
+  { status: "ok" | "unavailable"; nextCursor?: string | null } |
   { status: "not_searched"; nextCursor?: never }
 );
 
@@ -62,6 +62,7 @@ interface FindOptions {
   clients?: string[];
   sinceMs?: number;
   untilMs?: number;
+  /** An empty map pages the requested kinds from the start. A nonempty map continues only its layers. */
   cursors?: Partial<Record<"memory" | "card" | "raw", string>>;
 }
 

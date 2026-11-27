@@ -16,9 +16,12 @@ for (const semantic of [false, true]) {
   for (const text of [query, null, " \n "]) {
     for (const kinds of [options.kinds, ["raw"], ["card"], ["memory"]]) {
       const old = await findMethod(findFixture({ semantic }).deps)(scope, text, { ...options, kinds });
-      const current = await findFixture({ semantic }).service.find(scope, text, { ...options, kinds });
-      assert.deepEqual(serialize(stripCursors(current)), serialize(old));
-      comparisons++;
+      const { service } = findFixture({ semantic });
+      const plain = await service.find(scope, text, { ...options, kinds });
+      const paged = await service.find(scope, text, { ...options, kinds, cursors: {} });
+      assert.deepEqual(serialize(plain), serialize(old));
+      assert.deepEqual(serialize(stripCursors(paged)), serialize(old));
+      comparisons += 2;
     }
   }
 }

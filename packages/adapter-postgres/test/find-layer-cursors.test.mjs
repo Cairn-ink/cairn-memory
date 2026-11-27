@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { capabilities } from "../../core/src/index.mjs";
 import { createMemoryService } from "../../core/src/service/index.mjs";
 import { testAdapterFindPaging } from "../../core/test/helpers/adapter-find-layer-cursors.mjs";
@@ -17,10 +17,16 @@ testAdapterFindPaging(async t => {
   const options = { ...rawOptions, allowNonNullNamespace: true };
   const { raw } = createPostgresRawPorts(rawOptions);
   const { lexical } = createPostgresMemoryCandidates(options);
+  const identity = { storeId: randomUUID(), cursorKey: randomBytes(32) };
   return {
     storage: {
       name: "postgres",
-      capabilities: capabilities({ rawArchive: true, rawWindowHide: true, embeddingRequiredOnInsert: true }),
+      capabilities: { ...capabilities({ rawArchive: true, rawWindowHide: true, embeddingRequiredOnInsert: true }), inspect: true },
+      inspect: {
+        async identity() { return identity; },
+        async list() { throw new Error("unexpected inspect list"); },
+        async item() { throw new Error("unexpected inspect item"); },
+      },
       uow: createPostgresUnitOfWork(source),
       capture: createPostgresCapturePorts(rawOptions),
       memories: createPostgresMemoryStore(options),

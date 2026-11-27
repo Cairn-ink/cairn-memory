@@ -6,7 +6,6 @@ import { canonicalKey } from "../retrieval/bm25.mjs";
 import { fuseHostedLexicalOnly, fuseHostedWithCards } from "../retrieval/fusion.mjs";
 import { decodeCursor, RAW_FIND_DEPTH } from "../retrieval/hosted-paging.mjs";
 import { documentCardFindItem, documentCardVisible, visibleDocumentCardRows } from "../routing/index.mjs";
-import { newRankingId } from "./context-read-tokens.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { embedRecallQuery, recallSearch } from "./recall.mjs";
 import { readSet, visibleRawSegments } from "./reads.mjs";
@@ -29,7 +28,7 @@ import { isReadMac, signedReadToken } from "./signed-read-token.mjs";
 /** @typedef {Awaited<ReturnType<NonNullable<import("./index.d.mts").MemoryServiceDeps["embedQuery"]>["embedQuery"]>>} Embedding */
 
 const kindsForFind = /** @type {const} */ (["memory", "card", "raw"]);
-const MEMORY_CURSOR_LIMIT = 4096;
+const FIND_CURSOR_LIMIT = 8192;
 
 /** @param {unknown} value */
 function timeBound(value) {
@@ -80,49 +79,37 @@ function findCursors(value) {
   return /** @type {Partial<Record<Kind, unknown>>} */ (value);
 }
 
-function findTokens() {
-  const signer = signedReadToken(new TextEncoder().encode(newRankingId() + newRankingId()));
-  /** @type {Map<string, string>} */
-  const memoryPositions = new Map();
+/** @param {import("../ports/host.d.ts").ReadTokenIdentity} identity */
+function findTokens({ storeId, cursorKey }) {
+  const signer = signedReadToken(cursorKey);
+  /** @param {unknown[]} request */
+  const bind = request => (/** @type {string} */ body) => JSON.stringify(["find-cursor-v1", storeId, request, body]);
 
   return {
     /** @param {string} value */
-    mac: value => signer.mac(JSON.stringify(["find-state-v1", value])),
-    /** @param {unknown} cursor @param {(body: string) => string} bind @param {Kind} kind @returns {Promise<FindPosition | null>} */
-    async read(cursor, bind, kind) {
+    mac: value => signer.mac(JSON.stringify(["find-state-v1", storeId, value])),
+    /** @param {unknown} cursor @param {unknown[]} request @param {Kind} kind @returns {Promise<FindPosition | null>} */
+    async read(cursor, request, kind) {
       if (cursor === undefined) return null;
-      if (typeof cursor !== "string") throw new CoreError("invalid_cursor");
-      const payload = await signer.decode(cursor, bind);
+      if (typeof cursor !== "string" || cursor.length > FIND_CURSOR_LIMIT) throw new CoreError("invalid_cursor");
+      const payload = await signer.decode(cursor, bind(request));
       if (!Array.isArray(payload) || payload.length !== 3) throw new CoreError("invalid_cursor");
       const [position, state, model] = payload;
       const depth = kind === "raw" ? RAW_FIND_DEPTH : 2 * FUSION_PRESETS.hosted.pool;
       if ((model !== null && !isReadMac(model)) ||
           (kind === "memory"
-            ? !isReadMac(position) || state !== null
+            ? typeof position !== "string" || !position || state !== null
             : !Number.isSafeInteger(position) || position <= 0 || position >= depth || !isReadMac(state))) {
         throw new CoreError("invalid_cursor");
       }
-      if (kind !== "memory") return { position, state, model };
-      const inner = memoryPositions.get(position);
-      if (inner === undefined) throw new CoreError("cursor_stale");
-      memoryPositions.delete(position);
-      memoryPositions.set(position, inner);
-      return { position: inner, state, model };
+      return { position, state, model };
     },
 
-    /** @param {FindPosition} page @param {(body: string) => string} bind */
-    async write({ position, state, model }, bind) {
-      // Recall's inner position can include a storage key. Keep it in the
-      // service and sign a handle that reveals no storage or request data.
-      if (typeof position === "string") {
-        const inner = position;
-        position = await signer.mac(JSON.stringify(["find-memory-position-v1", inner]));
-        memoryPositions.delete(position);
-        const oldest = memoryPositions.keys().next().value;
-        if (memoryPositions.size >= MEMORY_CURSOR_LIMIT && oldest !== undefined) memoryPositions.delete(oldest);
-        memoryPositions.set(position, inner);
-      }
-      return signer.encode([position, state, model], bind);
+    /** @param {FindPosition} page @param {unknown[]} request */
+    async write({ position, state, model }, request) {
+      const token = await signer.encode([position, state, model], bind(request));
+      if (token.length > FIND_CURSOR_LIMIT) throw new CoreError("context_item_too_large");
+      return token;
     },
   };
 }
@@ -134,9 +121,9 @@ function notSearched(requested) {
     : { status: "not_searched", count: 0 };
 }
 
-/** @param {unknown} error @returns {Layer} */
-function unavailable(error) {
-  return { status: "unavailable", count: 0, code: entryError(error).code, nextCursor: null };
+/** @param {unknown} error @param {boolean} paging @returns {Layer} */
+function unavailable(error, paging) {
+  return { status: "unavailable", count: 0, code: entryError(error).code, ...(paging && { nextCursor: null }) };
 }
 
 /** @type {typeof fuseHostedLexicalOnly} */
@@ -179,29 +166,37 @@ async function readVisibleCard(store, load, tx, scope, ref) {
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["find"]} */
 export function findMethod(deps) {
   const { storage, embedQuery, gate } = deps;
-  const { uow, fence, raw, capabilities, documentCards, documentCardCandidates, snapshot } = storage;
+  const { uow, fence, raw, capabilities, documentCards, documentCardCandidates, snapshot, contextRead, inspect } = storage;
   const memoryDeps = snapshot.findMemory
     ? { ...deps, storage: { ...storage, snapshot: snapshot.findMemory } }
     : deps;
-  const searchMemories = recallSearch(memoryDeps, findLexicalPage);
-  const tokens = findTokens();
+  const searchMemories = recallSearch(deps);
+  const pageMemories = recallSearch(memoryDeps, findLexicalPage);
   /** @type {(...args: Parameters<MemoryService["find"]>) => ReturnType<MemoryService["find"]>} */
   const find = entry(async (input, rawQuery, options) => {
     const scope = scopeOf(input);
     if (rawQuery !== null && typeof rawQuery !== "string") throw new CoreError("invalid_input");
     const { limit, requested, filters, cursors } = findOptions(options);
+    const paging = cursors !== undefined;
+    const firstPage = !paging || Object.keys(cursors).length === 0;
     const query = prepareCoreText(rawQuery ?? "");
     const readScope = readSet(scope, filters);
     const clients = filters.clients?.slice().sort() ?? null;
     /** @param {Kind} kind */
-    const selected = kind => cursors === undefined ? requested.includes(kind) : cursors[kind] !== undefined;
+    const selected = kind => firstPage ? requested.includes(kind) : cursors?.[kind] !== undefined;
     /** @param {Kind} kind */
-    const bind = kind => {
-      const request = ["find-v1", scope.owner, scope.namespace, query, kind, clients,
-        filters.window?.sinceMs ?? null, filters.window?.untilMs ?? null, limit,
-        kind === "card" ? ["card-scope-v1", null] : null];
-      return (/** @type {string} */ body) => JSON.stringify([request, body]);
-    };
+    const binding = kind => [scope.owner, scope.namespace, query, kind, clients,
+      filters.window?.sinceMs ?? null, filters.window?.untilMs ?? null, limit,
+      kind === "card" ? ["card-scope-v1", null] : null];
+
+    /** @type {Promise<ReturnType<typeof findTokens>> | undefined} */
+    let tokensForRequest;
+    function loadTokens() {
+      const store = contextRead ?? inspect;
+      if (typeof store?.identity !== "function") throw new CoreError("capability_unavailable");
+      return tokensForRequest ??= uow.run(scope.owner, { readOnly: true }, async tx =>
+        findTokens(await store.identity(tx)));
+    }
     const rawRequested = selected("raw");
     const rawAvailable = capabilities.rawArchive && raw;
     const searchRaw = rawRequested && query && rawAvailable;
@@ -214,9 +209,8 @@ export function findMethod(deps) {
     let sharedEmbedding;
     /** @type {Embedding | undefined} */
     let firstEmbedding;
-    /** @param {FindPosition | null} page */
-    async function rankingEmbedding(page) {
-      if (!page) return firstEmbedding;
+    /** @param {FindPosition} page @param {ReturnType<typeof findTokens> | undefined} tokens */
+    async function rankingEmbedding(page, tokens) {
       if (page.model === null) return undefined;
       try {
         if (embedQuery) {
@@ -225,7 +219,7 @@ export function findMethod(deps) {
             return embedRecallQuery(embedQuery, scope.owner, query);
           })();
           const embedding = await sharedEmbedding;
-          if (await tokens.mac(embedding.model) === page.model) return embedding;
+          if (await tokens?.mac(embedding.model) === page.model) return embedding;
         }
       } catch {
         // A continuation needs the ranking path from its first page.
@@ -239,83 +233,91 @@ export function findMethod(deps) {
     if (selected("memory")) {
       let wrongModel = false;
       try {
-        const binding = bind("memory");
-        const page = await tokens.read(cursors?.memory, binding, "memory");
+        const tokens = paging ? await loadTokens() : undefined;
+        const request = binding("memory");
+        const page = tokens ? await tokens.read(cursors?.memory, request, "memory") : null;
         if (page?.model && (!embedQuery || !capabilities.semanticRetrieval || !storage.vector)) {
           throw new CoreError("invalid_cursor");
         }
         // Capture the embedding as recall computes it and check a hybrid
         // continuation's model before sending the vector to the memory index.
-        const search = embedQuery && query ? recallSearch({
-          ...memoryDeps,
+        let search = paging ? pageMemories : searchMemories;
+        if (embedQuery && (paging ? query : searchRaw || searchCards)) search = recallSearch({
+          ...(paging ? memoryDeps : deps),
           embedQuery: {
             async embedQuery(owner, text, options) {
               sharedEmbedding ??= embedQuery.embedQuery(owner, text, options);
               const embedding = await sharedEmbedding;
               firstEmbedding = embedding;
-              if (page?.model && page.model !== await tokens.mac(embedding.model)) {
+              if (page?.model && page.model !== await tokens?.mac(embedding.model)) {
                 wrongModel = true;
                 throw new CoreError("invalid_cursor");
               }
               return embedding;
             },
           },
-        }, findLexicalPage) : searchMemories;
+        }, paging ? findLexicalPage : undefined);
         const result = await search(scope, query, { cursor: page?.position ?? null, limit, mode: "search" }, filters);
         const inner = result.nextCursor;
-        // Lexical fallback and recent use no embedding on later pages.
-        const position = inner === null ? null : /** @type {unknown[]} */ (decodeCursor(inner));
-        const nextCursor = inner === null ? null : await tokens.write({
-          position: inner, state: null, model: query && position?.at(-1) === "hybrid" && firstEmbedding
-            ? await tokens.mac(firstEmbedding.model) : null,
-        }, binding);
+        let nextCursor = null;
+        if (tokens && inner !== null) {
+          // Lexical fallback and recent use no embedding on later pages.
+          const position = /** @type {unknown[]} */ (decodeCursor(inner));
+          nextCursor = await tokens.write({
+            position: inner, state: null, model: query && position.at(-1) === "hybrid" && firstEmbedding
+              ? await tokens.mac(firstEmbedding.model) : null,
+          }, request);
+        }
         memories = result.items;
-        memory = { status: "ok", count: memories.length, nextCursor };
+        memory = { status: "ok", count: memories.length, ...(paging && { nextCursor }) };
       } catch (error) {
-        memory = unavailable(wrongModel ? new CoreError("invalid_cursor") : error);
+        memory = unavailable(wrongModel ? new CoreError("invalid_cursor") : error, paging);
       }
     }
 
     /** @type {RawSegment[]} */
     let segments = [];
     let rawLayer = notSearched(rawRequested && !rawAvailable);
-    if (rawRequested) {
+    if (searchRaw || cursors?.raw !== undefined) {
       try {
-        const binding = bind("raw");
-        const page = await tokens.read(cursors?.raw, binding, "raw");
+        const tokens = paging ? await loadTokens() : undefined;
+        const request = binding("raw");
+        const page = tokens ? await tokens.read(cursors?.raw, request, "raw") : null;
         if (searchRaw) {
-          const embedding = await rankingEmbedding(page);
+          const embedding = page ? await rankingEmbedding(page, tokens) : firstEmbedding;
           const offset = Number(page?.position ?? 0);
           ({ segments, layer: rawLayer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
             const result = await searchRaw.raw(tx, readScope, query, "search",
-              { limit, offset, ...(embedding?.vector && { queryVector: embedding.vector }) });
-            const state = result.page ? await tokens.mac(JSON.stringify([result.page.state, result.coverage.complete])) : null;
+              { limit, ...(paging && { offset }), ...(embedding?.vector && { queryVector: embedding.vector }) });
+            const state = tokens && result.page
+              ? await tokens.mac(JSON.stringify([result.page.state, result.coverage.complete])) : null;
             if (page && state !== page.state) throw new CoreError("cursor_stale");
             const segments = await visibleRawSegments(result.segments, readScope, tx, fence);
-            const nextCursor = state && result.page?.hasMore ? await tokens.write({
+            const nextCursor = tokens && state && result.page?.hasMore ? await tokens.write({
               position: offset + limit, state, model: embedding?.vector ? await tokens.mac(embedding.model) : null,
-            }, binding) : null;
+            }, request) : null;
             /** @type {Layer} */
-            const layer = { status: "ok", count: segments.length, nextCursor };
+            const layer = { status: "ok", count: segments.length, ...(paging && { nextCursor }) };
             if (result.coverage.complete === false) layer.code = "index_unavailable";
             return { segments, layer };
           }));
         } else if (page) throw new CoreError("cursor_stale");
       } catch (error) {
-        rawLayer = unavailable(error);
+        rawLayer = unavailable(error, paging);
       }
     }
 
     /** @type {DocumentCardFindItem[]} */
     let cards = [];
     let card = notSearched(cardRequested && query.length > 0 && !cardAvailable);
-    if (cardRequested) {
+    if (searchCards || cursors?.card !== undefined) {
       try {
-        const binding = bind("card");
-        const page = await tokens.read(cursors?.card, binding, "card");
+        const tokens = paging ? await loadTokens() : undefined;
+        const request = binding("card");
+        const page = tokens ? await tokens.read(cursors?.card, request, "card") : null;
         if (searchCards && documentCards && documentCardCandidates && loadCardVisibility) {
           const pool = FUSION_PRESETS.hosted.pool;
-          const embedding = await rankingEmbedding(page);
+          const embedding = page ? await rankingEmbedding(page, tokens) : firstEmbedding;
           const offset = Number(page?.position ?? 0);
           const result = await uow.run(scope.owner, { readOnly: true }, async tx => {
             const words = await documentCardCandidates.lexical(tx, readScope, query, pool, {});
@@ -335,11 +337,11 @@ export function findMethod(deps) {
             const cardVector = vectorRows && (await visibleDocumentCardRows(vectorRows, load)).rows;
             const { rows } = fuseHostedWithCards(
               { memoryLexical: [], memoryVector: [], cardLexical, cardVector },
-              { offset: 0, limit: 2 * pool, floor: false },
+              { offset: 0, limit: paging ? 2 * pool : limit, floor: false },
             );
             const hasMore = offset + limit < rows.length;
             let state = null;
-            if (page || hasMore) {
+            if (tokens && (page || hasMore)) {
               const generation = await documentCardCandidates.stateToken?.(tx, readScope);
               state = await tokens.mac(JSON.stringify([generation, semantic?.coverage.complete === true, rows.map(row => {
                 const card = byRef.get(row.ref)?.card;
@@ -352,16 +354,16 @@ export function findMethod(deps) {
               const visible = await readVisibleCard(documentCards, loadCardVisibility, tx, scope, ref);
               if (visible) items.push(documentCardFindItem(visible.card, query));
             }
-            const nextCursor = hasMore ? await tokens.write({
+            const nextCursor = tokens && hasMore ? await tokens.write({
               position: offset + limit, state, model: semantic && embedding ? await tokens.mac(embedding.model) : null,
-            }, binding) : null;
+            }, request) : null;
             return { items, nextCursor };
           });
           cards = result.items;
-          card = { status: "ok", count: cards.length, nextCursor: result.nextCursor };
+          card = { status: "ok", count: cards.length, ...(paging && { nextCursor: result.nextCursor }) };
         } else if (page) throw new CoreError("cursor_stale");
       } catch (error) {
-        card = unavailable(error);
+        card = unavailable(error, paging);
       }
     }
     return { memories, cards, raw: segments, layers: { memory, card, raw: rawLayer } };

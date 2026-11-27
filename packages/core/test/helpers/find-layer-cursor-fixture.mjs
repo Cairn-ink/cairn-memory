@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createMemoryService } from "../../src/service/index.mjs";
 import { hostedScope, memory, serviceFake } from "./service-fake.mjs";
 
@@ -13,10 +15,11 @@ export function stripCursors(result) {
   return { ...items, layers: Object.fromEntries(Object.entries(layers).map(([kind, { nextCursor, ...layer }]) => [kind, layer])) };
 }
 
-export function findFixture({ semantic = true, count = 6 } = {}) {
+export function findFixture({ semantic = true, count = 6, writes = false,
+  identity = { storeId: randomUUID(), cursorKey: randomBytes(32) } } = {}) {
   const memories = Array.from({ length: count }, (_, i) =>
     memory(`memory-${i}`, { text: `${query} memory ${i}`, updatedAtUs: BigInt(30 - i) }));
-  const fake = serviceFake({ rows: memories, recall: true, semantic, leakForgotten: true });
+  const fake = serviceFake({ rows: memories, recall: true, semantic, leakForgotten: true, writes });
   const { deps, hooks, storage } = fake;
   const state = { card: 0, raw: 0, model: "query-model" };
   hooks.lexicalScore = ({ id }) => 10 - Number(id.split("-").at(-1));
@@ -34,6 +37,13 @@ export function findFixture({ semantic = true, count = 6 } = {}) {
   }));
   const refOf = ({ id }) => ({ type: "card", id, namespace: scope.namespace });
   Object.assign(storage.capabilities, { documentCards: true, documentCardSearch: true, rawArchive: true });
+  if (identity) {
+    storage.capabilities.contextRead = true;
+    storage.contextRead = { async identity(tx) {
+      assert.equal(tx.options.readOnly, true);
+      return identity;
+    } };
+  }
   storage.documentCardCandidates = {
     async lexical() {
       return { rows: cards.map((card, i) => ({ ref: refOf(card), score: count - i, updatedAtUs: BigInt(count - i) })) };
@@ -60,7 +70,7 @@ export function findFixture({ semantic = true, count = 6 } = {}) {
         page: { state: String(state.raw), hasMore: offset + limit < raw.length } };
     },
   };
-  return { ...fake, memories, cards, raw, state, service: createMemoryService(deps) };
+  return { ...fake, memories, cards, raw, state, identity, service: createMemoryService(deps) };
 }
 
 export function takeCursors(layers) {

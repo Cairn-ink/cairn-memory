@@ -1516,11 +1516,15 @@ Pack whole `{ date, body }` items in ascending date order with undated items las
 Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
 Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.
 
-## Addendum 34 — Find layer cursors
+## Addendum 35 — Find layer cursors
 
-A first page searches the requested kinds and preserves their ranking and delivery, while a call with `cursors` searches only the layers that have a cursor.
-Every searched layer returns `nextCursor`, which is null when there is no further page or the layer is unavailable.
-The service instance signs cursors with a MAC that binds owner, namespace, prepared query, layer, clients, time bounds and limit, and binds the embedding model for hybrid memory ranking.
-The card binding reserves a versioned scope field for future use, and malformed, forged or mismatched tokens return `invalid_cursor`.
-Pages preserve the visibility checks, and a changed index or an evicted memory position returns `cursor_stale` on the affected layer while the other layers can continue.
+Find without `cursors` keeps the original response and omits `nextCursor` throughout.
+An empty `cursors` map requests the first page of every requested kind. A nonempty map searches only the layers with supplied cursors.
+In paging mode each searched layer returns `nextCursor`, which is null when there is no further page or the layer is unavailable.
+Find signs cursors under its own purpose with the store's read-token identity, so they work across service instances and restarts with the same store.
+A store without a read-token identity reports `capability_unavailable` on layers that require paging.
+The MAC binds owner, namespace, prepared query, layer, clients, time bounds and limit, and binds the embedding model for hybrid memory ranking.
+The card binding reserves a versioned scope field for future use. Malformed, oversized, forged or mismatched tokens return `invalid_cursor`.
+The signed payload carries the memory continuation or the layer's offset and index state, with an 8,192-character token limit.
+Each page repeats the visibility checks. A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
 The page size remains at most 20, using the recall horizon for memory, the existing hosted fusion pool for cards and 100 ranked segments for Raw.
