@@ -21,6 +21,8 @@ const allowlist = {
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "service/context-read-assembly-evidence.mjs: documentCards.get(tx, ref.scope, ref.id)":
     "Read only after contextCardVerdict (fresh visibilityInputs + documentCardVisible in the same Tx); the card's id and scope are rechecked, and each amendment is gated by documentCardAmendmentVisible on its own Raw source before delivery.",
+  "service/find.mjs: documentCards.get(tx, scope, ref.id)":
+    "Ranking reads the card only to record its version; nothing read here is delivered. Delivery rereads it through readVisibleCard (fresh visibilityInputs + documentCardVisible) in the final read-only transaction and delivers it only if that version still matches.",
 };
 
 function walk(node, visit, parent) {
