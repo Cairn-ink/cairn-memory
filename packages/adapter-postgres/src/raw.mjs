@@ -166,9 +166,15 @@ export function createPostgresRawPorts(options) {
           const matches = stored && stored.length === batch.length && batch.every(({ id, content }, index) =>
             stored[index].id === id && (stored[index].content === "" || stored[index].content === content));
           if (!matches) {
-            for (const [index, message] of batch.entries()) {
-              const slot = stored?.[index];
-              if (slot?.id === message.id && slot.content === "") message.content = "";
+            if (stored) {
+              /** @type {Set<string>} */
+              const blankIds = new Set();
+              for (const { id, content } of stored) {
+                if (content === "") blankIds.add(id);
+              }
+              for (const message of batch) {
+                if (blankIds.has(message.id)) message.content = "";
+              }
             }
             await blankForgottenMessages(query, capture, batch);
           }

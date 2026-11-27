@@ -227,4 +227,42 @@ for (const keyed of [false, true]) {
       proof(replay, { ...resent, content: "" }), proof(replay, control),
     ]));
   });
+
+  test(`Postgres ${mode} honors a stored blank after its message moves`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const messages = [control, resent];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    const blank = { ...resent, content: "" };
+    assert.deepEqual(await f.write(tx => f.capture.admit(tx, key, [blank, control])), { status: "admitted" });
+    await f.write(tx => f.raw.recordLineage(tx, key, messages));
+
+    assert.equal((await f.outbox(replay)).raw_lineage_key_id, null);
+    assert.deepEqual(new Set(await f.proofs(replay)), new Set([proof(replay, control), proof(replay, blank)]));
+  });
+
+  test(`Postgres ${mode} honors a stored blank with a longer caller batch`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const messages = [resent, control, initialTurn];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    const blank = { ...resent, content: "" };
+    assert.deepEqual(await f.write(tx => f.capture.admit(tx, key, [blank, control])), { status: "admitted" });
+    await f.write(tx => f.raw.recordLineage(tx, key, messages));
+
+    assert.equal((await f.outbox(replay)).raw_lineage_key_id, null);
+    assert.deepEqual(new Set(await f.proofs(replay)), new Set([
+      proof(replay, blank), proof(replay, control), proof(replay, initialTurn),
+    ]));
+  });
+
+  test(`Postgres ${mode} honors a stored blank with a shorter caller batch`, migrationDbTest, async t => {
+    const f = await fixture(t, keyed);
+    const messages = [resent];
+    const key = { scope, ...replay, payloadDigest: sha256Hex(JSON.stringify(messages)) };
+    const blank = { ...resent, content: "" };
+    assert.deepEqual(await f.write(tx => f.capture.admit(tx, key, [control, blank])), { status: "admitted" });
+    await f.write(tx => f.raw.recordLineage(tx, key, messages));
+
+    assert.equal((await f.outbox(replay)).raw_lineage_key_id, null);
+    assert.deepEqual(await f.proofs(replay), [proof(replay, blank)]);
+  });
 }
