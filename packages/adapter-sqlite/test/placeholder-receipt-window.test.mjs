@@ -32,7 +32,7 @@ const placeholder = {
   role: "user", occurredAtMs: null,
 };
 
-async function fixture(t, { legacyRawHashing = false } = {}) {
+async function fixture(t, { legacyRawHashing = false, documentCards = false } = {}) {
   const { path, remove } = scratch();
   let storage;
   t.after(async () => {
@@ -40,7 +40,7 @@ async function fixture(t, { legacyRawHashing = false } = {}) {
     finally { remove(); }
   });
   storage = await openStorage(path);
-  const options = { capabilities: { contextRead: true, contextRawRead: true } };
+  const options = { capabilities: { contextRead: true, contextRawRead: true, documentCards } };
   const adapter = createSqliteAdapter({ ...storage, legacyRawHashing }, options);
   const baseReceiptWithheld = baseAdmission(storage, adapter.hashSessionKey, legacyRawHashing);
   return { adapter, api: contextReadTestService(adapter), baseReceiptWithheld };
@@ -316,6 +316,48 @@ test("every cited candidate uses the merge-base admission policy", async t => {
     });
   }
 });
+
+for (const binding of ["primary source", "sentence source", "amendment", "purged amendment"]) {
+  test(`a card ${binding} disables the placeholder exemption`, async t => {
+    for (const operation of ["save", "correct"]) {
+      await t.test(operation, async t => {
+        const { adapter, api, baseReceiptWithheld } = await fixture(t, { documentCards: true });
+        const receipt = { ...placeholder, messageId: 'card "message"' };
+        const address = { client: "card-client", sessionId: "card-session", messageId: receipt.messageId };
+        const cardText = "A synthetic card with independent text";
+        const id = "fixture-card";
+        await adapter.uow.run(scope.owner, { pauseLock: true }, async tx => {
+          const primary = binding === "primary source";
+          assert.equal((await adapter.documentCards.put(tx, rootScope, {
+            id, scope: rootScope, origin: primary ? "router" : "manual", title: "Card label", body: cardText,
+            contentHash: sha256(cardText), date: null, sourceMessage: primary ? address : null,
+            sourceMemories: [], stale: [], sentences: binding === "sentence source" ? [{ start: 0, end: 10, source: address }] : [],
+          })).status, "inserted");
+          if (binding.endsWith("amendment")) {
+            const amendmentId = "fixture-amendment";
+            assert.equal((await adapter.documentCards.amend(tx, rootScope, id, {
+              amendmentId, date: "2025-01-01", sourceMessage: address, sentence: "An updated note", quote: "An earlier note",
+            })).status, "inserted");
+            if (binding === "purged amendment") {
+              await adapter.documentCards.hideAmendment(tx, rootScope, id, amendmentId, "forgotten", { purge: true });
+            }
+          }
+        });
+        const baseApi = contextReadTestService({ ...adapter, suppressions: {
+          ...adapter.suppressions, receiptWithheld: baseReceiptWithheld,
+        } });
+        const ref = await retain(adapter, { ...placeholder, messageId: "independent-receipt" });
+        const write = service => operation === "save"
+          ? service.save(scope, text, source, "fact", { receipt })
+          : service.correct(scope, ref.id, ref.revision, changedText, source, { receipt });
+        await seedWindow(adapter);
+        const expected = (await write(baseApi)).status;
+        assert.equal(expected, "suppressed");
+        assert.equal((await write(api)).status, expected);
+      });
+    }
+  });
+}
 
 async function migrateDeletedClaudeTurn(t, messageId) {
   const directory = legacyScratch(t);

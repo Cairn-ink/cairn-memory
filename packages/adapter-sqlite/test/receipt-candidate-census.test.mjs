@@ -26,6 +26,23 @@ const excluded = {
   // and fence. Its ciphertext is neither an address nor a message ID tag.
   cairn_context_raw_checkpoints: "projection fence last_key examined published",
   cairn_context_terms: "projection namespace_key id term frequency",
+  // Card and amendment IDs identify those records. Routed IDs use composite
+  // digests of a card or amendment identity. Hashes of card content are separate.
+  // The card writer stores only memory/replacement IDs in stale JSON. Titles,
+  // bodies, sentences and quotes are display text, and dates, revisions,
+  // offsets, states and reasons are metadata.
+  cairn_document_cards: "owner_id namespace_key id origin title body content_hash source_at_ms created_at_ms updated_at_us revision body_revision stale state hidden_reason",
+  // These address components encode the client and session separately from
+  // message_key. Ordinals identify the primary source or a sentence binding.
+  cairn_document_card_sources: "owner_id namespace_key card_id ordinal client_key session_key start_utf16 end_utf16",
+  cairn_document_card_amendments: "owner_id namespace_key card_id amendment_id ordinal date client_key session_key sentence quote state hidden_reason",
+  // The link IDs belong to cards, memories or topics. The placement outcomes
+  // and failures track card content hashes, and generations are counters.
+  cairn_document_card_memories: "owner_id namespace_key card_id memory_id ordinal revision",
+  cairn_document_card_generations: "owner_id namespace_key generation",
+  cairn_document_card_outcomes: "owner_id namespace_key card_id content_hash",
+  cairn_document_card_memberships: "owner_id namespace_key card_id topic_id placed_at_us",
+  cairn_document_card_failures: "owner_id namespace_key card_id content_hash code attempts failed_at_ms",
   // Inspect anchors refer to receipt IDs. Inspect excerpts are display text.
   cairn_index_revisions: "owner_id revision",
   cairn_inspect_epochs: "owner_id namespace_key epoch",
@@ -102,6 +119,11 @@ function witnesses(storeKey, lineage) {
       { ...rawKey, session_key: json("legacy-raw:" + "a".repeat(64)), message_key: json(id), role: "user", content: json(other) }],
     ["cairn_raw_anchors", "message_tag", "lineage ID tag",
       { ...coordinates, client_key, message_tag: messageTag, session_tag: "tag", session_hash: "hash", proof: "" }],
+    ["cairn_document_card_sources", "message_key", "card source address",
+      { ...rawKey, card_id: "card", ordinal: 0, message_key: json(id), start_utf16: null, end_utf16: null }],
+    ["cairn_document_card_amendments", "message_key", "retained amendment address",
+      { ...rawKey, card_id: "card", amendment_id: "amendment", ordinal: 1, date: "2025-01-01",
+        message_key: json(id), state: "purged", hidden_reason: "forgotten" }],
     ["cairn_capture_claims", "source_positions", "$[*].id",
       { ...claim, source_positions: json([{ id, occurredAtMs: null }]) }],
     ["cairn_capture_claims", "source_proofs", "$[*][0]",

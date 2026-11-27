@@ -1,7 +1,7 @@
 import { decodeJson } from "./memory-rows.mjs";
 import { exactScope } from "./placement-visibility.mjs";
 import { copySession } from "./raw-rows.mjs";
-import { invalidInput, scopeKey, validateId } from "./storage-values.mjs";
+import { encodeMessageKey, invalidInput, scopeKey, validateId } from "./storage-values.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardStore, DocumentCardSourceMessage, Scope, StoredDocumentCardRecord } from "@cairn-ink/core/ports" */
 /** @import { SQLOutputValue } from "node:sqlite" */
@@ -24,7 +24,7 @@ export function copyCardSource(source) {
 
 /** @param {DocumentCardSourceMessage} source */
 export function sourceKeys({ client, sessionId, messageId }) {
-  return [JSON.stringify(client), JSON.stringify(sessionId), JSON.stringify(messageId)];
+  return [JSON.stringify(client), JSON.stringify(sessionId), encodeMessageKey(messageId)];
 }
 
 /** @param {Row} row */

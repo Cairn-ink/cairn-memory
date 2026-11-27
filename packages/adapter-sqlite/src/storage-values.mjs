@@ -33,6 +33,9 @@ export function scopeKey({ owner, namespace }) {
   return /** @type {const} */ ([ownerKey(owner), JSON.stringify(namespace)]);
 }
 
+/** @param {string} messageId */
+export const encodeMessageKey = messageId => JSON.stringify(messageId);
+
 /** @param {unknown} value */
 const nonempty = value => typeof value === "string" && value.length > 0;
 /** @param {unknown} value */

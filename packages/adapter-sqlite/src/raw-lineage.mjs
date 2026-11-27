@@ -3,7 +3,7 @@ import { CoreError, factHidesRow } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { hasMigratedUuidCandidate } from "./migrate/raw-privacy.mjs";
 import { decodeRawRow, rawScopeWhere, rawSessionKey, rawSessionWhere, readRawRow } from "./raw-rows.mjs";
-import { scopeKey, sha256, validateId } from "./storage-values.mjs";
+import { encodeMessageKey, scopeKey, sha256, validateId } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
 /** @import { RawSpanFact } from "@cairn-ink/core" */
@@ -48,6 +48,8 @@ function hasPlainMessageCandidate(db, owner, messageId) {
   return !!db.prepare(`
     SELECT 1 FROM cairn_raw_messages WHERE owner_id = $owner AND message_key = $id
     UNION ALL SELECT 1 FROM cairn_migrated_raw_maps WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_document_card_sources WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_document_card_amendments WHERE owner_id = $owner AND message_key = $id
     UNION ALL SELECT 1 FROM cairn_receipts WHERE owner_id = $owner AND source_key -> '$[2]' = $id
     UNION ALL SELECT 1 FROM cairn_receipts WHERE owner_id = $owner AND body -> '$.messageId' = $id
     UNION ALL SELECT 1 FROM cairn_capture_claims c, json_each(c.source_positions) p
@@ -77,7 +79,7 @@ function hasPlainMessageCandidate(db, owner, messageId) {
     UNION ALL SELECT 1 FROM cairn_migrated_safety WHERE owner_id = $owner AND kind = 'reservation'
       AND CASE WHEN body ->> '$.kind' IN ('raw-message', 'raw-part')
         THEN (body ->> '$.stable_key') -> '$[1]' = $id END
-    LIMIT 1`).get({ $owner: owner, $id: JSON.stringify(messageId) });
+    LIMIT 1`).get({ $owner: owner, $id: encodeMessageKey(messageId) });
 }
 
 /** @param {string} storeKey @param {SessionHasher} hashSession @param {MigratedRawPolicy} [migratedRaw] */
@@ -195,6 +197,7 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
     hasReceiptCandidate(db, scope, messageId) {
       const [owner] = scopeKey(scope);
       if (hasPlainMessageCandidate(db, owner, messageId)) return true;
+      // The anchor ID match covers receipt roots even when no archived row or matching proof remains.
       const keyed = db.prepare(`
         SELECT 1 FROM cairn_raw_anchors WHERE owner_id = $owner AND client_key = $client AND message_tag = $tag
         UNION ALL SELECT 1 FROM cairn_capture_claims c, json_each(c.source_proofs) p
