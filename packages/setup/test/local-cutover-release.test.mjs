@@ -274,14 +274,15 @@ test('confirmation resumes after each publication checkpoint and after installer
   assert.equal((await f.run('confirm-activation')).state, 'active');
 });
 
-test('legacy index files suspend confirmation while data and registration are still legacy', linux, async t => {
+test('confirmation deletes legacy index files before switching registration', linux, async t => {
   const f = await fixture(t);
   await f.run('prepare-activation');
   const cache = f.database + '.context-read-v1.sqlite';
   await writeFile(cache, marker, { mode: 0o600 });
-  await assert.rejects(f.run('confirm-activation'), refused('cutover_legacy_cache_present'));
-  assert.equal((await f.run('abort')).state, 'aborted');
-  assert.deepEqual(await readFile(f.database), f.initial);
-  assert.equal((await readFile(cache, 'utf8')), marker);
-  assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
+  const active = await f.run('confirm-activation', async state => {
+    if (state === 'activation-mcp-claude') await absent(cache);
+  });
+  assert.equal(active.state, 'active');
+  await absent(cache);
+  assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], active.targetPath);
 });

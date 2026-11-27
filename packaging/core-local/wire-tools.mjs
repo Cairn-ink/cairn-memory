@@ -84,7 +84,7 @@ export function missingAuthority(name) {
   return response(name, fail('authority_required'));
 }
 
-export async function callTool(service, scope, handles, name, args) {
+export async function callTool(service, scope, handles, name, args, checkpointForget) {
   const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGenerations: [0] };
   const reply = value => response(name, ok(value));
   const refuse = code => response(name, fail(code));
@@ -117,6 +117,7 @@ export async function callTool(service, scope, handles, name, args) {
         if (result.status !== 'forgotten' && result.status !== 'not_found') {
           return refuse(writeErrors.get(result.status) ?? 'memory_operation_failed');
         }
+        await checkpointForget?.();
         return reply({ forgotten: result.status === 'forgotten', indexRevision: result.indexRevision });
       }
       case 'inspect_memory':

@@ -1,19 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
-import { stateLock } from '../../../integrations/client/state-lock.mjs';
-import { readHostConfiguration, readHostProfile } from '../../../integrations/client/raw/local-host-profile.mjs';
-import { inspectPreparation } from '../../../integrations/client/raw/local-host-preparation.mjs';
-import { events, nativeSnapshot, nativeWrite } from '../../../integrations/client/raw/local-setup-files.mjs';
-import { setupRequest } from '../../../integrations/client/raw/local-setup-input.mjs';
-import { nativeSettingsLock } from '../../../integrations/client/raw/local-settings-lock.mjs';
-import { captureStoreIdentity, trustedBinding } from '../../../packaging/core-local/capture-binding.mjs';
-import { captureAdapter } from '../../../packaging/core-local/capture-slot.mjs';
-import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { byteDigest } from '../../adapter-sqlite/src/legacy/backup.mjs';
+import { pathToFileURL } from 'node:url';
 import { captureTargetFor, cutoverId } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
 import { boundedJSON, canonicalPath, parseStrictJSON, publishCaptureStore } from './local-descriptor.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } = await cutoverImport('state');
+const { stateLock } = await cutoverImport('lock');
+const { readHostConfiguration, readHostProfile } = await cutoverImport('profile');
+const { inspectPreparation } = await cutoverImport('preparation');
+const { events, nativeSnapshot, nativeWrite } = await cutoverImport('files');
+const { setupRequest } = await cutoverImport('request');
+const { nativeSettingsLock } = await cutoverImport('settings');
+const { captureStoreIdentity, trustedBinding } = await cutoverImport('binding');
+const { entry } = await cutoverImport('paths');
+const { byteDigest } = await cutoverImport('backup');
+const { documentCardsReady } = await cutoverImport('provider');
 
 const clients = { claude: 'claude-code', codex: 'codex' };
 const stages = ['capture-paused', 'capture-store-staged', 'capture-binding-staged', 'capture-native-published', 'capture-armed'];
@@ -147,7 +150,7 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
   const { migration } = descriptor, { cutover } = migration;
   const record = await legacyRecord(root, client, cutover, maintenance);
   const { saved, request, paused } = record;
-  if (Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
+  if (!documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
   // Capture can use only the same installed owner and namespace as the client.
   if (!descriptor.clients[client] || request.namespace.ownerId !== descriptor.ownerId ||
       request.namespace.projectId !== descriptor.projectId) throw refuse('cutover_capture_changed');
@@ -156,6 +159,7 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
   if (!Object.hasOwn(manifest.files, 'packaging/core-local/capture-cli.mjs') ||
       await canonicalPath(executable) !== executable) throw refuse('cutover_capture_candidate_required');
 
+  const { captureAdapter } = await import(pathToFileURL(join(dirname(executable), 'capture-slot.mjs')));
   return nativeSettingsLock(request.clientConfigPath + '.cairn-local.lock', request, async () => {
     let current = await journal(maintenance, client, cutover);
     const advance = async stage => {

@@ -8,11 +8,23 @@ import { join, posix } from 'node:path';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { adapterImports } from './adapter-imports.mjs';
 import { captureImports, captureAdapterImports } from './capture-imports.mjs';
+import { daemonImports } from './daemon-imports.mjs';
 import { sha256 } from './engine-id.mjs';
 
 const coreRoot = 'packages/core';
 const coreSource = coreRoot + '/src/';
 const hostEntry = 'packaging/core-local/host.mjs';
+const providerCheck = 'packaging/core-local/provider-check.mjs';
+const daemonEntry = 'packaging/core-local/daemon-entry.mjs';
+const daemonWorker = 'packaging/core-local/daemon-worker.mjs';
+const rawEntry = 'packaging/core-local/raw-cli.mjs';
+const walCheckpoint = 'packaging/core-local/wal-checkpoint.mjs';
+const deferredCliEntries = new Set([daemonEntry, rawEntry]);
+const daemonCaptureEdges = new Map([
+  ['packaging/core-local/daemon-authority.mjs', new Set(['packaging/core-local/capture-binding.mjs', 'integrations/client/private-state.mjs'])],
+  [daemonWorker, new Set(['integrations/client/file-lock.mjs'])],
+  ['adapters/mcp/local-daemon-liveness.mjs', new Set(['integrations/client/file-lock.mjs'])],
+]);
 const captureEntry = 'packaging/core-local/capture-cli.mjs';
 const captureHook = 'packaging/core-local/capture-hook.mjs';
 const captureSlot = 'packaging/core-local/capture-slot.mjs';
@@ -35,7 +47,8 @@ const tokenizerAssets = {
 const tokenizerLicenseDigest = '1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b';
 const hostBuiltins = new Map([
   [hostEntry, { readline: 'createInterface' }],
-  [adapterSlot, { crypto: 'createHash createHmac', perf_hooks: 'performance' }],
+  ['packaging/core-local/local-provider.mjs', { crypto: 'createHash createHmac', perf_hooks: 'performance' }],
+  [providerCheck, { path: 'isAbsolute resolve' }],
   [continuations, { crypto: 'randomBytes', perf_hooks: 'performance' }],
   [wireTools, { crypto: 'randomUUID' }],
 ]);
@@ -62,6 +75,7 @@ const adapterMembers = {
 const compositionEntry = 'openLocalService';
 export const cliEntry = 'packaging/core-local/cli.mjs';
 export const captureInventoryPath = 'packaging/core-local-capture-files.json';
+export const daemonInventoryPath = 'packaging/core-local-daemon-files.json';
 export const coreManifest = coreRoot + '/package.json';
 
 const runtimeGlobals = new Set([
@@ -151,11 +165,18 @@ function allowedAmbient(name, node, parents, path) {
   const member = parents.get(node);
   const use = parents.get(member);
   const property = dotMember(node, member);
+  if (path === providerCheck && name === 'process') {
+    return property === 'env' && use.type === 'CallExpression' && use.callee.name === 'localModelKey' ||
+      property === 'exitCode' && use.type === 'AssignmentExpression' && use.left === member && use.right.value === 1;
+  }
+  if (path === daemonEntry && name === 'process' && property === 'env') {
+    return use.type === 'CallExpression' && use.callee.name === 'localModelKey';
+  }
   if (path === cliEntry && name === 'process') {
     return stdioProcessMembers.has(property) || property === 'exitCode' &&
       use.type === 'AssignmentExpression' && use.left === member && use.operator === '=' && use.right.value === 2;
   }
-  if (path === cliEntry && name === 'console') {
+  if ((path === cliEntry || path === providerCheck) && name === 'console') {
     return (property === 'log' || property === 'error') && use.type === 'CallExpression' && use.callee === member;
   }
   if (name === 'globalThis' && property === 'crypto') {
@@ -168,7 +189,7 @@ function allowedAmbient(name, node, parents, path) {
     return webCryptoMembers.get(path)?.has(dotMember(use, method)) &&
       call.type === 'CallExpression' && call.callee === method;
   }
-  const capture = captureImports[path];
+  const capture = captureImports[path] ?? daemonImports[path];
   return (name === 'process' ? capture?.process?.includes(property) : capture?.globals?.includes(name)) ||
     runtimeGlobals.has(name) || fileGlobals.get(path)?.has(name) ||
     path.startsWith(adapterSource) && adapterMembers[path.slice(adapterSource.length)]?.[name]?.includes(property);
@@ -267,15 +288,21 @@ function adapterCoreImport(from, specifier, node) {
   }
 }
 
-function target(from, specifier, node) {
+function target(from, specifier, node, parent, parents) {
   const approved = adapterApproval(from);
   if (specifier === 'node:sqlite') {
-    if (approvedNames(node, approved?.sqlite) || from === captureSlot && namedImport(node, 'DatabaseSync') || from === adapterSlot && node.type === 'ExportNamedDeclaration' &&
+    const binding = parent.type === 'AwaitExpression' ? parents.get(parent)?.id : undefined;
+    const members = binding?.type === 'ObjectPattern' ? binding.properties : [];
+    const [member] = members;
+    if (approvedNames(node, approved?.sqlite) || from === captureSlot && namedImport(node, 'DatabaseSync') ||
+        from === walCheckpoint && node.type === 'ImportExpression' && members.length === 1 && member.type === 'Property' &&
+        !member.computed && member.key.name === daemonImports[from].builtins[specifier] ||
+        from === adapterSlot && node.type === 'ExportNamedDeclaration' &&
         node.specifiers.length === 1 && node.specifiers[0].local.name === 'DatabaseSync') return;
     throw new Error(`sqlite_outside_core_local_adapter: ${from}`);
   }
   if (typeof specifier === 'string' && specifier.startsWith('node:') &&
-      approvedNames(node, (hostBuiltins.get(from) ?? approved ?? captureImports[from]?.builtins)?.[specifier.slice(5)])) return;
+      approvedNames(node, (hostBuiltins.get(from) ?? approved ?? captureImports[from]?.builtins ?? daemonImports[from]?.builtins)?.[specifier.slice(5)])) return;
   const adapterCore = adapterCoreImport(from, specifier, node);
   if (adapterCore) return adapterCore;
   if (from === adapterSlot && specifier === './vendor/tiktoken/tiktoken.cjs' &&
@@ -285,7 +312,15 @@ function target(from, specifier, node) {
     throw new Error(`unsupported_core_local_import: ${from}`);
   }
   const path = posix.join(posix.dirname(from), specifier);
-  if (captureImports[path] && !captureImports[from] || path === captureSlot && from !== captureHook) {
+  if (path === providerCheck && (from !== cliEntry || node.type !== 'ImportExpression')) {
+    throw new Error(`invalid_core_local_provider_check_edge: ${from}`);
+  }
+  if (deferredCliEntries.has(path)
+    ? from !== cliEntry || node.type !== 'ImportExpression'
+    : daemonImports[path] && !daemonImports[from]) {
+    throw new Error(`invalid_core_local_daemon_edge: ${from} -> ${path}`);
+  }
+  if (captureImports[path] && !captureImports[from] && !daemonCaptureEdges.get(from)?.has(path) || path === captureSlot && from !== captureHook) {
     throw new Error(`invalid_core_local_capture_edge: ${from} -> ${path}`);
   }
   if (from.startsWith(coreSource)) {
@@ -297,10 +332,11 @@ function target(from, specifier, node) {
       throw new Error(`invalid_core_local_sqlite_edge: ${from} -> ${path}`);
     }
   } else if (!path.startsWith(coreSource) && !path.startsWith('packaging/core-local/') &&
-      !(captureImports[from] && captureImports[path])) {
+      !(captureImports[from] && captureImports[path]) &&
+      !(daemonImports[from] && (daemonImports[path] || daemonCaptureEdges.get(from)?.has(path)))) {
     throw new Error(`core_local_import_escapes_runtime: ${from} -> ${path}`);
   }
-  if (path === hostEntry && (from !== cliEntry || !namedImport(node, 'serveStdio'))) {
+  if (path === hostEntry && (![cliEntry, daemonEntry, daemonWorker].includes(from) || !namedImport(node, 'serveStdio'))) {
     throw new Error(`invalid_core_local_host_edge: ${from}`);
   }
   return path;
@@ -343,7 +379,7 @@ function imports(root, path) {
   walk(ast, null, (node, parent) => {
     parents.set(node, parent);
     if (node.type === 'MetaProperty' && node.meta.name === 'import' &&
-        !(captureImports[path]?.moduleURL && dotMember(node, parent) === 'url') ||
+        !((path === cliEntry || (captureImports[path] ?? daemonImports[path])?.moduleURL) && dotMember(node, parent) === 'url') ||
         node.type === 'Identifier' && node.name === 'getBuiltinModule' ||
         node.type === 'Literal' && node.value === 'getBuiltinModule') {
       throw new Error(`unsupported_core_local_loader: ${path}`);
@@ -355,7 +391,7 @@ function imports(root, path) {
     const dynamic = node.type === 'ImportExpression';
     if (dynamic || ['ImportDeclaration', 'ExportNamedDeclaration', 'ExportAllDeclaration'].includes(node.type)) {
       if (node.source) {
-        const next = target(path, node.source.type === 'Literal' ? node.source.value : undefined, node);
+        const next = target(path, node.source.type === 'Literal' ? node.source.value : undefined, node, parent, parents);
         if (next === captureSlot) {
           const declaration = parents.get(parent);
           const statement = parents.get(declaration);
@@ -365,7 +401,8 @@ function imports(root, path) {
               opener?.type !== 'FunctionDeclaration' || opener.id.name !== 'openBoundAdapter' ||
               parents.get(opener)?.type !== 'Program') throw new Error(`invalid_core_local_capture_slot: ${path}`);
         }
-        if (next === adapterSlot && !(path === captureSlot && namedImport(node, 'openStorage'))) {
+        if (next === adapterSlot && !(path === captureSlot && namedImport(node, 'openStorage')) &&
+            !(path === rawEntry && dynamic && parent.type === 'AwaitExpression')) {
           let body = parent;
           while (body && body !== composition?.body) body = parents.get(body);
           if (!dynamic || !body) throw new Error(`invalid_core_local_adapter_edge: ${path}`);
@@ -415,7 +452,7 @@ export function coreRuntimeManifest(root) {
   return { name, version, private: true, type, license, engines, exports: Object.fromEntries(exports) };
 }
 
-export function deriveRuntimeGraph(root, { checkStartup, includeCapture } = {}) {
+export function deriveRuntimeGraph(root, { checkStartup, includeCapture, includeDaemon } = {}) {
   root = realpathSync(root);
   const { exports } = coreRuntimeManifest(root);
   const coreEntries = Object.values(exports).map(({ default: entry }) => posix.join(coreRoot, entry));
@@ -429,7 +466,7 @@ export function deriveRuntimeGraph(root, { checkStartup, includeCapture } = {}) 
   };
   const startup = new Set();
   const eager = [cliEntry, ...coreEntries];
-  let deferred = false;
+  let deferred = false, managed = false, check = false;
   while (eager.length) {
     const path = eager.pop();
     if (startup.has(path)) continue;
@@ -439,6 +476,8 @@ export function deriveRuntimeGraph(root, { checkStartup, includeCapture } = {}) 
     startup.add(path);
     for (const next of edges(path)) {
       if (path === hostEntry && next === adapterSlot) deferred = true;
+      else if (path === cliEntry && next === providerCheck) check = true;
+      else if (path === cliEntry && deferredCliEntries.has(next)) managed ||= next === daemonEntry;
       else eager.push(next);
     }
   }
@@ -447,6 +486,11 @@ export function deriveRuntimeGraph(root, { checkStartup, includeCapture } = {}) 
 
   const required = new Set(startup);
   const pending = [adapterSlot];
+  if (check) pending.push(providerCheck);
+  if (includeDaemon ?? existsSync(join(root, daemonInventoryPath))) {
+    if (!managed) throw new Error('core_local_daemon_entry_missing');
+    pending.push(daemonEntry, daemonWorker, rawEntry);
+  }
   if (includeCapture ?? existsSync(join(root, captureInventoryPath))) pending.push(captureEntry);
   while (pending.length) {
     const path = pending.pop();

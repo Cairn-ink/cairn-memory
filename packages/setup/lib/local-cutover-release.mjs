@@ -1,17 +1,21 @@
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
-import { privateRead } from '../../../integrations/client/private-state.mjs';
-import { captureStoreIdentity } from '../../../packaging/core-local/capture-binding.mjs';
-import { pinColdFile } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { codexHome, inspectCodexServers } from './codex.mjs';
+import { codexHome } from './codex.mjs';
 import { claudeCapabilities, observedVector, readClaudeServers, registerClaude } from './local-claude.mjs';
-import { codexCapabilities, registerCodex } from './local-codex.mjs';
+import { codexCapabilities, inspectLocalCodexServers, registerCodex } from './local-codex.mjs';
 import { activateCapture, stageStore } from './local-cutover-activation.mjs';
 import { captureTargetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
 import { removeActivationBackup } from './local-cutover-reclaim.mjs';
-import { assertNoLegacyCaches, beginActivation, retireLegacy } from './local-cutover-retirement.mjs';
+import { beginActivation, retireLegacy } from './local-cutover-retirement.mjs';
 import { canonicalPath, parseStrictJSON, sameVector } from './local-descriptor.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+import { SetupError } from './errors.mjs';
+
+const { privateRead } = await cutoverImport('state');
+const { captureStoreIdentity } = await cutoverImport('binding');
+const { pinColdFile } = await cutoverImport('paths');
+const { documentCardsReady, localModelKey } = await cutoverImport('provider');
 
 export async function checkActivationClients({ root, descriptor, env, context, target, resume = false }) {
   const { runClaude, inspection, write, t } = context ?? {};
@@ -32,7 +36,7 @@ export async function checkActivationClients({ root, descriptor, env, context, t
     } else {
       if (dirname(record.configPath) !== await canonicalPath(codexHome(env)) ||
           !await codexCapabilities(env)) throw refuse('cutover_client_unavailable');
-      entry = (await inspectCodexServers({ ...inspection, home: dirname(record.configPath), env,
+      entry = (await inspectLocalCodexServers({ ...inspection, home: dirname(record.configPath), env,
         includeLaunchOptions: true })).find(item => item.name === 'cairn-local');
       register = () => registerCodex({ root, checkpoint: { previous, desired, destination: record.configPath },
         env, inspection, capable: true, write, t, allowCoreLocal: true });
@@ -47,22 +51,28 @@ export async function checkActivationClients({ root, descriptor, env, context, t
   return clients;
 }
 
-export async function assertKeylessActivation(root, env) {
-  if (Object.hasOwn(env, 'OPENAI_API_KEY')) throw refuse('cutover_model_configured');
+export async function activationModelConfigured(root, env) {
+  let keyed;
+  try { keyed = !!localModelKey(env); }
+  catch { throw refuse('cutover_model_configured'); }
+  if (keyed && !documentCardsReady) throw refuse('cutover_model_configured');
   for (const client of ['claude', 'codex']) {
     const text = await privateRead(join(root, 'capture', client, 'installation.json'), { missing: true });
     if (text === undefined) continue;
     const { request } = parseStrictJSON(text);
-    if (!request || request.interpretationConsent || Object.hasOwn(env, request.providerApiKeyEnv)) {
+    if (!request || request.interpretationConsent ||
+        (!documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv))) {
       throw refuse('cutover_model_configured');
     }
   }
+  return keyed;
 }
 
-export async function assertSupportedLegacyContents(path) {
+export async function assertSupportedLegacyContents(path, { keyless = true } = {}) {
   const file = pinColdFile(path);
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(file.path, { readOnly: true });
+  let timeless = 0;
   try {
     db.exec('PRAGMA query_only = ON; PRAGMA trusted_schema = OFF; BEGIN');
     const exists = db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?");
@@ -75,8 +85,22 @@ export async function assertSupportedLegacyContents(path) {
         throw refuse('cutover_legacy_content_unrepresentable');
       }
     }
+    if (exists.get('raw_messages')) {
+      // Before the local range index, receive time could stand in for event
+      // time. A stored timestamp alone cannot prove those sessions are timed.
+      const hasRanges = exists.get('local_raw_session_ranges');
+      timeless = db.prepare(`SELECT count(*) AS total FROM raw_conversations c
+        ${hasRanges ? `LEFT JOIN local_raw_session_ranges r
+          USING (owner_id, scope, project_id, client, session_key)` : ''}
+        WHERE EXISTS (SELECT 1 FROM raw_messages m WHERE m.conversation_id = c.id
+          ${hasRanges ? 'AND (r.session_key IS NULL OR r.unknown_time = 1 OR m.occurred_at IS NULL)' : ''})`).get().total;
+    }
   } finally { db.close(); }
   file.check();
+  if (keyless && timeless > 0) {
+    throw new SetupError('cutover_timeless_raw', 2, { timeless });
+  }
+  return timeless;
 }
 
 export async function confirmActivation({ root, maintenance, descriptor, manifest, env, context,
@@ -95,7 +119,6 @@ export async function confirmActivation({ root, maintenance, descriptor, manifes
   });
 
   if (!receipt || receipt.phase === 'staging') {
-    assertNoLegacyCaches(cutover.sourcePath);
     drain();
     await withColdStoreLease(cutover.sourcePath, async assertLease => {
       const checkSource = () => reattest(assertLease);

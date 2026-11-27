@@ -132,6 +132,17 @@ async function qualification(root, receipt, context) {
     console.log(JSON.stringify({status:verdict.status}));`;
   return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: 90000 });
 }
+export async function activeCodexQualification(root, receipt, config, context) {
+  const packageRoot = engineRoot(root, receipt);
+  const module = pathToFileURL(join(packageRoot, 'integrations/codex/qualification.mjs')).href;
+  const status = pathToFileURL(join(packageRoot, 'integrations/client/raw/local-codex-qualification.mjs')).href;
+  const script = `const q=await import(${JSON.stringify(module)});
+    const config=${JSON.stringify(config)}, host=await q.resolveCLI(process.env);
+    if(host){await q.observeHost(config,host);await q.qualifyBinary(config,host);}
+    const {localCodexQualificationStatus}=await import(${JSON.stringify(status)});
+    console.log(JSON.stringify(await localCodexQualificationStatus(config)));`;
+  return engineChild(receipt.node, ['--input-type=module', '-e', script], { ...context, timeout: 90000 });
+}
 async function requestFor(root, descriptor, client, receipt, context) {
   const nativeHome = await clientConfigDirectory(client, context.env, { create: true });
   const sourceRoot = join(nativeHome, client === 'claude' ? 'projects' : 'sessions');
@@ -162,6 +173,12 @@ async function requestFor(root, descriptor, client, receipt, context) {
     interpretationConsent: false, plaintextRawConsent: true, foregroundConsent: true };
 }
 export const captureRequested = (enabled, receipt) => enabled ?? receipt?.enabled ?? true;
+export async function disableCapturePreference(root, descriptor, client) {
+  const settings = await captureSettings(root);
+  if (!settings.clients[client]?.enabled) return;
+  settings.clients[client].enabled = false;
+  await save(root, settings, descriptor.database.path);
+}
 export async function configureCapture(root, descriptor, selected, context, { enabled, uninstall = false } = {}) {
   if (!descriptor && !uninstall) fail();
   await directory(root);
@@ -234,7 +251,7 @@ export function finishCaptureSetup(outcomes, { write, t }) {
   })).join(' '));
   return inactive.some(value => !value.temporary) ? 2 : 0;
 }
-function showCapture(client, outcome, { write, t, platform = process.platform }) {
+export function showCapture(client, outcome, { write, t, platform = process.platform }) {
   const macCodex = client === 'codex' && platform === 'darwin' && outcome.status !== 'disabled';
   if (macCodex && ['active', 'prepared'].includes(outcome.status)) outcome = { status:'blocked', reason:'qualification_required' };
   // A retained older runtime may omit the DTO. Keep capture status waiting

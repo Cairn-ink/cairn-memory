@@ -106,10 +106,17 @@ export async function rawLocal(options, selection, detection, context) {
     throw new SetupError('local_raw_unavailable', 2);
   const [, operation, id] = selection.argv;
   return withLocalLock(detection.root, async onChild => {
-    const current = await readDescriptor(detection.root);
+    const active = !!descriptor.migration?.cutover;
+    const current = await readDescriptor(detection.root, active ? { allowV2: true } : undefined);
     if (JSON.stringify(current) !== JSON.stringify(descriptor)) throw new SetupError('local_recovery_required', 2);
     const receipt = current.clients[selection.client ?? Object.keys(current.clients).find(client => current.clients[client])];
-    const vector = receipt.vector;
+    let vector = receipt.vector;
+    if (active) {
+      const { activeCutoverTarget } = await import('./local-cutover-command.mjs');
+      const target = await activeCutoverTarget(detection.root, current).catch(() => undefined);
+      if (!target || !current.node) throw new SetupError('local_recovery_required', 2);
+      vector = { ...vector, node: current.node, databasePath: target, engineId: current.migration.targetEngineId };
+    }
     const [executable, ...flags] = vectorArguments(detection.root, vector);
     return invoke(vector, [executable, 'raw', operation, ...flags,
       ...(operation === 'delete' ? ['--conversation', id, ...(options.yes ? ['--yes'] : [])] : [])],

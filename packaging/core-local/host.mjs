@@ -10,7 +10,7 @@ export async function openLocalService(storageOptions, shared) {
   }
   const open = async () => {
     const { openStorage } = await import('./adapter-slot.mjs');
-    return openStorage(storageOptions.database);
+    return openStorage(storageOptions.database, undefined, { provider: storageOptions.provider });
   };
   return shared ? (shared.runtime ??= open()) : open();
 }
@@ -19,8 +19,8 @@ const rpcError = (code, message) => ({ code, message });
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const supportedProtocols = new Set(['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']);
 
-export async function serveStdio(input, output, options, { shared, closed = () => false } = {}) {
-  const lines = createInterface({ input, crlfDelay: Infinity, terminal: false });
+export async function serveStdio(input, output, options, { shared, closed = () => false, signal } = {}) {
+  const lines = createInterface({ input, crlfDelay: Infinity, terminal: false, signal });
   const handles = createContinuations();
   const scope = options && { owner: options.owner,
     namespace: options.project === undefined ? 'personal\0' : 'project\0' + options.project };
@@ -72,7 +72,7 @@ export async function serveStdio(input, output, options, { shared, closed = () =
                 if (closed()) break;
                 runtime = shared ? await openLocalService(options, shared) : runtime ?? await openLocalService(options);
                 if (closed()) break;
-                result = await callTool(runtime.service, scope, handles, tool.name, args);
+                result = await callTool(runtime.service, scope, handles, tool.name, args, shared?.checkpointForget);
               } finally {
                 await release?.(result !== undefined && tool.name === 'forget_memory');
               }

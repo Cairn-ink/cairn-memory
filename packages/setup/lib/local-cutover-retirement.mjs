@@ -1,9 +1,10 @@
-import { spawnSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { privateList, privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
-import { entry, pinColdFile, privateFile } from '../../adapter-sqlite/src/legacy/paths.mjs';
-import { cutoverRefusal as refuse, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
-import { parseStrictJSON } from './local-descriptor.mjs';
+import { cutoverRefusal as refuse, exchange, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
+import { parseStrictJSON, removeCutoverDirectory } from './local-descriptor.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { privateList, privateRead, privateRemove, privateWrite, syncDirectory } = await cutoverImport('state');
+const { assertPrivateDirectory, entry, pinColdFile, privateFile } = await cutoverImport('paths');
 
 const phases = ['staging', 'exchanging', 'sealed', 'reclaimed', 'active'];
 const pathFor = maintenance => join(maintenance, 'activation.json');
@@ -36,36 +37,59 @@ export async function beginActivation(maintenance, cutover) {
   return receipt;
 }
 
-export function assertNoLegacyCaches(source) {
-  const suffixes = ['.raw-search', '.context-read-v1.sqlite', '.context-read-product-v1.1.sqlite'];
-  if (suffixes.some(suffix => ['', '-wal', '-shm', '-journal'].some(extra => entry(source + suffix + extra)))) {
-    throw refuse('cutover_legacy_cache_present');
+const cacheSuffixes = ['.raw-search', '.context-read-v1.sqlite', '.context-read-product-v1.1.sqlite'];
+const companions = ['', '-wal', '-shm', '-journal'];
+
+async function legacySiblingEntries(source) {
+  const parent = dirname(source), device = assertPrivateDirectory(parent).dev;
+  const files = [], directories = [];
+  async function collect(path, allowDirectory) {
+    const info = entry(path);
+    if (!info) return;
+    if (info.dev !== device) throw refuse('cutover_unsafe_artifact');
+    if (allowDirectory && info.isDirectory()) {
+      assertPrivateDirectory(path);
+      for (const name of await privateList(path)) await collect(join(path, name), true);
+      directories.push(path);
+    } else files.push({ path, identity: inode(privateFile(path)) });
+  }
+  // The cold source proof has already ruled out an uncheckpointed journal.
+  // These names may appear after the exchange while an old opener unwinds.
+  for (const tail of companions.slice(1)) await collect(source + tail, false);
+  for (const suffix of cacheSuffixes) {
+    for (const tail of companions) await collect(source + suffix + tail, suffix === '.raw-search' && tail === '');
+  }
+  // Legacy sidecar creation may leave a private stage beside its final name.
+  const names = await privateList(parent);
+  for (const suffix of cacheSuffixes.slice(1)) {
+    const prefix = '.' + basename(source) + suffix + '.cairn-create-';
+    for (const name of names) {
+      if (name.startsWith(prefix) && /^[1-9][0-9]*-[0-9a-f-]{36}(?:-wal|-shm|-journal)?$/u.test(name.slice(prefix.length))) {
+        await collect(join(parent, name), false);
+      }
+    }
+  }
+  return { files, directories };
+}
+
+async function removeLegacySiblings(source) {
+  const { files, directories } = await legacySiblingEntries(source);
+  for (const { path, identity } of files) {
+    await withColdStoreLease(path, async assertLease => {
+      if (inode(privateFile(path)) !== identity) throw refuse('cutover_unsafe_artifact');
+      await assertLease();
+      await privateRemove(path);
+      await syncDirectory(dirname(path));
+    });
+  }
+  for (const path of directories) {
+    assertPrivateDirectory(path);
+    await removeCutoverDirectory(path, names => names.length === 0);
+    await syncDirectory(dirname(path));
   }
 }
 
-// Atomic exchange leaves no instant in which an old SQLite opener can create
-// a fresh database at the registered pathname. Both names are in one private
-// directory. There is no non-atomic fallback.
-function exchange(source, retired, identity) {
-  const result = spawnSync('/usr/bin/python3', ['-I', '-c', `
-import ctypes, os, signal, sys
-libc = ctypes.CDLL(None, use_errno=True)
-# Stop a pending helper if setup dies. Recovery must be the only process
-# that can perform a second exchange for the same names.
-if libc.prctl(1, signal.SIGKILL, 0, 0, 0) or os.getppid() != int(sys.argv[3]):
-    sys.exit(1)
-source = os.stat(sys.argv[1], follow_symlinks=False)
-if f'{source.st_dev}:{source.st_ino}' != sys.argv[4]:
-    sys.exit(1)
-exchange = libc.renameat2
-exchange.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-if exchange(-100, os.fsencode(sys.argv[1]), -100, os.fsencode(sys.argv[2]), 2):
-    raise OSError(ctypes.get_errno(), 'renameat2')
-`, source, retired, String(process.pid), identity], { env: {}, stdio: 'ignore', timeout: 5000, killSignal: 'SIGKILL' });
-  if (result.error || result.status !== 0) throw refuse('cutover_exchange_unavailable');
-}
-
-async function assertTombstone(path) {
+export async function assertTombstone(path) {
   if (privateFile(path).size !== BigInt(Buffer.byteLength(tombstone)) || await privateRead(path) !== tombstone) {
     throw refuse('cutover_activation_changed');
   }
@@ -94,45 +118,52 @@ export async function retireLegacy({ maintenance, cutover, receipt, targetIdenti
   const exclusion = localCutoverExclusion();
   if (exclusion.retireLegacy) {
     await exclusion.retireLegacy({ source, retired, tombstone, receipt, drain, proveRetired,
-      assertTombstone, assertSiblings: () => assertNoLegacyCaches(source), state: fenceState, syncDirectory, advance,
+      assertTombstone, assertSiblings: () => legacySiblingEntries(source), state: fenceState, syncDirectory, advance,
       notify: state => onCheckpoint(state, structuredClone(cutover)) });
-    return advance;
+  } else {
+    await retireWithExchange();
   }
-  if (receipt.phase === 'exchanging' && inode(entry(source)) === receipt.source) {
-    assertNoLegacyCaches(source);
-    drain();
-    await withColdStoreLease(source, async assertLease => {
-      if (!entry(retired)) await privateWrite(retired, tombstone, { exclusive: true });
-      await assertTombstone(retired);
-      await reattest(assertLease);
-      exchange(source, retired, receipt.source);
-    });
-    await syncDirectory(parent);
-    await onCheckpoint('activation-source-exchanged', structuredClone(cutover));
+  if (receipt.phase === 'sealed') {
+    await removeLegacySiblings(source);
+    await onCheckpoint('activation-caches-removed', structuredClone(cutover));
   }
-  await assertTombstone(source);
   assertCompanionsClosed(source);
-  assertNoLegacyCaches(source);
-  if (receipt.phase === 'exchanging') {
-    if (inode(privateFile(retired)) !== receipt.source) throw refuse('cutover_activation_changed');
-    // A writer may have been waiting on the original inode. Re-prove that
-    // all such handles closed and that the bytes still match the backup.
-    await withColdStoreLease(retired, async assertLease => {
-      await proveRetired(retired, assertLease);
-      await syncDirectory(parent);
-      await advance('sealed', 'activation-legacy-sealed');
-    });
-  }
-  if (receipt.phase === 'sealed' && entry(retired)) {
-    await withColdStoreLease(retired, async assertLease => {
-      if (inode(privateFile(retired)) !== receipt.source) throw refuse('cutover_activation_changed');
-      await proveRetired(retired, assertLease);
-      await privateRemove(retired);
-      await syncDirectory(parent);
-    });
-    await onCheckpoint('activation-source-removed', structuredClone(cutover));
-  }
   return advance;
+
+  async function retireWithExchange() {
+    if (receipt.phase === 'exchanging' && inode(entry(source)) === receipt.source) {
+      drain();
+      await withColdStoreLease(source, async assertLease => {
+        if (!entry(retired)) await privateWrite(retired, tombstone, { exclusive: true });
+        await assertTombstone(retired);
+        await reattest(assertLease);
+        exchange(source, retired, receipt.source);
+      });
+      await syncDirectory(parent);
+      await onCheckpoint('activation-source-exchanged', structuredClone(cutover));
+    }
+    await assertTombstone(source);
+    if (receipt.phase === 'exchanging') {
+      if (inode(privateFile(retired)) !== receipt.source) throw refuse('cutover_activation_changed');
+      // A writer may have been waiting on the original inode. Re-prove that
+      // all such handles closed and that the bytes still match the backup.
+      await withColdStoreLease(retired, async assertLease => {
+        await proveRetired(retired, assertLease);
+        await legacySiblingEntries(source);
+        await syncDirectory(parent);
+        await advance('sealed', 'activation-legacy-sealed');
+      });
+    }
+    if (receipt.phase === 'sealed' && entry(retired)) {
+      await withColdStoreLease(retired, async assertLease => {
+        if (inode(privateFile(retired)) !== receipt.source) throw refuse('cutover_activation_changed');
+        await proveRetired(retired, assertLease);
+        await privateRemove(retired);
+        await syncDirectory(parent);
+      });
+      await onCheckpoint('activation-source-removed', structuredClone(cutover));
+    }
+  }
 }
 
 export async function abortRetirement(cutover, receipt, reclaim, notify) {

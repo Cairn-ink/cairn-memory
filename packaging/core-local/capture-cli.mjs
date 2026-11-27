@@ -46,5 +46,11 @@ async function hook(args, stdin) {
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await hook(process.argv.slice(2), process.stdin);
+  const args = process.argv.slice(2);
+  if (args[0] === 'hook') await hook(args, process.stdin);
+  else {
+    process.stdout.write(JSON.stringify({ version: 'local-raw-setup-v1', status: 'blocked',
+      reason: 'invalid_input', foreground: true, hookTimeoutSeconds: 160 }) + '\n');
+    process.exitCode = 1;
+  }
 }

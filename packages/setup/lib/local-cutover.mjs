@@ -1,21 +1,25 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { processStart } from '../../../adapters/mcp/local-daemon-liveness.mjs';
-import { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
-import { stateLock } from '../../../integrations/client/state-lock.mjs';
-import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { withCutoverCapture } from './local-cutover-capture.mjs';
 import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
 import { assertReclaimedMaintenance, backupFor, maintenanceFor, reclaimAttempt, reclaimMaintenance,
   reclaimPastAttempts } from './local-cutover-reclaim.mjs';
-import { abortRetirement, assertNoLegacyCaches, readActivation } from './local-cutover-retirement.mjs';
+import { abortRetirement, readActivation } from './local-cutover-retirement.mjs';
 import { boundedJSON, canonicalPath, executableFor, ownedDirectory, pidIsDead, readDescriptor, withLocalLock,
   writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
 import { runLocalDaemon } from './local-mode.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { processStart } = await cutoverImport('liveness');
+const { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } = await cutoverImport('state');
+const { stateLock } = await cutoverImport('lock');
+const { entry } = await cutoverImport('paths');
 
 const quiescence = Object.freeze({ admissionsClosed: true, writersStopped: true, readersDrained: true, oldHandlesClosed: true });
+const rejectedLegacyContents = error =>
+  error.code === 'cutover_legacy_content_unrepresentable' || error.key === 'cutover_timeless_raw';
 
 function sourceIdentity(path) {
   const file = entry(path);
@@ -25,7 +29,7 @@ function sourceIdentity(path) {
 }
 
 async function reattestSource(input, cutover, assertLease) {
-  const { byteDigest, verifyLegacyBackupAgainstSource } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
+  const { byteDigest, verifyLegacyBackupAgainstSource } = await cutoverImport('backup');
   const proof = verifyLegacyBackupAgainstSource(input);
   const result = { logicalDigest: proof.logicalDigest, byteDigest: proof.byteDigest,
     sourceDigest: byteDigest(input.path), sourceIdentity: sourceIdentity(input.path) };
@@ -124,9 +128,9 @@ async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigra
     return await withCutoverCapture(root, maintenance, path, false, async () => {
       drainDaemon(root, descriptor, env);
       return withColdStoreLease(path, async assertLease => {
-        const { inventoryLegacyStore } = await import('../../adapter-sqlite/src/legacy/inventory.mjs');
-        const { byteDigest, createLegacyBackup } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
-        const { migrateLegacyStore } = await import('../../adapter-sqlite/src/migrate/index.mjs');
+        const { inventoryLegacyStore } = await cutoverImport('inventory');
+        const { byteDigest, createLegacyBackup } = await cutoverImport('backup');
+        const { migrateLegacyStore } = await cutoverImport('migrate');
         const inventory = inventoryLegacyStore(path, { expectedStoreId: cutover.source?.storeId });
         if (![18, 29, 48, 53].includes(inventory.physical)) throw refuse('legacy_cross_version');
         await assertSourceContents?.(path);
@@ -196,16 +200,16 @@ async function activate(root, descriptor, maintenance, env, manifest, client, on
   });
 }
 
-async function confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint) {
+async function confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint, assertSourceContents) {
   if (descriptor.migration.state !== 'verified') throw refuse('cutover_capture_not_verified');
   const { cutover } = descriptor.migration;
-  const { byteDigest, verifyLegacyBackupAgainstSource } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
-  const { assertSupportedLegacyContents, confirmActivation } = await import('./local-cutover-release.mjs');
+  const { byteDigest, verifyLegacyBackupAgainstSource } = await cutoverImport('backup');
+  const { confirmActivation } = await import('./local-cutover-release.mjs');
   const input = { path: cutover.sourcePath, backupDirectory: backupFor(maintenance, cutover.attemptId),
     expectedStoreId: cutover.source.storeId, quiescence };
   const reattest = async assertLease => {
     await reattestSource(input, cutover, assertLease);
-    await assertSupportedLegacyContents(input.path);
+    await assertSourceContents(input.path);
     await assertLease();
   };
   const proveRetired = async (path, assertLease) => {
@@ -223,7 +227,7 @@ async function confirm(root, descriptor, maintenance, env, manifest, context, re
       confirmActivation({ root, maintenance, descriptor, manifest, env, context, receipt, reattest, proveRetired,
         drain: () => drainDaemon(root, descriptor, env), onCheckpoint }));
   } catch (error) {
-    if (['legacy_backup_stale', 'cutover_target_changed', 'cutover_legacy_content_unrepresentable'].includes(error.code)) {
+    if (['legacy_backup_stale', 'cutover_target_changed'].includes(error.code) || rejectedLegacyContents(error)) {
       const current = await readActivation(maintenance, cutover);
       if (!current || ['staging', 'exchanging'].includes(current.phase)) await abort(root, descriptor, maintenance, onCheckpoint);
     }
@@ -295,13 +299,13 @@ async function ensureMaintenance(root, maintenance) {
 
 // Successful readiness is point-in-time and must be re-attested at activation.
 export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform, context,
-  onCheckpoint = async () => {}, onMigrationCheckpoint }) {
+  stageCandidate, onCheckpoint = async () => {}, onMigrationCheckpoint }) {
   localCutoverExclusion(platform);
   if (!['prepare', 'abort', 'activate-capture', 'prepare-activation', 'confirm-activation'].includes(action) ||
       !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
   return stateLock(join(root, '.cutover.lock'), async () => {
     await recoverCutoverLock(root);
-    return withLocalLock(root, async () => {
+    return withLocalLock(root, async updateChild => {
       const descriptor = await readDescriptor(root, { allowV2: true });
       if (descriptor?.state !== 'installed') throw refuse('cutover_installation_required');
       let migration = descriptor.migration;
@@ -316,12 +320,12 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
       let assertSourceContents;
       if (receipt && action !== 'confirm-activation') throw refuse('cutover_activation_pending');
       if (releaseAction) {
-        const { assertKeylessActivation, assertSupportedLegacyContents, checkActivationClients } = await import('./local-cutover-release.mjs');
-        await assertKeylessActivation(root, env);
+        const { activationModelConfigured, assertSupportedLegacyContents, checkActivationClients } = await import('./local-cutover-release.mjs');
+        const keyed = await activationModelConfigured(root, env);
+        assertSourceContents = path => assertSupportedLegacyContents(path, { keyless: !keyed });
         if (action === 'prepare-activation') {
-          assertNoLegacyCaches(descriptor.database.path);
           await checkActivationClients({ root, descriptor, env, context });
-          assertSourceContents = assertSupportedLegacyContents;
+          if (keyed) context.write(context.t('local_privacy'));
         } else if (migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
       }
       if (action === 'activate-capture' && migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
@@ -339,6 +343,7 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
           basename(path).startsWith('.cairn-cutover-')) throw refuse('cutover_unsafe_path');
       const targetEngineId = manifest?.engineId;
       if (migration && migration.targetEngineId !== targetEngineId) throw refuse('cutover_candidate_changed');
+      await stageCandidate?.({ descriptor, updateChild });
       await checkCoreLocalConfig({ appDirectory: join(root, 'engine', targetEngineId ?? '', 'app'),
         manifest, engineId: targetEngineId, node: descriptor.node });
       if (!migration) {
@@ -353,11 +358,13 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
       const maintenance = maintenanceFor(root, migration.cutover.id);
       await ensureMaintenance(root, maintenance);
       if (action === 'activate-capture') return activate(root, descriptor, maintenance, env, manifest, captureClient, onCheckpoint);
-      if (action === 'confirm-activation') return confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint);
+      if (action === 'confirm-activation') {
+        return confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint, assertSourceContents);
+      }
       try {
         return await prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint, assertSourceContents);
       } catch (error) {
-        if (error.code === 'cutover_legacy_content_unrepresentable') await abort(root, descriptor, maintenance, onCheckpoint);
+        if (rejectedLegacyContents(error)) await abort(root, descriptor, maintenance, onCheckpoint);
         throw error;
       }
     }, { cutover: true });

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -78,7 +78,30 @@ async function withLinuxLease(path, work) {
   }
 }
 
-const linuxExclusion = Object.freeze({ withColdStoreLease: withLinuxLease });
+// Atomic exchange leaves no instant in which an old SQLite opener can create
+// a fresh database at the registered pathname. Both names are in one private
+// directory. There is no non-atomic fallback.
+function exchangeFiles(source, retired, identity) {
+  const result = spawnSync('/usr/bin/python3', ['-I', '-c', `
+import ctypes, os, signal, sys
+libc = ctypes.CDLL(None, use_errno=True)
+# Stop a pending helper if setup dies. Recovery must be the only process
+# that can perform a second exchange for the same names.
+if libc.prctl(1, signal.SIGKILL, 0, 0, 0) or os.getppid() != int(sys.argv[3]):
+    sys.exit(1)
+source = os.stat(sys.argv[1], follow_symlinks=False)
+if f'{source.st_dev}:{source.st_ino}' != sys.argv[4]:
+    sys.exit(1)
+exchange = libc.renameat2
+exchange.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+if exchange(-100, os.fsencode(sys.argv[1]), -100, os.fsencode(sys.argv[2]), 2):
+    raise OSError(ctypes.get_errno(), 'renameat2')
+`, source, retired, String(process.pid), identity], { env: {}, stdio: 'ignore', timeout: 5000, killSignal: 'SIGKILL' });
+  if (result.error || result.status !== 0) throw cutoverRefusal('cutover_exchange_unavailable');
+}
+
+const linuxExclusion = Object.freeze({ withColdStoreLease: withLinuxLease, exchange: exchangeFiles });
+
 const macOSExclusion = darwinExclusion(cutoverRefusal);
 
 export function localCutoverExclusion(platform = process.platform) {
@@ -89,4 +112,8 @@ export function localCutoverExclusion(platform = process.platform) {
 
 export function withColdStoreLease(path, work) {
   return localCutoverExclusion().withColdStoreLease(path, work);
+}
+
+export function exchange(source, retired, identity) {
+  return localCutoverExclusion().exchange(source, retired, identity);
 }

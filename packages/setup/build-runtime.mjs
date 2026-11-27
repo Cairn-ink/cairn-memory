@@ -115,3 +115,6 @@ try {
   try { if (scratch) await rm(scratch, { recursive: true, force: true }); }
   finally { if (buildDirectory) await rm(buildDirectory, { recursive: true, force: true }); }
 }
+
+const { buildSetupCoreLocal } = await import('../../packaging/core-local/setup-runtime.mjs');
+buildSetupCoreLocal(fileURLToPath(new URL('./runtime/', import.meta.url)), { check });

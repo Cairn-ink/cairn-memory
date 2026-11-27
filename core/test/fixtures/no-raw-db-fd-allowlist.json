@@ -2043,5 +2043,80 @@
     "path": "packaging/bin/cairn-memory.mjs",
     "source": "import { realpathSync } from 'node:fs'",
     "reason": "Immutable shipped artifact metadata only: the bin resolves its own invocation path to recognize a symlinked npm .bin entry; never a store path. No DB, WAL or SHM path is opened."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "import { chmodSync, closeSync, fsyncSync, mkdtempSync, openSync, readdirSync,\n  readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'",
+    "reason": "Backup publication binds directory sync and private proof document I/O. Database bytes are handled by the isolated digest child."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "import { createReadStream } from 'node:fs'",
+    "reason": "Fixed digest child imports the read stream for the cold database using its own file descriptor."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "import { open } from 'node:fs/promises'",
+    "reason": "Fixed digest child imports open for the cold database and holds no SQLite connection."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "const fd = openSync(path, 'r');",
+    "reason": "Backup publication syncs only the checked staging directory and the canonical destination parent directory."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "const file = await open(path, 'r');",
+    "reason": "Fixed digest child opens the cold database in a separate Node process with no SQLite connection."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "for await (const chunk of createReadStream(path, { fd: file.fd, autoClose: false })) hash.update(chunk);",
+    "reason": "Fixed digest child streams the cold database through the descriptor that it owns and closes."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "writeFileSync(join(stage, proofName), JSON.stringify(proof) + '\\n',",
+    "reason": "Writes the JSON proof document into the private staging directory."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "source": "const proof = JSON.parse(readFileSync(proofPath, 'utf8'));",
+    "reason": "Reads the bounded JSON proof document from the private published backup directory."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs",
+    "source": "import { chmodSync, closeSync, fsyncSync, linkSync, mkdtempSync, openSync, readdirSync, rmSync } from \"node:fs\"",
+    "reason": "Migration bootstrap binds directory sync and pathname operations for atomic publication."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs",
+    "source": "const fd = openSync(parent, \"r\");",
+    "reason": "Migration publication syncs only the canonical private parent directory validated by privateLocation."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/legacy/paths.mjs",
+    "source": "import { realpathSync } from 'node:fs'",
+    "reason": "Canonical path resolution for the validated private parent directory uses filesystem metadata."
+  },
+  {
+    "path": "packages/adapter-sqlite/src/uow.mjs",
+    "source": "import { realpathSync, statSync } from \"node:fs\"",
+    "reason": "Unit-of-work verifies canonical path identity using filesystem metadata."
+  },
+  {
+    "path": "packaging/core-local/capture-binding.mjs",
+    "source": "import { realpath, lstat } from 'node:fs/promises'",
+    "reason": "Capture checks canonical path and file identity using filesystem metadata."
+  },
+  {
+    "path": "packaging/core-local/capture-lock.mjs",
+    "source": "import { readFile, readlink } from 'node:fs/promises'",
+    "reason": "Linux capture lock liveness reads kernel boot identity and the PID namespace link from procfs."
+  },
+  {
+    "path": "packaging/core-local/capture-lock.mjs",
+    "source": "const boot = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();",
+    "reason": "Reads the fixed procfs kernel boot identity for Linux capture lock liveness."
   }
 ]

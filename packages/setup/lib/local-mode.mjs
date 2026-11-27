@@ -3,12 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
-import { availableClient, codexHome, inspectCodexServers, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
+import { availableClient, codexHome, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
 import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
   engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree, localFilesystemError } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
-import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
+import { registerCodex, detachCodex, checkCodexLock, codexCapabilities, inspectLocalCodexServers } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
 import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup, engineOperatorEnvironment } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
@@ -27,7 +27,13 @@ export function modeUnion(states, pending = false) {
 }
 export async function detectLocalMode({ env = process.env, runClaude, inspection }) {
   let root, descriptor = null, descriptorError;
-  try { root = await localRoot(env); descriptor = await readDescriptor(root); }
+  try {
+    root = await localRoot(env);
+    descriptor = await readDescriptor(root, { allowV2: true });
+    if (descriptor?.version === 'cairn-local-installation-v2' && !descriptor.migration?.cutover) {
+      throw new SetupError('local_recovery_required', 2, { path: join(root, 'installation.json') });
+    }
+  }
   catch (error) { root = requestedRoot(env); descriptorError = error; }
   const destinations = { claude: await canonicalPath(env.HOME || homedir()),
     codex: join(await canonicalPath(codexHome(env)), 'config.toml') };
@@ -71,7 +77,7 @@ export async function detectLocalMode({ env = process.env, runClaude, inspection
       }
     } else {
       try {
-        const entries = await inspectCodexServers({ ...inspection, home: codexHome(env), env });
+        const entries = await inspectLocalCodexServers({ ...inspection, home: codexHome(env), env });
         state.cloud ||= entries.some(entry => entry.name === 'cairn' && entry.type === 'streamable_http');
         state.entry = entries.find(entry => entry.name === 'cairn-local' && entry.type === 'stdio') ?? null;
         state.local ||= Boolean(state.entry);
@@ -133,6 +139,14 @@ function validateLocalOptions(options, selection, descriptor) {
 }
 export async function routeLocalMode(options, selection, context) {
   const [action, ...flags] = selection.argv;
+  if (action === 'local-cutover') {
+    if (selection.client || flags.length !== 1 || !['--activate', '--confirm', '--abort'].includes(flags[0])) {
+      throw new SetupError('unknown_command', 2);
+    }
+    if (!context.supportedNode(context.nodeVersion)) throw new SetupError('node_required');
+    const { cutoverActions, runInstalledCutover } = await import('./local-cutover-command.mjs');
+    return { handled: true, code: await runInstalledCutover(cutoverActions[flags[0]], context) };
+  }
   if (action === 'daemon') {
     context.beforeRouting?.();
     if (!options.local || selection.client || flags.length !== 1 || !['status', 'stop'].includes(flags[0]))
@@ -148,9 +162,45 @@ export async function routeLocalMode(options, selection, context) {
   const { write, t, interactive, prompt } = context;
   const detection = await detectLocalMode(context);
   const { states, descriptor, union } = detection;
-  if (action === 'setup' && (options.local || union === 'local' || (detection.descriptorError && !options.cloud)))
+  if (action === 'setup' && (options.local || union === 'local' ||
+      (!options.cloud && (descriptor?.migration?.cutover || detection.descriptorError))))
     validateLocalOptions(options, selection, descriptor);
   context.beforeRouting?.();
+  if (descriptor?.migration?.cutover && !detection.descriptorError) {
+    if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };
+    if (action === 'setup' && options.cloud) return refusal('mode_conflict_local', detection, context);
+    const { activeCutoverTarget, showInstalledCutover } = await import('./local-cutover-command.mjs');
+    if (action === 'setup' && ['uninstalled', 'pending'].includes(descriptor.state)) {
+      if (union === 'mixed' || union === 'cloud') return refusal(union === 'mixed' ? 'mode_mixed' : 'mode_conflict_cloud', detection, context);
+      if (union === 'unknown') return refusal('mode_unknown', detection, context);
+      if (flags.includes('--dry-run')) return { handled: true, code: await localDryRun(options, selection, detection, context) };
+      const { reattachActiveLocal } = await import('./local-cutover-reattach.mjs');
+      return { handled: true, code: await reattachActiveLocal(options, selection, detection, context) };
+    }
+    if (action === 'setup' && descriptor.state === 'installed') {
+      const target = await activeCutoverTarget(detection.root, descriptor).catch(() => undefined);
+      if (target) {
+        if (union === 'mixed') return refusal('mode_mixed', detection, context);
+        for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context, { client, ...states[client].changedHome });
+        if (union === 'unknown') return refusal('mode_unknown', detection, context);
+        if (flags.includes('--dry-run')) return { handled: true, code: await localDryRun(options, selection, detection, context) };
+        const { repairActiveLocal } = await import('./local-cutover-repair.mjs');
+        return { handled: true, code: await repairActiveLocal(options, selection, detection, context) };
+      }
+    }
+    if (action === 'uninstall' && options.local) {
+      const target = await activeCutoverTarget(detection.root, descriptor).catch(() => undefined);
+      if (!target) return refusal('local_recovery_required', detection, context);
+      validateLocalOptions(options, selection, descriptor);
+      return { handled: true, code: await uninstallLocal(options, selection, detection, context) };
+    }
+    if (action === 'status' && descriptor.state === 'uninstalled') return { handled: false, detection, statusCode: 0 };
+    if (action === 'status' || action === 'setup') {
+      return { handled: true, code: await showInstalledCutover(detection.root, descriptor, context,
+        { retryPrepare: action === 'setup' && !flags.includes('--dry-run') && !selection.client && !options.noCapture }) };
+    }
+    return refusal('local_recovery_required', detection, context);
+  }
   if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };
   if (action === 'uninstall' && options.local) {
     validateLocalOptions(options, selection, descriptor);
@@ -210,23 +260,17 @@ export async function routeLocalMode(options, selection, context) {
     options = { ...options, db };
   }
   if ((context.platform ?? process.platform) === 'win32') return refusal('local_windows_unsupported', detection, context);
-  if (flags.includes('--dry-run')) {
-    const cp = descriptor?.operation?.checkpoints.codex;
-    if (!detection.descriptorError && !Object.values(states).some(state => state.changedHome) &&
-        previewClients(options, selection, detection).includes('codex') &&
-        !['done', 'manual', 'detached'].includes(cp?.state) &&
-        !await codexPrecheck(detection, context, { add: descriptor?.operation?.kind !== 'uninstall', dryRun: true })) return { handled: true, code: 2 };
-    write(t('local_dry_run'));
-    if (detection.descriptorError) {
-      write(t(detection.descriptorError.key)); command(write, shellArgument(join(detection.root, 'installation.json')));
-    }
-    if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
-    return { handled: true, code: 0 };
-  }
+  if (flags.includes('--dry-run')) return { handled: true, code: await localDryRun(options, selection, detection, context) };
   if (detection.descriptorError) return refusal(detection.descriptorError.key, detection, context);
   for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
     { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
+  if (descriptor?.state === 'installed' && descriptor.installerVersion === '0.6.11' &&
+      (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform)) {
+    if (options.noCapture || selection.client) throw new SetupError('local_option_invalid', 2);
+    const { runInstalledCutover } = await import('./local-cutover-command.mjs');
+    return { handled: true, code: await runInstalledCutover('prepare-activation', context) };
+  }
   return { handled: true, code: await setupLocal(options, selection, detection, context) };
 }
 async function codexPrecheck(detection, context, { add = false, dryRun = false } = {}) {
@@ -252,6 +296,20 @@ function previewClients(options, selection, detection) {
   return detection.descriptor?.operation?.clients ?? clientNames.filter(client =>
     detection.states[client].available && (!selection.client || selection.client === client) &&
     (options.local || recorded(detection.descriptor, client)));
+}
+async function localDryRun(options, selection, detection, context) {
+  const { descriptor, states } = detection, { write, t } = context;
+  const cp = descriptor?.operation?.checkpoints.codex;
+  if (!detection.descriptorError && !Object.values(states).some(state => state.changedHome) &&
+      previewClients(options, selection, detection).includes('codex') &&
+      !['done', 'manual', 'detached'].includes(cp?.state) &&
+      !await codexPrecheck(detection, context, { add: descriptor?.operation?.kind !== 'uninstall', dryRun: true })) return 2;
+  write(t('local_dry_run'));
+  if (detection.descriptorError) {
+    write(t(detection.descriptorError.key)); command(write, shellArgument(join(detection.root, 'installation.json')));
+  }
+  if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
+  return 0;
 }
 async function setupLocal(options, selection, detection, context) {
   const { write, t, prompt, interactive, env, runClaude, installerVersion, progress = {} } = context;
@@ -437,10 +495,17 @@ export function runLocalDaemon(action, root, descriptor, env, stdout) {
 async function daemonLocal(action, { env, write, t }) {
   const root = await localRoot(env);
   const notInstalled = () => { write(t('not_installed')); return 2; };
-  if ((await readDescriptor(root))?.state !== 'installed') return notInstalled();
+  if ((await readDescriptor(root, { allowV2: true }))?.state !== 'installed') return notInstalled();
   return withLocalLock(root, async () => {
-    const descriptor = await readDescriptor(root);
+    const descriptor = await readDescriptor(root, { allowV2: true });
     if (descriptor?.state !== 'installed') return notInstalled();
+    if (descriptor.migration?.cutover) {
+      const { runActiveDaemon } = await import('./local-cutover-command.mjs');
+      const result = await runActiveDaemon(action, root, descriptor);
+      if (result.stdout) write.literal(result.stdout.trimEnd());
+      return result.code;
+    }
+    if (descriptor.version === 'cairn-local-installation-v2') throw new SetupError('local_recovery_required', 2);
     return runLocalDaemon(action, root, descriptor, env, 'inherit');
   });
 }
@@ -471,7 +536,20 @@ async function uninstallLocal(options, selection, detection, context) {
   progress.localOperation = true;
   const root = await localRoot(env, { create: true });
   return withLocalLock(root, async onChild => {
-    let descriptor = detection.descriptorError ? null : await readDescriptor(root);
+    const active = detection.descriptor?.migration?.cutover;
+    let descriptor = detection.descriptorError ? null : await readDescriptor(root, { allowV2: !!active });
+    let activeTarget, activeDaemon, disableCapture;
+    if (active) {
+      if (JSON.stringify(descriptor) !== JSON.stringify(detection.descriptor)) throw new SetupError('local_recovery_required', 2);
+      const { activeCutoverTarget, runActiveDaemon } = await import('./local-cutover-command.mjs');
+      activeTarget = await activeCutoverTarget(root, descriptor);
+      if (!activeTarget) throw new SetupError('local_recovery_required', 2);
+      const { maintenanceFor } = await import('./local-cutover-reclaim.mjs');
+      const { disableActiveCapture } = await import('./local-cutover-detach.mjs');
+      const maintenance = maintenanceFor(root, active.id);
+      disableCapture = client => disableActiveCapture(root, maintenance, descriptor, client, context);
+      activeDaemon = () => runActiveDaemon('stop', root, descriptor);
+    }
     if (descriptor?.operation?.kind === 'setup') {
       const previous = descriptor.operation;
       descriptor.state = 'uninstalling';
@@ -488,9 +566,12 @@ async function uninstallLocal(options, selection, detection, context) {
       const cp = descriptor?.operation?.checkpoints[client];
       if (cp?.state === 'detached') continue;
       if (cp) { cp.state = 'detaching'; await writeDescriptor(root, descriptor); }
-      await configureCapture(root, descriptor, [client], { ...context, onChild }, { uninstall: true });
+      if (disableCapture) await disableCapture(client);
+      else await configureCapture(root, descriptor, [client], { ...context, onChild }, { uninstall: true });
       if (client === 'claude') await detachClaude({ home: detection.destinations.claude, run: runClaude });
-      else await detachCodex({ home: dirname(detection.destinations.codex), env, inspection, write, t });
+      else if (!active || detection.states.codex.entry) {
+        await detachCodex({ home: dirname(detection.destinations.codex), env, inspection, write, t });
+      }
       if (descriptor) { recordClient(descriptor, client, null); await writeDescriptor(root, descriptor); }
       write(t('local_uninstall_receipt')); write.literal(client + ': cairn-local');
     }
@@ -507,12 +588,18 @@ async function uninstallLocal(options, selection, detection, context) {
         }
         // Engine records pin their runtime path. Retain it with disabled identity
         // so an identical setup request can reactivate without rewriting authority.
-        if (!await retainedCapture(root)) {
-          const engine = await deletionPath(root, 'engine', { databasePath: descriptor.database.path });
-          if (descriptor.engine && descriptor.node) {
-            try { runLocalDaemon('stop', root, descriptor, env, 'ignore'); }
-            catch { /* Best effort. Engine removal proceeds regardless of the stop outcome. */ }
+        const retained = await retainedCapture(root);
+        if (activeDaemon && descriptor.state !== 'uninstalled') {
+          const stopped = await activeDaemon();
+          if (stopped.code || JSON.parse(stopped.stdout).still_running) {
+            write(t('local_uninstall_retained')); write.literal(shellArgument(join(root, 'engine'))); return 2;
           }
+        } else if (!retained && descriptor.engine && descriptor.node) {
+          try { runLocalDaemon('stop', root, descriptor, env, 'ignore'); }
+          catch { /* Best effort. Engine removal proceeds regardless of the stop outcome. */ }
+        }
+        if (!retained) {
+          const engine = await deletionPath(root, 'engine', { databasePath: activeTarget ?? descriptor.database.path });
           await rm(engine, { recursive: true, force: true });
         }
         descriptor.state = 'uninstalled'; descriptor.engine = null; descriptor.node = null; descriptor.operation = null;
@@ -523,10 +610,10 @@ async function uninstallLocal(options, selection, detection, context) {
       write.literal('rm -rf -- ' + shellArgument(join(root, 'engine')));
     }
     if (options.purgeConfig) for (const name of ['installation.json', '.npmrc']) {
-      const path = await deletionPath(root, name, { purge: true, databasePath: descriptor?.database.path });
+      const path = await deletionPath(root, name, { purge: true, databasePath: activeTarget ?? descriptor?.database.path });
       if (await exists(path)) { await rm(path); write(t('local_uninstall_receipt')); write.literal(shellArgument(path)); }
     }
     write(t('local_uninstall_done')); write(t('local_data_kept'));
-    write.literal(shellArgument(descriptor?.database.path ?? join(root, 'data/memory.sqlite'))); return 0;
+    write.literal(shellArgument(activeTarget ?? descriptor?.database.path ?? join(root, 'data/memory.sqlite'))); return 0;
   });
 }

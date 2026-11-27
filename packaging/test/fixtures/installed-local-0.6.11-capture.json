@@ -39,6 +39,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -112,6 +113,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -160,6 +162,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -208,6 +211,7 @@
         "reason": "partial_record"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -288,6 +292,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -343,6 +348,7 @@
         "reason": "event_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -394,6 +400,7 @@
       "acknowledgements": [],
       "hook": null,
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -440,6 +447,7 @@
         "reason": "source_unqualified"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -492,6 +500,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -544,6 +553,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -628,6 +638,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -719,6 +730,7 @@
         "reason": null
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -785,6 +797,7 @@
         "reason": "capture_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -851,6 +864,7 @@
         "reason": "rearm_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -917,6 +931,7 @@
         "reason": "rearm_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -983,6 +998,7 @@
         "reason": "authority_changed"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     },
     {
@@ -1038,6 +1054,7 @@
         "reason": "rearm_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": true
     },
     {
@@ -1093,6 +1110,7 @@
         "reason": "rearm_refused"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": true
     },
     {
@@ -1148,6 +1166,7 @@
         "reason": "authority_changed"
       },
       "modelCalls": 0,
+      "cardWrites": 0,
       "closedFileContainsDeletedText": null
     }
   ]
