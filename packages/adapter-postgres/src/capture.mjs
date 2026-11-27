@@ -1,7 +1,7 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
 import { copyFinishItems, finishMemories, readIndexRevision, trackFinish } from "./capture-finish.mjs";
 import {
-  clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
+  clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, pgText, readFailure,
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
@@ -126,6 +126,19 @@ export async function terminateDirectClaims(query, owner, { client, sessionId })
   return rows.length > 0;
 }
 
+/** @param {Query} query @param {Pick<CaptureKey, "scope" | "client" | "sessionId">} key
+ * @param {CaptureMessage[]} batch */
+async function blankForgottenMessages(query, { scope, client, sessionId }, batch) {
+  const ids = batch.map(({ id }) => id).filter(pgText);
+  const { rows } = await query(`SELECT DISTINCT message_id FROM core_memory_receipts
+    WHERE user_id = $1 AND client = $2 AND session_id = $3 AND forgotten_at IS NOT NULL AND message_id = ANY($4::text[])`,
+  [scope.owner, client, sessionId, ids]);
+  const forgotten = new Set(rows.map(({ message_id }) => message_id));
+  for (const message of batch) {
+    if (forgotten.has(message.id)) message.content = "";
+  }
+}
+
 /** @param {Query} query @param {CaptureKey} key @param {boolean} fenced @param {CaptureMessage[]} [batch]
  * @returns {Promise<CaptureRow | null | undefined>} Null when a fence refuses a new event.
  */
@@ -135,6 +148,9 @@ async function reserveEvent(query, key, fenced, batch) {
   const { rows: [existing] } = await query(select, params);
   if (existing) return existing;
   if (fenced) return null;
+  if (batch && batch.length > 24) throw new CoreError("invalid_input");
+  // Keep the caller's digest for redelivery and scrub the copied outbox before persisting it.
+  if (batch?.length) await blankForgottenMessages(query, key, batch);
   const { raw, metadata } = encodeRequest(key, batch ?? []);
   const { rows } = await query(INSERT_EVENT, [
     ...params, key.sessionId, key.scope.namespace, key.payloadDigest, raw, batch !== undefined, metadata,
@@ -457,7 +473,6 @@ function requestIdentifier(value) {
 
 /** @param {CaptureKey} key @param {CaptureMessage[]} batch */
 function encodeRequest(key, batch) {
-  if (batch.length > 24) throw new CoreError("invalid_input");
   /** @type {Record<number, {id?: string, occurredAtMs?: number}>} */
   const metadata = {};
   const ids = new Set(batch.map(({ id }) => id));
