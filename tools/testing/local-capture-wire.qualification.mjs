@@ -291,16 +291,18 @@ syncBuiltinESMExports();
   return path;
 }
 
-async function prepareBaseline(installed, binary, database) {
+async function prepareBaseline(installed, binary, database, { captureRoot = root, namespace: fixedNamespace, captureClient } = {}) {
   const cli = join(installed, 'integrations/client/raw/local-setup-cli.mjs');
   const seed = setupSeed();
   const setup = (args, expected) =>
     assert.equal(JSON.parse(ok(child(node, [...flags, '--import', seed, cli, ...args]))).status, expected);
-  setup(['init', '--database', database], 'initialized');
-  const usage = directory(join(root, 'usage'));
-  const capture = directory(join(root, 'capture'));
+  if (fixedNamespace === undefined) setup(['init', '--database', database], 'initialized');
+  const usage = directory(join(captureRoot, 'usage'));
+  const capture = directory(join(captureRoot, 'capture'));
   const clients = {};
-  for (const [name, client, namespace] of [['claude', 'claude-code', project], ['codex', 'codex', personal]]) {
+  for (const [name, client, legacyNamespace] of [['claude', 'claude-code', project], ['codex', 'codex', personal]]) {
+    if (captureClient && name !== captureClient) continue;
+    const namespace = fixedNamespace ?? legacyNamespace;
     const config = directory(join(home, name));
     const installationDirectory = join(capture, name);
     const sourceRoot = directory(join(config, 'sources'));
@@ -329,8 +331,8 @@ async function prepareBaseline(installed, binary, database) {
     setup(['activate', '--installation', installationDirectory], 'active');
     clients[name] = { request, sourcePath };
   }
-  const forkPath = join(clients.codex.request.sourceRoot, 'fork.jsonl');
-  privateWrite(forkPath, '');
+  const forkPath = clients.codex && join(clients.codex.request.sourceRoot, 'fork.jsonl');
+  if (forkPath) privateWrite(forkPath, '');
   return { clients, cli, forkPath };
 }
 
@@ -389,7 +391,7 @@ async function baseline(installed) {
       stdin: step.literal ?? JSON.stringify({ ...payload, transcript_path: '$transcript' }), ...outcome,
       cursor: cursor(installationDirectory), archived: archived(database), acknowledgements,
       hook: observations.find(row => row.kind === 'hook')?.outcome ?? null,
-      modelCalls: observations.filter(({ kind }) => kind === 'model').length, closedFileContainsDeletedText });
+      modelCalls: observations.filter(({ kind }) => kind === 'model').length, cardWrites: 0, closedFileContainsDeletedText });
   }
   assert.ok(exchanges.find(row => row.label === 'claude append').archived.some(row => row.content?.includes(sentinel)));
   assert.ok(exchanges.find(row => row.label === 'codex append').archived.some(row => row.content?.includes('Synthetic Codex turn.')));
@@ -404,13 +406,18 @@ async function baseline(installed) {
 try {
   directory(home);
   privateWrite(trace, '');
-  const installed = installBaseline();
   const mode = process.argv[2];
-  if (mode === '--candidate') {
+  if (mode === '--candidate' || mode === '--installed-upgrade') {
     const { runCandidate } = await import('./local-capture-wire-candidate.mjs');
-    await runCandidate({ root, home, installed, child, ok, sql, read, privateWrite, directory, moduleAt, flags,
-      cases, sessions, sentinel, fakeCodex, prepareBaseline, cursor, cursorFilename, golden: read(goldenPath), instrumentation, calls, node, env });
+    const fixture = { root, home, child, ok, sql, read, privateWrite, directory, moduleAt, flags, cases, sessions,
+      sentinel, fakeCodex, prepareBaseline, cursor, cursorFilename, golden: read(goldenPath), instrumentation, calls, node, env };
+    if (mode === '--installed-upgrade') {
+      const { withUpgradeInstallers } = await import('./local-cutover-upgrade.qualification.mjs');
+      const { upgradeCaptureFixture } = await import('./local-capture-wire-candidate.mjs');
+      await withUpgradeInstallers(installers => runCandidate(fixture, binary => upgradeCaptureFixture(fixture, binary, installers)));
+    } else await runCandidate({ ...fixture, installed: installBaseline() });
   } else {
+    const installed = installBaseline();
     const observed = { version: '0.6.11', exchanges: await baseline(installed) };
     if (mode === '--record') writeFileSync(goldenPath, JSON.stringify(observed, null, 2) + '\n');
     else {

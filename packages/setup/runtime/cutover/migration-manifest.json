@@ -1,0 +1,1227 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    "adapters/mcp/local-daemon-liveness.mjs",
+    "integrations/client/private-state.mjs",
+    "integrations/client/raw/local-host-preparation.mjs",
+    "integrations/client/raw/local-host-profile.mjs",
+    "integrations/client/raw/local-settings-lock.mjs",
+    "integrations/client/raw/local-setup-files.mjs",
+    "integrations/client/raw/local-setup-input.mjs",
+    "integrations/client/state-lock.mjs",
+    "packages/adapter-sqlite/src/legacy/backup.mjs",
+    "packages/adapter-sqlite/src/legacy/inventory.mjs",
+    "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs",
+    "packages/adapter-sqlite/src/legacy/paths.mjs",
+    "packages/adapter-sqlite/src/migrate/index.mjs",
+    "packaging/core-local/capture-binding.mjs",
+    "packaging/core-local/provider-config.mjs"
+  ],
+  "imports": {
+    "adapters/local/configuration.mjs": [
+      "core/asset-schema.mjs",
+      "core/card-current-schema.mjs",
+      "core/content-safety-schema.mjs",
+      "core/existing-store.mjs",
+      "core/local-authority-input.mjs",
+      "core/role-profile-schema.mjs",
+      "integrations/client/private-state.mjs",
+      "integrations/client/raw/protocol.mjs",
+      "node:crypto",
+      "node:path",
+      "node:sqlite"
+    ],
+    "adapters/mcp/local-daemon-identity.mjs": [
+      "adapters/mcp/local-daemon-state.mjs",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path",
+      "node:url"
+    ],
+    "adapters/mcp/local-daemon-liveness.mjs": [
+      "adapters/mcp/local-daemon-identity.mjs",
+      "adapters/mcp/local-daemon-state.mjs",
+      "adapters/mcp/local-daemon-wire.mjs",
+      "integrations/client/file-lock.mjs",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "adapters/mcp/local-daemon-state.mjs": [
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "adapters/mcp/local-daemon-wire.mjs": [
+      "adapters/mcp/local-daemon-identity.mjs",
+      "adapters/mcp/local-daemon-state.mjs",
+      "node:crypto",
+      "node:stream"
+    ],
+    "core/asset-identity.mjs": [
+      "core/validation.mjs",
+      "node:crypto",
+      "node:util"
+    ],
+    "core/asset-schema.mjs": [
+      "core/method-package-schema.mjs",
+      "core/validation.mjs"
+    ],
+    "core/card-current-facade.mjs": [
+      "core/card-current-input.mjs",
+      "core/private-card-facade.mjs",
+      "core/private-card-input.mjs",
+      "core/validation.mjs"
+    ],
+    "core/card-current-input.mjs": [
+      "core/method-package-input.mjs",
+      "core/task-receipt.mjs",
+      "core/validation.mjs"
+    ],
+    "core/card-current-schema.mjs": [
+      "core/card-current-input.mjs",
+      "core/validation.mjs"
+    ],
+    "core/card-lineage-base-schema.mjs": [],
+    "core/card-lineage-schema.mjs": [
+      "core/private-card-schema.mjs"
+    ],
+    "core/card-lineage.mjs": [
+      "core/card-raw-sources.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/private-card-input.mjs",
+      "core/raw-lineage-storage.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/card-raw-sources.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/private-card-schema.mjs",
+      "core/raw-source-input.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/claim-qualification-input.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/claim-qualification-schema.mjs": [],
+    "core/claim-qualification-storage.mjs": [
+      "core/claim-qualification-input.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/classification-journal-schema.mjs": [],
+    "core/commit-dispatch.mjs": [
+      "core/content-suppression-storage.mjs",
+      "core/validation.mjs",
+      "node:async_hooks",
+      "node:util"
+    ],
+    "core/confirmation-schema.mjs": [
+      "core/index-schema.mjs"
+    ],
+    "core/content-safety-boundary.mjs": [
+      "core/card-lineage.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/content-write-context.mjs",
+      "core/private-card-input.mjs",
+      "core/validation.mjs",
+      "node:async_hooks",
+      "node:util"
+    ],
+    "core/content-safety-classifier.mjs": [],
+    "core/content-safety-layout.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/validation.mjs"
+    ],
+    "core/content-safety-migration.mjs": [
+      "core/card-lineage-schema.mjs",
+      "core/card-lineage.mjs",
+      "core/content-safety-classifier.mjs",
+      "core/content-safety-layout.mjs",
+      "core/content-safety-observations.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/context-product-schema.mjs",
+      "core/database.mjs",
+      "core/sqlite-journal-probe.mjs",
+      "core/validation.mjs",
+      "node:child_process",
+      "node:crypto",
+      "node:path",
+      "node:sqlite",
+      "node:url"
+    ],
+    "core/content-safety-observations.mjs": [
+      "core/card-raw-sources.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/context-product-schema.mjs",
+      "core/raw-source-roots.mjs",
+      "node:crypto"
+    ],
+    "core/content-safety-schema.mjs": [
+      "core/card-lineage-base-schema.mjs",
+      "core/card-lineage-schema.mjs",
+      "core/content-safety-layout.mjs",
+      "core/validation.mjs",
+      "node:async_hooks"
+    ],
+    "core/content-safety.mjs": [
+      "core/card-lineage.mjs",
+      "core/card-raw-sources.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/private-card-input.mjs",
+      "core/raw-lineage-storage.mjs",
+      "node:crypto"
+    ],
+    "core/content-suppression-storage.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/private-card-schema.mjs",
+      "core/raw-source-roots.mjs",
+      "core/validation.mjs",
+      "node:async_hooks",
+      "node:crypto"
+    ],
+    "core/content-write-changes.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/content-write-context.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/validation.mjs",
+      "node:async_hooks"
+    ],
+    "core/content-write-safety.mjs": [
+      "core/card-lineage.mjs",
+      "core/content-safety-boundary.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/content-write-changes.mjs",
+      "core/content-write-context.mjs",
+      "core/private-card-input.mjs",
+      "core/raw-lineage-storage.mjs",
+      "core/raw-source-roots.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/context-product-schema.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/validation.mjs"
+    ],
+    "core/context-read-embedder.mjs": [
+      "core/context-read-tokenize.mjs",
+      "node:crypto"
+    ],
+    "core/context-read-tokenize.mjs": [],
+    "core/database.mjs": [
+      "core/asset-schema.mjs",
+      "core/card-current-schema.mjs",
+      "core/claim-qualification-schema.mjs",
+      "core/classification-journal-schema.mjs",
+      "core/commit-dispatch.mjs",
+      "core/confirmation-schema.mjs",
+      "core/content-safety-layout.mjs",
+      "core/content-safety-migration.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/content-write-context.mjs",
+      "core/content-write-safety.mjs",
+      "core/context-product-schema.mjs",
+      "core/episode-schema.mjs",
+      "core/existing-store.mjs",
+      "core/index-schema.mjs",
+      "core/local-authority-schema.mjs",
+      "core/method-package-migration.mjs",
+      "core/ordered-capture-schema.mjs",
+      "core/private-card-schema.mjs",
+      "core/private-evidence-schema.mjs",
+      "core/private-organization-schema.mjs",
+      "core/qualified-transition-schema.mjs",
+      "core/rationale-schema.mjs",
+      "core/raw-deletion-schema.mjs",
+      "core/raw-lineage-schema.mjs",
+      "core/raw-schema.mjs",
+      "core/raw-source-roots.mjs",
+      "core/raw-source-schema.mjs",
+      "core/role-profile-schema.mjs",
+      "core/sqlite-journal-probe.mjs",
+      "core/staged-evidence-schema.mjs",
+      "core/store-fence.mjs",
+      "core/validation.mjs",
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "node:sqlite",
+      "node:util"
+    ],
+    "core/episode-schema.mjs": [
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/existing-store.mjs": [
+      "core/asset-schema.mjs",
+      "core/card-current-schema.mjs",
+      "core/content-safety-layout.mjs",
+      "core/content-safety-schema.mjs",
+      "core/context-product-schema.mjs",
+      "core/local-authority-input.mjs",
+      "core/local-authority-schema.mjs",
+      "core/method-package-schema.mjs",
+      "core/role-profile-schema.mjs",
+      "core/validation.mjs",
+      "node:fs",
+      "node:path",
+      "node:sqlite",
+      "node:url"
+    ],
+    "core/index-schema.mjs": [],
+    "core/local-authority-input.mjs": [
+      "core/raw-input.mjs",
+      "core/validation.mjs",
+      "node:util"
+    ],
+    "core/local-authority-schema.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/validation.mjs"
+    ],
+    "core/method-package-input.mjs": [
+      "core/asset-identity.mjs",
+      "core/private-card-input.mjs",
+      "core/private-evidence-input.mjs",
+      "core/validation.mjs",
+      "node:util",
+      "plugins/cairn-memory/lib/redact.mjs"
+    ],
+    "core/method-package-migration.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/existing-store.mjs",
+      "core/local-authority-schema.mjs",
+      "core/method-package-schema.mjs",
+      "core/private-card-schema.mjs",
+      "core/private-evidence-schema.mjs",
+      "core/private-organization-schema.mjs",
+      "core/raw-deletion-schema.mjs",
+      "core/raw-lineage-schema.mjs",
+      "core/raw-schema.mjs",
+      "core/raw-source-schema.mjs",
+      "core/validation.mjs"
+    ],
+    "core/method-package-schema.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/ordered-capture-schema.mjs": [],
+    "core/placement-input.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/private-card-facade.mjs": [
+      "core/card-current-facade.mjs",
+      "core/card-current-input.mjs",
+      "core/commit-dispatch.mjs",
+      "core/content-safety-boundary.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/content-write-context.mjs",
+      "core/database.mjs",
+      "core/private-card-input.mjs",
+      "core/private-evidence-input.mjs",
+      "core/private-organization-input.mjs",
+      "core/validation.mjs"
+    ],
+    "core/private-card-input.mjs": [
+      "core/card-current-input.mjs",
+      "core/private-evidence-input.mjs",
+      "core/private-organization-input.mjs",
+      "core/raw-source-input.mjs",
+      "core/validation.mjs",
+      "node:crypto",
+      "plugins/cairn-memory/lib/redact.mjs"
+    ],
+    "core/private-card-schema.mjs": [],
+    "core/private-evidence-input.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/private-evidence-schema.mjs": [],
+    "core/private-organization-input.mjs": [
+      "core/placement-input.mjs",
+      "core/private-evidence-input.mjs",
+      "core/validation.mjs"
+    ],
+    "core/private-organization-schema.mjs": [],
+    "core/procedural-storage.mjs": [
+      "core/database.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/qualified-transition-schema.mjs": [],
+    "core/rationale-schema.mjs": [],
+    "core/raw-deletion-schema.mjs": [],
+    "core/raw-input.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/raw-lineage-schema.mjs": [],
+    "core/raw-lineage-storage.mjs": [
+      "core/card-raw-sources.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/raw-source-roots.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/raw-schema.mjs": [],
+    "core/raw-search-authority.mjs": [
+      "core/card-raw-sources.mjs",
+      "core/content-safety-boundary.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/content-suppression-storage.mjs",
+      "core/database.mjs",
+      "core/private-card-facade.mjs",
+      "core/raw-search-input.mjs",
+      "core/raw-search-sqlite.mjs",
+      "core/raw-source-input.mjs",
+      "core/raw-source-reader.mjs",
+      "core/raw-source-roots.mjs",
+      "core/validation.mjs",
+      "node:crypto",
+      "node:perf_hooks"
+    ],
+    "core/raw-search-input.mjs": [
+      "core/context-read-embedder.mjs",
+      "core/local-authority-input.mjs",
+      "core/validation.mjs"
+    ],
+    "core/raw-search-sqlite.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/raw-source-input.mjs": [
+      "core/validation.mjs"
+    ],
+    "core/raw-source-reader.mjs": [
+      "core/card-raw-sources.mjs",
+      "core/content-safety-boundary.mjs",
+      "core/content-safety.mjs",
+      "core/raw-input.mjs",
+      "core/raw-source-input.mjs",
+      "core/validation.mjs",
+      "node:perf_hooks"
+    ],
+    "core/raw-source-roots.mjs": [
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/raw-source-schema.mjs": [
+      "core/private-card-schema.mjs"
+    ],
+    "core/role-profile-input.mjs": [
+      "core/local-authority-input.mjs",
+      "core/method-package-input.mjs",
+      "core/private-card-input.mjs",
+      "core/private-evidence-input.mjs",
+      "core/task-receipt.mjs",
+      "core/validation.mjs"
+    ],
+    "core/role-profile-schema.mjs": [
+      "core/method-package-input.mjs",
+      "core/private-card-input.mjs",
+      "core/role-profile-input.mjs",
+      "core/task-receipt.mjs",
+      "core/validation.mjs"
+    ],
+    "core/sqlite-journal-probe.mjs": [
+      "node:child_process",
+      "node:fs",
+      "node:path",
+      "node:url"
+    ],
+    "core/staged-evidence-schema.mjs": [],
+    "core/store-fence.mjs": [
+      "core/content-safety-schema.mjs",
+      "core/context-product-schema.mjs",
+      "core/local-authority-input.mjs",
+      "core/sqlite-journal-probe.mjs",
+      "core/validation.mjs",
+      "node:fs",
+      "node:path",
+      "node:url"
+    ],
+    "core/task-receipt.mjs": [
+      "core/method-package-input.mjs",
+      "core/private-card-input.mjs",
+      "core/validation.mjs",
+      "node:crypto"
+    ],
+    "core/validation.mjs": [
+      "node:crypto",
+      "plugins/cairn-memory/lib/redact.mjs"
+    ],
+    "integrations/client/control-state.mjs": [
+      "integrations/client/file-lock.mjs",
+      "integrations/client/private-state.mjs",
+      "node:crypto",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/file-lock.mjs": [
+      "node:crypto",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/hosted-contract.mjs": [
+      "integrations/client/hosted-schemas.mjs",
+      "integrations/client/source-time.mjs"
+    ],
+    "integrations/client/hosted-schemas.mjs": [],
+    "integrations/client/pairing.mjs": [
+      "integrations/client/control-state.mjs",
+      "integrations/client/file-lock.mjs",
+      "integrations/client/private-state.mjs",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:os",
+      "node:path"
+    ],
+    "integrations/client/private-state.mjs": [
+      "node:async_hooks",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/raw/bounds.mjs": [
+      "node:async_hooks",
+      "node:perf_hooks"
+    ],
+    "integrations/client/raw/local-host-preparation.mjs": [
+      "integrations/client/private-state.mjs",
+      "integrations/client/raw/local-host-profile.mjs",
+      "integrations/client/state-lock.mjs",
+      "node:crypto",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/raw/local-host-profile.mjs": [
+      "adapters/local/configuration.mjs",
+      "core/local-authority-input.mjs",
+      "integrations/client/private-state.mjs",
+      "node:crypto",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/raw/local-settings-lock.mjs": [
+      "integrations/client/file-lock.mjs",
+      "integrations/client/pairing.mjs",
+      "integrations/client/private-state.mjs",
+      "integrations/client/raw/local-setup-files.mjs",
+      "integrations/client/state-lock.mjs",
+      "node:path"
+    ],
+    "integrations/client/raw/local-setup-files.mjs": [
+      "integrations/client/private-state.mjs",
+      "integrations/client/raw/local-setup-input.mjs",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "integrations/client/raw/local-setup-input.mjs": [
+      "core/local-authority-input.mjs",
+      "integrations/client/raw/local-host-profile.mjs",
+      "node:crypto",
+      "node:path",
+      "node:url",
+      "node:util"
+    ],
+    "integrations/client/raw/protocol.mjs": [
+      "integrations/client/hosted-contract.mjs",
+      "integrations/client/raw/bounds.mjs"
+    ],
+    "integrations/client/source-time.mjs": [],
+    "integrations/client/state-lock.mjs": [
+      "integrations/client/file-lock.mjs",
+      "integrations/client/pairing.mjs",
+      "integrations/client/private-state.mjs",
+      "node:path"
+    ],
+    "packages/adapter-sqlite/src/errors.mjs": [
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/backup.mjs": [
+      "core/sqlite-journal-probe.mjs",
+      "node:child_process",
+      "node:fs",
+      "node:path",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/inventory.mjs",
+      "packages/adapter-sqlite/src/legacy/paths.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/inspect-evidence.mjs": [
+      "core/claim-qualification-storage.mjs",
+      "core/content-safety.mjs",
+      "core/procedural-storage.mjs",
+      "node:crypto"
+    ],
+    "packages/adapter-sqlite/src/legacy/inventory.mjs": [
+      "core/card-lineage.mjs",
+      "core/content-safety-migration.mjs",
+      "core/content-safety-schema.mjs",
+      "core/database.mjs",
+      "core/sqlite-journal-probe.mjs",
+      "core/validation.mjs",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/paths.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs",
+      "packages/adapter-sqlite/src/legacy/schema.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/migration-archive.mjs": [
+      "core/raw-search-authority.mjs",
+      "core/raw-source-roots.mjs",
+      "node:crypto",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs",
+      "packages/adapter-sqlite/src/migrate/raw-privacy.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs": [
+      "node:crypto",
+      "node:fs",
+      "node:path",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/paths.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs",
+      "packages/adapter-sqlite/src/migrate/layout.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/migration-input.mjs": [
+      "core/content-safety-migration.mjs",
+      "core/content-safety-schema.mjs",
+      "core/content-safety.mjs",
+      "core/validation.mjs",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/backup.mjs",
+      "packages/adapter-sqlite/src/legacy/inspect-evidence.mjs",
+      "packages/adapter-sqlite/src/legacy/inventory.mjs",
+      "packages/adapter-sqlite/src/legacy/migration-archive.mjs",
+      "packages/adapter-sqlite/src/legacy/migration-raw.mjs",
+      "packages/adapter-sqlite/src/legacy/paths.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/migration-raw.mjs": [
+      "packages/adapter-sqlite/src/legacy/migration-archive.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs",
+      "packages/adapter-sqlite/src/migrate/raw-privacy.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/paths.mjs": [
+      "core/sqlite-journal-probe.mjs",
+      "node:fs",
+      "node:path",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/refusal.mjs": [
+      "core/database.mjs"
+    ],
+    "packages/adapter-sqlite/src/legacy/schema.mjs": [
+      "core/asset-schema.mjs",
+      "core/card-current-schema.mjs",
+      "core/card-lineage-base-schema.mjs",
+      "core/confirmation-schema.mjs",
+      "core/content-safety-schema.mjs",
+      "core/context-product-schema.mjs",
+      "core/local-authority-schema.mjs",
+      "core/private-card-schema.mjs",
+      "core/private-organization-schema.mjs",
+      "core/raw-deletion-schema.mjs",
+      "core/raw-source-schema.mjs",
+      "packages/adapter-sqlite/src/legacy/refusal.mjs"
+    ],
+    "packages/adapter-sqlite/src/memory-rows.mjs": [
+      "node:crypto",
+      "packages/adapter-sqlite/src/receipt-identity.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/guard.mjs": [
+      "node:path",
+      "packages/adapter-sqlite/src/migrate/layout.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/index.mjs": [
+      "node:crypto",
+      "node:path",
+      "node:sqlite",
+      "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs",
+      "packages/adapter-sqlite/src/legacy/migration-input.mjs",
+      "packages/adapter-sqlite/src/migrate/layout.mjs",
+      "packages/adapter-sqlite/src/migrate/placement.mjs",
+      "packages/adapter-sqlite/src/migrate/plan.mjs",
+      "packages/adapter-sqlite/src/schema/context-read.mjs",
+      "packages/adapter-sqlite/src/schema/inspect.mjs",
+      "packages/adapter-sqlite/src/schema/layout.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/uow.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/layout.mjs": [],
+    "packages/adapter-sqlite/src/migrate/placement.mjs": [
+      "packages/adapter-sqlite/src/legacy/migration-input.mjs",
+      "packages/adapter-sqlite/src/migrate/plan.mjs",
+      "packages/adapter-sqlite/src/migrate/raw-privacy.mjs",
+      "packages/adapter-sqlite/src/placement-visibility.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/receipt-read-safety.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/plan.mjs": [
+      "packages/adapter-sqlite/src/legacy/migration-input.mjs",
+      "packages/adapter-sqlite/src/migrate/safety.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/receipt-identity.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/raw-privacy.mjs": [
+      "node:crypto",
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/raw-rows.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs"
+    ],
+    "packages/adapter-sqlite/src/migrate/safety.mjs": [
+      "packages/adapter-sqlite/src/legacy/migration-input.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/placement-visibility.mjs": [
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs"
+    ],
+    "packages/adapter-sqlite/src/port-scope.mjs": [
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/raw-facts.mjs": [
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/raw-lineage.mjs": [
+      "node:crypto",
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/raw-rows.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/raw-rows.mjs": [
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs"
+    ],
+    "packages/adapter-sqlite/src/receipt-identity.mjs": [
+      "packages/adapter-sqlite/src/storage-values.mjs"
+    ],
+    "packages/adapter-sqlite/src/receipt-read-safety.mjs": [
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/raw-facts.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/raw-rows.mjs",
+      "packages/adapter-sqlite/src/receipt-identity.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/adapter-sqlite/src/suppressions.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/retrieval-snapshot.mjs": [
+      "node:crypto",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/schema/context-read.mjs": [],
+    "packages/adapter-sqlite/src/schema/document-cards.mjs": [],
+    "packages/adapter-sqlite/src/schema/inspect.mjs": [
+      "node:crypto",
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/receipt-identity.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/schema/layout.mjs": [
+      "packages/adapter-sqlite/src/schema/document-cards.mjs",
+      "packages/adapter-sqlite/src/schema/placement-relations.mjs"
+    ],
+    "packages/adapter-sqlite/src/schema/placement-relations.mjs": [],
+    "packages/adapter-sqlite/src/storage-values.mjs": [
+      "node:crypto",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/suppressions.mjs": [
+      "node:crypto",
+      "packages/adapter-sqlite/src/memory-rows.mjs",
+      "packages/adapter-sqlite/src/migrate/raw-privacy.mjs",
+      "packages/adapter-sqlite/src/raw-facts.mjs",
+      "packages/adapter-sqlite/src/raw-lineage.mjs",
+      "packages/adapter-sqlite/src/raw-rows.mjs",
+      "packages/adapter-sqlite/src/receipt-identity.mjs",
+      "packages/adapter-sqlite/src/storage-values.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/adapter-sqlite/src/uow.mjs": [
+      "node:async_hooks",
+      "node:fs",
+      "node:sqlite",
+      "node:url",
+      "node:util",
+      "packages/adapter-sqlite/src/errors.mjs",
+      "packages/adapter-sqlite/src/migrate/guard.mjs",
+      "packages/adapter-sqlite/src/port-scope.mjs",
+      "packages/adapter-sqlite/src/retrieval-snapshot.mjs",
+      "packages/core/src/index.mjs"
+    ],
+    "packages/core/src/capabilities.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/capture/capture-input.mjs": [
+      "packages/core/src/capture/request-size.mjs",
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/privacy/text.mjs"
+    ],
+    "packages/core/src/capture/generated/prompts.mjs": [],
+    "packages/core/src/capture/model-call.mjs": [
+      "packages/core/src/capture/request-size.mjs",
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/capture/wire.mjs",
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/capture/qualification-text-catalog.mjs": [],
+    "packages/core/src/capture/request-size.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/capture/validate.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/capture/wire-schemas.mjs": [
+      "packages/core/src/capture/capture-input.mjs",
+      "packages/core/src/capture/qualification-text-catalog.mjs",
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/capture/wire.mjs": [
+      "packages/core/src/capture/generated/prompts.mjs",
+      "packages/core/src/capture/qualification-text-catalog.mjs",
+      "packages/core/src/capture/request-size.mjs",
+      "packages/core/src/capture/wire-schemas.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/extraction/quantity-spec.mjs"
+    ],
+    "packages/core/src/decisions.mjs": [],
+    "packages/core/src/errors.mjs": [],
+    "packages/core/src/extraction/generated/extract-memories-prompt.mjs": [],
+    "packages/core/src/extraction/quantity-spec.mjs": [
+      "packages/core/src/extraction/generated/extract-memories-prompt.mjs",
+      "packages/core/src/ledger/quantities.mjs"
+    ],
+    "packages/core/src/extraction/redact.mjs": [],
+    "packages/core/src/index.mjs": [
+      "packages/core/src/capabilities.mjs",
+      "packages/core/src/decisions.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/memory-policy/index.mjs",
+      "packages/core/src/privacy/fact-match.mjs",
+      "packages/core/src/privacy/fingerprint.mjs",
+      "packages/core/src/privacy/forget-steps.mjs",
+      "packages/core/src/privacy/legacy-passages.mjs",
+      "packages/core/src/privacy/pause.mjs",
+      "packages/core/src/privacy/redact.mjs",
+      "packages/core/src/privacy/text.mjs",
+      "packages/core/src/privacy/withholds.mjs",
+      "packages/core/src/rationale/index.mjs",
+      "packages/core/src/retrieval/bm25.mjs",
+      "packages/core/src/retrieval/fusion.mjs",
+      "packages/core/src/retrieval/hosted-paging.mjs",
+      "packages/core/src/retrieval/session-start.mjs",
+      "packages/core/src/retrieval/tokenize.mjs",
+      "packages/core/src/suppression-fact.mjs",
+      "packages/core/src/topics/index.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/ledger/quantities.mjs": [],
+    "packages/core/src/memory-policy/index.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/memory-policy/relation-limits.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/memory-policy/relation-limits.mjs": [],
+    "packages/core/src/privacy/fact-match.mjs": [
+      "packages/core/src/decisions.mjs",
+      "packages/core/src/privacy/withholds.mjs",
+      "packages/core/src/suppression-fact.mjs"
+    ],
+    "packages/core/src/privacy/fingerprint.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/privacy/redact.mjs",
+      "packages/core/src/privacy/text.mjs"
+    ],
+    "packages/core/src/privacy/forget-steps.mjs": [],
+    "packages/core/src/privacy/legacy-passages.mjs": [
+      "packages/core/src/privacy/redact.mjs",
+      "packages/core/src/privacy/streaming-sha256.mjs",
+      "packages/core/src/privacy/text.mjs"
+    ],
+    "packages/core/src/privacy/pause.mjs": [],
+    "packages/core/src/privacy/redact.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/privacy/streaming-sha256.mjs": [],
+    "packages/core/src/privacy/text.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/privacy/redact.mjs"
+    ],
+    "packages/core/src/privacy/withholds.mjs": [
+      "packages/core/src/decisions.mjs",
+      "packages/core/src/suppression-fact.mjs"
+    ],
+    "packages/core/src/rationale/decision-context.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/rationale/limits.mjs",
+      "packages/core/src/rationale/store-plan.mjs"
+    ],
+    "packages/core/src/rationale/generated/prompt.mjs": [],
+    "packages/core/src/rationale/index.mjs": [
+      "packages/core/src/rationale/decision-context.mjs",
+      "packages/core/src/rationale/limits.mjs",
+      "packages/core/src/rationale/relate-placed.mjs"
+    ],
+    "packages/core/src/rationale/limits.mjs": [],
+    "packages/core/src/rationale/relate-placed.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/rationale/limits.mjs",
+      "packages/core/src/rationale/relate.mjs",
+      "packages/core/src/rationale/store-plan.mjs"
+    ],
+    "packages/core/src/rationale/relate.mjs": [
+      "packages/core/src/capture/model-call.mjs",
+      "packages/core/src/capture/request-size.mjs",
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/rationale/generated/prompt.mjs",
+      "packages/core/src/rationale/limits.mjs"
+    ],
+    "packages/core/src/rationale/store-plan.mjs": [
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/privacy/fingerprint.mjs",
+      "packages/core/src/rationale/limits.mjs"
+    ],
+    "packages/core/src/retrieval/bm25.mjs": [
+      "packages/core/src/retrieval/tokenize.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/retrieval/fusion.mjs": [
+      "packages/core/src/decisions.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/retrieval/bm25.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/retrieval/hosted-paging.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/retrieval/session-start.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/retrieval/tokenize.mjs": [],
+    "packages/core/src/routing/card.mjs": [
+      "packages/core/src/privacy/text.mjs",
+      "packages/core/src/routing/redaction.mjs"
+    ],
+    "packages/core/src/routing/redaction.mjs": [
+      "packages/core/src/extraction/redact.mjs",
+      "packages/core/src/privacy/redact.mjs",
+      "packages/core/src/privacy/text.mjs",
+      "packages/core/src/routing/text.mjs"
+    ],
+    "packages/core/src/routing/text.mjs": [],
+    "packages/core/src/routing/visibility.mjs": [
+      "packages/core/src/privacy/fact-match.mjs",
+      "packages/core/src/privacy/fingerprint.mjs",
+      "packages/core/src/privacy/redact.mjs",
+      "packages/core/src/privacy/text.mjs",
+      "packages/core/src/privacy/withholds.mjs",
+      "packages/core/src/routing/card.mjs",
+      "packages/core/src/suppression-fact.mjs"
+    ],
+    "packages/core/src/suppression-fact.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/topics/batch.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/topics/catalog.mjs",
+      "packages/core/src/topics/classify.mjs"
+    ],
+    "packages/core/src/topics/cards.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/routing/visibility.mjs",
+      "packages/core/src/topics/catalog.mjs",
+      "packages/core/src/topics/classify.mjs"
+    ],
+    "packages/core/src/topics/catalog.mjs": [
+      "packages/core/src/utf8.mjs"
+    ],
+    "packages/core/src/topics/classify.mjs": [
+      "packages/core/src/capture/model-call.mjs",
+      "packages/core/src/capture/request-size.mjs",
+      "packages/core/src/errors.mjs",
+      "packages/core/src/topics/generated/prompt.mjs",
+      "packages/core/src/topics/packing.mjs",
+      "packages/core/src/topics/proposal.mjs",
+      "packages/core/src/topics/wire.mjs"
+    ],
+    "packages/core/src/topics/generated/prompt.mjs": [],
+    "packages/core/src/topics/index.mjs": [
+      "packages/core/src/topics/batch.mjs",
+      "packages/core/src/topics/cards.mjs",
+      "packages/core/src/topics/catalog.mjs",
+      "packages/core/src/topics/classify.mjs",
+      "packages/core/src/topics/generated/prompt.mjs",
+      "packages/core/src/topics/packing.mjs",
+      "packages/core/src/topics/plan.mjs",
+      "packages/core/src/topics/proposal.mjs",
+      "packages/core/src/topics/wire.mjs"
+    ],
+    "packages/core/src/topics/packing.mjs": [
+      "packages/core/src/capture/request-size.mjs"
+    ],
+    "packages/core/src/topics/plan.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/topics/proposal.mjs": [
+      "packages/core/src/capture/validate.mjs",
+      "packages/core/src/privacy/text.mjs"
+    ],
+    "packages/core/src/topics/wire.mjs": [
+      "packages/core/src/errors.mjs"
+    ],
+    "packages/core/src/utf8.mjs": [],
+    "packaging/core-local/capture-binding.mjs": [
+      "core/local-authority-input.mjs",
+      "integrations/client/private-state.mjs",
+      "node:crypto",
+      "node:fs/promises",
+      "node:path",
+      "packaging/core-local/capture-input.mjs",
+      "packaging/core-local/capture-lock.mjs"
+    ],
+    "packaging/core-local/capture-input.mjs": [
+      "core/local-authority-input.mjs",
+      "node:path",
+      "node:util"
+    ],
+    "packaging/core-local/capture-lock.mjs": [
+      "integrations/client/file-lock.mjs",
+      "integrations/client/private-state.mjs",
+      "node:fs/promises",
+      "node:path"
+    ],
+    "packaging/core-local/provider-config.mjs": [],
+    "plugins/cairn-memory/lib/redact.mjs": []
+  },
+  "files": {
+    "adapters/local/configuration.mjs": "d4ba512a295bf0ddc267a6ee3eb5bf0f407d6835372e68cfb94a7f94e526a93a",
+    "adapters/mcp/local-daemon-identity.mjs": "6dad217779df9004da166cecf91ff4eb84ffc81ef860ff88eb770cd77bf9e963",
+    "adapters/mcp/local-daemon-liveness.mjs": "c3d69b1875215476d8ddc20f02f2b691028ed9f7b0ab53aef540659c245e9dfa",
+    "adapters/mcp/local-daemon-state.mjs": "d9825bc4ea7932b0b35564f16654e137d7442a9130a325366267f604107abc4a",
+    "adapters/mcp/local-daemon-wire.mjs": "c11f78b561651d2eaf9546d172f5ff53ba08bdda6a620723e4847260e537e7ec",
+    "core/asset-identity.mjs": "09037c22c57c27e339edc535073346577b2e8a445287480c640d2fbd6acffea7",
+    "core/asset-schema.mjs": "cb34908b1fbfee733d8b9cb2231182109b1396a823d5232fff52c396245dc0b3",
+    "core/card-current-facade.mjs": "169477c2c9c2958fce2fb8fa6f7cbc8990508cfd13125726bcc070051a8ea290",
+    "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1",
+    "core/card-current-schema.mjs": "08cd3274d796ef2c3cad876c174a084bc43933447c96cbb50879ce6d4e99932d",
+    "core/card-lineage-base-schema.mjs": "7f2fbb15821435ff93e574a5354d83f2e122a97d63062052f2e67d4f76d742cc",
+    "core/card-lineage-schema.mjs": "c5e92974b996d2d045d4e794b6e44255a57d301881ca5e7b90c9407bbadfc2f1",
+    "core/card-lineage.mjs": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
+    "core/card-raw-sources.mjs": "5cbcb665b70aa479bba9b6b913fa9de8385a66c42e10b82843254a8bd2639656",
+    "core/claim-qualification-input.mjs": "19ca597b0648b92544b33542bbd35a190478ad03362ef970fe877e2cedfafbfc",
+    "core/claim-qualification-schema.mjs": "877eca508b7091056180872fa749f59b3af83cf51db06b23cae12647558ddcd0",
+    "core/claim-qualification-storage.mjs": "ebf516038e15286889daa1f5af5c56e2b8de35e9a7d296d46b5386d9a3f86817",
+    "core/classification-journal-schema.mjs": "2cf50290761edaf74fd8723ba54509ce15b7730fbf4c108c47640cc119a74cf1",
+    "core/commit-dispatch.mjs": "1f0511343608e6e19549891720ccf95086851f031cf0ec536a92d581e5c4c6c1",
+    "core/confirmation-schema.mjs": "abfd7cb0f8ad71a54aae23b341a9ddb6ec4c05cf7e123690a5c58f7b4f8b1bf5",
+    "core/content-safety-boundary.mjs": "635d937a8c6d608afefc3d480d3740e6df6d286cc4e9eb99acb99a49613df0ce",
+    "core/content-safety-classifier.mjs": "60cf43447d6c39d10301a39a9cb1b67b9b4b55cb4ce9a1162b711022a325fb58",
+    "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
+    "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
+    "core/content-safety-observations.mjs": "33520e67e2af62ae7f8d5623b25c0c2ca5c4abc193ae839ab41a4daa50e36745",
+    "core/content-safety-schema.mjs": "edf44e575b0ccc1a04e195cd613b2b8149d9c8a2e851f109c9632d4c0d1576dd",
+    "core/content-safety.mjs": "e71e8c7f4c6f6c8d7ff3f4a453ebfcc9a8b897b0328c5c731ba878ed93e41947",
+    "core/content-suppression-storage.mjs": "40578fd7fddf012340a07c023cd8f6ed977f7e2964c5a52d503c1655e544e340",
+    "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
+    "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
+    "core/content-write-safety.mjs": "72a00cb00058ab94280b9317ed20bda6d31914978ca349912bd2f65dca5ce32d",
+    "core/context-product-schema.mjs": "09d6e58d79282f8d52e6b5132620c6028967d1eb948a8196cd805bb5c8355296",
+    "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",
+    "core/context-read-tokenize.mjs": "0afed3c529f50cd22f449328e637ad1d0f4e5dc5e08aed7dce3c15a257cccd5a",
+    "core/database.mjs": "479b5d04588b0ef8f597334abe299cd6dcfaef3e8814de4fd989b750f5aea2e0",
+    "core/episode-schema.mjs": "f69f29986233a10715f0ffb84f96212052e3072b52d69c92627a2aed9a00c549",
+    "core/existing-store.mjs": "d01fae6e0f7dbbcabed9ef81fba915e84c454f0c668bfc95e31629394cee733f",
+    "core/index-schema.mjs": "1f54bcfd7702bde7492df0fac02387c4f36b6337492139413e0d058084e6b760",
+    "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
+    "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
+    "core/method-package-input.mjs": "e9ec687d06bc058005bc060c409d711ddada1d2da9b3bcff2e82a2f0c60dcb7b",
+    "core/method-package-migration.mjs": "bb698d25c245c0422c1d73589ab6e303a45b732d35102f987dfaa3e70f7b0429",
+    "core/method-package-schema.mjs": "f46dbce6b1c07ff52dbab3b6bb4cae5c9f8a14b5d5f4981264e74049edfba109",
+    "core/ordered-capture-schema.mjs": "9c1c93949b0a969e8a1f8008719699fb956c299753428c0dd0d4095175028469",
+    "core/placement-input.mjs": "4c3b6c68ce72f752fbc727304e2a0a31b8e89210711786c013855c33a4aea96e",
+    "core/private-card-facade.mjs": "8e6c084ed12ea185c0ce5979ac763a24f0f85ad9b257eabf8bb7e9929d0fb14d",
+    "core/private-card-input.mjs": "e317551b4c5c25a3b93bf5d104785cef2c931d48154946cc29c870f1bf7337dd",
+    "core/private-card-schema.mjs": "71b0127e728f29768a0ad495b327defe770a993af805cbfb23b8fdb48ef61551",
+    "core/private-evidence-input.mjs": "07e3569de2ecdfc27aeb4183b1ef98d7c5b402f9dd8c2a4e2e61555af68a1c72",
+    "core/private-evidence-schema.mjs": "b3929d42f296fce535b7691e3ed946e1828d74224f58db4cb17c1e940746ca6c",
+    "core/private-organization-input.mjs": "0850ebf916a064bced8966e1510d2476d32a52ac3c2bfd8aa6fb4fc6687ead84",
+    "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
+    "core/procedural-storage.mjs": "71bdc3eab7ab300ec3758a2d24cc2de2d80b051ad40a99c36ee8ff6cad37e26c",
+    "core/qualified-transition-schema.mjs": "acbc489570626d41409c89321f2a48ad600603aa11dab775c3d7e440951b3f58",
+    "core/rationale-schema.mjs": "74641a707327381687ac9a315e5795a3a47273eb7e5907f6fe5b54b2afde7bcc",
+    "core/raw-deletion-schema.mjs": "77cf51369ba28c4667acbced4923f46fd532da6c0355fce0523cab8cd4b859e8",
+    "core/raw-input.mjs": "7a7588ef778f3c827dae4ba958e8ccd976b3b76757f3e3f8f0f4a2a90eff0dcc",
+    "core/raw-lineage-schema.mjs": "36fc5b3c5b616e198e229361f235cbc2dcaf7775349f54fa1d2313a04d513d44",
+    "core/raw-lineage-storage.mjs": "338538ff10964f6b6c186dcab30772d0519c4aad9af8207faa00e5b4b2725141",
+    "core/raw-schema.mjs": "39976d38343bf9ef1f83e574f9d6a8889c9dd5ba083bc3bd2b8cb966b7399530",
+    "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
+    "core/raw-search-input.mjs": "7cdbf0ed482d852be08efd4c59980081741c4e1c6e4340a0568dde5f789fdeae",
+    "core/raw-search-sqlite.mjs": "b51bd300bec030018b67fb52b32ec354057eda11f870f87305b7e34a9a20fc9a",
+    "core/raw-source-input.mjs": "e25f414941c0c22d933b1a888f53fefd0dbc4682989e311b08c74c36a2d1f300",
+    "core/raw-source-reader.mjs": "57ed279190dfe5432b4016cd76a91c11ba82e2b10cd386a48452c2fd76137ee0",
+    "core/raw-source-roots.mjs": "cb44f9308986dcfa2c89174d67bc0336a0bafafa18c01b6c1013045aa0766830",
+    "core/raw-source-schema.mjs": "eae8eb62c420a68f721ccc8d072f850a6f1c181ac26d010dfd2f7173126ae705",
+    "core/role-profile-input.mjs": "a7fe98d134367431cc6b80d48eee6cabdde1b573f4425a82ecfa210c4b092d6e",
+    "core/role-profile-schema.mjs": "da61b400f78e07134ba91353380f6483f5fbc723954740e07326acbfa66d243e",
+    "core/sqlite-journal-probe.mjs": "16831756af69178af3a63795ef939670fe22f80a5fe481e55978afefec1f4964",
+    "core/staged-evidence-schema.mjs": "7da2c038d9cc03ece4efbf703937ff8d0093dcf30150fa79a4c73641cf24f2bc",
+    "core/store-fence.mjs": "3d33fab3946ec3e77ba776a276268251d8eb02223c7ac9e2f81af1137fa2c44e",
+    "core/task-receipt.mjs": "6b6cfb598ea8a25ad944ff6893845fe5d624845c0aabb8634b57e14c09b94c76",
+    "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
+    "integrations/client/control-state.mjs": "8664a54da21f5168b9168e8a76d902f8d1df59ee7e299e61ca4cfccd811e4be1",
+    "integrations/client/file-lock.mjs": "42535bd8d6d96e89819e2669c7c671f1136fb753c3ffd2153919f3eb3c8e46b6",
+    "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
+    "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
+    "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
+    "integrations/client/private-state.mjs": "14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e",
+    "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
+    "integrations/client/raw/local-host-preparation.mjs": "c5e2cd4bcf85b82fdd522a3796f8981dc320ecc7688abbb20759c82c3dc7b4c9",
+    "integrations/client/raw/local-host-profile.mjs": "4dd9e8cd5a022c1802e5a62470b8584ab93ebb399b59f4993b6eca99e64413c6",
+    "integrations/client/raw/local-settings-lock.mjs": "0e3a1973363798d9cf037b972743b1c53f154a1ffda6729b5e0f4660826ecbbc",
+    "integrations/client/raw/local-setup-files.mjs": "f54b51f466531ad76798de6982146e7080bd60d2004c259bcf7e0fc59cf2055a",
+    "integrations/client/raw/local-setup-input.mjs": "e4f2cf1031897b25d3e16f6f65696bfab62afee758e82fe8e8d148785029cb6a",
+    "integrations/client/raw/protocol.mjs": "b8bc52c7af71a945fc470188a51cd63b2904bea6898eec84b30805aefc98fb94",
+    "integrations/client/source-time.mjs": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401",
+    "integrations/client/state-lock.mjs": "a7dbbf6c805fce74039a224f19e720d5740506c1fcd41129bea8ecb6a60c7c84",
+    "packages/adapter-sqlite/src/errors.mjs": "866315659aa59eeacf4d13cbfdacc4741d56a8fcdaca3d512e33638d11578dc9",
+    "packages/adapter-sqlite/src/legacy/backup.mjs": "2dee74eb25af8ad8380fa4327723a263730d7a0e08df1309079e4b8d1f1bfd8f",
+    "packages/adapter-sqlite/src/legacy/inspect-evidence.mjs": "66afc757245475a39e3b091eec21a7ff09284532a88e1cca896a7e9a3f1fba7e",
+    "packages/adapter-sqlite/src/legacy/inventory.mjs": "d040ddd316f6d139c248380cec533dd0f57266d1514d609cc0a5592455d66c87",
+    "packages/adapter-sqlite/src/legacy/migration-archive.mjs": "f2e2cd4438e23eac6ea9c0c5c7af4f1199e2f25eebe101d2274596604ea770a7",
+    "packages/adapter-sqlite/src/legacy/migration-bootstrap.mjs": "d7118eb50e5ea0fdf9931cdaca5eab79d3015b4ac711e2ad7035a9b35948d321",
+    "packages/adapter-sqlite/src/legacy/migration-input.mjs": "9fe406989ac7242445e0c9a52ec33c2e8f0c697044b5e3b8d418c4d2f6880a4c",
+    "packages/adapter-sqlite/src/legacy/migration-raw.mjs": "20e1eab14f8fd389884554cb6248cabe89bf432ba541947e9072316eb2275cee",
+    "packages/adapter-sqlite/src/legacy/paths.mjs": "49b8cc29ae12568f37596ca5e5fb1e688f711ab9eb1be7d0d84a2f2139fb8a36",
+    "packages/adapter-sqlite/src/legacy/refusal.mjs": "0f57f17691041d238c34dd94f8928274ede60a14eb92696be48b5d5b66cb4f23",
+    "packages/adapter-sqlite/src/legacy/schema.mjs": "38476e7ae5a41992f46c31d21fe3fe28742d1697842415ed29ba64f09c7023b9",
+    "packages/adapter-sqlite/src/memory-rows.mjs": "e9e2c88616e7c55e6138a105c1793541c3847463a1e3660940d140c0090426a5",
+    "packages/adapter-sqlite/src/migrate/guard.mjs": "144bfa268d0ec7d12da332bfd2a75fc5369f0f6d852755c4e31f1ceaafc7e597",
+    "packages/adapter-sqlite/src/migrate/index.mjs": "bb50e5ff776be22235e7df5377335efd3274d7196a7c72c0831c7b6edfa22ab3",
+    "packages/adapter-sqlite/src/migrate/layout.mjs": "c2c73c2be6ff49b18fcaa18478b75c8f6c36482c24f66ac1f7b2e02ef11b5000",
+    "packages/adapter-sqlite/src/migrate/placement.mjs": "d4fd36f9a690dc00e17aa03b4b3d3d933fcae3a3c872ded9e37b45823da86d44",
+    "packages/adapter-sqlite/src/migrate/plan.mjs": "a34c387e856a69e5d478989bda34bcc1731df380ec2b8ee252f73084f513988b",
+    "packages/adapter-sqlite/src/migrate/raw-privacy.mjs": "ad94bdacadd4b588503441d54ecb9f22670b58189e7cfd6a126509c95eabda86",
+    "packages/adapter-sqlite/src/migrate/safety.mjs": "34332e366b1534837b4349b17907aa17756817bc75fb50a2c0233e37a984202f",
+    "packages/adapter-sqlite/src/placement-visibility.mjs": "149959807b29eac5fadc8c28dd26bab2bd9316b1384578561b32ad485af4c6cb",
+    "packages/adapter-sqlite/src/port-scope.mjs": "a33bcd13cf18baef1e1086939a8ee751a2dd5e50eee633b8b78db4e836ca83ce",
+    "packages/adapter-sqlite/src/raw-facts.mjs": "1e03ae70329c57b70c6db46b1eebf6a132f8797fb6bed8cf116c11bed3e22151",
+    "packages/adapter-sqlite/src/raw-lineage.mjs": "d52d0a65e67bcb219eaeb0cc417290e30fdc3163231dbce570322d4d21387c4f",
+    "packages/adapter-sqlite/src/raw-rows.mjs": "997b0244902246a4d77499e738c7b9435ad49f2fe4545ae49003b8162bd59583",
+    "packages/adapter-sqlite/src/receipt-identity.mjs": "071fcbede65bab7cf33009874e78b7b0916135f8848275165334d2815953fd06",
+    "packages/adapter-sqlite/src/receipt-read-safety.mjs": "d30e83c38f70e0939081b8da4f032adc952ea838ef9af169c3a361b000956b5b",
+    "packages/adapter-sqlite/src/retrieval-snapshot.mjs": "e01099aad983479229d0f8a363a28b2e3c483a4b7b97bb8242aa406b49469075",
+    "packages/adapter-sqlite/src/schema/context-read.mjs": "0ad5f7825103fd7954014753e78356f1d88bd66989ed5c8501f09fb76241b596",
+    "packages/adapter-sqlite/src/schema/document-cards.mjs": "cf53abc8d61ef13025fbe51b5930177401dff1da57f6bf956b8ba614d0f5c5f2",
+    "packages/adapter-sqlite/src/schema/inspect.mjs": "c0473133e3b47976055e75342bc4553a07d5a5d14e1cdf1c13795a5a62042d1a",
+    "packages/adapter-sqlite/src/schema/layout.mjs": "4d407e5c37f1df30659664e5c594af60190fbc11796626c81a801a77a4abd50c",
+    "packages/adapter-sqlite/src/schema/placement-relations.mjs": "3ed9d6a459992b2498b1822b70394788c63c0150329212b0ed496416c89ad24b",
+    "packages/adapter-sqlite/src/storage-values.mjs": "c9f6f628e737ad6456b97bce1fbf2d5937963193f8b76112cca2aacfda307a2a",
+    "packages/adapter-sqlite/src/suppressions.mjs": "d80cf55a4f64de42a8b8225dbc5fc7af2406c1e197a4bcee55b4de035c4e29cf",
+    "packages/adapter-sqlite/src/uow.mjs": "6b27a2247f6c8ac020fc03d840e57ec2121e5f810bbebe19fa85a9d31002782a",
+    "packages/core/src/capabilities.mjs": "44837ac9b939d44f44bc4aeca7a8bb5c37a0bbeac52e4261625803c3015c52c6",
+    "packages/core/src/capture/capture-input.mjs": "91c8f5d11202c1f63f66c5cf21aa9b0aa30b7dae418671164163b5f1460bb9a8",
+    "packages/core/src/capture/generated/prompts.mjs": "e49d76340e0aa6398a1283edd6aa4bac91c58535d4403789329e90cfa9c39fc4",
+    "packages/core/src/capture/model-call.mjs": "7f2bd77e6a4f160215e11e84efea8eaa6bf72f2a6dd029baa4a2ea704b911741",
+    "packages/core/src/capture/qualification-text-catalog.mjs": "46cd5e4ec9fac04c3347f4baadb9e78c627de6e5a45d605ede8b60518e8bb6a7",
+    "packages/core/src/capture/request-size.mjs": "f8cc21757d3ee19af05bd5ffe9b1f450f4f801e1351160f5652a8cd8ec198115",
+    "packages/core/src/capture/validate.mjs": "734d8085f0558de24d19eebfbe6aea4190aac415d0e929f4b20aba367db7b4f1",
+    "packages/core/src/capture/wire-schemas.mjs": "3a1e1c51d76d79f3aea1c7e4fe33f2321040c8f5c44548c185246add80aa44b2",
+    "packages/core/src/capture/wire.mjs": "8900c3dd59d84a76521e094165655fe53c6f1a66513613ad05502e40c632ccc6",
+    "packages/core/src/decisions.mjs": "3cea8d936a77de56baabeaf4319ede9b10e57b8b9878104f0ad8bbc498843397",
+    "packages/core/src/errors.mjs": "8dee922a6abd63a1eaf0045309e8fbbb3c4177adb99b78b8b9c68be4daa6981b",
+    "packages/core/src/extraction/generated/extract-memories-prompt.mjs": "b29e0c76c2c073361ed6c6d6fc19e2096381a46f2a1cf1fc6df20702d092ce31",
+    "packages/core/src/extraction/quantity-spec.mjs": "ffa85820958831d54833372c71ff2ad4201b4fe62d95a63069190f9c1251e3cd",
+    "packages/core/src/extraction/redact.mjs": "7c17e79f0440d937e3db722761e64b1e95e7a9ed80907067ab60adcb97e53247",
+    "packages/core/src/index.mjs": "0168aba9c73d3c4f079a96fb3e088e2b1110810a76dfafd7fe732d4c7b4fa762",
+    "packages/core/src/ledger/quantities.mjs": "92d22ec33d667a538848f21e7c675043ccfc2ab47333e5d898a2fe2d33d7dfd7",
+    "packages/core/src/memory-policy/index.mjs": "6569497958bd1780be5f76774c3c6e62af148653a42540da63c88b8c8e3cb069",
+    "packages/core/src/memory-policy/relation-limits.mjs": "152d392195ba92bd24808333a89d61aaaf9dec1a27066db6cad8b16bf20af3b7",
+    "packages/core/src/privacy/fact-match.mjs": "b2a5018bbe6a92d22e7d9998c6fdf96f1d7ebc55180a3c7cf5314efaa9bb7ac0",
+    "packages/core/src/privacy/fingerprint.mjs": "479f84785438b8e9c4b1c99342bf777987bfc2f082e817e948cb2ea2dfb4ee9e",
+    "packages/core/src/privacy/forget-steps.mjs": "404cb33d80def660424d7ae312f548eca76ebefd6cb73eeb14ab75a40776db3f",
+    "packages/core/src/privacy/legacy-passages.mjs": "686ebd15049e7584a3988f0f06af4b5436b7eee090d2943e2129e9f1b1f71a98",
+    "packages/core/src/privacy/pause.mjs": "02b0f7615a67fda1f80ef499c490726f61ef050d3854c390526a71dcb6b3c830",
+    "packages/core/src/privacy/redact.mjs": "79d20914a6d744a290ff11b29fe334bd596efd2ce6d0473626188e828cf0f49e",
+    "packages/core/src/privacy/streaming-sha256.mjs": "3541963fb152b146e54d1f1da25fc6503e77ad2367e58fc69b76fc014f89bd75",
+    "packages/core/src/privacy/text.mjs": "89c3c28fb59e008879eec254ec5bd59d7ee40903b2f2c3003047a17daeaf3c50",
+    "packages/core/src/privacy/withholds.mjs": "4554212d4cef5a751861321aa59d76023fda227a512d1a972835059f96158797",
+    "packages/core/src/rationale/decision-context.mjs": "99986127071d34d83d39f460eab2115aeeb11193e91cf344a27577ddb7b29c99",
+    "packages/core/src/rationale/generated/prompt.mjs": "ae19a5cb10f294cc8aba3b3bd097880010227393c678126294dd6bb06be604da",
+    "packages/core/src/rationale/index.mjs": "8e27987309a54d16bcc56d58d576757ab3b9c29299442432d5215e12c8d618fe",
+    "packages/core/src/rationale/limits.mjs": "73cce22b52ec55a8b42f5563ab5456d3b1ea18b1440a9743654846aa4550a2df",
+    "packages/core/src/rationale/relate-placed.mjs": "bd8913f0859f792d75624fd762c6438596b6a72f9d147d711dd6304f08325630",
+    "packages/core/src/rationale/relate.mjs": "e00c36b2f89947326940bc39998db12bc709177810ec5d31c6e4a1eff1d561f6",
+    "packages/core/src/rationale/store-plan.mjs": "164b7e14b2694244d72ae1cd14f5dcf83bf62b5b5a6588e34d838a057bb8ebd3",
+    "packages/core/src/retrieval/bm25.mjs": "5f59680dafd3b7e6bdf4abd53239915fed7a9a5213b647680a49c8030d520e40",
+    "packages/core/src/retrieval/fusion.mjs": "9ef66548f692db15b449be0f7c4d76e8f03b4cfe990c6bbd5765a396a4f3904e",
+    "packages/core/src/retrieval/hosted-paging.mjs": "9865ba08d8712cdbe0880627936c1d8f152483dd51df53bd4d547781b0a07c55",
+    "packages/core/src/retrieval/session-start.mjs": "78160fc6a4d4ebba7414a3ac3f8f824812c435dc9b1d93ee78e4b0fb3549abb9",
+    "packages/core/src/retrieval/tokenize.mjs": "e656d7eada5513921afbebb5d098237b6b0c89117cbce1e02c7368f47ef56d2b",
+    "packages/core/src/routing/card.mjs": "71d45d8629dfd3ff9ee4af0f4bb99786864e14605c38021787e36b1ad1f6e8b2",
+    "packages/core/src/routing/redaction.mjs": "1e6140da107a3a792e6cbabbacc2299b1d34069f720ffe50ac64f6d87d65eda0",
+    "packages/core/src/routing/text.mjs": "c59b4c9281121a3f6c9a2da49b3d597fe92fd48707337f9de68c30098e45843a",
+    "packages/core/src/routing/visibility.mjs": "c81fb9a0bd3a905e3bfaf57df02fce2a8a919c7895db5eab150f09a14088d104",
+    "packages/core/src/suppression-fact.mjs": "d45b707ba0430a37c016792a915d90962b337827b13694b0bb396003f77beb13",
+    "packages/core/src/topics/batch.mjs": "5b0a2f3eae182babd6d917ba36ea748fd9c4be94285084b8873234f2f394815a",
+    "packages/core/src/topics/cards.mjs": "dca92566a55340a4b0d090a1f9d3cd635e7a743d22c2a3793cf90ed1895a3e85",
+    "packages/core/src/topics/catalog.mjs": "048eab001bdf85e779d5760c4f6c6c61b53a7007a8c47f84834bf50bea11c7d5",
+    "packages/core/src/topics/classify.mjs": "32de2f62d5e593aee9fcf01aa4576046ed31fbc8f148078eeff7ff9ff94e37c0",
+    "packages/core/src/topics/generated/prompt.mjs": "ffbddf98b4d1f600eff1a48faa5ff5c088c4b025267793de73cacf17c2b616cf",
+    "packages/core/src/topics/index.mjs": "299da09cd17153652768e530dfbd505af02d864ce1d4b2259ebf2604df366a81",
+    "packages/core/src/topics/packing.mjs": "4567762d379cda58a215881bdcb2098762178eb0498aa295ceccf6dcf72fa079",
+    "packages/core/src/topics/plan.mjs": "fd6beb2b6af2326d199d7954c9fad124216f9623a90c61d6ce1f8a912c4e2f1a",
+    "packages/core/src/topics/proposal.mjs": "493c7a9a26143b5ac8b006957f5f39d1f097bf67a3336d4084d526df0aa42bda",
+    "packages/core/src/topics/wire.mjs": "cb39361bd3319927225a5bd31c030f7c4f4d2ae17951616728a00677c5fc0d7a",
+    "packages/core/src/utf8.mjs": "fa464162e80801ea62e83dda9ebd60132cedec86004c8e7d2ee28d51c9e6e4e4",
+    "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
+    "packaging/core-local/capture-input.mjs": "25ba8e79874da395a8cd2dadaa19939359adb9aebd226a0988c137f2a29308d7",
+    "packaging/core-local/capture-lock.mjs": "3bb798d7cf56f49792a510136f982df675e7251fccbb24829125a6403386cba3",
+    "packaging/core-local/provider-config.mjs": "9febfb7c69f914659bafe15b4dba7d6ebf872d869e791a2aff3a0e02cd6cb03e",
+    "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5"
+  }
+}

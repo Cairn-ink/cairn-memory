@@ -14,7 +14,7 @@ import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, so
 /** @typedef {ContextAssemblyValue<ContextAssemblyItem | ContextCompactAssemblyItem>} AssemblyValue */
 /** @typedef {{ value: AssemblyValue, details: PackDiagnostics["items"], selected: PreparedItem[], amendmentSourceCount?: number }} Projection */
 /** @typedef {{ budget: Budget, policy: ContextAssemblyPolicy, representation: ContextAssemblyDiagnostics["representation"],
- * now: () => number, deadline: number, ledger?: ContextLedgerDigest,
+ * now: () => number, deadline: number, ledger?: ContextLedgerDigest, includeCompactItemRank?: boolean,
  * format: (value: AssemblyValue) => string, count: (text: string) => number,
  * fitsBytes: (value: AssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
 /** @typedef {{ tokens: number, sources: { source: Source, tokens: number }[],
@@ -172,7 +172,7 @@ export function fitLedgerDigest(reading, maxTokens, { block, tokens }, active, d
 /** @param {readonly PreparedItem[]} items @param {PackOptions} options
  * @param {ReturnType<typeof meter>} metering */
 export function packContext(items, options, metering) {
-  const { budget, policy, representation } = options;
+  const { budget, policy, representation, includeCompactItemRank } = options;
   const { stops, expired, tokens, trace, check } = metering;
   const dated = representation === "representation-v2-dated";
   const hits = cardHits(items, budget.maxItems);
@@ -197,7 +197,8 @@ export function packContext(items, options, metering) {
     const wire = rendered.map((item, itemIndex) => {
       const { tokens, sources: included, body = item.body, amendmentSources = [] } = /** @type {Choice} */ (selection.get(item));
       if (representation === COMPACT_MEMORY_REPRESENTATION) {
-        details.push({ ref: item.evidence.item.ref, metadata: item.metadata, body: { tokens }, sources: [],
+        details.push({ ref: item.evidence.item.ref, ...(includeCompactItemRank && { rank: item.rank }),
+          metadata: item.metadata, body: { tokens }, sources: [],
           sourceAccess: item.sourceAccess, sourcesComplete: item.sourcesComplete, fence: item.evidence.fence, f: item.compact.f });
         return { date: item.date ?? null, body };
       }

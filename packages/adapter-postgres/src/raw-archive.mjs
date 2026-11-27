@@ -21,15 +21,19 @@ export function rawMessageStorable({ id, content }) {
  * @param {readonly CaptureMessage[]} batch @param {Signer} signer
  * @param {RawOptions["hashSessionKey"]} hashSessionKey @param {boolean} [requireOutbox] */
 export async function archiveCandidates(query, capture, batch, signer, hashSessionKey, requireOutbox = false) {
+  const { scope, client, sessionId, eventId } = capture;
+  const { rows: tombstones } = await query(`SELECT DISTINCT message_id FROM core_memory_receipts
+    WHERE user_id = $1 AND client = $2 AND session_id = $3 AND forgotten_at IS NOT NULL AND message_id = ANY($4::text[])`,
+  [scope.owner, client, sessionId, batch.map(({ id }) => id)]);
+  const forgotten = new Set(tombstones.map(({ message_id }) => message_id));
   const times = batch.map(({ occurredAtMs }) => occurredAtMs);
   // An unrepresentable time cannot be archived as an unknown time.
   const hostedTimes = times.map(time => time === null ? null : hostedTime(time) ?? undefined);
-  const withheld = hostedTimes.filter(time => time === undefined).length;
+  const withheld = batch.filter(({ id }, index) => forgotten.has(id) || hostedTimes[index] === undefined).length;
   const positions = await filterSources(query, capture, times, await signer(capture, batch),
     "raw", signer, hashSessionKey, false, batch);
   if (!positions.length) return { candidates: [], withheld };
 
-  const { scope, client, sessionId, eventId } = capture;
   const { rows: [outbox] } = await query(LOCK_ARCHIVE_OUTBOX, [scope.owner, client, sessionId, eventId]);
   if (!outbox && requireOutbox) return { candidates: [], withheld };
   /** @type {Set<string> | undefined} */
@@ -45,7 +49,7 @@ export async function archiveCandidates(query, capture, batch, signer, hashSessi
   const candidates = positions.flatMap(index => {
     const message = batch[index];
     const occurredAt = hostedTimes[index];
-    if (occurredAt === undefined || spanBlocked(message) ||
+    if (forgotten.has(message.id) || occurredAt === undefined || spanBlocked(message) ||
         (eligible && !eligible.has(JSON.stringify([message.id, message.content])))) return [];
     return [{ message, occurredAt }];
   });

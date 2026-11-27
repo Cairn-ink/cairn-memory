@@ -160,7 +160,7 @@ export interface ReadCompactContextInput extends Omit<ReadContextInput, "intent"
 
 export interface ContextReadChannel {
   state: "ready" | "unavailable" | "disabled" | "absent" | "timeout";
-  causes: readonly ("unavailable" | "disabled" | "absent" | "timeout")[];
+  causes: readonly ("unavailable" | "disabled" | "absent" | "timeout" | "card_index_rebuilding")[];
 }
 
 export interface ContextReadMaintenance {
@@ -169,10 +169,12 @@ export interface ContextReadMaintenance {
   buildState: "ready" | "rebuilt" | "rebuilding";
   reason: "missing" | "corrupt" | "wrong-store" | "incompatible" | null;
   progress: { phase: number; checkpoint: number; sequence: number; baseSequence: number } | null;
+  /** Remaining namespace scans plus publication for a pending card index. */
+  cardPendingUnits?: number;
 }
 
 export interface ContextReadCoverage {
-  status: "complete" | "unavailable";
+  status: "complete" | "partial" | "unavailable";
   byType: Partial<Record<ContextReadType, {
     eligible: number | null;
     indexed: number | null;
@@ -439,6 +441,8 @@ export interface ContextAssemblyDiagnostics {
   counter: { id: "tiktoken-o200k_base" };
   items: readonly {
     ref: ContextReadRef;
+    /** Candidate rank when the compact reader opts in to item ranks. */
+    rank?: number;
     metadata: ContextMemoryMetadata | ContextReadFields;
     body?: { tokens: number };
     sourceAccess?: "available" | "unavailable-for-noncurrent-memory" | "unsupported";
@@ -503,9 +507,11 @@ interface ReadIdentityPort {
 }
 
 export interface ContextIndexObservation {
-  /** Binding for the ready publication, including its canonical and suppression fences. */
+  /** Binding for the observed publications and their canonical and suppression fences. */
   indexState: string;
   ready: boolean;
+  /** Lexical can run, with counts and hits omitted for the rebuilding document card projection. */
+  cardPending?: true;
   byType: Partial<Record<ContextReadType, { eligible: number; indexed: number }>>;
   maintenance: ContextReadMaintenance;
 }

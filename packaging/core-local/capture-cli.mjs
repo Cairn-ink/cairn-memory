@@ -37,8 +37,7 @@ async function hook(args, stdin) {
   try {
     const payload = await readHookInput(stdin, controller.signal);
     await runBoundCapture({ directory: args[2], event: args[4], payload, executable: fileURLToPath(import.meta.url),
-      headless: /^sdk-/u.test(process.env.CLAUDE_CODE_ENTRYPOINT ?? ''),
-      hasProviderKey: name => Object.hasOwn(process.env, name) }, controller.signal);
+      headless: /^sdk-/u.test(process.env.CLAUDE_CODE_ENTRYPOINT ?? '') }, controller.signal);
   } catch { /* A native hook supplies no stdout or diagnostic text on refusal. */ }
   finally {
     clearTimeout(timer);
@@ -46,5 +45,11 @@ async function hook(args, stdin) {
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await hook(process.argv.slice(2), process.stdin);
+  const args = process.argv.slice(2);
+  if (args[0] === 'hook') await hook(args, process.stdin);
+  else {
+    process.stdout.write(JSON.stringify({ version: 'local-raw-setup-v1', status: 'blocked',
+      reason: 'invalid_input', foreground: true, hookTimeoutSeconds: 160 }) + '\n');
+    process.exitCode = 1;
+  }
 }

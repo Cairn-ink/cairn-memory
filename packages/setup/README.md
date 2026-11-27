@@ -249,6 +249,21 @@ user scope for Claude Code, and `$CODEX_HOME/config.toml` (default `~/.codex`)
 for Codex. Both use the same database and owner, with an absolute Node path.
 Restart the tools after setup. If Node moves, rerun `setup --local`.
 
+When the local engine supports Document Cards, keyless capture creates lexical
+cards without amendments or card embeddings.
+
+On Linux, rerun local setup to verify a supported legacy installation for
+cutover. Use `cairn-memory local-cutover --activate` to verify it explicitly.
+`cairn-memory local-cutover --confirm` switches the registered clients and
+removes the previous store, migration backup and legacy search indexes.
+Before confirmation, `cairn-memory local-cutover --abort` restores legacy service.
+
+Known issue: if cutover confirmation is interrupted just as it takes the Codex
+configuration lock, it can leave an empty Codex lock file, and later setup runs
+refuse until you remove it. This applies on Linux and macOS. Make sure no other
+Cairn setup is running, run the `rm` command that setup prints, then run
+`setup --local` again.
+
 On Linux, eligible sessions from the same installation share a background
 server. The first session starts it, and it exits about 30 seconds after the
 last one closes. Sessions with different server environments, such as a different `PATH`, use separate

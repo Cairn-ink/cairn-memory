@@ -9,6 +9,7 @@ import {
 import { duplicateMatches, exactCandidates } from "./memory-duplicates.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { memoryPage } from "./memory-read.mjs";
+import { eraseReceiptRaw } from "./raw-purge.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
@@ -171,7 +172,15 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         const owner = tx.owner;
         const deleted = await query(`DELETE FROM memories WHERE ${TARGET} RETURNING id`, [owner, ns, key]);
         if (!deleted.rows.length) return false;
-        await deleteActiveReceipts(query, owner, key);
+        // Postgres Raw is null-namespace only.
+        if (ns === null) {
+          // Core forget holds the pause lock while erasing receipt Raw and scrubbing the capture ledger.
+          await eraseReceiptRaw(query, { owner, namespace: null }, key);
+          await query(`UPDATE core_memory_receipts SET forgotten_at = now()
+            WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [owner, key]);
+        } else {
+          await deleteActiveReceipts(query, owner, key);
+        }
         for (const table of ["memory_topics", "memory_placements"]) {
           await query(`DELETE FROM ${table} WHERE user_id = $1 AND memory_id = $2`, [owner, key]);
         }

@@ -6,7 +6,7 @@ import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { scratch, seedFact } from "./storage-fixtures.mjs";
 
-const notApplicable = { "K-LEG-PASS-7-router": "the SQLite adapter has no document card store" };
+const notApplicable = {};
 const factory = {
   name: "sqlite",
   async open({ capabilities }) {

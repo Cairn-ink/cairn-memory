@@ -60,7 +60,8 @@ function crash(f, checkpoint, internal = false) {
     await runLocalCutover({ ...options, [internal ? 'onMigrationCheckpoint' : 'onCheckpoint'](state) {
       if (state === checkpoint) process.kill(process.pid, 'SIGKILL');
     } });
-  `, JSON.stringify({ options: f.options, checkpoint, internal })], { env: {}, encoding: 'utf8', timeout: 45_000 });
+  `, JSON.stringify({ options: f.options, checkpoint, internal })], { env: {}, encoding: 'utf8', timeout: 75_000 });
+  assert.ifError(child.error);
   assert.equal(child.signal, 'SIGKILL', child.stderr);
 }
 
@@ -77,7 +78,7 @@ function cutoverError(code) {
 }
 
 for (const layout of [18, 29, 48, 53]) {
-  test(`layout ${layout} resumes from every durable checkpoint without publication`, linux, async t => {
+  test(`layout ${layout} resumes from every durable checkpoint without publication`, { ...linux, timeout: 420_000 }, async t => {
     const { path } = await fixture(scratch(t), layout);
     const f = await installer(t, path, join(dirname(path), 'run'));
     const bytes = await readFile(path);

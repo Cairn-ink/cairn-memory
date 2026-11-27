@@ -91,7 +91,7 @@ jobs:
         env:
           CAIRN_SETUP_TEST_NETWORK: '1'
         run: node packages/setup/test/engine-cache.mjs "$RUNNER_TEMP/setup-engine-cache"
-      - run: node tools/testing/run.mjs packages/setup/test/local-uninstall-daemon-stop.test.mjs packages/setup/test/local-daemon-command.test.mjs
+      - run: node tools/testing/run.mjs packages/setup/test/local-uninstall-daemon-stop.test.mjs packages/setup/test/local-daemon-command.test.mjs packages/setup/test/local-cutover-darwin.test.mjs packages/setup/test/local-cutover-darwin-active.test.mjs
       - name: Test installer capture
         env:
           CAIRN_SETUP_TEST_GROUP: local

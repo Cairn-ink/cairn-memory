@@ -227,7 +227,8 @@ function assertCommitted(state, start, item) {
     owner: scope.owner, namespace: scope.namespace, kind, text_hash: sha256(original), memory_id: item.id, fact_id: id,
   })));
   assert.deepEqual(state.memories, []);
-  assert.deepEqual(state.receipts, []);
+  assert.deepEqual(state.receipts.filter(({ forgotten_at }) => forgotten_at === null), []);
+  assert.ok(state.receipts.length > 0 && state.receipts.every(({ memory_id, forgotten_at }) => memory_id === item.id && forgotten_at !== null));
   assert.equal(state.indexRevision, start.indexRevision + 1);
 }
 

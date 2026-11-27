@@ -13,15 +13,30 @@ function config(args) {
   if (options.database && options.owner) return options;
 }
 
+const managed = /\/engine\/[^/]+\/app\/node_modules\/cairn-memory-core-local-candidate\/packaging\/core-local\/cli\.mjs$/u.test(import.meta.url);
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === '--help') {
   console.log('Usage: cairn-memory-core-local [--stdio | --help | --db PATH --owner OWNER [--project PROJECT]]');
+} else if (args[0] === '--check-config') {
+  const { checkProvider } = await import('./provider-check.mjs');
+  await checkProvider(config(args.slice(1)), async options => {
+    if (!managed) return false;
+    const { readManagedModelConsent } = await import('./daemon-entry.mjs');
+    return readManagedModelConsent(options);
+  });
+} else if (args[0] === 'raw') {
+  const { runRaw } = await import('./raw-cli.mjs');
+  await runRaw(args.slice(1));
 } else if (args.length === 0 || (args.length === 1 && args[0] === '--stdio')) {
   await serveStdio(process.stdin, process.stdout);
 } else {
   const options = config(args);
-  if (options) await serveStdio(process.stdin, process.stdout, options);
-  else {
+  if (options) {
+    if (managed) {
+      const { serveManaged } = await import('./daemon-entry.mjs');
+      await serveManaged(args, options);
+    } else await serveStdio(process.stdin, process.stdout, options);
+  } else {
     console.error('Invalid candidate arguments. Run with --help.');
     process.exitCode = 2;
   }

@@ -33,6 +33,7 @@ export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
 export { DOCUMENT_CARD_PURGE_CASES } from "./document-card-purge-cases.mjs";
+export { DOCUMENT_CARD_CORRECTION_PRIVACY_CASE } from "./document-card-correction-privacy-cases.mjs";
 export { CAPTURE_DOCUMENT_CARD_CASES } from "./capture-document-card-cases.mjs";
 export { CAPTURE_DOCUMENT_AMENDMENT_CASES } from "./capture-document-amendment-cases.mjs";
 export { CAPTURE_QUANTITY_LEDGER_CASES } from "./capture-quantity-ledger-cases.mjs";
@@ -42,6 +43,7 @@ export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
 export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 export { DURABLE_DELETE_CASES } from "./durable-delete-cases.mjs";
 export { COMMITTED_INDEX_CASES } from "./committed-index-cases.mjs";
+export { PROCEDURAL_TAG_CASES, RECEIPT_ID_CASES } from "./procedural-tag-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
