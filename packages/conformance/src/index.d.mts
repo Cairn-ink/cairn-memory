@@ -58,6 +58,7 @@ export declare const TOPIC_CARD_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_AMENDMENT_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_LINK_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_PURGE_CASES: readonly ConformanceCase[];
+export declare const DOCUMENT_CARD_CORRECTION_PRIVACY_CASE: ConformanceCase;
 export declare const CAPTURE_DOCUMENT_CARD_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_DOCUMENT_AMENDMENT_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_QUANTITY_LEDGER_CASES: readonly ConformanceCase[];

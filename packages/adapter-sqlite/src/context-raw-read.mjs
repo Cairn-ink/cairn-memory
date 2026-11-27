@@ -217,14 +217,14 @@ export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, {
   const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
   /** @type {RawRow | undefined} */
   let archived;
-  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, row => { archived = row; }, searched) ||
+  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, undefined, row => { archived = row; }, searched) ||
       !archived || !exactTurn(scope, memoryId, address, archived)) return;
   const excerpt = archivedReceiptExcerpt(archived.message.content);
   if (!excerpt) return;
   const receipt = { ...address, excerpt };
   /** @type {RawRow | undefined} */
   let checkedArchive;
-  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId,
+  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId, undefined,
     row => { checkedArchive = row; }, searched) || !checkedArchive || checkedArchive.client !== archived.client ||
     checkedArchive.sessionId !== archived.sessionId || checkedArchive.message.id !== archived.message.id) return;
   if (searched && (searched.message.role !== archived.message.role || searched.message.content !== archived.message.content) &&
