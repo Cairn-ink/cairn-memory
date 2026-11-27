@@ -121,6 +121,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
+          rawRows: hooks.rawRows ?? [],
           forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions, archived: state.archived,
           archivedIds: state.archivedIds,
           effects: Object.fromEntries(Object.entries(state.effects).map(([field, items]) => [field, [...items]])),
@@ -212,6 +213,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         assert.ok(tx.options.readOnly || (writes && tx.options.pauseLock));
         return refs.filter(ref => !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref) &&
           (!forgetting || candidates(tx, scope).some(row => row.id === ref.id && row.scope.namespace === ref.namespace)));
+      },
+      async readVisibleRaw(tx, scope, refs, matchesVersion) {
+        record(tx, scope.owner, "fence.readVisibleRaw", scope, refs);
+        assert.ok(tx.options.readOnly);
+        return refs.filter(ref => ref.type === "raw" && scope.namespaces.includes(ref.namespace) &&
+          !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref)).flatMap(ref =>
+          tx.rawRows.filter(row => row.ref.id === ref.id && row.ref.namespace === ref.namespace)
+            .map(({ score: _score, ...row }) => ({ ...row, ref: { ...row.ref } })).filter(row => matchesVersion(row)));
       },
     },
   };

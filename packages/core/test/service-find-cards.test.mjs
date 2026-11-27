@@ -102,6 +102,7 @@ test("hybrid cards reuse the memory embedding and leave memory and Raw delivery 
   storage.capabilities.rawArchive = true;
   const segment = { ref: { type: "raw", id: "raw", namespace: scope.namespace }, client: "fixture",
     sessionId: "conversation", messageId: "message", role: "user", content: "spare key", occurredAtMs: 12, score: 3 };
+  hooks.rawRows = [segment];
   let rawVector;
   storage.raw = {
     async raw(_tx, _selection, _query, _intent, options) {
