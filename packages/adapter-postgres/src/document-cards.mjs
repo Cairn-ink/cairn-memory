@@ -6,6 +6,7 @@ import { CARD_COLUMNS, LIVE_CARD, PERSONAL_CARD, cardRow, copyCard, copyMessage,
 import { createCardVisibility } from "./document-card-visibility.mjs";
 import { copyArray, inputText, invalid, pgText } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
+import { resolvePurgeAddresses } from "./raw-purge.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideOptions, DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "../../core/src/ports/index.d.ts" */
@@ -17,6 +18,7 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {Required<DocumentCardStore<StoredDocumentCardRecord>>} Store */
 /** @typedef {ReturnType<ReturnType<typeof createCardVisibility>>} Reader */
 /** @typedef {ReturnType<typeof copySelector>} Selector */
+/** @typedef {Awaited<ReturnType<typeof resolvePurgeAddresses>>} PurgeAddresses */
 
 const AMENDMENTS = "core_document_card_amendments";
 const AMENDMENT_PARENT = "a.user_id = c.user_id AND a.card_id = c.id";
@@ -74,24 +76,26 @@ async function dropMemberships(query, owner, ids) {
   await query("DELETE FROM card_placements WHERE user_id = $1 AND card_id = ANY($2::text[])", [owner, ids]);
 }
 
-/** @param {Parameters<CardPurge>[3]} sources @param {unknown[]} args */
+/** @param {Readonly<PurgeAddresses>} sources @param {unknown[]} args */
 function sourceSelectorsSql(sources, args) {
   if (!sources.length) return { card: "false", amendment: "false" };
   const target = `jsonb_to_recordset($${args.push(JSON.stringify(sources))}::jsonb)
     AS target(client text, "sessionId" text, "messageId" text)`;
   /** @param {string} alias */
   const match = alias => `EXISTS (SELECT 1 FROM ${target}
-    WHERE (${alias}.source_client, ${alias}.source_session_id) = (target.client, target."sessionId")
+    WHERE ${alias}.source_session_id = target."sessionId"
+      AND (target.client IS NULL OR ${alias}.source_client = target.client)
       AND (target."messageId" IS NULL OR ${alias}.source_message_id = target."messageId"))`;
   const sentence = `EXISTS (SELECT 1 FROM ${target} JOIN LATERAL jsonb_array_elements(
     CASE WHEN jsonb_typeof(c.sentences) = 'array' THEN c.sentences ELSE '[]'::jsonb END) s
-    ON (s #>> '{source,client}', s #>> '{source,sessionId}') = (target.client, target."sessionId")
+    ON s #>> '{source,sessionId}' = target."sessionId"
+      AND (target.client IS NULL OR s #>> '{source,client}' = target.client)
       AND (target."messageId" IS NULL OR s #>> '{source,messageId}' = target."messageId"))`;
   return { card: `(${match("c")} OR ${sentence})`, amendment: match("a") };
 }
 
 /** @param {Query} query @param {string} owner @param {readonly Selector[] | undefined} selectors
- * @param {{id?: string, purge?: boolean, lock?: boolean, sources?: Parameters<CardPurge>[3], textMatches?: string[]}} [options] */
+ * @param {{id?: string, purge?: boolean, lock?: boolean, sources?: PurgeAddresses, textMatches?: string[]}} [options] */
 async function selectAffected(query, owner, selectors, { id, purge = false, lock = false, sources = [], textMatches = [] } = {}) {
   /** @type {unknown[]} */
   const args = [owner];
@@ -227,7 +231,8 @@ export function createPostgresDocumentCardStore(options = {}) {
         }
       }
       const selectors = memoryId === undefined ? [] : [{ sourceMemoryId: memoryId }];
-      const affected = await selectAffected(query, owner, selectors, { sources, textMatches, purge: true, lock: true });
+      const addresses = await resolvePurgeAddresses(query, scope, sources);
+      const affected = await selectAffected(query, owner, selectors, { sources: addresses, textMatches, purge: true, lock: true });
       const reason = memoryId === undefined ? "raw_deleted" : "source_memory_forgotten";
       if ((await hideSelection(query, owner, affected, reason, true)).changed) await advanceIndex(query, owner, run, perCall);
     },

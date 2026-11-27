@@ -71,9 +71,9 @@ async function definitelyWithheld(content, legacy, keys, facts, scope) {
   return facts.some((fact) => passages.some((passage) => factHidesRow(fact, { type: "raw", scope, sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: content.length, ...passage }) === true));
 }
 
-/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
-export async function dropSourceQuantities(query, scope, addresses) {
-  if (!addresses.length) return false;
+/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses
+ * @returns {Promise<{client: string | null, sessionId: string, messageId?: string}[]>} */
+export async function resolvePurgeAddresses(query, scope, addresses) {
   /** @type {Map<string, {client: string | null, sessionId: string}[]>} */
   const sessions = new Map();
   const targets = [];
@@ -89,15 +89,21 @@ export async function dropSourceQuantities(query, scope, addresses) {
       } catch (error) {
         if (!(error instanceof CoreError) || error.code !== "raw_lineage_unavailable" ||
             !sessionId.startsWith("mcp-save:")) throw error;
-        // Ambiguous MCP save provenance requires dropping quantities across clients.
+        // Ambiguous MCP save provenance requires erasing bindings across clients.
         resolved = [{ client: null, sessionId }];
       }
       sessions.set(key, resolved);
     }
-    for (const address of resolved) {
-      targets.push({ client: address.client, session_id: address.sessionId, message_id: messageId });
-    }
+    for (const address of resolved) targets.push({ ...address, messageId });
   }
+  return targets;
+}
+
+/** @param {Query} query @param {Scope} scope @param {readonly SourceAddress[]} addresses */
+export async function dropSourceQuantities(query, scope, addresses) {
+  if (!addresses.length) return false;
+  const targets = (await resolvePurgeAddresses(query, scope, addresses)).map(({ client, sessionId, messageId }) =>
+    ({ client, session_id: sessionId, message_id: messageId }));
   const { rows: [result] } = await query(`WITH removed AS (
     DELETE FROM core_quantity_ledger l
     USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text, message_id text)

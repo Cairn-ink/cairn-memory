@@ -1,6 +1,10 @@
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 
+-- This migration locks document_cards, then users, in the order card writers use.
+-- Keep public.delete_personal_document_cards() and the document_cards_delete_personal trigger stable.
+-- Rows in card_topics and card_placements are removed by their existing users foreign keys (ON DELETE CASCADE).
+
 DO $$
 BEGIN
   IF pg_catalog.to_regprocedure('public.delete_personal_document_cards()') IS NULL THEN

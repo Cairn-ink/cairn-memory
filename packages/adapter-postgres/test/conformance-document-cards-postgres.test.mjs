@@ -33,7 +33,7 @@ const notApplicable = new Map([
   ["T-CARD-INPUT-1", "Inserts a card into a non-personal namespace before checking ref order"],
   ["T-CARD-LINK-3", "Expects not_found for linkMemories in a non-personal namespace, which this adapter does not support"],
   ["T-CARD-PURGE-2", "The primary run archives Raw and inserts cards in a non-personal namespace to test indeterminate evidence"],
-  ["T-CARD-CORRECT-LATE-FACT", "The final read needs a durable text revision to distinguish a post-replacement metadata update"],
+  ["T-CARD-CORRECT-LATE-FACT", "The final read needs a durable text revision after a metadata update. The Postgres test 'withholds older citations after a late sourced correction' covers the earlier privacy assertion."],
 ]);
 
 const cardCapability = name => name === "documentCards" || name === "documentCardSearch";

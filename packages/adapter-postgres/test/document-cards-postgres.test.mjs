@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
-import { CoreError, coreDigest, coreFingerprintLabels, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { capabilities, CoreError, coreDigest, coreFingerprintLabels, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { buildDocumentCard, documentCardVisible } from "@cairn-ink/core/routing";
+import { forgetMethod } from "../../core/src/service/forget.mjs";
 import {
   applyMigrations, createPostgresDocumentCardStore, createPostgresDocumentCardCandidates,
   createPostgresMemoryStore, createPostgresRawPorts, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
@@ -266,7 +267,8 @@ async function setup(t, profile) {
   const options = { lineageSecret: randomUUID(), hashSessionKey, sessionKey: hashSessionKey, fingerprintKey: () => key };
   const store = createPostgresDocumentCardStore(options);
   const candidates = createPostgresDocumentCardCandidates(options);
-  const { run } = createPostgresUnitOfWork(source);
+  const uow = createPostgresUnitOfWork(source);
+  const { run } = uow;
   const read = work => run(owner, { readOnly: true }, work);
   const write = work => run(owner, { pauseLock: true }, work);
   const put = (value, vector) => write(tx => store.put(tx, scope, value, vector));
@@ -275,7 +277,7 @@ async function setup(t, profile) {
     digest(factIncarnationBody({ ...scope, origin: "forget", actionId: "forget", ...value })));
   const revision = async () => Number((await pool.query(
     "SELECT index_revision FROM core_owner_state WHERE user_id = $1", [owner])).rows[0]?.index_revision ?? 0);
-  return { pool, key, options, store, candidates, read, write, put, fact, revision, hashSessionKey };
+  return { pool, key, options, store, candidates, read, write, put, fact, revision, hashSessionKey, uow };
 }
 
 async function storeTeamCard(pool, value, user = owner) {
@@ -308,6 +310,37 @@ async function fileCard(pool, { id, contentHash }) {
   await pool.query(`INSERT INTO card_placements (user_id, card_id, content_hash, status)
     VALUES ($1, $2, $3, 'filed')`, [owner, id, contentHash]);
 }
+
+test("Postgres forget refuses pending legacy facts before erasing memory", migrationDbTest, async t => {
+  const { pool, store, read, write, put, uow } = await setup(t, "keyless");
+  const memories = createPostgresMemoryStore({ purgeCards: store.purgeCards });
+  const duplicates = t.mock.method(memories, "findDuplicates");
+  const erase = t.mock.method(memories, "erase");
+  const suppressions = createPostgresSuppressionStore();
+  const writeFact = t.mock.method(suppressions, "writeFact");
+  const forget = forgetMethod({ storage: { uow, memories, suppressions, capabilities: capabilities({}) },
+    clock: { sha256Hex: digest } });
+  const content = memoryContent("Fasteners are stored in the cabinet.");
+  const memory = await write(tx => memories.insert(tx, scope, content, [], 1000));
+  const linked = { ...card("linked"), sourceMemories: [{ id: memory.id, revision: memory.revision }] };
+  await put(linked, embedding);
+  await pool.query(`INSERT INTO suppressions (id, user_id, kind, client, session_id, origin)
+    VALUES ('pending', $1, 'session', 'client', 'unrelated', 'forget')`, [owner]);
+
+  await assert.rejects(forget(scope, memory.id, content.source), { code: "ineligible" });
+  assert.equal(duplicates.mock.callCount(), 1);
+  assert.equal(writeFact.mock.callCount(), 0);
+  assert.equal(erase.mock.callCount(), 0);
+  assert.equal((await read(tx => memories.get(tx, scope, memory.id))).id, memory.id);
+  assert.deepEqual((await pool.query("SELECT tombstoned, body FROM document_cards WHERE id = $1", [linked.id])).rows,
+    [{ tombstoned: false, body: linked.body }]);
+
+  await pool.query("UPDATE core_owner_state SET legacy_facts_ready = true WHERE user_id = $1", [owner]);
+  assert.equal((await forget(scope, memory.id, content.source)).status, "forgotten");
+  assert.equal(erase.mock.callCount(), 1);
+  assert.deepEqual((await pool.query("SELECT tombstoned, body FROM document_cards WHERE id = $1", [linked.id])).rows,
+    [{ tombstoned: true, body: "" }]);
+});
 
 for (const profile of ["keyless", "keyed"]) {
   test(`Postgres ${profile} isolates team cards from all personal operations`, migrationDbTest, async t => {
@@ -692,6 +725,203 @@ for (const profile of ["keyless", "keyed"]) {
       await write(remove);
       assertErased(await read(snapshot));
     }
+  });
+
+  for (const path of ["deleteConversation", "eraseSessions", "purgeWithheld", "eraseReceiptRaw", "lateLineage"]) {
+    test(`Postgres ${profile} erases logical-client cards through ${path}`, migrationDbTest, async t => {
+      const { store, pool, key, options, read, write, put } = await setup(t, profile);
+      const { purgeCards } = store;
+      const { raw, sessionLineage } = createPostgresRawPorts({ ...options, purgeCards,
+        fingerprintKeys: () => key ? [{ key, pipeline: "core" }] : [] });
+      const memories = createPostgresMemoryStore({ purgeCards });
+      const source = { ...sourceMessage, client: "mcp", sessionId: `mcp-save:${randomUUID()}` };
+      const logical = { ...source, client: "reported-client" };
+      const control = { ...card("control"), origin: "router", sourceMessage: { ...logical, sessionId: randomUUID() } };
+      const text = "Private source text.";
+      const { card: routed } = await buildDocumentCard({ id: logical.messageId, role: "user", content: text },
+        { scope, client: logical.client, canonicalSessionKey: options.sessionKey(logical.client, logical.sessionId) });
+      const target = { ...card(routed.id, routed.body), origin: "router", title: routed.title, sourceMessage: logical };
+      await pool.query("INSERT INTO core_owner_state (user_id, legacy_facts_ready) VALUES ($1, true)", [owner]);
+      const rawSource = path === "purgeWithheld" ? { ...source, client: "mixed-client" } : source;
+      await archive(pool, text, rawSource);
+      await archive(pool, "Independent source.", control.sourceMessage);
+      const request = { client: rawSource.client, session_id: rawSource.sessionId, event_id: rawSource.sessionId,
+        messages: [{ id: rawSource.messageId, role: "user", content: text }] };
+      await pool.query(`INSERT INTO capture_events (user_id, client, session_id, event_id, raw_request, received_at)
+        VALUES ($1, $2, $3, $3, $4, now())`, [owner, rawSource.client, rawSource.sessionId, JSON.stringify(request)]);
+      assert.deepEqual(await put(target, embedding), { status: "inserted" });
+      await put(control, embedding);
+
+      const messageOnly = path === "purgeWithheld" || path === "eraseReceiptRaw";
+      if (messageOnly) {
+        const neighbor = { ...logical, messageId: "neighbor" };
+        await archive(pool, "Separate message in the same session.", { ...rawSource, messageId: neighbor.messageId });
+        await put({ ...card("neighbor"), origin: "router", sourceMessage: neighbor }, embedding);
+      }
+      if (path === "purgeWithheld") {
+        // Mixed provenance makes the reverse lookup ambiguous for this client's Raw address.
+        for (const kind of ["mcp", "plugin"]) {
+          await write(tx => memories.insert(tx, scope, { ...memoryContent(`Provenance for ${kind}.`),
+            source: { kind, client: rawSource.client, sessionId: rawSource.sessionId } }, [], 1000));
+        }
+        await put({ ...card("sentence"), sentences: [{ start: 0, end: 7, source: logical }] }, embedding);
+        assert.deepEqual(await write(tx => store.amend(tx, scope, control.id,
+          { ...amendment(), sourceMessage: logical })), { status: "inserted" });
+      }
+      const memory = path === "eraseReceiptRaw" ? await write(tx => memories.insert(tx, scope,
+        memoryContent("Independent memory text."), [{ ...rawSource, role: "user", occurredAtMs: 1000 }], 1000)) : null;
+      const textFact = { ...scope, kind: "text", mode: "exact", origin: "forget", actionId: path,
+        text: { digests: [await coreDigest(text, key ?? undefined)], keyId: key?.id ?? null } };
+
+      const root = { ...source, sessionId: randomUUID() };
+      const anchor = { messageMac: digest("message"), contentMac: digest(text) };
+      const eraseSession = async (tx, session, ledgerBlanked) => {
+        const closure = await sessionLineage.provenClosure(tx, scope, [session]);
+        assert.deepEqual(await raw.eraseSessions(tx, scope, closure), { rawDeleted: 1, ledgerBlanked });
+      };
+      if (path === "lateLineage") {
+        await archive(pool, text, root);
+        await write(async tx => {
+          await sessionLineage.recordAnchors(tx, scope, source, [anchor]);
+          await eraseSession(tx, root, 0);
+        });
+        await storeTeamCard(pool, { ...target, id: "team" });
+        await storeTeamCard(pool, { ...target, id: "unowned" }, null);
+      }
+
+      const snapshot = async tx => (await query(tx, `SELECT
+        ARRAY(SELECT to_jsonb(c) FROM document_cards c ORDER BY c.scope_id, c.id) AS cards,
+        ARRAY(SELECT to_jsonb(a) FROM core_document_card_amendments a ORDER BY a.card_id, a.amendment_id) AS amendments,
+        ARRAY(SELECT to_jsonb(r) FROM raw_messages r ORDER BY r.id) AS raw,
+        ARRAY(SELECT raw_request #>> '{messages,0,content}' FROM capture_events ORDER BY event_id) AS ledger,
+        ARRAY(SELECT to_jsonb(m) FROM memories m ORDER BY m.id) AS memories,
+        ARRAY(SELECT to_jsonb(r) FROM core_memory_receipts r ORDER BY r.memory_id, r.message_id) AS receipts,
+        ARRAY(SELECT to_jsonb(f) FROM capture_raw_fences f ORDER BY f.client, f.session_id) AS fences,
+        ARRAY(SELECT to_jsonb(l) FROM capture_raw_lineage l ORDER BY l.client, l.session_id, l.message_mac, l.content_mac) AS lineage,
+        ARRAY(SELECT to_jsonb(s) FROM suppressions s ORDER BY s.id) AS suppressions,
+        (SELECT index_revision::text FROM core_owner_state WHERE user_id = $1) AS revision`, [owner])).rows[0];
+      const before = await read(snapshot);
+      assert.ok(before.raw.some(row => row.session_id === rawSource.sessionId && row.message_id === rawSource.messageId));
+      assert.equal(before.cards.find(row => row.id === target.id).tombstoned, false);
+      const remove = async tx => {
+        switch (path) {
+          case "deleteConversation":
+            assert.deepEqual(await raw.deleteConversation(tx, scope, rawSource), { rawDeleted: 1 });
+            break;
+          case "eraseSessions":
+            await eraseSession(tx, rawSource, 1);
+            break;
+          case "purgeWithheld":
+            assert.deepEqual(await raw.purgeWithheld(tx, scope, [{ fact: textFact }]), { rawDeleted: 1, ledgerBlanked: 1 });
+            break;
+          case "eraseReceiptRaw":
+            assert.equal(await memories.erase(tx, scope, memory.id), true);
+            break;
+          case "lateLineage":
+            await sessionLineage.recordAnchors(tx, scope, root, [anchor]);
+            break;
+        }
+      };
+      const assertErased = state => {
+        assert.deepEqual(state.raw, before.raw.filter(row =>
+          row.session_id !== rawSource.sessionId || row.message_id !== rawSource.messageId));
+        assert.deepEqual(state.ledger, [""]);
+        assert.equal(state.cards.length, before.cards.length);
+        for (const [i, previous] of before.cards.entries()) {
+          const current = state.cards[i];
+          if (previous.id !== target.id && previous.id !== "sentence") {
+            assert.deepEqual(current, previous);
+            continue;
+          }
+          const { tombstoned, hidden_reason, title, body, sentences, embedding, embedding_model, embedding_text_version,
+            embedding_content_hash } = current;
+          assert.equal(tombstoned, true, `Expected ${previous.id} to be tombstoned`);
+          assert.equal(hidden_reason, memory ? "source_memory_forgotten" : "raw_deleted");
+          assert.deepEqual([title, body, sentences, embedding, embedding_model, embedding_text_version, embedding_content_hash],
+            ["", "", [], null, null, null, null]);
+        }
+        if (path === "purgeWithheld") {
+          const [{ purged, sentence, quote }] = state.amendments;
+          assert.deepEqual([purged, sentence, quote], [true, "", ""]);
+        }
+        if (memory) {
+          assert.deepEqual(state.memories, []);
+          assert.ok(state.receipts[0].forgotten_at);
+        }
+      };
+      await assert.rejects(write(async tx => {
+        await remove(tx);
+        assertErased(await snapshot(tx));
+        throw new CoreError("storage_error");
+      }), { code: "storage_error" });
+      assert.deepEqual(await read(snapshot), before);
+      await write(remove);
+      assertErased(await read(snapshot));
+    });
+  }
+
+  test(`Postgres ${profile} withholds older citations after a late sourced correction`, migrationDbTest, async t => {
+    const { store, pool, key, candidates, read, write, put, fact, hashSessionKey } = await setup(t, profile);
+    const memories = createPostgresMemoryStore();
+    const content = async text => ({ ...memoryContent(text), digests: [await coreDigest(text, key ?? undefined)] });
+    const original = await content("The machine takes steel rivets.");
+    const middleContent = await content("The machine takes brass rivets.");
+    const latestContent = await content("The machine takes stainless steel rivets.");
+    const memory = await write(tx => memories.insert(tx, scope, original, [], 1000));
+    const citations = [];
+    const addCitation = async revision => {
+      const source = { ...sourceMessage, messageId: String(revision) };
+      const message = { id: source.messageId, role: "user", content: "Cabinet inventory." };
+      const canonicalSessionKey = hashSessionKey(source.client, source.sessionId);
+      const { card: routed } = await buildDocumentCard(message, { scope, client: source.client, canonicalSessionKey });
+      const value = { ...card(routed.id), origin: "router", sourceMessage: source,
+        sourceMemories: [{ id: memory.id, revision }] };
+      await archive(pool, message.content, source);
+      assert.deepEqual(await put(value, embedding), { status: "inserted" });
+      citations.push(value);
+    };
+    const readCitations = () => read(async tx => ({
+      inputs: await store.visibilityInputs(tx, scope, citations.map(({ id }) => ref(id))),
+      stored: await Promise.all(citations.map(({ id }) => store.get(tx, scope, id))),
+      lexical: await candidates.lexical(tx, selection, "cabinet", 5, {}),
+      vector: await candidates.vector(tx, selection, embedding.vector, embedding.model, 5),
+    }));
+    await addCitation(memory.revision);
+    // Mirror the kit's first replacement without a fact, then the replacement with a late fact.
+    const middle = await write(tx => memories.replaceContent(tx, scope, memory.id, memory.revision,
+      middleContent, null, 2000));
+    assert.equal(middle.revision, memory.revision + 1);
+    await addCitation(middle.revision);
+    const before = await readCitations();
+    const ids = citations.map(({ id }) => id).sort();
+    assert.deepEqual(before.stored.map(({ id }) => id).sort(), ids);
+    assert.equal(before.inputs.length, citations.length);
+    for (const input of before.inputs) assert.deepEqual(await documentCardVisible(input), { visible: true, reason: null });
+    for (const channel of [before.lexical, before.vector]) {
+      assert.deepEqual(channel.rows.map(({ ref }) => ref.id).sort(), ids);
+    }
+
+    const latest = await write(async tx => {
+      await fact(tx, { origin: "correct", kind: "text", mode: "exact", actionId: "late-correction",
+        sourceMemory: { id: memory.id, createdAtMs: memory.createdAtMs },
+        text: { digests: original.digests, keyId: key?.id ?? null } });
+      return memories.replaceContent(tx, scope, memory.id, middle.revision, latestContent, null, 3000);
+    });
+    assert.equal(latest.revision, middle.revision + 1);
+
+    // Mirror the kit's older-citation privacy assertion across storage and candidate reads.
+    const after = await readCitations();
+    assert.equal(after.inputs.length, citations.length);
+    for (const [i, input] of after.inputs.entries()) {
+      const [{ revision }] = citations[i].sourceMemories;
+      const state = input.memoryStates.get(memory.id);
+      assert.equal(state.revision, latest.revision);
+      assert.deepEqual(state.correctedRevisions, [revision]);
+      assert.deepEqual(await documentCardVisible(input), { visible: false, reason: "source_memory_corrected" });
+    }
+    assert.deepEqual(after.stored, [null, null]);
+    assert.deepEqual(after.lexical.rows, []);
+    assert.deepEqual(after.vector.rows, []);
   });
 
   test(`Postgres ${profile} returns the stored hash and allows visibility inputs without Raw`, migrationDbTest, async t => {
