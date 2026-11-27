@@ -119,6 +119,20 @@ for (const layout of [29, 48, 53]) {
   });
 }
 
+test("a retired shared receipt keeps its lineage when a legacy Raw fence also withholds its excerpt", async t => {
+  const { input, survivor } = await legacyStore(scratch(t), 29);
+  editFixture(input.path, db => db.prepare("INSERT INTO raw_session_fences VALUES (?, ?, ?, ?, ?)")
+    .run(project.ownerId, project.scope, project.projectId, client, sessionId));
+  await createLegacyBackup(input);
+  await migrateLegacyStore(input);
+  const adapter = await open(t, input.destination);
+  await putCard(adapter, survivor);
+  await assertDelivery(adapter, survivor, true);
+  assertStored(input.destination, survivor);
+  await adapter.close();
+  assert.equal(readFileSync(input.destination).includes(receipt.excerpt), false);
+});
+
 test("an unrepresentable receipt marker refuses before changing the source or creating a destination", async t => {
   const { input } = await legacyStore(scratch(t), 29);
   await createLegacyBackup(input);
