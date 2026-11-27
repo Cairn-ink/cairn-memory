@@ -1198,7 +1198,7 @@
     "packages/core/src/rationale/relate.mjs": "e00c36b2f89947326940bc39998db12bc709177810ec5d31c6e4a1eff1d561f6",
     "packages/core/src/rationale/store-plan.mjs": "164b7e14b2694244d72ae1cd14f5dcf83bf62b5b5a6588e34d838a057bb8ebd3",
     "packages/core/src/retrieval/bm25.mjs": "5f59680dafd3b7e6bdf4abd53239915fed7a9a5213b647680a49c8030d520e40",
-    "packages/core/src/retrieval/fusion.mjs": "9ef66548f692db15b449be0f7c4d76e8f03b4cfe990c6bbd5765a396a4f3904e",
+    "packages/core/src/retrieval/fusion.mjs": "5013b1fabb3aca7ae81f995548db1e203435ffda8701039fa033f26bade71da1",
     "packages/core/src/retrieval/hosted-paging.mjs": "9865ba08d8712cdbe0880627936c1d8f152483dd51df53bd4d547781b0a07c55",
     "packages/core/src/retrieval/session-start.mjs": "78160fc6a4d4ebba7414a3ac3f8f824812c435dc9b1d93ee78e4b0fb3549abb9",
     "packages/core/src/retrieval/tokenize.mjs": "e656d7eada5513921afbebb5d098237b6b0c89117cbce1e02c7368f47ef56d2b",
