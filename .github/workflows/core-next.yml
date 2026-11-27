@@ -1,9 +1,9 @@
 name: core-next
 on:
   push:
-    branches: [core-next]
+    branches: [core-next, "release/**"]
   pull_request:
-    branches: [core-next]
+    branches: [core-next, "release/**"]
 permissions:
   contents: read
 jobs:
