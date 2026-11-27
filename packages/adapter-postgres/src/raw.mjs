@@ -155,20 +155,22 @@ export function createPostgresRawPorts(options) {
         const batch = copyMessages(messages);
         return async (query, run) => {
           if (!batch.length) return;
-          const proofs = await captureProofs(capture, batch);
-          if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const { scope, client, sessionId, eventId, payloadDigest } = capture;
-          const params = [scope.owner, client, sessionId, eventId, payloadDigest, "content:" + await captureProofs.keyId()];
+          const params = [scope.owner, client, sessionId, eventId, payloadDigest];
           const identity = `user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
-            AND core_namespace IS NULL AND core_payload_digest = $5 AND raw_lineage_key_id IS DISTINCT FROM $6`;
-          const { rows: [outbox] } = await query(`SELECT raw_request, core_outbox_metadata
+            AND core_namespace IS NULL AND core_payload_digest = $5`;
+          const { rows: [outbox] } = await query(`SELECT raw_request, core_outbox_metadata, raw_lineage_key_id
             FROM capture_events WHERE ${identity} FOR UPDATE`, params);
-          if (outbox) {
-            const stored = decodeOutboxMessages(outbox.raw_request, outbox.core_outbox_metadata);
-            if (stored.length === batch.length && batch.every(({ id, content }, index) =>
-              stored[index].id === id && stored[index].content === content)) {
-              await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, params);
-            }
+          const stored = outbox && decodeOutboxMessages(outbox.raw_request, outbox.core_outbox_metadata);
+          // Admission or forget can clear content while keeping the position and message ID.
+          const matches = stored && stored.length === batch.length && batch.every(({ id, content }, index) =>
+            stored[index].id === id && (stored[index].content === "" || stored[index].content === content));
+          const effective = matches ? stored : batch;
+          const proofs = await captureProofs(capture, effective);
+          if (proofs === null) throw new CoreError("fingerprint_unavailable");
+          const stamp = "content:" + await captureProofs.keyId();
+          if (matches && outbox.raw_lineage_key_id !== stamp) {
+            await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, [...params, stamp]);
           }
           await record(query, run, scope, capture, proofs);
         };
