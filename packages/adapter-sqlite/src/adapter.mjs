@@ -106,7 +106,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
     counters,
-    suppressions: createSuppressionStore(port, hashSessionKey, receiptReadSafety.sourceVisible,
+    suppressions: createSuppressionStore(port, hashSessionKey, lineage.hasReceiptCandidate,
       index.markDirty, migratedRaw, captureControls, scrubTitles),
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },

@@ -13,7 +13,6 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {ReturnType<typeof scopedSuppression>} Policy */
-/** @typedef {Pick<import("./receipt-identity.mjs").StoredReceipt, "legacy" | "legacyRawAncestryEmpty">} StoredProof */
 
 /** Evaluate a retained receipt or bare address inside the caller's transaction.
  * @param {SessionHasher} hashSession
@@ -23,12 +22,12 @@ import { scopedSuppression } from "./suppressions.mjs";
 export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
   /** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {Receipt} receipt
    * @param {string | undefined} key @param {string | undefined} legacyKey
-   * @param {StoredProof} [stored]
+   * @param {Pick<import("./receipt-identity.mjs").StoredReceipt, "legacy" | "legacyRawAncestryEmpty">} [stored]
    * @param {string} [memoryId]
    * @param {(row: RawRow) => void} [onVisibleArchive]
    */
-  function receiptReadSafety(db, scope, policy, receipt, key, legacyKey, stored, memoryId, onVisibleArchive) {
-    const { client, sessionId, messageId, role, excerpt } = receipt;
+  return function receiptReadSafety(db, scope, policy, receipt, key, legacyKey, stored, memoryId, onVisibleArchive) {
+    const { client, sessionId, messageId, role, excerpt, occurredAtMs } = receipt;
     if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant")) return false;
     if (excerpt !== undefined && (!key || receiptIdentityKey(receipt) !== key || receiptExcerpt(excerpt) !== excerpt)) return false;
     const attested = legacyKey !== undefined && stored?.legacy?.root === "legacy-attested" &&
@@ -40,15 +39,6 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
     if (policy.withholdsReceipt(receipt, key, legacyKey, { ownPosition: true }) || (excerpt !== undefined &&
         ((excerpt.length >= 799 && policy.legacy.has(receiptExcerptDenial(excerpt))) ||
         importTextBlocked(policy.facts, excerpt, policy.legacy, retirement)))) return false;
-    return sourceVisible(db, scope, policy, receipt, { legacyKey, stored, attested, onVisibleArchive });
-  }
-
-  /** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {Receipt} receipt
-   * @param {{legacyKey?: string, stored?: StoredProof, attested?: boolean,
-   *   onVisibleArchive?: (row: RawRow) => void, citedMessageOnly?: boolean}} [options]
-   */
-  function sourceVisible(db, scope, policy, receipt, { legacyKey, stored, attested, onVisibleArchive, citedMessageOnly = false } = {}) {
-    const { client, sessionId, messageId, role, excerpt, occurredAtMs } = receipt;
     if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return false;
     const addressOnly = excerpt === undefined;
     const rootSessions = legacyKey && migratedRaw ? [
@@ -61,21 +51,15 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
           policy.withholdsReceipt(root) || migratedRaw?.blocksSpan(db, scope, root, messageId)) return false;
     }
     const session = rootSessions.length ? { client, sessionId: rootSessions[0] }
-      : addressOnly || legacyKey || citedMessageOnly ? migratedRaw?.storageSession(db, scope, receipt) ?? receipt : receipt;
-    const first = citedMessageOnly ? receipt : session;
-    const fallback = citedMessageOnly ? session : receipt;
-    const archived = readRawRow(db, scope, first, messageId) ??
-      (first === fallback ? undefined : readRawRow(db, scope, fallback, messageId));
+      : addressOnly || legacyKey ? migratedRaw?.storageSession(db, scope, receipt) ?? receipt : receipt;
+    const archived = readRawRow(db, scope, session, messageId) ?? (session === receipt ? undefined : readRawRow(db, scope, receipt, messageId));
     if (migratedRaw) {
       if (legacyKey && ((!attested && !migratedRaw.receiptAncestryEmpty(db, stored?.legacyRawAncestryEmpty)) ||
           migratedRaw.blocksSpan(db, scope, receipt, messageId) ||
           migratedRaw.blocksEvent(db, { scope, client, eventId: messageId }))) return false;
       if ((legacyKey || !archived) && migratedRaw.blocks(db, scope, receipt, [{ id: messageId, occurredAtMs }])) return false;
     }
-    // Admission uses the excerpt to look for matching proofs when the cited archive is absent.
-    const source = archived ?? (citedMessageOnly && excerpt !== undefined
-      ? { client, message: { id: messageId, role, content: excerpt, occurredAtMs } } : undefined);
-    if (!source) return attested || !lineage.hasPossibleReceiptSource(db, scope, receipt, addressOnly);
+    if (!archived) return attested || !lineage.hasPossibleReceiptSource(db, scope, receipt, addressOnly);
 
     /** @param {Scope} target @param {RawRow} row @param {Policy} facts */
     function visible(target, row, facts) {
@@ -88,13 +72,10 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
         !migratedRaw?.blocks(db, target, row, [message]);
     }
 
-    const allowed = (!archived || visible(scope, archived, policy)) &&
-      lineage.receiptRootsVisible(db, scope, source, (target, row) =>
+    const allowed = visible(scope, archived, policy) &&
+      lineage.receiptRootsVisible(db, scope, archived, (target, row) =>
         visible(target, row, target.namespace === scope.namespace ? policy : scopedSuppression(db, target, hashSession)));
-    if (allowed && archived) onVisibleArchive?.(archived);
+    if (allowed) onVisibleArchive?.(archived);
     return allowed;
-  }
-
-  receiptReadSafety.sourceVisible = sourceVisible;
-  return receiptReadSafety;
+  };
 }

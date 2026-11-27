@@ -118,13 +118,28 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
         .get(owner, clientKey, messageTag, namespace, addressOnly ? 0 : 1, owner, namespace, clientKey, sessionTag));
     },
 
-    /** @param {Connection} db @param {Scope} scope
-     * @param {Pick<RawRow, "client" | "message"> & Partial<Pick<RawRow, "sessionId">>} source
+    /** @param {Connection} db @param {Scope} scope @param {string} messageId */
+    hasReceiptCandidate(db, scope, messageId) {
+      const [owner] = scopeKey(scope);
+      const root = db.prepare(`SELECT 1 FROM cairn_raw_anchors
+        WHERE owner_id = ? AND client_key = ? AND message_tag = ? LIMIT 1`);
+      // Each recorded client's tag can prove the id even after its archive is gone.
+      const clients = db.prepare("SELECT DISTINCT client_key FROM cairn_raw_anchors WHERE owner_id = ?");
+      for (const { client_key } of clients.iterate(owner)) {
+        const messageTag = tag(["raw-lineage-id", owner, decodeJson(client_key), messageId]);
+        if (root.get(owner, client_key, messageTag)) return true;
+      }
+      // The owner and message id also cover archives stored under a migrated session alias.
+      return !!db.prepare("SELECT 1 FROM cairn_raw_messages WHERE owner_id = ? AND message_key = ? LIMIT 1")
+        .get(owner, JSON.stringify(messageId));
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {RawRow} source
      * @param {(scope: Scope, row: RawRow) => boolean} visible
      */
     receiptRootsVisible(db, scope, { client, sessionId, message }, visible) {
       const candidates = proofs(scope.owner, client, [message]);
-      const direct = sessionId === undefined ? undefined : hashSession(scope, client, sessionId);
+      const direct = hashSession(scope, client, sessionId);
       const rowsForMessage = db.prepare(`SELECT * FROM cairn_raw_messages WHERE ${rawScopeWhere}
         AND client_key = ? AND message_key = ?`);
       for (const root of matchingAnchors(db, scope.owner, client, candidates, null)) {

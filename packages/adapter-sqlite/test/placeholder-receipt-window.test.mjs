@@ -4,8 +4,14 @@ import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { createSqliteAdapter } from "../src/adapter.mjs";
-import { openSqliteAdapter } from "../src/index.mjs";
+import { createMigratedRawPolicy } from "../src/migrate/raw-privacy.mjs";
+import { rawFactPolicy } from "../src/raw-facts.mjs";
+import { allowsRawSession } from "../src/raw-lineage.mjs";
+import { readRawRow } from "../src/raw-rows.mjs";
+import { receiptIdentityKey } from "../src/receipt-identity.mjs";
 import { openStorage } from "../src/schema/open.mjs";
+import { copyReceipts, invalidInput } from "../src/storage-values.mjs";
+import { scopedSuppression } from "../src/suppressions.mjs";
 import { scratch, seedFact, sha256 } from "./storage-fixtures.mjs";
 
 const scope = { owner: "fixture-owner", namespace: "project\0notes" };
@@ -22,16 +28,37 @@ const placeholder = {
 
 async function fixture(t, { legacyRawHashing = false } = {}) {
   const { path, remove } = scratch();
-  let adapter;
+  let storage;
   t.after(async () => {
-    try { await adapter?.close(); }
+    try { await storage?.close(); }
     finally { remove(); }
   });
+  storage = await openStorage(path);
   const options = { capabilities: { contextRead: true, contextRawRead: true } };
-  adapter = legacyRawHashing
-    ? createSqliteAdapter({ ...await openStorage(path), legacyRawHashing }, options)
-    : await openSqliteAdapter(path, options);
-  return { adapter, api: contextReadTestService(adapter) };
+  const adapter = createSqliteAdapter({ ...storage, legacyRawHashing }, options);
+  const baseReceiptWithheld = baseAdmission(storage, adapter.hashSessionKey, legacyRawHashing);
+  return { adapter, api: contextReadTestService(adapter), baseReceiptWithheld };
+}
+
+// The merge base's receipt admission port, with the full Raw window policy.
+function baseAdmission({ port, sessionHashKey }, hashSession, legacyRawHashing) {
+  const migratedRaw = legacyRawHashing ? createMigratedRawPolicy(sessionHashKey, hashSession, false) : undefined;
+  return (tx, scope, input) => port(tx, scope?.owner, {}, db => {
+    const [receipt] = copyReceipts([input]);
+    const { client, messageId, occurredAtMs, excerpt } = receipt;
+    if (excerpt === undefined) invalidInput();
+    const policy = scopedSuppression(db, scope, hashSession);
+    if (policy.hasReceiptDenial(receipt, receiptIdentityKey(receipt))) return true;
+    const raw = rawFactPolicy(scope, receipt, policy.facts, hashSession);
+    const position = { id: messageId, occurredAtMs };
+    if (!allowsRawSession(db, scope, client, raw.sessionKeyHash, policy.facts) || raw.refusesSource(position, true) ||
+        migratedRaw?.blocksEvent(db, { scope, client, eventId: messageId }) ||
+        migratedRaw?.blocks(db, scope, receipt, [position]) ||
+        migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;
+    const session = migratedRaw?.storageSession(db, scope, receipt) ?? receipt;
+    const archived = readRawRow(db, scope, session, messageId);
+    return archived ? raw.refusesSource(archived.message, true) : false;
+  });
 }
 
 function seedWindow(adapter, options = {}) {
@@ -41,13 +68,15 @@ function seedWindow(adapter, options = {}) {
   });
 }
 
-async function archive(adapter, receipt, { target = scope, occurredAtMs = receipt.occurredAtMs, content = text } = {}) {
+async function archive(adapter, receipt, {
+  target = scope, occurredAtMs = receipt.occurredAtMs, content = text, recordRoot = true, storeTurn = true,
+} = {}) {
   const { client, sessionId, messageId: id, role } = receipt;
   const key = { scope: target, client, sessionId, eventId: "fixture-event", payloadDigest: sha256(content) };
   const messages = [{ id, role, occurredAtMs, content }];
   await adapter.uow.run(target.owner, { pauseLock: true }, async tx => {
-    await adapter.raw.recordLineage(tx, key, messages);
-    assert.equal((await adapter.raw.archive(tx, key, messages)).archived, 1);
+    if (recordRoot) await adapter.raw.recordLineage(tx, key, messages);
+    if (storeTurn) assert.equal((await adapter.raw.archive(tx, key, messages)).archived, 1);
   });
 }
 
@@ -179,7 +208,7 @@ for (const [name, target, direct] of lineageCases) {
   test(`placeholder admission with ${name}`, async t => {
     for (const operation of ["save", "correct"]) {
       await t.test(operation, async t => {
-        const { adapter, api } = await fixture(t);
+        const { adapter, api, baseReceiptWithheld } = await fixture(t);
         const context = assemblyService(adapter);
         if (direct) await archive(adapter, placeholder, { occurredAtMs: 25 });
         await archive(adapter, { ...placeholder, sessionId: "fixture-root" }, { target });
@@ -188,6 +217,15 @@ for (const [name, target, direct] of lineageCases) {
 
         await seedWindow(adapter, target);
         assert.deepEqual(await delivery(api, ref), hidden);
+        // A window in the root namespace withholds projection. Admission also
+        // needs an applicable window in the receipt's namespace, as on the base.
+        if (target !== scope) {
+          const receipt = { ...placeholder, excerpt: text };
+          const base = await adapter.uow.run(scope.owner, { readOnly: true },
+            tx => baseReceiptWithheld(tx, scope, receipt));
+          assert.equal(base, false);
+          await seedWindow(adapter);
+        }
 
         const result = operation === "save"
           ? await api.save(scope, text, source, "fact", { receipt: placeholder })
@@ -204,6 +242,82 @@ for (const [name, target, direct] of lineageCases) {
     }
   });
 }
+
+const changedText = "Revised synthetic receipt evidence";
+
+for (const [location, target] of [["another session", scope], ["another namespace", rootScope]]) {
+  for (const [variant, archivedText, saveText, correctText] of [
+    ["exact save and changed correction", text, text, changedText],
+    ["spacing variants", "Synthetic   receipt evidence", "Synthetic receipt  evidence", text],
+    ["case variants", text, "synthetic receipt evidence", "Synthetic Receipt Evidence"],
+    ["verbatim with collapsible spaces", "Synthetic  receipt evidence", "Synthetic  receipt evidence", "Synthetic  receipt evidence"],
+  ]) {
+    test(`id-only admission for ${variant} in ${location}`, async t => {
+      async function setup() {
+        const { adapter, api } = await fixture(t);
+        await archive(adapter, { ...placeholder, sessionId: "fixture-root" }, { target, content: archivedText });
+        const ref = await retain(adapter, placeholder);
+        await seedWindow(adapter);
+        if (target !== scope) await seedWindow(adapter, target);
+        return { api, ref };
+      }
+
+      const saveCase = await setup();
+      const saved = await saveCase.api.save(scope, saveText, source, "fact", { receipt: placeholder });
+      const { api, ref } = await setup();
+      const corrected = await api.correct(scope, ref.id, ref.revision, correctText, source, { receipt: placeholder });
+      assert.deepEqual({ save: saved.status, correct: corrected.status }, { save: "suppressed", correct: "suppressed" });
+    });
+  }
+}
+
+test("every Raw candidate uses the merge-base admission policy", async t => {
+  for (const [name, candidate, options, citedAddress] of [
+    ["direct archive", {}, { recordRoot: false }, true],
+    ["same-id archive in another session", { sessionId: "fixture-other" }, { recordRoot: false }, false],
+    ["same-id archive in another namespace", {}, { target: rootScope, recordRoot: false }, false],
+    ["same-id archive from another client", { client: "fixture-client" }, { recordRoot: false }, false],
+    ["migrated archive alias", {}, { legacyRawHashing: true, recordRoot: false }, true],
+    ["root only in another session", { sessionId: "fixture-root" }, { storeTurn: false }, false],
+    ["root only in another namespace", { sessionId: "fixture-root" }, { target: rootScope, storeTurn: false }, false],
+    ["root only from another client", { client: "fixture-client" }, { storeTurn: false }, false],
+  ]) {
+    await t.test(name, async t => {
+      const { legacyRawHashing = false, ...archiveOptions } = options;
+      const { adapter, baseReceiptWithheld } = await fixture(t, { legacyRawHashing });
+      const sessionId = legacyRawHashing
+        ? "legacy-raw:" + adapter.hashSessionKey(scope, placeholder.client, placeholder.sessionId)
+        : candidate.sessionId ?? placeholder.sessionId;
+      await archive(adapter, { ...placeholder, ...candidate, sessionId }, { ...archiveOptions, occurredAtMs: 15 });
+
+      async function check(expected) {
+        const receipt = { ...placeholder, excerpt: changedText };
+        const base = await adapter.uow.run(scope.owner, { readOnly: true }, tx => baseReceiptWithheld(tx, scope, receipt));
+        assert.equal(base, expected, "merge-base outcome");
+        assert.equal(await withholds(adapter, placeholder, changedText), base, "candidate admission must equal the merge base");
+      }
+
+      await check(false);
+      await seedWindow(adapter, rootScope);
+      await check(false);
+      await seedWindow(adapter, { actionId: "fixture-finite-window", unknownTime: undefined });
+      await check(citedAddress);
+      await seedWindow(adapter);
+      await check(true);
+    });
+  }
+});
+
+test("an unrelated id and a same-id turn under another owner do not remove the exemption", async t => {
+  const { adapter, api } = await fixture(t);
+  await archive(adapter, { ...placeholder, messageId: "other-message" });
+  await archive(adapter, placeholder, { target: { ...scope, owner: "other-owner" } });
+  const ref = await retain(adapter, placeholder);
+  await seedWindow(adapter);
+  assert.equal(await withholds(adapter, placeholder), false);
+  assert.equal((await api.save(scope, text, source, "fact", { receipt: placeholder })).status, "saved");
+  assert.equal((await api.correct(scope, ref.id, ref.revision, changedText, source, { receipt: placeholder })).status, "saved");
+});
 
 test("address-only Raw evidence is withheld by an unknown-time window in the root namespace", async t => {
   const { adapter } = await fixture(t);
