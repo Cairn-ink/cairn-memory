@@ -43,6 +43,7 @@ export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
 export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 export { DURABLE_DELETE_CASES } from "./durable-delete-cases.mjs";
 export { COMMITTED_INDEX_CASES } from "./committed-index-cases.mjs";
+export { PROCEDURAL_TAG_CASES, RECEIPT_ID_CASES } from "./procedural-tag-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];

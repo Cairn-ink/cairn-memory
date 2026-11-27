@@ -442,6 +442,7 @@ const selected = new Set([
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
+  "K-PROC-13",
   "CAPTURE-LEDGER-1", "CAPTURE-FORGET-3",
   "K-LEG-PASS-1", "K-LEG-PASS-2", "K-LEG-PASS-3", "K-LEG-PASS-4", "K-LEG-PASS-5", "K-LEG-PASS-6",
   "K-LEG-PASS-7", "K-LEG-PASS-7-raw-import", "K-LEG-PASS-8", "K-LEG-PASS-9", "K-LEG-PASS-10", "K-LEG-PASS-N1", "K-LEG-PASS-N2",
@@ -449,6 +450,9 @@ const selected = new Set([
 
 // Each entry names a missing port, method, capability, or profile behavior.
 const notApplicable = {
+  proceduralTags: ["K-PROC-1", "K-PROC-2", "K-PROC-3", "K-PROC-4", "K-PROC-5", "K-PROC-6",
+    "K-PROC-7", "K-PROC-8", "K-PROC-9", "K-PROC-10", "K-PROC-11", "K-PROC-12"],
+  "memories.insert and touchDuplicate return no stored receipt IDs": ["K-RID-1", "K-RID-2"],
   "K-FACT-4 expects changed pipeline, key ID, and redaction version to share an algorithm/value slot. Postgres slots include the full digest domain": ["K-FACT-4"],
   "K-KD-9 expects two missing domains. Its direct insert supplies no current digest, so Postgres counts three": ["K-KD-9"],
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
