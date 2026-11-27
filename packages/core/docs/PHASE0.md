@@ -1515,3 +1515,12 @@ Compact follows Addendum 25. Omitting `semantic` selects semantic retrieval when
 Pack whole `{ date, body }` items in ascending date order with undated items last, and meter the formatted block without source excerpts or ledger digests.
 Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
 Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.
+
+## Addendum 34 — Dated Raw evidence projection
+
+In `representation-v2-dated`, attached Raw evidence and standalone Raw items omit excerpt offsets
+and omit `occurredAt` when the row carries a minute-level `date`.
+The packer keeps the full excerpt data internally and uses the original timestamps to determine
+evidence order and item dates.
+Packing uses the delivered shape for ranking cost and budget checks.
+`representation-v2` retains its existing Raw wire bytes.
