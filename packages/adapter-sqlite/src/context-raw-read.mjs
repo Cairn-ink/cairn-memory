@@ -347,6 +347,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
         const id = String(record.memory_id);
         if (!memoryVisible(scope, id)) return false;
         if (amendment) {
+          /** @type {Receipt | undefined} */
           let receipt = project(record)?.receipt;
           if (record.excerpt == null) {
             // A capture may retain only the address. Prove it against the finished capture below.

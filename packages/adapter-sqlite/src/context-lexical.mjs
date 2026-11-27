@@ -24,6 +24,8 @@ import { scopedSuppression } from "./suppressions.mjs";
 
 const MAX_ROWS = 1024;
 const MAX_TEXT_UNITS = 2_000_000;
+// Bound the posting work left for a foreground mixed read and its commit.
+const MIXED_CARD_TEXT_UNITS = 64_000;
 const CARD_STATES = ["draft", "confirmed", "cancelled", "deleted"];
 // Canonical UUIDs and imported IDs cannot start with this control character.
 const CHECKPOINT_PREFIX = "\x1f";
@@ -134,8 +136,21 @@ function documentWriter(db, key, state) {
       terms.run(key, ns, id, postings);
       return replaced;
     },
-    /** @param {number} limit */
-    sweep(limit) {
+    /** @param {number} limit @param {{ used: number, stopped: () => boolean }} [budget] */
+    sweep(limit, budget) {
+      if (budget) {
+        const old = db.prepare(`SELECT namespace_key, id, token_length
+          FROM cairn_context_documents WHERE projection = ? AND sequence < ? LIMIT ?`)
+          .all(key, state.sequence, limit);
+        let { used } = budget, removed = 0;
+        for (const row of old) {
+          const cost = 1 + Number(row.token_length);
+          if (budget.stopped() || (used > 0 && used + cost > MIXED_CARD_TEXT_UNITS)) break;
+          removed += Number(remove.run(key, String(row.namespace_key), String(row.id)).changes);
+          used += cost;
+        }
+        return removed;
+      }
       return Number(db.prepare(`DELETE FROM cairn_context_documents WHERE (projection, namespace_key, id) IN (
         SELECT projection, namespace_key, id FROM cairn_context_documents WHERE projection = ? AND sequence < ? LIMIT ?
       )`).run(key, state.sequence, limit).changes);
@@ -170,10 +185,11 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
     state.total_length += length;
   }
 
-  /** @param {ReturnType<typeof documentWriter>} documents @param {Generation} state @param {Metrics} metrics */
-  function sweep(documents, state, metrics) {
+  /** @param {ReturnType<typeof documentWriter>} documents @param {Generation} state @param {Metrics} metrics
+   * @param {{ used: number, stopped: () => boolean }} [cardBudget] */
+  function sweep(documents, state, metrics, cardBudget) {
     const budget = MAX_ROWS - metrics.canonicalRows - metrics.removed;
-    const removed = documents.sweep(budget);
+    const removed = documents.sweep(budget, cardBudget);
     const erased = Math.min(state.pendingRemovals, budget - removed);
     state.pendingRemovals -= erased;
     metrics.removed += removed + erased;
@@ -234,11 +250,12 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
   }
 
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadSelection} selection
-   * @param {() => boolean} stopped */
-  async function reconcileCards(tx, readSet, selection, stopped) {
+   * @param {() => boolean} stopped @param {boolean} bounded */
+  async function reconcileCards(tx, readSet, selection, stopped, bounded) {
     const metrics = maintenanceMetrics();
     if (!loadCards || stopped()) return metrics;
     const key = cardProjectionKey(readSet, selection);
+    const textLimit = bounded ? MIXED_CARD_TEXT_UNITS : MAX_TEXT_UNITS;
     const batch = await port(tx, readSet.owner, {}, db => {
       const captured = cardFence(db, readSet, contextEpochs(db, readSet)), prior = generation(db, key);
       if (published(prior, captured)) return null;
@@ -248,7 +265,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       /** @type {{scope: Scope, phase: number, afterId: string, rows: CardDocument[]}[]} */
       const pages = [];
       let textUnits = 0;
-      while (state.phase < readSet.namespaces.length && !stopped() && textUnits < MAX_TEXT_UNITS) {
+      while (state.phase < readSet.namespaces.length && !stopped() && textUnits < textLimit) {
         const limit = MAX_ROWS - metrics.canonicalRows - metrics.removed;
         if (limit === 0) break;
         const namespace = readSet.namespaces[state.phase], scope = { owner: readSet.owner, namespace };
@@ -258,12 +275,17 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
         for (const row of rows.iterate(...scopeKey(scope), afterId, limit)) {
           examined++;
           metrics.canonicalRows++;
-          if (stopped() || textUnits >= MAX_TEXT_UNITS) {
+          if (stopped() || textUnits >= textLimit) {
             ended = false;
             break;
           }
           const id = String(row.id);
           const text = documentCardSearchText({ title: String(row.title), body: String(row.body) });
+          // A single oversized card can still advance the checkpoint.
+          if (bounded && textUnits > 0 && textUnits + text.length > textLimit) {
+            ended = false;
+            break;
+          }
           candidates.push({ ref: { type: /** @type {const} */ ("card"), namespace, id },
             revision: Number(row.revision), text });
           state.last_id = id;
@@ -274,10 +296,10 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
         state.phase++;
         state.last_id = "";
       }
-      return { state, pages };
+      return { state, pages, textUnits };
     });
     if (!batch) return metrics;
-    const { state, pages } = batch;
+    const { state, pages, textUnits } = batch;
     for (const page of pages) {
       if (stopped()) return metrics;
       const { scope, rows: candidates } = page;
@@ -292,6 +314,10 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       state.checkpoint++;
       saveGeneration(db, key, state);
       const documents = documentWriter(db, key, state);
+      // Visibility has been rechecked in this transaction. The same revision
+      // has the same text, so its postings can be carried into the new generation.
+      const carry = bounded ? db.prepare(`UPDATE cairn_context_documents SET sequence = ?
+        WHERE projection = ? AND namespace_key = ? AND id = ? AND revision = ? RETURNING token_length`) : null;
       for (const { scope, phase, afterId, rows } of pages) {
         const [, ns] = scopeKey(scope);
         let lastId = afterId;
@@ -302,11 +328,18 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
             saveGeneration(db, key, state);
             return;
           }
-          indexText(documents, state, metrics, ns, ref.id, revision, text);
+          const carried = carry?.get(state.sequence, key, ns, ref.id, revision);
+          if (carried) {
+            metrics.sidecarRows++;
+            state.eligible++;
+            state.total_length += Number(carried.token_length);
+          } else indexText(documents, state, metrics, ns, ref.id, revision, text);
           lastId = ref.id;
         }
       }
-      if (state.phase === readSet.namespaces.length && !stopped()) sweep(documents, state, metrics);
+      if (state.phase === readSet.namespaces.length && !stopped()) {
+        sweep(documents, state, metrics, bounded ? { used: textUnits, stopped } : undefined);
+      }
       saveGeneration(db, key, state);
     });
     return metrics;

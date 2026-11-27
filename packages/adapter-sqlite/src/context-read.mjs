@@ -90,11 +90,14 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
           return metrics;
         });
         if (!cards || !selection.types.includes("card")) return metrics;
-        // Leave time to commit the checkpoint and serve the memory results.
         const deadline = options.deadlineAtMs ?? Infinity;
-        const reserve = Math.min(250, Math.max(0, deadline - monotonicMs()) / 2);
+        const remaining = Math.max(0, deadline - monotonicMs());
+        const bounded = Number.isFinite(deadline) && selection.types.includes("memory");
+        // After rebuilding memories, give cards at most a third of the time left.
+        // The shared transaction still has to commit before search and delivery.
+        const reserve = bounded ? remaining * 2 / 3 : Math.min(250, remaining / 2);
         const cardStopped = contextDeadline({ ...options, deadlineAtMs: deadline - reserve }, monotonicMs);
-        const cardMetrics = await index.reconcileCards(tx, readSet, selection, cardStopped);
+        const cardMetrics = await index.reconcileCards(tx, readSet, selection, cardStopped, bounded);
         return {
           canonicalRows: metrics.canonicalRows + cardMetrics.canonicalRows,
           sidecarRows: metrics.sidecarRows + cardMetrics.sidecarRows,
