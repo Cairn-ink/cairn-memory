@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { contextReadTestService } from "@cairn-ink/conformance/context-read";
+import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openSqliteAdapter } from "../src/index.mjs";
+import { openStorage } from "../src/schema/open.mjs";
 import { scratch, seedFact, sha256 } from "./storage-fixtures.mjs";
 
 const scope = { owner: "fixture-owner", namespace: "project\0notes" };
@@ -18,14 +20,17 @@ const placeholder = {
   role: "user", occurredAtMs: null,
 };
 
-async function fixture(t) {
+async function fixture(t, { legacyRawHashing = false } = {}) {
   const { path, remove } = scratch();
   let adapter;
   t.after(async () => {
     try { await adapter?.close(); }
     finally { remove(); }
   });
-  adapter = await openSqliteAdapter(path, { capabilities: { contextRead: true, contextRawRead: true } });
+  const options = { capabilities: { contextRead: true, contextRawRead: true } };
+  adapter = legacyRawHashing
+    ? createSqliteAdapter({ ...await openStorage(path), legacyRawHashing }, options)
+    : await openSqliteAdapter(path, options);
   return { adapter, api: contextReadTestService(adapter) };
 }
 
@@ -36,10 +41,10 @@ function seedWindow(adapter, options = {}) {
   });
 }
 
-async function archive(adapter, receipt, { target = scope, occurredAtMs = receipt.occurredAtMs } = {}) {
+async function archive(adapter, receipt, { target = scope, occurredAtMs = receipt.occurredAtMs, content = text } = {}) {
   const { client, sessionId, messageId: id, role } = receipt;
-  const key = { scope: target, client, sessionId, eventId: "fixture-event", payloadDigest: sha256(text) };
-  const messages = [{ id, role, occurredAtMs, content: text }];
+  const key = { scope: target, client, sessionId, eventId: "fixture-event", payloadDigest: sha256(content) };
+  const messages = [{ id, role, occurredAtMs, content }];
   await adapter.uow.run(target.owner, { pauseLock: true }, async tx => {
     await adapter.raw.recordLineage(tx, key, messages);
     assert.equal((await adapter.raw.archive(tx, key, messages)).archived, 1);
@@ -120,6 +125,36 @@ test("an unarchived placeholder remains visible under an unknown-time window", a
 
   const replacement = "Revised synthetic receipt evidence";
   assert.equal((await opened.api.correct(scope, ref.id, ref.revision, replacement, source, { receipt: placeholder })).status, "saved");
+});
+
+test("an unrelated archived turn in the placeholder session does not block explicit writes", async t => {
+  const { adapter, api } = await fixture(t);
+  await archive(adapter, { ...placeholder, messageId: "other-message", occurredAtMs: 25 },
+    { content: "An unrelated archived turn" });
+  const ref = await retain(adapter, placeholder);
+  const result = {
+    ...await delivery(api, ref),
+    receiptWithheld: await withholds(adapter, placeholder),
+    save: (await api.save(scope, text, source, "fact", { receipt: placeholder })).status,
+    correct: (await api.correct(scope, ref.id, ref.revision, "An independent correction", source,
+      { receipt: placeholder })).status,
+  };
+  assert.deepEqual(result, { receiptWithheld: false, save: "saved", correct: "saved", ...hidden });
+});
+
+test("a visible cited turn under a migrated Raw alias does not block explicit writes", async t => {
+  const { adapter, api } = await fixture(t, { legacyRawHashing: true });
+  const sessionId = "legacy-raw:" + adapter.hashSessionKey(scope, placeholder.client, placeholder.sessionId);
+  await archive(adapter, { ...placeholder, sessionId, occurredAtMs: 25 });
+  const ref = await retain(adapter, placeholder);
+  const result = {
+    ...await delivery(api, ref),
+    receiptWithheld: await withholds(adapter, placeholder),
+    save: (await api.save(scope, text, source, "fact", { receipt: placeholder })).status,
+    correct: (await api.correct(scope, ref.id, ref.revision, "An independent correction", source,
+      { receipt: placeholder })).status,
+  };
+  assert.deepEqual(result, { receiptWithheld: false, save: "saved", correct: "saved", ...hidden });
 });
 
 test("an archived timeless turn cited by a placeholder stays withheld", async t => {

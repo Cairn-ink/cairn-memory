@@ -368,7 +368,7 @@ export function createSuppressionStore(port, hashSession, receiptSourceVisible, 
         const archived = readRawRow(db, scope, session, messageId);
         // Archived turns use the full Raw window policy.
         if (archived && raw.refusesSource(archived.message, true)) return true;
-        return placeholder && !receiptSourceVisible(db, scope, policy, receipt);
+        return placeholder && !receiptSourceVisible(db, scope, policy, receipt, { citedMessageOnly: true });
       });
     },
     factsFor(tx, scope, { memoryId }) {
