@@ -29,6 +29,7 @@ export { RAW_LEDGER_CASES } from "./raw-ledger-cases.mjs";
 export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
 export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
 export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
+export { relationJudgeCases as RELATION_JUDGE_CASES } from "./relation-judge-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
