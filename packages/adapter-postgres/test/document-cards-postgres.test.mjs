@@ -87,7 +87,7 @@ test("Postgres card migration preserves the production schema and writer default
   try {
     await writer.query("BEGIN");
     await writer.query("UPDATE document_cards SET title = 'Concurrent update' WHERE user_id = $1", [owner]);
-    // Migration 0027 changes the keys and is covered by k4.
+    // The "Postgres applies all migrations after hosted document card team keys" test covers 0027.
     await applyMigrations({
       async connect() {
         const connection = await source.connect();
@@ -150,6 +150,9 @@ test("Postgres installs the document card team keys", migrationDbTest, async t =
       + "FOR EACH ROW EXECUTE FUNCTION delete_personal_document_cards()",
     enabled: "O",
   }]);
+  const { rows: functions } = await pool.query(`SELECT prosecdef, proconfig FROM pg_proc
+    WHERE oid = 'public.delete_personal_document_cards()'::regprocedure`);
+  assert.deepEqual(functions, [{ prosecdef: false, proconfig: ["search_path=pg_catalog, public"] }]);
 });
 
 test("Postgres retains team cards when their author is deleted", migrationDbTest, async t => {
@@ -257,6 +260,33 @@ test("Postgres applies all migrations after hosted document card team keys", mig
   } finally {
     try { await writer.query("ROLLBACK"); } finally { writer.release(); }
   }
+});
+
+test("Postgres deletes cards the author wrote in another personal scope", migrationDbTest, async t => {
+  const { pool } = await migrationDatabase(t);
+  await pool.query(`
+    INSERT INTO users (id) VALUES ('author'), ('other');
+    INSERT INTO document_cards (user_id, scope_id, id, content_hash, title, body, origin, source_memories, sentences, stale)
+    VALUES ('author', 'other', 'imported', 'hash', 'Title', 'Imported', 'import', '[]', '[]', '[]'),
+           ('other', 'other', 'personal', 'hash', 'Title', 'Personal', 'manual', '[]', '[]', '[]'),
+           ('author', 'team:x', 'team', 'hash', 'Title', 'Shared', 'manual', '[]', '[]', '[]');
+    INSERT INTO topics (user_id, id, level, title, title_key)
+    VALUES ('author', 'topic', 1, 'Topic', 'topic');
+    INSERT INTO card_topics (user_id, card_id, topic_id, content_hash)
+    VALUES ('author', 'imported', 'topic', 'hash');
+    INSERT INTO card_placements (user_id, card_id, content_hash, status)
+    VALUES ('author', 'imported', 'hash', 'filed');
+  `);
+  const users = () => pool.query('SELECT * FROM users ORDER BY id COLLATE "C"');
+  const cards = () => pool.query('SELECT * FROM document_cards ORDER BY id COLLATE "C"');
+  const { rows: [, other] } = await users();
+  const { rows: [, personal, team] } = await cards();
+
+  assert.equal((await pool.query("DELETE FROM users WHERE id = 'author'")).rowCount, 1);
+  assert.deepEqual((await users()).rows, [other]);
+  assert.deepEqual((await cards()).rows, [personal, { ...team, user_id: null }]);
+  assert.deepEqual((await pool.query("SELECT * FROM card_topics")).rows, []);
+  assert.deepEqual((await pool.query("SELECT * FROM card_placements")).rows, []);
 });
 
 async function setup(t, profile) {
@@ -547,7 +577,7 @@ for (const profile of ["keyless", "keyed"]) {
     });
   });
 
-  test(`Postgres ${profile} isolates team cards under the promoted scope key`, migrationDbTest, async t => {
+  test(`Postgres ${profile} isolates team cards when card IDs overlap across scopes`, migrationDbTest, async t => {
     const { store, pool, candidates, read, write, put } = await setup(t, profile);
     await pool.query("INSERT INTO users (id) VALUES ('departing')");
     const memories = createPostgresMemoryStore();

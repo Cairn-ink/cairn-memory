@@ -3,14 +3,16 @@ SET LOCAL statement_timeout = '30s';
 
 -- This migration locks document_cards, then users, in the order card writers use.
 -- Keep public.delete_personal_document_cards() and the document_cards_delete_personal trigger stable.
+-- The deletion function runs as SECURITY INVOKER with search_path pinned to pg_catalog, public.
 -- Rows in card_topics and card_placements are removed by their existing users foreign keys (ON DELETE CASCADE).
 
 DO $$
 BEGIN
   IF pg_catalog.to_regprocedure('public.delete_personal_document_cards()') IS NULL THEN
-    CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql AS $personal$
+    CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql
+    SET search_path = pg_catalog, public AS $personal$
     BEGIN
-      DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id = OLD.id;
+      DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id NOT LIKE 'team:%';
       RETURN OLD;
     END;
     $personal$;

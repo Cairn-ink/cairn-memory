@@ -136,9 +136,10 @@ const hostedDDL = `
   ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_scope_id_id_unique" UNIQUE ("scope_id", "id");
   ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_user_id_users_id_fk"
     FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
-  CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql AS $personal$
+  CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public AS $personal$
   BEGIN
-    DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id = OLD.id;
+    DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id NOT LIKE 'team:%';
     RETURN OLD;
   END;
   $personal$;
