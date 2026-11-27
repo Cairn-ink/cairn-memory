@@ -106,3 +106,6 @@ export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
 export { createPostgresTopicStore } from "./topics.mjs";
 export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";
 export type { PostgresHostOperation } from "./host-write-hooks.mjs";
+export { createPostgresDocumentCardStore } from "./document-cards.mjs";
+export { createPostgresDocumentCardCandidates } from "./document-card-candidates.mjs";
+export type { DocumentCardOptions } from "./document-card-visibility.mjs";

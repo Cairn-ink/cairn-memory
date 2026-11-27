@@ -230,3 +230,5 @@ export async function scrubLedger(query, scope, sessions, { matches, messageIds 
     ({ client: afterClient, event_id: afterEvent } = rows.at(-1));
   }
 }
+
+export { definitelyWithheld as rawTextDefinitelyWithheld };
