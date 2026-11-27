@@ -78,22 +78,26 @@ export function readMigrationInput(input) {
     const hiddenReceiptIds = [];
     const rawAncestryEmpty = new Map();
     // Evaluate the legacy inspect decision inside the final attested snapshot.
-    // Hidden receipts leave only the withheld count and dependent-memory deny set.
-    const visibleReceipts = receipts.filter(({ inspect_position: _position, ...receipt }) => {
+    // A retired shared receipt retains its lineage even when a second check
+    // independently denies its excerpt.
+    const storedReceipts = receipts.flatMap(row => {
+      const { inspect_position: _position, ...receipt } = row;
       const memory = byId.get(receipt.memory_id);
       const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
       const allowed = memory.deleted !== 1n && receiptReadSafety(db, { namespace, receipt, memo }).allowed;
+      const retired = memory.deleted !== 1n && retiredReceiptIds.has(receipt.id);
+      if (!allowed || retired) withheldReceipts++;
       if (!allowed) {
-        withheldReceipts++;
         hiddenReceiptIds.push([namespace, receipt.id]);
         withheldPlacement.add(receipt.memory_id);
-      } else {
-        if (retiredReceiptIds.has(receipt.id)) withheldReceipts++;
-        if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
+        if (!retired) return [];
+        if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, false);
+        return [{ ...row, excerpt: "" }];
       }
-      return allowed;
+      if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
+      return [row];
     });
-    const archive = readLegacyArchive(db, file, rawPrivacy, visibleReceipts);
+    const archive = readLegacyArchive(db, file, rawPrivacy, storedReceipts);
     const admissions = db.prepare(`SELECT owner_id, scope, project_id, client, event_id,
       state FROM admission_claims ORDER BY owner_id, scope, project_id, client, event_id`).all();
     const registered = inventory.raw ? db.prepare(`SELECT owner_id, scope, project_id, client,
@@ -102,12 +106,12 @@ export function readMigrationInput(input) {
     const history = rows(db, "SELECT * FROM memory_supersessions ORDER BY previous_memory_id");
     const inspect = readInspectMigrationInput(db, {
       cursorSecret: readIdentity(db, inventory.storeId).cursorSecret,
-      receipts: visibleReceipts, namespaceEpochs, history, memo,
+      receipts: storedReceipts, namespaceEpochs, history, memo,
     });
     const result = {
       storeId: inventory.storeId, physical: inventory.physical, logicalDigest: proof.logicalDigest,
       target: target.path, checkSource: file.check, withheldReceipts,
-      memories, receipts: visibleReceipts, hiddenReceiptIds, retiredReceiptIds,
+      memories, receipts: storedReceipts, hiddenReceiptIds, retiredReceiptIds,
       placement: {
         topics: rows(db, "SELECT * FROM mocs ORDER BY canonical_title, id"),
         edges: rows(db, "SELECT * FROM moc_edges ORDER BY parent_id, child_id"),
