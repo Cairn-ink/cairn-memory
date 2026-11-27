@@ -1,4 +1,5 @@
 export type * from "./common.d.ts";
+export type * from "./host-write-hooks.d.ts";
 export type * from "./unit-of-work.d.ts";
 export type * from "./model.d.ts";
 export type * from "./capture.d.ts";
@@ -33,9 +34,11 @@ export interface StorageAdapter<Card extends StoredDocumentCardRecord = Document
   readonly name: string;
   readonly capabilities: Capabilities & Readonly<{
     proceduralTags?: boolean;
+    hostWriteHooks?: boolean;
     receiptAttachAdvancesRevision?: boolean;
   }>;
   readonly uow: UnitOfWork;
+  readonly hostWriteHookPort?: import("./host-write-hooks.d.ts").HostWriteHookPort;
   readonly capture: CaptureClaim & CaptureFinish & SourceFilter;
   readonly memories: MemoryStore;
   readonly suppressions: SuppressionStore;

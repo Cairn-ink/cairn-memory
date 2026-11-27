@@ -41,6 +41,7 @@ import { validWriteEmbedding } from "./writes.mjs";
  *   readEligible: (tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[]) => Promise<number[]>,
  *   runAtGeneration: <T>(work: (tx: Tx) => Promise<T>) => Promise<T | null>,
  *   finish: (tx: Tx, items: readonly FinishItem[]) => Promise<FinishResult>,
+ *   finishHook?: (tx: Tx, result: FinishResult, positions: readonly number[]) => Promise<void>,
  *   assertSendGeneration: () => Promise<void>,
  *   generation: number,
  *   signal: AbortSignal | undefined,
@@ -479,7 +480,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /** @param {CaptureContext} context */
   function forCapture(context) {
     const { key, messages, excludedSources, sourceKey, readSourcePassages, unchangedPositions, selectWriteKey,
-      filterSources, abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation,
+      filterSources, abandonKeyMismatch, readEligible, runAtGeneration, finish, finishHook, assertSendGeneration, generation,
       signal } = context;
     const { capture } = storage;
     const archive = capabilities.rawArchive ? raw : undefined;
@@ -653,6 +654,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         } else if (!archive) {
           await finishDocuments(tx, rawMessages, [], result);
         }
+        if (finishHook) await finishHook(tx, result, allowed);
         return result;
       });
       if (result === null) return /** @type {const} */ ({ status: "paused" });

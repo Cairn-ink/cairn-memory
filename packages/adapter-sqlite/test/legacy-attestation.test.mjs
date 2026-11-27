@@ -110,7 +110,7 @@ test("version 7 fails read-only preflight with bytes unchanged", async t => {
   const previous = readFileSync(path);
   await assert.rejects(openSqliteAdapter(path).then(storage => storage.close()), { code: "storage_error" });
   assert.deepEqual(readFileSync(path), previous);
-  assert.equal(SQLITE_PHYSICAL_VERSION, 8);
+  assert.equal(SQLITE_PHYSICAL_VERSION, 9);
 });
 
 test("forget advances a live topic once when it withdraws both the title and a member", async t => {

@@ -33,6 +33,7 @@ export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
 export { DOCUMENT_CARD_PURGE_CASES } from "./document-card-purge-cases.mjs";
+export { DOCUMENT_CARD_CORRECTION_PRIVACY_CASE } from "./document-card-correction-privacy-cases.mjs";
 export { CAPTURE_DOCUMENT_CARD_CASES } from "./capture-document-card-cases.mjs";
 export { CAPTURE_DOCUMENT_AMENDMENT_CASES } from "./capture-document-amendment-cases.mjs";
 export { CAPTURE_QUANTITY_LEDGER_CASES } from "./capture-quantity-ledger-cases.mjs";

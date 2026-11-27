@@ -18,3 +18,4 @@ export { createPostgresPauseStore } from "./pause-store.mjs";
 export { createPostgresSupersessionStore } from "./supersession-store.mjs";
 export { createPostgresConflictEdgeStore } from "./conflict-edge-store.mjs";
 export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
+export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";

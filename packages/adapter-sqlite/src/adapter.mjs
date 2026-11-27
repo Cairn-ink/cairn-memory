@@ -4,6 +4,8 @@ import { createContextLexical } from "./context-lexical.mjs";
 import { createContextRawRead, reconcileRawInventory } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
+import { createCardVisibility, visibleCardRefs } from "./document-card-visibility.mjs";
+import { createDocumentCards } from "./document-cards.mjs";
 import { handleWriteRejections } from "./errors.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
 import { anchorsVisible, createInspectStore, receiptProjector } from "./inspect.mjs";
@@ -21,11 +23,12 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createRetrievalPorts, createVectorCache } from "./retrieval.mjs";
 import { openStorage } from "./schema/open.mjs";
 import { createSuppressionStore, sessionHasher } from "./suppressions.mjs";
+import { clearCardPlacement } from "./topic-card-placement.mjs";
 import { createTopicStore } from "./topics.mjs";
 
 /** @import { CallOptions, ContextReadSet } from "@cairn-ink/core/ports" */
 /** @typedef {{ now?: () => number, monotonicMs?: () => number, legacyInspectPlacements?: boolean,
- * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean,
+ * capabilities?: { contextRead?: boolean, contextRawRead?: boolean, placement?: boolean, documentCards?: boolean,
  * supersession?: boolean, conflictEdges?: boolean, semanticRetrieval?: boolean } } & import("./topics.mjs").TopicOptions & import("./migrate/capture-controls.mjs").CaptureOptions} Options */
 
 /** Opens the storage ports for a single installation database.
@@ -47,6 +50,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   { now, localAuthority, monotonicMs = () => performance.now(), capabilities: requested, legacyInspectPlacements, ...topicOptions } = {}) {
   const flags = capabilities({ rawArchive: true, rawSpans: true, rawWindowHide: true, spanLineage: true, inspect: true,
     contextRead: requested?.contextRead ?? false, contextRawRead: requested?.contextRawRead ?? false,
+    documentCards: requested?.documentCards ?? false,
     placement: requested?.placement ?? false, supersession: requested?.supersession ?? false,
     conflictEdges: requested?.conflictEdges ?? false, semanticRetrieval: requested?.semanticRetrieval ?? false,
     embeddingRequiredOnInsert: false, receiptAttachAdvancesRevision: true, proceduralTags: true });
@@ -60,13 +64,22 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const receiptReadSafety = createReceiptReadSafety(hashSessionKey, lineage, migratedRaw);
   const visibility = createPlacementVisibility(hashSessionKey, receiptReadSafety, migratedRaw);
   const scrubTitles = createTitleScrubber(visibility);
-  const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now,
-    topicOptions, controls !== undefined),
+  const cardVisibility = createCardVisibility(hashSessionKey, receiptReadSafety, visibility, migratedRaw, captureControls);
+  // Privacy operations continue to cover disk-resident cards when the port is disabled.
+  const cards = createDocumentCards(port, index, cardVisibility, now ?? Date.now, clearCardPlacement,
+    migratedRaw && hashSessionKey);
+  const documentCards = flags.documentCards ? handleWriteRejections(
+    /** @type {Required<typeof cards.store>} */ (cards.store),
+    ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) : undefined;
+  const loadCards = documentCards?.visibilityInputs;
+  const placement = flags.placement ? handleWriteRejections(createTopicStore(port, index, visibility, now ?? Date.now, topicOptions,
+    controls !== undefined, flags.documentCards ? cardVisibility : undefined),
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
   const relations = createRelationStores(port, index, visibility);
   const supersession = flags.supersession ? handleWriteRejections(relations.supersession, ["record", "markHistorical"]) : undefined;
   const conflicts = flags.conflictEdges ? handleWriteRejections(relations.conflicts, ["insert", "invalidate"]) : undefined;
-  const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles);
+  const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles,
+    cards.purgeSources, flags.documentCards);
   const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
   // Keep migrated evidence readable by inspect even for hosts that have not
   // enabled the optional placement and relation mutation ports.
@@ -86,10 +99,12 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
     capabilities: flags,
     uow: { run: index.run },
     capture: createCapturePorts(port, hashSessionKey, index, lineage, now, migratedRaw, captureControls, preserveArrivalRefusal),
-    memories: createMemoryStore(port, hashSessionKey, index, scrubTitles),
+    memories: createMemoryStore(port, hashSessionKey, index, scrubTitles, cards.purgeErasedMemory,
+      cardVisibility.recordReceiptWithdrawals),
     ...(placement && { placement }),
     ...(supersession && { supersession }),
     ...(conflicts && { conflicts }),
+    ...(documentCards && { documentCards }),
     proceduralTags,
     inspect,
     ...(contextRead && { contextRead }),
@@ -102,12 +117,13 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
           reconcileRawInventory(db, readSet, contextEpochs(db, readSet), sessionHashKey, contextDeadline(options, monotonicMs), true)));
       },
     }),
-    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, vectorCache, vectorClock),
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, vectorCache, vectorClock,
+      loadCards && ((tx, selection, refs) => visibleCardRefs(loadCards, tx, selection, refs))),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
     counters,
     suppressions: createSuppressionStore(port, hashSessionKey, lineage.hasReceiptCandidate,
-      index.markDirty, migratedRaw, captureControls, scrubTitles),
+      index.markDirty, migratedRaw, captureControls, scrubTitles, cards.purgeForgottenSpan),
     pause: createPauseStore(port),
     keys: { async userKey(/** @type {string} */ _owner) { return null; } },
     hashSessionKey,

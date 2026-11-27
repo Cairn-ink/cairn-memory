@@ -14,10 +14,17 @@ import { readFacts } from "./suppressions.mjs";
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @typedef {[messageTag: string, proof: string]} Proof */
 
+const rawFenceSql = `SELECT 1 FROM cairn_raw_fences WHERE owner_id = ? AND namespace_key = ? AND session_hash = ?`;
+
 /** @param {Connection} db @param {Scope} scope @param {string} sessionHash */
 export function hasRawFence(db, scope, sessionHash) {
-  return db.prepare(`SELECT 1 FROM cairn_raw_fences WHERE owner_id = ? AND namespace_key = ? AND session_hash = ?`)
-    .get(...scopeKey(scope), sessionHash) !== undefined;
+  return db.prepare(rawFenceSql).get(...scopeKey(scope), sessionHash) !== undefined;
+}
+
+/** @param {Connection} db */
+export function rawFenceReader(db) {
+  const find = db.prepare(rawFenceSql);
+  return (/** @type {Scope} */ scope, /** @type {string} */ sessionHash) => find.get(...scopeKey(scope), sessionHash) !== undefined;
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} client @param {string} sessionHash
@@ -116,8 +123,33 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
     }
   }
 
+  /** @param {Connection} db @param {SessionHasher} [hash] */
+  function receiptRootReader(db, hash = hashSession) {
+    const find = db.prepare(`SELECT DISTINCT namespace_key, session_hash FROM cairn_raw_anchors
+      WHERE owner_id = ? AND client_key = ? AND message_tag = ?
+        AND (? = '' OR proof = '' OR proof = ?) AND (namespace_key <> ? OR session_hash <> ?)`);
+    const rowsForMessage = db.prepare(`SELECT * FROM cairn_raw_messages WHERE ${rawScopeWhere}
+      AND client_key = ? AND message_key = ?`);
+    const fenced = rawFenceReader(db);
+    return (/** @type {Scope} */ scope, /** @type {RawRow} */ { client, sessionId, message },
+      /** @type {(scope: Scope, row: RawRow) => boolean} */ visible) => {
+      const [[messageTag, proof]] = proofs(scope.owner, client, [message]);
+      const direct = hash(scope, client, sessionId);
+      const clientKey = JSON.stringify(client), namespace = scopeKey(scope)[1];
+      for (const anchor of find.iterate(scope.owner, clientKey, messageTag, proof, proof, namespace, direct)) {
+        const target = { owner: scope.owner, namespace: decodeJson(anchor.namespace_key) };
+        const sessionHash = String(anchor.session_hash);
+        if (fenced(target, sessionHash)) return false;
+        const rows = rowsForMessage.all(...scopeKey(target), clientKey, JSON.stringify(message.id))
+          .map(decodeRawRow).filter(row => hash(target, client, row.sessionId) === sessionHash);
+        if (rows.length !== 1 || rows[0].message.role !== message.role || !visible(target, rows[0])) return false;
+      }
+      return true;
+    };
+  }
+
   return {
-    proofs, anchorRows,
+    proofs, anchorRows, receiptRootReader,
 
     /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly CaptureMessage[]} messages */
     record(db, scope, session, messages) {
@@ -178,23 +210,11 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
       return hasMigratedUuidCandidate(db, owner, storeKey, messageId);
     },
 
-    /** @param {Connection} db @param {Scope} scope @param {RawRow} source
+    /** @param {Connection} db @param {Scope} scope @param {RawRow} row
      * @param {(scope: Scope, row: RawRow) => boolean} visible
      */
-    receiptRootsVisible(db, scope, { client, sessionId, message }, visible) {
-      const candidates = proofs(scope.owner, client, [message]);
-      const direct = hashSession(scope, client, sessionId);
-      const rowsForMessage = db.prepare(`SELECT * FROM cairn_raw_messages WHERE ${rawScopeWhere}
-        AND client_key = ? AND message_key = ?`);
-      for (const root of matchingAnchors(db, scope.owner, client, candidates, null)) {
-        const target = root.scope;
-        if (target.namespace === scope.namespace && root.sessionHash === direct) continue;
-        if (hasRawFence(db, target, root.sessionHash)) return false;
-        const rows = rowsForMessage.all(...scopeKey(target), JSON.stringify(client), JSON.stringify(message.id))
-          .map(decodeRawRow).filter(row => hashSession(target, client, row.sessionId) === root.sessionHash);
-        if (rows.length !== 1 || rows[0].message.role !== message.role || !visible(target, rows[0])) return false;
-      }
-      return true;
+    receiptRootsVisible(db, scope, row, visible) {
+      return receiptRootReader(db)(scope, row, visible);
     },
   };
 }

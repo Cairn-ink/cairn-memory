@@ -2,10 +2,10 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:
 import { rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
 import { receiptProjector } from "./inspect.mjs";
-import { decodeJson, readEntry } from "./memory-rows.mjs";
+import { decodeEntry, decodeJson, LIVE_SCOPE, MEMORY_COLUMNS } from "./memory-rows.mjs";
 import { importTextBlocked, rawFactPolicy } from "./raw-facts.mjs";
-import { hasRawFence } from "./raw-lineage.mjs";
-import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
+import { rawFenceReader } from "./raw-lineage.mjs";
+import { decodeRawRow, rawRows, rawSegment, rawSessionKey, readRawRow } from "./raw-rows.mjs";
 import { receiptIdentityKey } from "./receipt-identity.mjs";
 import { archivedReceiptExcerpt, scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
@@ -23,6 +23,9 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} ReceiptReadSafety */
 /** @typedef {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>} RawLineage */
 /** @typedef {[string, string, string, string]} InventoryPosition */
+/** @typedef {{ scope: Scope, row: RawRow, tokens: ReturnType<typeof termFrequencies>, ref: ReturnType<typeof rawSegment>["ref"] }} Document */
+/** @typedef {Map<string, Array<{message: CaptureMessage, memories: Set<string>}>>} CaptureMessages */
+/** @typedef {{ after: string, complete: boolean, byMessage: CaptureMessages }} CaptureSession */
 
 const CHECKPOINT_ROWS = 1024;
 const MAX_INVENTORY = 4096;
@@ -123,14 +126,67 @@ function publishedInventory(db, readSet, fence) {
     WHERE projection = ? AND fence = ? AND published = 1`).get(inventoryKey(readSet), fence)?.examined;
 }
 
+/** @param {Connection} db @param {() => boolean} stopped */
+function captureTurnReader(db, stopped) {
+  // Resume in source index order without keeping SQLite iterators open between lookups.
+  const find = db.prepare(`SELECT c.event_key, o.messages, o.result
+    FROM cairn_capture_claims c INDEXED BY cairn_capture_source
+    CROSS JOIN cairn_capture_outbox o USING (owner_id, client_key, event_key)
+    WHERE c.owner_id = ? AND c.namespace_key = ? AND c.client_key = ? AND c.session_key = ?
+      AND c.event_key > ? AND c.status = 'done' AND o.messages IS NOT NULL AND o.result IS NOT NULL
+    ORDER BY c.event_key LIMIT 1`);
+  /** @type {Map<string, CaptureSession>} */
+  const sessions = new Map();
+  return (/** @type {Scope} */ scope, /** @type {string} */ memoryId, /** @type {Receipt} */ receipt, /** @type {RawRow} */ row) => {
+    if (stopped() || row.message.role !== receipt.role || !row.message.content) return false;
+    const keys = rawSessionKey(scope, receipt), sessionKey = JSON.stringify(keys);
+    let session = sessions.get(sessionKey);
+    if (!session) {
+      session = { after: "", complete: false, byMessage: new Map() };
+      sessions.set(sessionKey, session);
+    }
+    const { byMessage } = session;
+    /** @param {{message: CaptureMessage, memories: Set<string>}} candidate */
+    const matches = ({ message, memories }) =>
+      memories.has(memoryId) && message.content === row.message.content && message.role === row.message.role;
+    if (byMessage.get(receipt.messageId)?.some(matches)) return !stopped();
+
+    while (!session.complete && !stopped()) {
+      const capture = find.get(...keys, session.after);
+      if (!capture) {
+        session.complete = true;
+        break;
+      }
+      if (stopped()) return false;
+      session.after = String(capture.event_key);
+      const result = /** @type {FinishResult} */ (decodeJson(capture.result));
+      if (!result.memories.length) continue;
+      const memories = new Set(result.memories.map(({ id }) => id));
+      const seen = new Set();
+      let proved = false;
+      for (const message of /** @type {CaptureMessage[]} */ (decodeJson(capture.messages))) {
+        if (seen.has(message.id)) continue;
+        seen.add(message.id);
+        const candidate = { message, memories };
+        const candidates = byMessage.get(message.id);
+        if (candidates) candidates.push(candidate);
+        else byMessage.set(message.id, [candidate]);
+        if (message.id === receipt.messageId && matches(candidate)) proved = true;
+      }
+      if (proved) return !stopped();
+    }
+    return false;
+  };
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {Receipt} receipt @param {RawRow} row */
 export function exactReceiptTurn(db, scope, memoryId, receipt, row) {
   if (row.message.role !== receipt.role || !row.message.content) return false;
-  const captures = db.prepare(`SELECT messages, result
+  const find = db.prepare(`SELECT messages, result
     FROM cairn_capture_claims JOIN cairn_capture_outbox USING (owner_id, client_key, event_key)
     WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND session_key = ? AND status = 'done'
-    LIMIT ?`).iterate(...scopeKey(scope), JSON.stringify(receipt.client), JSON.stringify(receipt.sessionId), MAX_LINKS);
-  for (const capture of captures) {
+    LIMIT ?`);
+  for (const capture of find.iterate(...rawSessionKey(scope, receipt), MAX_LINKS)) {
     if (typeof capture.messages !== "string" || typeof capture.result !== "string") continue;
     const result = /** @type {FinishResult} */ (decodeJson(capture.result));
     if (!result.memories.some(memory => memory.id === memoryId)) continue;
@@ -148,8 +204,11 @@ export function withRawEvidence(scope, receipt, { client, sessionId, message }) 
 
 /** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {Policy} policy
  * @param {ReceiptReadSafety} receiptReadSafety @param {Record<string, SQLOutputValue>} row
+ * @param {ReturnType<typeof captureTurnReader>} [exactTurn]
+ * @param {RawRow} [searched]
  */
-export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, legacy_receipt_key, id, time }) {
+export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, { body, legacy_receipt_key, id, time },
+  exactTurn = (scope, id, receipt, row) => exactReceiptTurn(db, scope, id, receipt, row), searched) {
   if (typeof id !== "string" || !id) return;
   const stored = /** @type {StoredReceipt} */ (decodeJson(body));
   if (stored.receiptKey !== undefined || stored.excerpt !== undefined) return;
@@ -158,16 +217,18 @@ export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, {
   const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
   /** @type {RawRow | undefined} */
   let archived;
-  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, row => { archived = row; }) ||
-      !archived || !exactReceiptTurn(db, scope, memoryId, address, archived)) return;
+  if (!receiptReadSafety(db, scope, policy, address, legacyKey, legacyKey, stored, memoryId, undefined, row => { archived = row; }, searched) ||
+      !archived || !exactTurn(scope, memoryId, address, archived)) return;
   const excerpt = archivedReceiptExcerpt(archived.message.content);
   if (!excerpt) return;
   const receipt = { ...address, excerpt };
   /** @type {RawRow | undefined} */
   let checkedArchive;
-  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId,
-    row => { checkedArchive = row; }) || !checkedArchive || checkedArchive.client !== archived.client ||
+  if (!receiptReadSafety(db, scope, policy, receipt, receiptIdentityKey(receipt), legacyKey, stored, memoryId, undefined,
+    row => { checkedArchive = row; }, searched) || !checkedArchive || checkedArchive.client !== archived.client ||
     checkedArchive.sessionId !== archived.sessionId || checkedArchive.message.id !== archived.message.id) return;
+  if (searched && (searched.message.role !== archived.message.role || searched.message.content !== archived.message.content) &&
+      !exactTurn(scope, memoryId, receipt, searched)) return;
   return withRawEvidence(scope, { ...receipt, id, eventId: messageId,
     createdAtMs: Number(BigInt(String(time)) / 1000n) }, archived);
 }
@@ -189,52 +250,105 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     return { ...turn, witness };
   }
 
-  /** @param {Connection} db @param {() => boolean} stopped */
-  function visibility(db, stopped) {
-    /** @type {Map<Scope["namespace"], ReturnType<typeof scopedSuppression>>} */
-    const policies = new Map();
+  /** @param {Connection} db @param {() => boolean} stopped @param {number} [memoryCacheLimit] */
+  function visibility(db, stopped, memoryCacheLimit = MAX_INVENTORY) {
+    /** @type {Map<Scope["namespace"], {policy: Policy, project: ReturnType<typeof receiptProjector>, current: Map<string, boolean>}>} */
+    const scopes = new Map();
+    let cachedMemories = 0;
+    /** @type {ReturnType<Connection["prepare"]> | undefined} */
+    let citingMemories;
+    // The source index avoids scanning this scope's receipt inventory for each Raw row.
     const possibleReceipts = db.prepare(`SELECT i.id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
         r.body, r.legacy_receipt_key, r.memory_id
-      FROM cairn_receipts r LEFT JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
+      FROM cairn_receipts r INDEXED BY cairn_context_receipts_by_source
+      LEFT JOIN cairn_inspect_receipts i USING (owner_id, namespace_key, memory_id, ordinal)
       WHERE r.owner_id = ? AND r.namespace_key = ? AND r.source_key = ? LIMIT ?`);
+    const findMemory = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM cairn_memories WHERE ${LIVE_SCOPE} AND id = ?`);
+    /** @type {Map<string, string>} */
+    const sessionHashes = new Map();
+    /** @type {SessionHasher} */
+    const hash = (scope, client, sessionId) => {
+      const key = JSON.stringify([scope.namespace, client, sessionId]);
+      let value = sessionHashes.get(key);
+      if (value === undefined) {
+        value = hashSession(scope, client, sessionId);
+        if (sessionHashes.size < MAX_INVENTORY) sessionHashes.set(key, value);
+      }
+      return value;
+    };
+    const fenced = rawFenceReader(db), rootsVisible = lineage.receiptRootReader(db, hash), exactTurn = captureTurnReader(db, stopped);
 
     /** @param {Scope} scope */
-    function policyFor(scope) {
-      let policy = policies.get(scope.namespace);
-      if (!policy) {
-        policy = scopedSuppression(db, scope, hashSession);
-        policies.set(scope.namespace, policy);
+    function forScope(scope) {
+      let scoped = scopes.get(scope.namespace);
+      if (!scoped) {
+        const policy = scopedSuppression(db, scope, hash);
+        scoped = { policy, project: receiptProjector(db, scope, policy, receiptReadSafety), current: new Map() };
+        scopes.set(scope.namespace, scoped);
       }
-      return policy;
+      return scoped;
+    }
+
+    /** @param {Scope} scope @param {string} id */
+    function memoryVisible(scope, id) {
+      const { policy, current } = forScope(scope);
+      let visible = current.get(id);
+      if (visible === undefined) {
+        const entry = findMemory.get(...scopeKey(scope), id);
+        visible = !!entry && entry.historical !== 1 && !policy.hides(decodeEntry(scope, entry));
+        if (cachedMemories < memoryCacheLimit) {
+          current.set(id, visible);
+          cachedMemories++;
+        }
+      }
+      return visible;
     }
 
     /** @param {Scope} scope @param {RawRow} row */
     function directlyVisible(scope, row) {
-      const { message } = row, policy = policyFor(scope);
-      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
+      const { message } = row, { policy } = forScope(scope);
+      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hash);
       return !stopped() && (!controls || controls.rawReadable(scope)) && Boolean(message.content) &&
-        !hasRawFence(db, scope, rawPolicy.sessionKeyHash) &&
-        !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs }) &&
+        !fenced(scope, rawPolicy.sessionKeyHash) &&
+        ((!policy.facts.length && !policy.legacy.size) ||
+          !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs })) &&
         !rawPolicy.hides(message) && !importTextBlocked([], message.content, policy.legacy) &&
         !migratedRaw?.blocks(db, scope, row, [message]);
     }
 
     /** @param {Scope} scope @param {RawRow} row */
-    return (scope, row) => {
-      if (!directlyVisible(scope, row) || !lineage.receiptRootsVisible(db, scope, row, directlyVisible)) return false;
-      const policy = policyFor(scope), project = receiptProjector(db, scope, policy, receiptReadSafety);
+    const cheap = (scope, row) => directlyVisible(scope, row) && rootsVisible(scope, row, directlyVisible);
+
+    /** @param {Scope} scope @param {RawRow} row */
+    function citingMemoriesVisible(scope, row) {
+      citingMemories ??= db.prepare(`SELECT memory_id FROM cairn_receipts INDEXED BY cairn_context_receipts_by_source
+        WHERE owner_id = ? AND namespace_key = ? AND source_key = ?`);
+      const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
+      for (const { memory_id } of citingMemories.iterate(...scopeKey(scope), sourceKey)) {
+        if (stopped() || !memoryVisible(scope, String(memory_id))) return false;
+      }
+      return true;
+    }
+
+    /** @param {Scope} scope @param {RawRow} row */
+    function prove(scope, row) {
+      const { policy, project } = forScope(scope);
       const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
       let linkCount = 0;
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
-        const id = String(record.memory_id), entry = readEntry(db, scope, id);
-        if (!entry || entry.row.historical || policy.hides(entry)) return false;
-        const receipt = record.excerpt === null
-          ? addressReceipt(db, scope, id, policy, receiptReadSafety, record) : project(record)?.receipt;
-        if (!receipt || !exactReceiptTurn(db, scope, id, receipt, row)) return false;
+        const id = String(record.memory_id);
+        if (!memoryVisible(scope, id)) return false;
+        if (record.excerpt === null) {
+          if (!addressReceipt(db, scope, id, policy, receiptReadSafety, record, exactTurn, row)) return false;
+        } else {
+          const receipt = project(record)?.receipt;
+          if (!receipt || !exactTurn(scope, id, receipt, row)) return false;
+        }
       }
       return true;
-    };
+    }
+    return { cheap, citingMemoriesVisible, prove };
   }
 
   return {
@@ -242,38 +356,47 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       return port(tx, readSet.owner, {}, db => {
         const stopped = contextDeadline(options, monotonicMs), fence = inventoryFence(contextEpochs(db, readSet));
         const published = publishedInventory(db, readSet, fence);
-        const visible = visibility(db, stopped);
-        const documents = [], df = new Map(), terms = tokenizeT1(query);
-        let examined = 0, textUnits = 0, complete = true, totalLength = 0;
+        const { cheap, citingMemoriesVisible, prove } = visibility(db, stopped, Infinity);
+        /** @type {Document[]} */
+        const documents = [];
+        /** @type {Map<string, number>} */
+        const df = new Map();
+        const terms = [...new Set(tokenizeT1(query))], stats = { N: 0, totalLength: 0, df };
+        let examined = 0, textUnits = 0, complete = true;
+
         inventory: for (const namespace of readSet.namespaces) {
           const scope = { owner: readSet.owner, namespace };
           for (const record of rawRows(db, scope)) {
-            if (stopped()) {
-              complete = false;
-              break inventory;
-            }
+            if (stopped()) return { turns: [], coverage: "partial" };
             examined++;
             const row = decodeRawRow(record);
-            if (!visible(scope, row)) continue;
-            textUnits += row.message.content.length;
-            if (documents.length >= MAX_INVENTORY || textUnits > MAX_TEXT_UNITS) {
+            if (!cheap(scope, row) || !citingMemoriesVisible(scope, row)) continue;
+            const tokens = termFrequencies(row.message.content);
+            const matched = terms.filter(term => tokens.frequencies.has(term));
+            if (matched.length && !prove(scope, row)) continue;
+            const size = row.message.content.length;
+            if (stats.N === MAX_INVENTORY || textUnits + size > MAX_TEXT_UNITS) {
               complete = false;
               break inventory;
             }
-            const tokens = termFrequencies(row.message.content);
-            totalLength += tokens.length;
-            for (const term of tokens.frequencies.keys()) df.set(term, (df.get(term) ?? 0) + 1);
-            documents.push({ ref: rawSegment(scope, row, 0).ref, tokens, scope, row });
+            stats.N++;
+            stats.totalLength += tokens.length;
+            textUnits += size;
+            if (matched.length) {
+              for (const term of matched) df.set(term, (df.get(term) ?? 0) + 1);
+              documents.push({ ref: rawSegment(scope, row, 0).ref, tokens, scope, row });
+            }
           }
         }
-        const ranked = [], stats = { N: documents.length, totalLength, df };
-        for (const { tokens, ...document } of documents) {
+
+        const ranked = [];
+        for (const document of documents) {
           if (stopped()) return { turns: [], coverage: "partial" };
-          const score = scoreBM25(terms, tokens, stats);
-          if (score !== null) ranked.push({ ...document, score });
+          ranked.push({ ...document, score: /** @type {number} */ (scoreBM25(terms, document.tokens, stats)) });
         }
+        rankScores(ranked);
         if (stopped()) return { turns: [], coverage: "partial" };
-        const rows = rankScores(ranked).slice(0, limit);
+        const rows = ranked.slice(0, limit);
         return { turns: rows.map(({ scope, row }) => witnessedTurn(scope, row, fence)),
           coverage: complete && examined === published && rows.length === ranked.length ? "included" : "partial" };
       });
@@ -281,7 +404,7 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     async revalidate(tx, readSet, turns) {
       return port(tx, readSet.owner, {}, db => {
         const fence = inventoryFence(contextEpochs(db, readSet));
-        const visible = visibility(db, () => false);
+        const { cheap, prove } = visibility(db, () => false);
         for (const turn of turns) {
           const { scope } = turn;
           if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace)) return false;
@@ -294,7 +417,8 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
           if (!Array.isArray(session) || session.length !== 2 || !session.every(value => typeof value === "string" && value)) return false;
           const [client, sessionId] = session;
           const row = readRawRow(db, scope, { client, sessionId }, turn.messageId);
-          if (!row || !visible(scope, row) || JSON.stringify(witnessedTurn(scope, row, fence)) !== JSON.stringify(turn)) return false;
+          if (!row || !cheap(scope, row) || !prove(scope, row) ||
+              JSON.stringify(witnessedTurn(scope, row, fence)) !== JSON.stringify(turn)) return false;
         }
         return true;
       });

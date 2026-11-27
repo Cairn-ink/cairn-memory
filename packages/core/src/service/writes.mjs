@@ -9,7 +9,7 @@ import { cleanContent, normalizeForHash, prepareCoreText, receiptExcerpt } from 
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { redactAmendmentText } from "../routing/redaction.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
-import { entry, entryError, scopeOf } from "./entry.mjs";
+import { entry, entryError, scopeOf, correctRequestDecision, factReference, hostAttachments, hostRequestOf, predecessorOf, saveRequestDecision, spanReference, writeHookResult } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 
 /** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Receipt, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
@@ -328,11 +328,11 @@ export async function fullWriteWithholds(suppressions, tx, scope, source, batch)
     facts === null || legacyWithholds?.(raw) || withholdsAnyPassage(passages, facts));
 }
 
-/** @param {import("./index.d.mts").MemoryServiceDeps} deps
+/** @param {import("./entry.mjs").HookedDeps} deps
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "save" | "correct">}
  */
 export function writeMethods(deps) {
-  const { storage, gate, clock, embedder, config } = deps;
+  const { storage, gate, clock, embedder, config, hooks } = deps;
   const { uow, pause, memories, suppressions, keys, fence, capabilities, proceduralTags } = storage;
   const { embed } = writeEmbedding(deps);
   /** @param {string} text */
@@ -369,7 +369,9 @@ export function writeMethods(deps) {
 
   return {
     save: entry(async (input, raw, inputSource, inputKind = "fact", options) => {
-      let scope, source, kind;
+      /** @type {Scope} */
+      let scope;
+      let source, kind;
       try {
         scope = scopeOf(input);
         source = sourceOf(inputSource);
@@ -399,11 +401,41 @@ export function writeMethods(deps) {
         }
       }
       const { owner } = scope;
+      const explicit = source.kind === "mcp" || source.kind === "web";
+      const saveHooks = explicit ? hooks : undefined;
+      if (options?.hostRequest !== undefined && !saveHooks) throw new CoreError("capability_unavailable");
+      const request = saveHooks ? hostRequestOf(options?.hostRequest) : null;
+      const context = saveHooks && { scope, source, request };
+      /** @param {Tx} tx */
+      const suppressed = async (tx) => /** @type {const} */ ({
+        status: "suppressed", ...reportedIndex(await memories.indexRevision?.(tx)),
+      });
+      /** @param {Tx} tx */
+      async function checkHost(tx) {
+        if (!saveHooks || !context) return null;
+        const decision = await saveHooks.invoke("beforeSave", tx, context, value => saveRequestDecision(value, request !== null));
+        switch (decision.status) {
+          case "proceed": return null;
+          case "refuse": return suppressed(tx);
+          case "conflict": throw new CoreError("event_payload_conflict");
+          case "replay": {
+            const { status, memory: { id, revision }, indexRevision } = decision.result;
+            return { status, id, revision, indexRevision };
+          }
+        }
+      }
+      /** @param {{status: "saved" | "duplicate", id: string, revision: number, indexRevision?: number}} result */
+      async function deliverSave(result) {
+        const item = await deliver(scope, result.id, result.revision);
+        const index = reportedIndex(result.indexRevision);
+        return item ? { status: result.status, item, ...index } : /** @type {const} */ ({ status: "suppressed", ...index });
+      }
       const preflight = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
-        return state.paused ? paused(tx) : state;
+        if (state.paused) return paused(tx);
+        return saveHooks ? (await checkHost(tx)) ?? state : state;
       });
-      if ("status" in preflight) return preflight;
+      if ("status" in preflight) return "id" in preflight ? deliverSave(preflight) : preflight;
       await gate.assertOpen(owner, "pre-send");
       if (!text) return invalid();
       const key = await keys?.userKey?.(owner) ?? null;
@@ -412,7 +444,6 @@ export function writeMethods(deps) {
       const embedding = embedder === null ? null : await embed(owner, text, key);
       if (embedding) query.embedding = embedding.vector;
       const tag = spans && { spans, digest: await sha256Hex(receipts[0].excerpt) };
-      const explicit = source.kind === "mcp" || source.kind === "web";
       const mode = explicit ? "hash" : "full";
       const row = /** @type {InsertRow} */ ({
         kind, text, textHash: query.textHash, source, embedding, confidence: 1,
@@ -422,20 +453,23 @@ export function writeMethods(deps) {
 
       await gate.assertOpen(owner, "post-send");
       const result = await uow.run(owner, { pauseLock: true }, async tx => {
-        const suppressed = async () => /** @type {const} */ ({
-          status: "suppressed", ...reportedIndex(await memories.indexRevision?.(tx)),
-        });
         const state = pauseResult(await pause.get(tx, owner));
         if (state.paused || state.generation !== preflight.generation) return paused(tx);
+        if (saveHooks) {
+          const host = await checkHost(tx);
+          if (host) return host;
+        }
         if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
         if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
-            await withheld(suppressions, tx, scope, source, raw, passages, key)) return suppressed();
+            await withheld(suppressions, tx, scope, source, raw, passages, key)) return suppressed(tx);
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
         const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
-        if (decision.status === "suppressed") return suppressed();
+        if (decision.status === "suppressed") return suppressed(tx);
         let id, written;
+        /** @type {readonly import("../ports/index.d.ts").HostReceipt[]} */
+        let priorReceipts = [];
         if (decision.status === "saved") {
           written = await memories.insert(tx, scope, row, receipts, clock.nowMs());
           id = written.id;
@@ -445,9 +479,10 @@ export function writeMethods(deps) {
           const current = await scopedRow(memories, scope, duplicateId, tx);
           const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === duplicateId &&
             match.revision === current?.revision);
-          if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed();
+          if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed(tx);
           const { merge } = planDuplicateMerge(current, current);
           if (tag && kind !== current.kind) merge.kind = kind;
+          if (saveHooks && receipts.length) priorReceipts = await saveHooks.port.priorReceipts(tx, scope, id);
           written = await memories.touchDuplicate(tx, scope, duplicateId, receipts, merge, clock.nowMs());
         }
         if (tag && proceduralTags) {
@@ -458,17 +493,25 @@ export function writeMethods(deps) {
             anchors: tag.spans.map(span => ({ receiptId, digest: tag.digest, ...span })),
           });
         }
-        return { status: decision.status, id, revision: written.revision,
-          ...reportedIndex(await memories.committedIndexRevision?.(tx)) };
+        if (!saveHooks || !context) {
+          return { status: decision.status, id, revision: written.revision,
+            ...reportedIndex(await memories.committedIndexRevision?.(tx)) };
+        }
+        const attached = receipts.length
+          ? hostAttachments(priorReceipts, await saveHooks.port.priorReceipts(tx, scope, id), receipts) : [];
+        const saved = { ...context, status: decision.status, memory: { id, revision: written.revision }, receipts: attached };
+        await saveHooks.invoke("onSave", tx, saved, writeHookResult);
+        const indexRevision = await memories.committedIndexRevision?.(tx);
+        if (indexRevision === undefined) throw new CoreError("internal_error");
+        if (request) await saveHooks.port.finalizeSave(tx, saved, indexRevision);
+        return { status: decision.status, id, revision: written.revision, indexRevision };
       }).catch(error => {
         if (receipts.length && entryError(error).code === "invalid_input") return invalid();
         throw error;
       });
 
       if (result.status === "paused" || result.status === "suppressed" || result.status === "invalid") return result;
-      const item = await deliver(scope, result.id, result.revision);
-      const index = reportedIndex(result.indexRevision);
-      return item ? { status: result.status, item, ...index } : { status: "suppressed", ...index };
+      return deliverSave(result);
     }, invalid),
 
     correct: entry(async (input, inputId, inputRevision, raw, inputSource, options) => {
@@ -543,11 +586,22 @@ export function writeMethods(deps) {
             decision.status === "duplicate");
           if (plan.outcome === "unchanged") return /** @type {const} */ ({ status: "unchanged", revision: plan.revision });
           if (!predecessor) throw new CoreError("internal_error");
+          const context = hooks && { scope, predecessor: predecessorOf(current) };
+          if (hooks && context) {
+            const admission = await hooks.invoke("beforeCorrect", tx, context, correctRequestDecision);
+            if (admission.status === "refuse") return /** @type {const} */ ({ status: "suppressed" });
+          }
+          const evidence = hooks && await hooks.port.predecessorEvidence(tx, scope, id);
+          const spans = hooks && storage.spanLineage ? await storage.spanLineage.resolveSpans(tx, scope, id) : [];
+          /** @type {import("../ports/index.d.ts").HostFactRef[] | undefined} */
+          const facts = hooks ? [] : undefined;
           const { kind, origin, confidence, textHash } = plan;
           const now = clock.nowMs();
-          await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
+          const writtenFact = await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
+          facts?.push(factReference(predecessor.fact.kind, writtenFact));
           for (const { fact, incarnation } of windows) {
-            await suppressions.writeFact(tx, fact, incarnation);
+            const written = await suppressions.writeFact(tx, fact, incarnation);
+            facts?.push(factReference(fact.kind, written));
           }
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
             { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, receipts, now);
@@ -555,6 +609,13 @@ export function writeMethods(deps) {
           if (capabilities.proceduralTags === true) {
             if (!proceduralTags) throw new CoreError("capability_unavailable");
             await proceduralTags.clear(tx, scope, id);
+          }
+          if (hooks && context && evidence && facts) {
+            const attached = receipts === null ? null : hostAttachments([], receipts.length
+              ? await hooks.port.priorReceipts(tx, scope, id) : [], receipts);
+            await hooks.invoke("onCorrect", tx, { ...context, ...evidence, facts, status: "saved",
+              affectedSessions: [], affectedSpans: spans.map(spanReference),
+              replacement: { id, revision: replaced.revision, source }, receipts: attached }, writeHookResult);
           }
           return /** @type {const} */ ({ status: "saved", revision: replaced.revision,
             ...reportedIndex(await memories.committedIndexRevision?.(tx)) });

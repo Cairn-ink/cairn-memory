@@ -20,6 +20,7 @@ const adapterSlot = 'packaging/core-local/adapter-slot.mjs';
 const adapterSource = 'packages/adapter-sqlite/src/';
 const adapterEntry = adapterSource + 'adapter.mjs';
 const coreEntry = coreSource + 'index.mjs';
+const routingEntry = coreSource + 'routing/index.mjs';
 const continuations = 'packaging/core-local/continuations.mjs';
 const wireTools = 'packaging/core-local/wire-tools.mjs';
 const tokenizerRoot = 'packaging/core-local/vendor/tiktoken/';
@@ -64,7 +65,7 @@ export const captureInventoryPath = 'packaging/core-local-capture-files.json';
 export const coreManifest = coreRoot + '/package.json';
 
 const runtimeGlobals = new Set([
-  'AbortSignal', 'Array', 'ArrayBuffer', 'BigInt', 'Blob', 'DataView', 'Date', 'Error', 'Float32Array',
+  'AbortController', 'AbortSignal', 'Array', 'ArrayBuffer', 'BigInt', 'Blob', 'DataView', 'Date', 'Error', 'Float32Array',
   'Float64Array', 'Infinity', 'Intl', 'JSON', 'Map', 'Math', 'NaN', 'Number',
   'Object', 'Promise', 'Reflect', 'RegExp', 'Set', 'String', 'TextDecoder',
   'TextEncoder', 'TypeError', 'Uint8Array', 'Uint32Array', 'WeakMap', 'WeakSet', 'atob', 'btoa',
@@ -255,8 +256,15 @@ function adapterApproval(from) {
   return from.startsWith(adapterSource) ? adapterImports[from.slice(adapterSource.length)] : undefined;
 }
 
-function adapterCoreSpecifier(from) {
-  return posix.relative(posix.dirname(from), coreEntry);
+function adapterCoreImport(from, specifier, node) {
+  const approved = adapterApproval(from);
+  for (const [name, entry, names] of [
+    ['@cairn-ink/core', coreEntry, approved?.core],
+    ['@cairn-ink/core/routing', routingEntry, approved?.routing],
+  ]) {
+    if ((specifier === name || specifier === posix.relative(posix.dirname(from), entry)) &&
+        approvedNames(node, names)) return entry;
+  }
 }
 
 function target(from, specifier, node) {
@@ -268,8 +276,8 @@ function target(from, specifier, node) {
   }
   if (typeof specifier === 'string' && specifier.startsWith('node:') &&
       approvedNames(node, (hostBuiltins.get(from) ?? approved ?? captureImports[from]?.builtins)?.[specifier.slice(5)])) return;
-  if (approvedNames(node, approved?.core) &&
-      (specifier === '@cairn-ink/core' || specifier === adapterCoreSpecifier(from))) return coreEntry;
+  const adapterCore = adapterCoreImport(from, specifier, node);
+  if (adapterCore) return adapterCore;
   if (from === adapterSlot && specifier === './vendor/tiktoken/tiktoken.cjs' &&
       node.type === 'ImportDeclaration' && node.specifiers.length === 1 &&
       node.specifiers[0].type === 'ImportDefaultSpecifier') return tokenizerEntry;
@@ -375,12 +383,14 @@ export function candidateSourcePath(path) {
 }
 
 export function candidateFileBytes(path, bytes) {
-  if (!adapterApproval(path)?.core) return bytes;
+  if (!adapterApproval(path)?.core && !adapterApproval(path)?.routing) return bytes;
   let source = bytes.toString('utf8');
   const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
   for (const node of tree.body.toReversed()) {
-    if (node.source?.value === '@cairn-ink/core' && approvedNames(node, adapterApproval(path).core)) {
-      source = source.slice(0, node.source.start) + JSON.stringify(adapterCoreSpecifier(path)) + source.slice(node.source.end);
+    const entry = adapterCoreImport(path, node.source?.value, node);
+    if (entry) {
+      const specifier = posix.relative(posix.dirname(path), entry);
+      source = source.slice(0, node.source.start) + JSON.stringify(specifier) + source.slice(node.source.end);
     }
   }
   return source;
