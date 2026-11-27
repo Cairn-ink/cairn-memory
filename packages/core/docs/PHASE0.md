@@ -1524,3 +1524,10 @@ The packer keeps the full excerpt data internally and uses the original timestam
 evidence order and item dates.
 Packing uses the delivered shape for ranking cost and budget checks.
 `representation-v2` retains its existing Raw wire bytes.
+
+## Addendum 36 — Context Read fusion depth
+
+For `representation-v2` and `representation-v2-dated`, a `maxItems` above the configured preset depth raises the fusion depth to `maxItems`, capped by the retrieval horizon.
+Fusion retains the preset's `k` and channel weights and uses a union maximum of at least twice the resulting depth.
+Semantic coverage reports the depth used and the resulting semantic omissions.
+Candidate searches and reads at or below the preset depth retain preset ranking, and evidence snapshots replay the exact delivered refs.
