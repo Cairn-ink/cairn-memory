@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-639ae003da975f7fed9ab4eae27bde92196b8b8c4162c37279f8afcbc18fab9b",
+  "engineId": "core-local-v1-50e44205fb64291b268fc0def305dea3fc62c43ce0bef84fffb99fc71fa20f8d",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2918603,
-    "sha256": "20d341ba06524bd4b61daab8b4f9b516da3bd3773292d804ce0ec7a8e3d71f4b"
+    "bytes": 2918611,
+    "sha256": "17adf0d668b5d334ca659b337ccc9bbcc30f9d31d7e739624d0f6338bc925e78"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -206,7 +206,7 @@
     "packaging/core-local/daemon-worker.mjs": "89b7b89107b040bf5505b6ee4babc3d4afeb1daff1eb98ef0b79361e2d7054ca",
     "packaging/core-local/host.mjs": "b6873740c8f6bbd4c9c19c8a2e7be62231b12c56d282aed2a9a45c76c9023a3d",
     "packaging/core-local/local-provider.mjs": "a0411163c65c682737445749a9f20823e92d00d1190e1e6e2a869413cf40e832",
-    "packaging/core-local/profile.mjs": "93a646d26089a8b8f8cd0cae4bad34290ea62888cf453b2b6b9f9675bec6af93",
+    "packaging/core-local/profile.mjs": "fb3509bd82417f2b478bfc39c23d8e3eab0551b27c07ec2c262fbef6ee0fa7e9",
     "packaging/core-local/provider-check.mjs": "1a991faf5dd73e3bd02fbf423a4319f66183c14b2c12d9fcbe41d70b6b420aea",
     "packaging/core-local/provider-config.mjs": "9febfb7c69f914659bafe15b4dba7d6ebf872d869e791a2aff3a0e02cd6cb03e",
     "packaging/core-local/raw-cli.mjs": "7fefea3dab4c59c11586cc859de87cfd29faa7afc33239d26e1045c200850ca1",
@@ -216,7 +216,7 @@
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.cjs": "85b2bfcc1cab757b81b3ebfd200a188175c20ce9c9f7ccd340dfa479813d1205",
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.wasm": "dedd9a7b5d8d98b44448bedb371ade1c5327f7bb5dd9effe159da816473a415f",
     "packaging/core-local/wal-checkpoint.mjs": "a1eb0edccded85c4a383b17c897e0d653711c0210ba4a9b8b3746c88efb403db",
-    "packaging/core-local/wire-tools.mjs": "6fea2c9972a144933945285df4b35fb3ce770a3196d7d41741db9bae600d52d9",
+    "packaging/core-local/wire-tools.mjs": "2b49f15745e4f265d93b00883e236d3befdcd58256ee4806594dd0212fc39880",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5",
     "plugins/cairn-memory/lib/source-time.mjs": "b1c0b9ccf03ff76103ed759840b60effdfdc4b31e93f3dfd107ae876aa5dcb27",
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75"
