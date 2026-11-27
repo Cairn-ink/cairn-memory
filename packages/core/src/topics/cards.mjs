@@ -131,7 +131,11 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
             const cards = await readCards(tx, basedOn.cards);
             if (cards.length !== basedOn.cards.length) return;
             const receiptCode = await indexIsStale(tx) ? 'topic_index_moved' : code;
-            await placement.markCardsFailed(tx, scope, cards.map(({ id }) => id), receiptCode);
+            const visible = await visibleIds(tx, cards);
+            const ids = cards.map(({ id }) => id);
+            const excluded = ids.filter((id) => !visible.has(id));
+            if (excluded.length) return placement.markCardsFailed(tx, scope, excluded, 'source_excluded');
+            await placement.markCardsFailed(tx, scope, ids, receiptCode);
           });
         }
       } catch {
