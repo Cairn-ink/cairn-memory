@@ -1,20 +1,25 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { processStart } from '../../../adapters/mcp/local-daemon-liveness.mjs';
-import { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } from '../../../integrations/client/private-state.mjs';
-import { stateLock } from '../../../integrations/client/state-lock.mjs';
-import { entry } from '../../adapter-sqlite/src/legacy/paths.mjs';
 import { withCutoverCapture } from './local-cutover-capture.mjs';
-import { atLeast, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
-import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
+import { atLeast, captureTargetFor, checkpointOf, evidenceKeys, targetFor } from './local-cutover-journal.mjs';
+import { cutoverRefusal as refuse, localCutoverExclusion, withColdStoreLease } from './local-cutover-lease.mjs';
 import { assertReclaimedMaintenance, backupFor, maintenanceFor, reclaimAttempt, reclaimMaintenance,
   reclaimPastAttempts } from './local-cutover-reclaim.mjs';
-import { boundedJSON, canonicalPath, executableFor, ownedDirectory, readDescriptor, withLocalLock,
+import { abortRetirement, readActivation } from './local-cutover-retirement.mjs';
+import { boundedJSON, canonicalPath, executableFor, ownedDirectory, pidIsDead, readDescriptor, withLocalLock,
   writeDescriptor } from './local-descriptor.mjs';
 import { checkCoreLocalConfig } from './local-engine.mjs';
 import { runLocalDaemon } from './local-mode.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
+
+const { processStart } = await cutoverImport('liveness');
+const { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } = await cutoverImport('state');
+const { stateLock } = await cutoverImport('lock');
+const { entry } = await cutoverImport('paths');
 
 const quiescence = Object.freeze({ admissionsClosed: true, writersStopped: true, readersDrained: true, oldHandlesClosed: true });
+const rejectedLegacyContents = error =>
+  error.code === 'cutover_legacy_content_unrepresentable' || error.key === 'cutover_timeless_raw';
 
 function sourceIdentity(path) {
   const file = entry(path);
@@ -24,7 +29,7 @@ function sourceIdentity(path) {
 }
 
 async function reattestSource(input, cutover, assertLease) {
-  const { byteDigest, verifyLegacyBackupAgainstSource } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
+  const { byteDigest, verifyLegacyBackupAgainstSource } = await cutoverImport('backup');
   const proof = verifyLegacyBackupAgainstSource(input);
   const result = { logicalDigest: proof.logicalDigest, byteDigest: proof.byteDigest,
     sourceDigest: byteDigest(input.path), sourceIdentity: sourceIdentity(input.path) };
@@ -40,6 +45,11 @@ function parseDaemon(result) {
 }
 
 function drainDaemon(root, descriptor, env) {
+  const exclusion = localCutoverExclusion();
+  if (exclusion.drainDaemon) {
+    return exclusion.drainDaemon(() => runLocalDaemon('stop', root, descriptor, env, 'pipe'),
+      () => runLocalDaemon('status', root, descriptor, env, 'pipe'));
+  }
   const stop = parseDaemon(runLocalDaemon('stop', root, descriptor, env, 'pipe'));
   if (stop?.still_running !== 0) throw refuse('cutover_daemon_busy');
   const status = parseDaemon(runLocalDaemon('status', root, descriptor, env, 'pipe'));
@@ -59,12 +69,17 @@ async function recoverCutoverLock(root) {
     if (journaled) throw error;
     return;
   }
-  if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || owner.child !== null) return;
+  const validPid = pid => Number.isSafeInteger(pid) && pid > 0;
+  if (!validPid(owner.pid) || (owner.child !== null && !validPid(owner.child))) return;
   // A completed descriptor restore can precede metadata cleanup and lock release.
   // Continue to recognize pre-existing cutover locks while their v2 journal exists.
   if (owner.cutover !== true && !journaled) return;
-  const live = processStart(owner.pid);
-  if (!live || live.zombie) await privateRemove(path);
+  const dead = pid => {
+    if (process.platform === 'darwin') return pidIsDead(pid);
+    const live = processStart(pid);
+    return !live || live.zombie;
+  };
+  if (dead(owner.pid) && (owner.child === null || dead(owner.child))) await privateRemove(path);
 }
 
 async function writeMarker(directory, cutover) {
@@ -93,7 +108,7 @@ function attestResult(result, inventory) {
   }
 }
 
-async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint) {
+async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint, assertSourceContents) {
   const path = descriptor.database.path;
   const { migration } = descriptor, { cutover } = migration;
   let lastSaved = structuredClone(migration);
@@ -114,11 +129,12 @@ async function prepare(root, descriptor, maintenance, env, onCheckpoint, onMigra
     return await withCutoverCapture(root, maintenance, path, false, async () => {
       drainDaemon(root, descriptor, env);
       return withColdStoreLease(path, async assertLease => {
-        const { inventoryLegacyStore } = await import('../../adapter-sqlite/src/legacy/inventory.mjs');
-        const { byteDigest, createLegacyBackup } = await import('../../adapter-sqlite/src/legacy/backup.mjs');
-        const { migrateLegacyStore } = await import('../../adapter-sqlite/src/migrate/index.mjs');
+        const { inventoryLegacyStore } = await cutoverImport('inventory');
+        const { byteDigest, createLegacyBackup } = await cutoverImport('backup');
+        const { migrateLegacyStore } = await cutoverImport('migrate');
         const inventory = inventoryLegacyStore(path, { expectedStoreId: cutover.source?.storeId });
         if (![18, 29, 48, 53].includes(inventory.physical)) throw refuse('legacy_cross_version');
+        await assertSourceContents?.(path);
         if (atLeast(migration, 'backup-proved') && cutover.source.layout !== inventory.physical) {
           throw refuse('legacy_backup_stale');
         }
@@ -185,6 +201,43 @@ async function activate(root, descriptor, maintenance, env, manifest, client, on
   });
 }
 
+async function confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint, assertSourceContents) {
+  if (descriptor.migration.state !== 'verified') throw refuse('cutover_capture_not_verified');
+  const { cutover } = descriptor.migration;
+  const { byteDigest, verifyLegacyBackupAgainstSource } = await cutoverImport('backup');
+  const { confirmActivation } = await import('./local-cutover-release.mjs');
+  const input = { path: cutover.sourcePath, backupDirectory: backupFor(maintenance, cutover.attemptId),
+    expectedStoreId: cutover.source.storeId, quiescence };
+  const reattest = async assertLease => {
+    await reattestSource(input, cutover, assertLease);
+    await assertSourceContents(input.path);
+    await assertLease();
+  };
+  const proveRetired = async (path, assertLease) => {
+    // On macOS a late writer can change the SQLite header before the rename.
+    // Establish byte freshness before asking SQLite to read the retired file.
+    const digest = process.platform === 'darwin' ? byteDigest(path) : undefined;
+    if (digest !== undefined && digest !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
+    const proof = verifyLegacyBackupAgainstSource({ ...input, path });
+    if (proof.logicalDigest !== cutover.backup.logicalDigest || proof.byteDigest !== cutover.backup.byteDigest ||
+        (digest ?? byteDigest(path)) !== cutover.backup.sourceDigest) throw refuse('legacy_backup_stale');
+    await assertLease();
+  };
+  try {
+    return await withCutoverCapture(root, maintenance, cutover.sourcePath, false, () =>
+      confirmActivation({ root, maintenance, descriptor, manifest, env, context, receipt, reattest, proveRetired,
+        drain: () => drainDaemon(root, descriptor, env), onCheckpoint }));
+  } catch (error) {
+    if (['legacy_backup_stale', 'cutover_target_changed'].includes(error.code) || rejectedLegacyContents(error)) {
+      const current = await readActivation(maintenance, cutover);
+      if (!current || ['staging', 'exchanging'].includes(current.phase)) {
+        await abort(root, descriptor, maintenance, onCheckpoint, env, context);
+      }
+    }
+    throw error;
+  }
+}
+
 async function finishRollback(root, descriptor, maintenance, onCheckpoint) {
   const { migration } = descriptor, { cutover } = migration;
   await reclaimAttempt(maintenance, cutover, state => onCheckpoint(state, structuredClone(cutover)));
@@ -197,7 +250,7 @@ async function finishRollback(root, descriptor, maintenance, onCheckpoint) {
   await writeDescriptor(root, descriptor);
 }
 
-async function abort(root, descriptor, maintenance, onCheckpoint) {
+async function abort(root, descriptor, maintenance, onCheckpoint, env, context) {
   const { migration } = descriptor, { cutover } = migration;
   const checkpoint = state => onCheckpoint(state, structuredClone(cutover));
   const reclaimed = new Set();
@@ -207,19 +260,31 @@ async function abort(root, descriptor, maintenance, onCheckpoint) {
   };
   const { hasCaptureActivation, disarmCaptureActivations, restoreCaptureVectors } = await import('./local-cutover-activation.mjs');
   const activated = await hasCaptureActivation(maintenance);
+  const activation = await readActivation(maintenance, cutover);
+  if (activation && !['staging', 'exchanging'].includes(activation.phase)) throw refuse('cutover_activation_confirmed');
   const rememberAbort = async () => {
     cutover.aborting = true;
     await writeDescriptor(root, descriptor);
   };
   if (activated) await disarmCaptureActivations(root, cutover, maintenance, rememberAbort, onCheckpoint);
   else await rememberAbort();
+  if (activation) {
+    const { checkActivationClients } = await import('./local-cutover-release.mjs');
+    const clients = await checkActivationClients({ root, descriptor, env, context,
+      target: captureTargetFor(cutover.sourcePath, cutover.attemptId), resume: true, rollback: true });
+    for (const { installed, register } of clients) {
+      if (!installed && await register() !== 'done') throw refuse('cutover_client_unavailable');
+    }
+  }
   await ensureMaintenance(root, maintenance);
   await writeMarker(maintenance, cutover);
-  // Keep the v2 journal and capture snapshots until all retired bytes have
-  // been durably reclaimed. Any error leaves the abort intent available to retry.
-  await reclaimAttempt(maintenance, { ...cutover, reclaimCapture: activated }, reclaimCheckpoint);
-  await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
-  await assertReclaimedMaintenance(maintenance);
+  await abortRetirement(cutover, activation, async () => {
+    // Keep the journal and capture snapshots until the unserved copies have
+    // been reclaimed. If the old pathname is fenced, keep it closed until then.
+    await reclaimAttempt(maintenance, { ...cutover, reclaimCapture: activated || !!activation }, reclaimCheckpoint);
+    await reclaimPastAttempts(root, cutover.sourcePath, cutover, reclaimCheckpoint);
+    await assertReclaimedMaintenance(maintenance);
+  }, checkpoint);
   if (activated) await restoreCaptureVectors(root, cutover, maintenance, onCheckpoint);
   await withCutoverCapture(root, maintenance, cutover.sourcePath, true, async () => {
     delete descriptor.migration;
@@ -243,27 +308,44 @@ async function ensureMaintenance(root, maintenance) {
   await ownedDirectory(maintenance);
 }
 
-// Explicit checkout-only entry point. Leave non-Linux and existing stdio
-// sessions alone. A busy lease asks the operator to close those sessions and
-// retry. Successful readiness is point-in-time and must be re-attested at activation.
-export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform,
-  onCheckpoint = async () => {}, onMigrationCheckpoint }) {
-  if (platform !== 'linux' || process.platform !== 'linux') throw refuse('cutover_platform');
-  if (!['prepare', 'abort', 'activate-capture'].includes(action) || !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
+// Successful readiness is point-in-time and must be re-attested at activation.
+export async function runLocalCutover({ root, manifest, action = 'prepare', captureClient, env = {}, platform = process.platform, context,
+  stageCandidate, requestModel = false, onCheckpoint = async () => {}, onMigrationCheckpoint }) {
+  localCutoverExclusion(platform);
+  if (!['prepare', 'abort', 'activate-capture', 'prepare-activation', 'confirm-activation'].includes(action) ||
+      !entry(root) || await canonicalPath(root) !== root) throw refuse('cutover_arguments');
   return stateLock(join(root, '.cutover.lock'), async () => {
     await recoverCutoverLock(root);
-    return withLocalLock(root, async () => {
+    return withLocalLock(root, async updateChild => {
       const descriptor = await readDescriptor(root, { allowV2: true });
       if (descriptor?.state !== 'installed') throw refuse('cutover_installation_required');
       let migration = descriptor.migration;
       if (descriptor.version === 'cairn-local-installation-v2' && !migration?.cutover) throw refuse('cutover_journal_required');
       if (migration?.cutover.aborting || action === 'abort') {
-        if (migration) return abort(root, descriptor, maintenanceFor(root, migration.cutover.id), onCheckpoint);
+        if (migration) return abort(root, descriptor, maintenanceFor(root, migration.cutover.id), onCheckpoint, env, context);
         await reclaimPastAttempts(root, descriptor.database.path, null, onCheckpoint);
         return { state: 'aborted' };
       }
+      const releaseAction = action === 'prepare-activation' || action === 'confirm-activation';
+      const receipt = migration ? await readActivation(maintenanceFor(root, migration.cutover.id), migration.cutover) : null;
+      let assertSourceContents;
+      let consent;
+      if (receipt && action !== 'confirm-activation') throw refuse('cutover_activation_pending');
+      if (releaseAction) {
+        const { activationModelConfigured, assertSupportedLegacyContents, checkActivationClients,
+          recordProviderConsent } = await import('./local-cutover-release.mjs');
+        const model = await activationModelConfigured(root, descriptor, env, requestModel);
+        assertSourceContents = path => assertSupportedLegacyContents(path, { keyless: !model.keyed });
+        if (action === 'prepare-activation') {
+          await checkActivationClients({ root, descriptor, env, context });
+          if (model.recordConsent) {
+            context.write(context.t('local_privacy'));
+            consent = recordProviderConsent;
+          }
+        } else if (migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
+      }
       if (action === 'activate-capture' && migration?.state !== 'verified') throw refuse('cutover_capture_not_verified');
-      if (migration && action === 'prepare') {
+      if (migration && ['prepare', 'prepare-activation', 'confirm-activation'].includes(action) && !receipt) {
         const { hasCaptureActivation } = await import('./local-cutover-activation.mjs');
         if (await hasCaptureActivation(maintenanceFor(root, migration.cutover.id))) throw refuse('cutover_capture_active');
       }
@@ -277,6 +359,7 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
           basename(path).startsWith('.cairn-cutover-')) throw refuse('cutover_unsafe_path');
       const targetEngineId = manifest?.engineId;
       if (migration && migration.targetEngineId !== targetEngineId) throw refuse('cutover_candidate_changed');
+      await stageCandidate?.({ descriptor, updateChild });
       await checkCoreLocalConfig({ appDirectory: join(root, 'engine', targetEngineId ?? '', 'app'),
         manifest, engineId: targetEngineId, node: descriptor.node });
       if (!migration) {
@@ -291,7 +374,17 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
       const maintenance = maintenanceFor(root, migration.cutover.id);
       await ensureMaintenance(root, maintenance);
       if (action === 'activate-capture') return activate(root, descriptor, maintenance, env, manifest, captureClient, onCheckpoint);
-      return prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint);
+      if (action === 'confirm-activation') {
+        return confirm(root, descriptor, maintenance, env, manifest, context, receipt, onCheckpoint, assertSourceContents);
+      }
+      try {
+        const result = await prepare(root, descriptor, maintenance, env, onCheckpoint, onMigrationCheckpoint, assertSourceContents);
+        await consent?.(root, descriptor);
+        return result;
+      } catch (error) {
+        if (rejectedLegacyContents(error)) await abort(root, descriptor, maintenance, onCheckpoint);
+        throw error;
+      }
     }, { cutover: true });
   });
 }

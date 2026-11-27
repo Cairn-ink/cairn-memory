@@ -1,3 +1,4 @@
+import { readCardGeneration } from "./document-card-rows.mjs";
 import { RAW_INSPECT_EPOCH_KEY } from "./schema/inspect.mjs";
 import { ownerKey, scopeKey } from "./storage-values.mjs";
 
@@ -10,6 +11,11 @@ const inspectEpoch = "SELECT epoch FROM cairn_inspect_epochs WHERE owner_id = ? 
 export function namespaceEpochs(db, { owner, namespaces }) {
   const epoch = db.prepare(inspectEpoch);
   return namespaces.map(namespace => Number(epoch.get(...scopeKey({ owner, namespace }))?.epoch ?? 1));
+}
+
+/** @param {Connection} db @param {ContextReadSet} readSet */
+export function namespaceCardGenerations(db, { owner, namespaces }) {
+  return namespaces.map(namespace => readCardGeneration(db, { owner, namespace }));
 }
 
 /** @param {Connection} db @param {ContextReadSet} readSet */

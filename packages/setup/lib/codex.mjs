@@ -110,7 +110,7 @@ export async function privateWrite(path, text) {
   finally { await file.close(); }
 }
 
-export function runCodex(args, { env = process.env, cwd } = {}) {
+export function runCodex(args, { env = process.env, cwd, onChild } = {}) {
   return new Promise(resolveResult => {
     const child = spawn('codex', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env, cwd });
     let stdout = '', stderr = '', error, escalation;
@@ -119,12 +119,14 @@ export function runCodex(args, { env = process.env, cwd } = {}) {
       escalation ??= setTimeout(() => child.kill('SIGKILL'), 1000);
     };
     const timer = setTimeout(() => { error = new Error('timeout'); stop(); }, 15000);
+    const tracked = onChild && child.pid ? onChild(child.pid).catch(value => { error = value; stop(); }) : undefined;
     for (const stream of ['stdout', 'stderr']) child[stream].on('data', chunk => {
       if (stream === 'stdout') stdout += chunk.toString('utf8'); else stderr += chunk.toString('utf8');
       if (stdout.length + stderr.length > 4 * 1024 * 1024) { error = new Error('output_limit'); stop(); }
     });
     child.on('error', value => { error = value; });
-    child.on('close', status => {
+    child.on('close', async status => {
+      await tracked;
       clearTimeout(timer); clearTimeout(escalation);
       resolveResult({ stdout, stderr, status, error });
     });
@@ -134,7 +136,7 @@ export function runCodex(args, { env = process.env, cwd } = {}) {
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
   SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, claudeDeclined, dailyCap,
     captureExec, verbose, identityPlan, endpointChoice,
-  expectedCodex, hostsStopped, coordinated, progress = {}, inspection = {} }) {
+  expectedCodex, hostsStopped, coordinated, progress = {}, inspection = {}, clientEnvironment = process.env }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
     if (inspectOnly) return { qualified: false, reason: 'codex_windows' };
@@ -175,7 +177,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const cliPath = process.env.PATH?.split(delimiter).map(directory => resolve(directory || '.')).join(delimiter);
     const run = (args, options = {}) => runCodex(args, {
       cwd: neutral, ...options,
-      env: { ...process.env, CODEX_HOME: inspectionHome, ...options.env, ...(cliPath === undefined ? {} : { PATH: cliPath }) },
+      env: { ...clientEnvironment, CODEX_HOME: inspectionHome, ...options.env, ...(cliPath === undefined ? {} : { PATH: cliPath }) },
     });
     const checked = (result, args) => {
       if (result.error || result.status !== 0) {
@@ -313,7 +315,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const validate = async token => {
       await privateWrite(candidatePath, candidate(token));
       try {
-        const saved = await get({ env: { ...process.env, CODEX_HOME: validationHome } });
+        const saved = await get({ env: { CODEX_HOME: validationHome } });
         if (!saved.enabled || saved.transport.type !== 'streamable_http' ||
             saved.transport.url !== endpoint + '/api/mcp' || saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
           throw fail('codex_candidate');
@@ -340,7 +342,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       await privateWrite(stage, candidate(token));
       if (!unchanged(before, await snapshot(configPath))) throw fail('codex_changed');
       await rename(stage, configPath); stage = null;
-      const saved = await get({ env: { ...process.env, CODEX_HOME: home } });
+      const saved = await get({ env: { CODEX_HOME: home } });
       if (!saved.enabled || saved.transport.url !== endpoint + '/api/mcp' ||
           saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
         throw fail('codex_saved_unverified');
@@ -423,7 +425,7 @@ export async function withCodexInspectionEnvironment({ env = process.env, fallba
   }
   throw new CodexInspectionError('codex_tmpdir');
 }
-export async function inspectCodexServers({ home = codexHome(), env = process.env, ...inspection } = {}) {
+export async function inspectCodexServers({ home = codexHome(), env = process.env, includeLaunchOptions = false, ...inspection } = {}) {
   const before = await snapshot(join(home, 'config.toml'));
   return withCodexInspectionEnvironment({ ...inspection, env }, async neutral => {
     const inspectionHome = join(neutral, 'user-file'); await mkdir(inspectionHome, { mode: 0o700 });
@@ -444,6 +446,13 @@ export async function inspectCodexServers({ home = codexHome(), env = process.en
       name: entry.name, type: entry.transport.type,
       command: entry.transport.type === 'stdio' ? entry.transport.command : undefined,
       args: entry.transport.type === 'stdio' ? entry.transport.args : undefined,
+      ...(includeLaunchOptions && {
+        customEnvironment: ['env', 'env_vars', 'cwd'].some(key => {
+          const value = entry.transport[key];
+          return value != null && Object.keys(value).length > 0;
+        }),
+        enabled: entry.enabled,
+      }),
     }));
   });
 }

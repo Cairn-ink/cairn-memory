@@ -9,6 +9,7 @@ import { DEFAULT_CODEX_DAILY_CAP, PRIVACY_URL } from './constants.mjs';
 import { chooseIdentity, assertIdentityUnchanged, backupIdentity, restoreIdentity, reportBackups } from './identity-choice.mjs';
 import { confirmStopped } from './hosts.mjs';
 import { selectEndpoint } from './options.mjs';
+import { localClientEnvironment } from './local-client-environment.mjs';
 import { privateRead, privateWrite, privateDirectory, checkedPath } from '../runtime/integrations/client/private-state.mjs';
 import { resolveClient, detectClients, initializePairing, completePairing } from '../runtime/integrations/client/pairing.mjs';
 import { readControlState, setPaused } from '../runtime/integrations/client/control-state.mjs';
@@ -117,7 +118,7 @@ function binary(name) {
 }
 async function localClaude(args, input, { cwd }) {
   return new Promise(resolveResult => {
-    const child = spawn(binary('claude'),args,{cwd,stdio:['pipe','pipe','pipe']});
+    const child = spawn(binary('claude'),args,{cwd,env:localClientEnvironment(process.env),stdio:['pipe','pipe','pipe']});
     let stdout = '', failed = false;
     const timer = setTimeout(() => {failed=true;child.kill('SIGKILL');},15000);
     child.on('error', () => { failed = true; });

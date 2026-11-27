@@ -10,7 +10,7 @@ import { receiptIdentityKey } from "./receipt-identity.mjs";
 import { archivedReceiptExcerpt, scopeKey, sha256 } from "./storage-values.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 
-/** @import { CaptureMessage, ContextRawReadStore, ContextRawTurn, ContextEvidenceRow, ContextReadSet, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, ContextEvidenceRow, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore, DocumentCardSourceMessage, FinishResult, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { RawRow } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
@@ -237,8 +237,8 @@ export function addressReceipt(db, scope, memoryId, policy, receiptReadSafety, {
  * @param {ReceiptReadSafety} receiptReadSafety @param {() => number} monotonicMs
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {import("./migrate/capture-controls.mjs").MigratedCaptureControls} [controls]
- * @returns {ContextRawReadStore} */
-export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, controls) {
+ * @param {(source: DocumentCardSourceMessage) => string} [conflictKey] */
+export function createContextRawRead(port, hashSession, storeKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, controls, conflictKey) {
   const secret = Buffer.from(storeKey, "hex");
 
   /** @param {Scope} scope @param {RawRow} row @param {string} fence @returns {ContextRawTurn} */
@@ -250,8 +250,8 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
     return { ...turn, witness };
   }
 
-  /** @param {Connection} db @param {() => boolean} stopped @param {number} [memoryCacheLimit] */
-  function visibility(db, stopped, memoryCacheLimit = MAX_INVENTORY) {
+  /** @param {Connection} db @param {() => boolean} stopped @param {number} [memoryCacheLimit] @param {boolean} [amendment] */
+  function visibility(db, stopped, memoryCacheLimit = MAX_INVENTORY, amendment = false) {
     /** @type {Map<Scope["namespace"], {policy: Policy, project: ReturnType<typeof receiptProjector>, current: Map<string, boolean>}>} */
     const scopes = new Map();
     let cachedMemories = 0;
@@ -313,7 +313,14 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
         ((!policy.facts.length && !policy.legacy.size) ||
           !policy.withholdsReceipt({ ...row, messageId: message.id, role: message.role, occurredAtMs: message.occurredAtMs })) &&
         !rawPolicy.hides(message) && !importTextBlocked([], message.content, policy.legacy) &&
-        !migratedRaw?.blocks(db, scope, row, [message]);
+        !migratedRaw?.blocks(db, scope, row, [message]) && (!amendment || !sourceDenied(scope, { ...row, messageId: message.id }));
+    }
+
+    /** @param {Scope} scope @param {DocumentCardSourceMessage} source */
+    function sourceDenied(scope, source) {
+      return (conflictKey && forScope(scope).policy.legacy.has(conflictKey(source))) ||
+        migratedRaw?.blocksSpan(db, scope, source, source.messageId) ||
+        migratedRaw?.reservesMessage(db, scope, source, source.messageId);
     }
 
     /** @param {Scope} scope @param {RawRow} row */
@@ -330,16 +337,28 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       return true;
     }
 
-    /** @param {Scope} scope @param {RawRow} row */
-    function prove(scope, row) {
+    /** @param {Scope} scope @param {RawRow} row @param {DocumentCardSourceMessage} [source] */
+    function prove(scope, row, source = { ...row, messageId: row.message.id }) {
       const { policy, project } = forScope(scope);
-      const sourceKey = JSON.stringify([row.client, row.sessionId, row.message.id]);
+      const sourceKey = JSON.stringify([source.client, source.sessionId, source.messageId]);
       let linkCount = 0;
       for (const record of possibleReceipts.iterate(...scopeKey(scope), sourceKey, MAX_LINKS + 1)) {
         if (++linkCount > MAX_LINKS || stopped()) return false;
         const id = String(record.memory_id);
         if (!memoryVisible(scope, id)) return false;
-        if (record.excerpt === null) {
+        if (amendment) {
+          /** @type {Receipt | undefined} */
+          let receipt = project(record)?.receipt;
+          if (record.excerpt == null) {
+            // A capture may retain only the address. Prove it against the finished capture below.
+            const stored = /** @type {StoredReceipt} */ (decodeJson(record.body));
+            const legacy = typeof record.legacy_receipt_key === "string" ? record.legacy_receipt_key : undefined;
+            if (!receiptReadSafety(db, scope, policy, stored, stored.receiptKey ?? legacy, legacy, stored, id)) return false;
+            receipt = stored;
+          }
+          if (!receipt || receipt.client !== source.client || receipt.sessionId !== source.sessionId ||
+              receipt.messageId !== source.messageId || !exactReceiptTurn(db, scope, id, receipt, row)) return false;
+        } else if (record.excerpt === null) {
           if (!addressReceipt(db, scope, id, policy, receiptReadSafety, record, exactTurn, row)) return false;
         } else {
           const receipt = project(record)?.receipt;
@@ -348,10 +367,11 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       }
       return true;
     }
-    return { cheap, citingMemoriesVisible, prove };
+    return { cheap, citingMemoriesVisible, prove, forScope, sourceDenied };
   }
 
-  return {
+  /** @type {ContextRawReadStore} */
+  const raw = {
     async search(tx, readSet, query, { limit, ...options }) {
       return port(tx, readSet.owner, {}, db => {
         const stopped = contextDeadline(options, monotonicMs), fence = inventoryFence(contextEpochs(db, readSet));
@@ -424,4 +444,31 @@ export function createContextRawRead(port, hashSession, storeKey, lineage, recei
       });
     },
   };
+
+  /** @type {NonNullable<ContextReadStore["documentCardAmendmentSource"]>} */
+  async function documentCardAmendmentSource(tx, readSet, scope, { sourceMessage, quote }) {
+    if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace) ||
+        typeof quote !== "string" || !quote) return null;
+    return port(tx, readSet.owner, {}, db => {
+      const session = migratedRaw?.storageSession(db, scope, sourceMessage) ?? sourceMessage;
+      const row = readRawRow(db, scope, session, sourceMessage.messageId);
+      if (row?.message.role !== "user" || !row.message.content.includes(quote)) return null;
+      const { cheap, prove, forScope, sourceDenied } = visibility(db, () => false, MAX_INVENTORY, true);
+      if (!cheap(scope, row) || !prove(scope, row)) return null;
+      const { policy } = forScope(scope);
+      if (session !== sourceMessage && (sourceDenied(scope, sourceMessage) ||
+          !receiptReadSafety(db, scope, policy, { ...sourceMessage, role: row.message.role,
+            occurredAtMs: row.message.occurredAtMs }, undefined, undefined) ||
+          !prove(scope, row, sourceMessage))) return null;
+      const rawPolicy = rawFactPolicy(scope, row, policy.facts, hashSession);
+      const { sessionKeyHash } = rawPolicy;
+      return {
+        sourceIdentity: { sessionKeyHash, messageKey: sourceMessage.messageId },
+        source: { rawRows: [rawPolicy.evidence(row.message)], sourceLengthUtf16: row.message.content.length,
+          facts: policy.facts, sourceExcluded: false, policy: { rowShingles: false } },
+      };
+    });
+  }
+
+  return { raw, documentCardAmendmentSource };
 }

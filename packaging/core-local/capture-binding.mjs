@@ -45,7 +45,8 @@ export async function withCaptureBinding(directory, executable, signal, work) {
     if (binding.phase !== 'armed' || binding.executable !== executable || await realpath(executable) !== executable) fail();
     const descriptor = JSON.parse(await privateRead(join(dirname(dirname(legacy)), 'installation.json')));
     const migration = descriptor.migration;
-    if (descriptor.version !== 'cairn-local-installation-v2' || migration?.state !== 'verified' ||
+    if (descriptor.version !== 'cairn-local-installation-v2' || ['pending', 'uninstalled'].includes(descriptor.state) ||
+        migration?.state !== 'verified' ||
         migration.cutover?.aborting !== false || migration.cutover.attemptId !== binding.attemptId ||
         migration.cutover.result?.attestation !== binding.attestation || migration.cutover.source?.storeId !== binding.authority.storeId) fail();
     const old = await privateRead(join(legacy, 'installation.json'));

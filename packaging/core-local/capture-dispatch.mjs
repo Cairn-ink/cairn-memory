@@ -13,7 +13,9 @@ export async function dispatchCapture(service, scope, selection, message, signal
     }
     signal.throwIfAborted();
     const outcome = await service.runCapture(scope, selection, { signal });
-    if (outcome.status === 'done' && outcome.result) return { status: 'done' };
+    if (outcome.status === 'done' && (outcome.result || outcome.code)) {
+      return { status: 'done', ...(outcome.code && { code: outcome.code }) };
+    }
     if (outcome.status === 'processing' || outcome.status === 'duplicate') return { status: 'processing' };
     if (outcome.status === 'paused') return { status: 'blocked', reason: 'authority_changed' };
     return refusal(outcome.code);

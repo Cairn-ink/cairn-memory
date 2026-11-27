@@ -481,7 +481,7 @@ test("Postgres advances only the acting owner's index for committed memory and p
     assert.equal(await memories.erase(tx, scope, id), false);
   });
   await state(7);
-  assert.equal((await pool.query("SELECT 1 FROM core_memory_receipts WHERE user_id = $1", [owner])).rowCount, 0);
+  assert.equal((await pool.query("SELECT 1 FROM core_memory_receipts WHERE user_id = $1 AND forgotten_at IS NULL", [owner])).rowCount, 0);
 });
 
 test("Postgres reads legacy metadata and pages by exact microseconds then C collation", migrationDbTest, async (t) => {

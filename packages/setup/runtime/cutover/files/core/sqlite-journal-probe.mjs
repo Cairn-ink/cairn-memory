@@ -1,0 +1,446 @@
+// Keep this module SQLite-free at link time (store-fence is CLI-reachable).
+import { spawnSync } from 'node:child_process';
+import { lstatSync, readdirSync, statfsSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Transport failures say nothing about file safety. Do not retain child output,
+// spawn arguments, or Error objects (which can contain paths) in the cause.
+function checkChildResult(result, message, retryTimeout = true) {
+  if (!result.error && result.status === 0 && !result.signal) return;
+  const errno = result.error?.code, signal = result.signal;
+  const cause = typeof errno === 'string' && /^E[A-Z0-9]+$/.test(errno) ? errno
+    : typeof signal === 'string' && /^SIG[A-Z0-9]+$/.test(signal) ? signal : 'EIO';
+  throw Object.assign(new Error(message), {
+    code: errno === 'ETIMEDOUT' && retryTimeout ? 'storage_busy' : 'storage_error', cause,
+  });
+}
+
+// Pure metadata predicates shared by the number-stat and bigint-stat guards.
+// Callers supply lstat snapshots; these predicates perform no filesystem access.
+export const sameJournal = (actual, expected) =>
+  ['dev','ino','mode','uid','nlink'].every(key => actual[key] === expected[key]);
+// Directory entry creation/removal changes nlink on macOS. File guards retain it.
+export const sameDirectory = (actual, expected) =>
+  actual.dev === expected.dev && actual.ino === expected.ino &&
+  actual.mode === expected.mode && actual.uid === expected.uid;
+const sameProof = (actual, expected, directory = false) => actual && expected &&
+  ['dev','ino','mode','uid','gid','nlink'].every(key =>
+    directory && key === 'nlink' || actual[key] === expected[key]);
+export function protectedDeleteJournal({ main, directory, journal, wal, shm }, proof = { main, directory, journal }) {
+  const uid = process.getuid?.();
+  const file = entry => entry?.isFile() && !entry.isSymbolicLink() &&
+    (process.platform === 'win32' || (Number(entry.mode) & 0o777) === 0o600);
+  return file(main) && file(journal) && Number(main.nlink) === 1 && Number(journal.nlink) === 1 &&
+    directory?.isDirectory() && !directory.isSymbolicLink() &&
+    (process.platform === 'win32' || (Number(directory.mode) & 0o777) === 0o700 &&
+      uid !== undefined && [main, journal, directory].every(entry => Number(entry.uid) === uid)) &&
+    sameProof(main, proof.main) && sameProof(directory, proof.directory, true) &&
+    ['mode','uid','nlink'].every(key => journal[key] === proof.journal[key]) && !wal && !shm;
+}
+
+// A normal read-only PRAGMA can create WAL/SHM. nolock refuses WAL without
+// creating either, but must NEVER run in the host: its VFS close could drop
+// locks on another host connection. Isolate the SQLite-only header query in a
+// child. It reads no tables, performs no recovery, and never changes the mode.
+const probe = `
+  const { DatabaseSync } = await import('node:sqlite');
+  let db, stage = 'open';
+  try {
+    db = new DatabaseSync(process.argv[1], { readOnly: true });
+    stage = 'query';
+    console.log(JSON.stringify({ mode: db.prepare('PRAGMA journal_mode').get().journal_mode }));
+  } catch (error) { console.log(JSON.stringify({ stage, code: error.errcode & 255 })); }
+  finally { db?.close(); }
+`;
+// Product transcript: fixed labels and numeric outcomes only. Begin records
+// identify a child call whose outcome was lost to interruption or failure.
+const observedProbe = `
+  const { DatabaseSync } = await import('node:sqlite');
+  let db, stage = 'open', value, closeFailed = false;
+  const call = (stage, statement, work) => {
+    console.log(JSON.stringify({ begin: { stage, statement } }));
+    try {
+      const result = work();
+      console.log(JSON.stringify({ outcome: { stage, statement, ok: true } }));
+      return result;
+    } catch (error) {
+      console.log(JSON.stringify({ outcome: { stage, statement, ok: false,
+        extendedCode: Number.isInteger(error.errcode) ? error.errcode : 0 } }));
+      throw error;
+    }
+  };
+  try {
+    db = call('open', 'connection', () => new DatabaseSync(process.argv[1], { readOnly: true }));
+    stage = 'query';
+    const query = call('prepare', 'journal_mode', () => db.prepare('PRAGMA journal_mode'));
+    value = { mode: call('execute', 'journal_mode', () => query.get()).journal_mode };
+  } catch (error) { value = { stage, code: error.errcode & 255 }; }
+  finally {
+    if (db) try { call('close', 'connection', () => db.close()); }
+    catch (error) { closeFailed = true; value = { stage: 'close', code: error.errcode & 255 }; }
+  }
+  console.log(JSON.stringify({ value, closeFailed }));
+`;
+// The header cannot change without inode/size/mtime/ctime changing. Bound this
+// cache; compare nanosecond stats before AND after probing, never cache errors.
+const cache = new Map();
+// Metadata only: safe while this process (including Workers) holds SQLite locks.
+export function sqliteFileStat(path, { withVolume = false, readVolume = statfsSync } = {}) {
+  const stat = lstatSync(path, { bigint: true });
+  if (withVolume) {
+    const { bavail, bsize } = readVolume(dirname(path), { bigint: true });
+    stat.volumeAvailableBytes = bavail * bsize;
+  }
+  return stat;
+}
+const fingerprint = path => {
+  const s = lstatSync(path, { bigint: true });
+  return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
+};
+// Internal canonical detection can bypass timestamp caching. Existing rollback
+// preflights and sidecar callers retain their original cache and policy.
+export function probeRollbackJournal(path, { observe, uncached = false } = {}) {
+  if (observe) return observe(() => runProbe(path, true, uncached));
+  return runProbe(path, false, uncached);
+}
+function runProbe(path, structured, uncached) {
+  const before = fingerprint(path);
+  if (!uncached && cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
+  const uri = pathToFileURL(path);
+  uri.searchParams.set('mode', 'ro'); uri.searchParams.set('nolock', '1');
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', structured ? observedProbe : probe, uri.href], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
+  });
+  checkChildResult(result, 'sqlite_journal_probe_failed');
+  if (!structured) {
+    const value = JSON.parse(result.stdout);
+    if (fingerprint(path) !== before) throw new Error('sqlite_journal_probe_changed');
+    if (value.mode === 'delete') {
+      if (cache.size >= 64) cache.clear();
+      cache.set(path, before);
+    }
+    return value;
+  }
+  const events = [];
+  let value, closeFailed = false, complete = !result.error && result.status === 0 && !result.signal;
+  try {
+    for (const line of result.stdout.trim().split('\n')) {
+      const event = JSON.parse(line);
+      if (event.value) { value = event.value; closeFailed = event.closeFailed === true; }
+      else events.push(event);
+    }
+    complete &&= fingerprint(path) === before && Boolean(value);
+  } catch { complete = false; }
+  if (complete && !closeFailed && value.mode === 'delete') {
+    if (cache.size >= 64) cache.clear();
+    cache.set(path, before);
+  }
+  return { value, events, complete };
+}
+
+// Stage and fsync before publication, then link atomically without replacing.
+// All descriptors, including the directory fsync, belong to this child.
+// A killed child can leave a stage; generic creation checks owner liveness,
+// while product creation cleans stages under its exclusive lifecycle lock.
+// Ordinary creation never replaces a target;
+// explicit product repair stages a full successor and uses a verified rename.
+const create = `
+  import { openSync, closeSync, fstatSync, fsyncSync, linkSync, unlinkSync, readdirSync } from 'node:fs';
+  import { lstatSync, renameSync, mkdirSync, rmdirSync } from 'node:fs';
+  import { dirname, basename, join } from 'node:path';
+  import { randomUUID, createHash } from 'node:crypto';
+  const target = process.argv[1], directory = dirname(target);
+  const prefix = '.' + basename(target) + '.cairn-create-';
+  let fd, dir, temporary, lifecycle, published = false;
+  const replacing = process.argv[2] === 'replace-product-cache';
+  const recovering = process.argv[2] === 'recover-stage';
+  const init = process.argv[4] ? JSON.parse(process.argv[4]) : null;
+  const observed = process.argv[5] === 'observe-native';
+  let value, calls=0;
+  const call = (database, stage, statement, work) => {
+    if (!observed) return work();
+    const sequence=++calls;
+    console.log(JSON.stringify({begin:{sequence,database,stage,statement}}));
+    try {
+      const result=work();console.log(JSON.stringify({outcome:{sequence,database,stage,statement,ok:true}}));return result;
+    } catch(error) {
+      console.log(JSON.stringify({outcome:{sequence,database,stage,statement,ok:false,extendedCode:Number.isInteger(error.errcode)?error.errcode:0}}));
+      throw error;
+    }
+  };
+  const database = async (path, options = {}, role) => {
+    const {DatabaseSync}=await import('node:sqlite');
+    const native=call(role,'open','connection',()=>new DatabaseSync(path,options));
+    return {
+      exec(sql) {
+        const verb=sql.trim().split(/[ ;]/)[0].toLowerCase();
+        const stage=['begin','commit','rollback'].includes(verb)?verb:'configure';
+        return call(role,stage,sql.startsWith('PRAGMA journal_mode=')?'journal_mode':'transaction',()=>native.exec(sql));
+      },
+      prepare(sql) {
+        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':['PRAGMA quick_check','PRAGMA foreign_key_check'].includes(sql)?'context_evidence':'context_metadata';
+        const prepared=call(role,'prepare',statement,()=>native.prepare(sql));
+        return Object.fromEntries(['get','all','run'].map(method=>[method,(...args)=>call(role,'execute',statement,()=>prepared[method](...args))]));
+      },
+      close(){return call(role,'close','connection',()=>native.close());},
+    };
+  };
+  let dev, ino;
+  try {
+    if (recovering) {
+      // cairn-create-recovery: metadata only until directory fsync. Never open
+      // the published database or stage. Recheck the parent's complete proof.
+      if (process.platform === 'win32') throw Error('directory_sync_unavailable');
+      const proof = JSON.parse(process.argv[3]);
+      const current = lstatSync(target, { bigint: true });
+      const stage = join(directory, proof.name), staged = lstatSync(stage, { bigint: true });
+      const parent = lstatSync(directory, { bigint: true });
+      const matches = (stat, expected) => Object.entries(expected).every(([key,value]) => String(stat[key]) === value);
+      if (!matches(current, proof.file) || !matches(staged, proof.file) || !matches(parent, proof.directory) ||
+          !current.isFile() || current.isSymbolicLink() || !staged.isFile() || staged.isSymbolicLink() ||
+          !parent.isDirectory() || parent.isSymbolicLink() || current.nlink !== 2n ||
+          !proof.name.startsWith(prefix) || !/^[1-9][0-9]*-[0-9a-f-]{36}$/.test(proof.name.slice(prefix.length))) throw Error('unsafe_stage');
+      const pid = Number(proof.name.slice(prefix.length).split('-')[0]);
+      let dead = false;
+      try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') dead = true; }
+      if (!dead) throw Error('live_stage');
+      dev = String(current.dev); ino = String(current.ino);
+      // Claim a fresh unpredictable entry before checking the unlink target.
+      // A substitution at the original stage name must never be deleted.
+      const claimed = join(directory, prefix + pid + '-' + randomUUID());
+      renameSync(stage, claimed);
+      const held = lstatSync(claimed, { bigint: true });
+      if (!held.isFile() || held.isSymbolicLink() ||
+          ['dev','ino','nlink'].some(key => String(held[key]) !== proof.file[key])) {
+        renameSync(claimed, stage);
+        throw Error('changed_stage');
+      }
+      unlinkSync(claimed);
+    } else {
+    if (replacing || init) {
+      if (!target.endsWith('.context-read-product-v1.1.sqlite')) throw Error('unsafe_cache');
+      const lock = target + '.lifecycle-lock.sqlite';
+      try { const pin = openSync(lock, 'wx', 0o600); closeSync(pin); }
+      catch (error) { if (error.code !== 'EEXIST') throw error; }
+      const lockStat = lstatSync(lock);
+      if (!lockStat.isFile() || lockStat.isSymbolicLink() || (lockStat.mode & 0o777) !== 0o600) throw Error('unsafe_lock');
+      lifecycle = await database(lock,undefined,'lifecycle');
+      lifecycle.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE');
+      if (replacing) {
+        const current = lstatSync(target, { bigint: true });
+        const stamp = [current.dev,current.ino,current.size,current.mtimeNs,current.ctimeNs].join(':');
+        if (init?.expectedStamp && stamp !== init.expectedStamp) throw Object.assign(Error('changed_cache'), { code:'ESTALE' });
+        // Re-decide under exclusion, independently of timestamp granularity.
+        // A valid incumbent may have been initialized or committed meanwhile.
+        // nolock stays in this child; lifecycle exclusion protects all users,
+        // and companions are refused before opening the incumbent.
+        for (const suffix of ['-journal','-wal','-shm']) {
+          try { lstatSync(target + suffix); throw Object.assign(Error('cache_companion'), { code:'EBUSY' }); }
+          catch (error) { if (error.code !== 'ENOENT') throw error; }
+        }
+        if (init?.attestation) {
+          const { pathToFileURL } = await import('node:url');
+          const uri=pathToFileURL(target);uri.searchParams.set('mode','ro');uri.searchParams.set('nolock','1');
+          let incumbent, damaged=false;
+          try {
+            incumbent=await database(uri.href,{readOnly:true},'incumbent');
+            const format=init.attestation;
+            const rows=incumbent.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
+            damaged=incumbent.prepare('PRAGMA application_id').get().application_id!==format.applicationId ||
+              incumbent.prepare('PRAGMA user_version').get().user_version!==(format.userVersion ?? 1) || JSON.stringify(rows)!==JSON.stringify(format.schema);
+            if(!damaged){
+              const metadata=incumbent.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+              damaged=!metadata || metadata.store_id!==init.storeId || metadata.profile!==init.profile;
+            }
+            if(init.expectedAttestation!==undefined){
+              // The parent authenticated (or refused) the exact row. This
+              // verdict rechecks only its basis under lifecycle exclusion.
+              // Never accept a changed row, even if another cheap check failed.
+              const table=rows.find(row=>row.name==='product_attestation');
+              const expected=format.schema.find(row=>row.name==='product_attestation');
+              if(table && JSON.stringify(table)!==JSON.stringify(expected))throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              const row=table?incumbent.prepare('SELECT CAST(stamp AS TEXT) AS stamp,typeof(stamp) AS stampType,record FROM product_attestation WHERE singleton=1').get():null;
+              if(row && row.stampType==='integer' && /^[1-9][0-9]*$/.test(row.stamp) && Number.isSafeInteger(Number(row.stamp)))row.stamp=Number(row.stamp);
+              const actual=row?createHash('sha256').update(JSON.stringify([row.stamp,row.record,row.stampType])).digest('hex'):'missing';
+              if(actual!==init.expectedAttestation)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+              damaged=true;
+            }else if(!damaged)damaged=incumbent.prepare('PRAGMA quick_check').get().quick_check!=='ok' || Boolean(incumbent.prepare('PRAGMA foreign_key_check').get());
+            if(!damaged && init.expectedStamp && /^[a-f0-9]{64}$/.test(init.foreignBindingDigest ?? '')) {
+              // Admission authenticated these exact stored certificates and
+              // proved a foreign physical binding. Recheck its complete basis
+              // under lifecycle exclusion; never accept a bare repair flag.
+              const basis=createHash('sha256');
+              for(const [purpose,sql] of [
+                ['validation','SELECT substr(record,1,16385) AS record FROM validation_records ORDER BY publication'],
+                ['progress','SELECT substr(record,1,4097) AS record FROM progress_records ORDER BY generation']
+              ])for(const {record:text} of incumbent.prepare(sql).all())basis.update(purpose+'\\0'+text+'\\0');
+              damaged=basis.digest('hex')===init.foreignBindingDigest;
+            }
+          } catch(error) {
+            if(error.code!=='ERR_SQLITE_ERROR' || ![1,11,14,26].includes(error.errcode&255))throw error;
+            damaged=true;
+          } finally {incumbent?.close();}
+          if(!damaged)throw Object.assign(Error('valid_cache'),{code:'ESTALE'});
+        }
+      }
+    }
+    for (const name of readdirSync(directory)) {
+      if (!name.startsWith(prefix)) continue;
+      const suffix = name.slice(prefix.length), dash = suffix.indexOf('-');
+      const pid = Number(suffix.slice(0, dash));
+      if (dash < 1 || !Number.isSafeInteger(pid) || pid < 1 || !/^[0-9a-f-]{36}(?:-journal|-wal|-shm)?$/.test(suffix.slice(dash + 1))) continue;
+      try { if (lifecycle) throw Object.assign(Error('exclusive stages'), { code:'ESRCH' }); process.kill(pid, 0); }
+      catch (error) {
+        if (error.code !== 'ESRCH') continue;
+        try { unlinkSync(join(directory, name)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+    }
+    temporary = join(directory, prefix + process.pid + '-' + randomUUID());
+    fd = openSync(temporary, 'wx', 0o600);
+    ({ dev, ino } = fstatSync(fd));
+    if (init) {
+      // Repair publishes a complete format, so another selection cannot mistake
+      // an intermediate empty successor for a damaged cache and replace it.
+      const db = await database(temporary,undefined,'initialize');
+      let initializationError;
+      try {
+        if (init.autoVacuum !== undefined) {
+          if (init.autoVacuum !== 'INCREMENTAL') throw Error('unsafe_auto_vacuum');
+          db.exec('PRAGMA auto_vacuum=INCREMENTAL');
+        }
+        if (init.journalMode !== undefined) {
+          if (!['DELETE','WAL'].includes(init.journalMode)) throw Error('unsafe_journal_mode');
+          db.exec('PRAGMA journal_mode=' + init.journalMode);
+        }
+        db.exec('BEGIN IMMEDIATE;' + init.sql);
+        db.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(init.storeId,init.profile,init.incarnation,replacing ? 'rebuild' : 'initial');
+        db.exec('COMMIT');
+      } catch(error) {initializationError=error;throw error;}
+      finally {try {db.close();}catch(error){if(!initializationError)throw error;}}
+    }
+    fsyncSync(fd);
+    closeSync(fd); fd = undefined;
+    if (replacing) {
+      // All coordinated replacements hold this lock. Check immediately before
+      // rename, in the child; a stale parent observation never removes a winner.
+      const current = lstatSync(target, { bigint: true });
+      if (!current.isFile() || current.isSymbolicLink() || (current.mode & 0o777n) !== 0o600n ||
+          String(current.dev)+':'+String(current.ino) !== process.argv[3]) throw Object.assign(Error('stale_cache'), { code:'ESTALE' });
+      // No coordinated transaction can start while the exclusive lifecycle lock
+      // is held. Refuse even a hot journal left by a dead ordinary writer.
+      for (const suffix of ['-journal','-wal','-shm']) {
+        try { lstatSync(target + suffix); throw Object.assign(Error('cache_companion'), { code:'EBUSY' }); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      renameSync(temporary, target);
+    } else { linkSync(temporary, target); }
+    published = true;
+    if (!replacing) unlinkSync(temporary); temporary = undefined;
+    }
+    if (process.platform !== 'win32') {
+      try {
+        dir = openSync(directory, 'r'); fsyncSync(dir);
+      } catch (error) {
+        // The target is already published; some filesystems cannot sync directories.
+        if (recovering || !['EISDIR', 'EPERM', 'EINVAL', 'ENOTSUP'].includes(error.code)) throw error;
+      }
+      if (dir !== undefined) { closeSync(dir); dir = undefined; }
+    }
+    value=recovering?{dev,ino,directorySynced:true}:{dev,ino};
+  } catch (error) { value={error:error.code??'EIO',errcode:Number.isInteger(error.errcode)?error.errcode:null,published}; }
+  finally {
+    if (fd !== undefined) closeSync(fd);
+    if (dir !== undefined) closeSync(dir);
+    if (temporary !== undefined) { try { unlinkSync(temporary); } catch {} }
+    try { lifecycle?.close(); } catch(error) { value=value?.error?value:{error:error.code??'EIO',errcode:Number.isInteger(error.errcode)?error.errcode:null,published}; }
+  }
+  console.log(JSON.stringify(observed?{value,calls}:value));
+`;
+// A timeout is retryable only with an absent target, or a dead creator's exact
+// two-link stage whose durable publication can be finished. No database fd is
+// opened here. All other published states remain for existing admission checks.
+function recoverCreationTimeout(path, creatorPid) {
+  try {
+    let file;
+    try { file = sqliteFileStat(path); }
+    catch (error) { if (error.code === 'ENOENT') return true; throw error; }
+    const directory = dirname(path), parent = sqliteFileStat(directory);
+    const privateEntry = (stat, mode) => !stat.isSymbolicLink() && (process.platform === 'win32' ||
+      (stat.mode & 0o777n) === mode && Number(stat.uid) === process.getuid?.());
+    if (!file.isFile() || file.nlink !== 2n || !privateEntry(file, 0o600n) ||
+        !parent.isDirectory() || !privateEntry(parent, 0o700n)) return false;
+    const prefix = '.' + basename(path) + '.cairn-create-';
+    const keys = ['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'];
+    const snapshot = (stat, fields = keys) => Object.fromEntries(fields.map(key => [key, String(stat[key])]));
+    const proof = snapshot(file);
+    for (const name of readdirSync(directory)) {
+      if (!name.startsWith(prefix) || !/^[1-9][0-9]*-[0-9a-f-]{36}$/.test(name.slice(prefix.length))) continue;
+      const pid = Number(name.slice(prefix.length).split('-')[0]);
+      if (!Number.isSafeInteger(pid) || pid !== creatorPid) continue;
+      let dead = false;
+      try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') dead = true; }
+      if (!dead) continue;
+      const staged = sqliteFileStat(join(directory, name));
+      if (!staged.isFile() || staged.isSymbolicLink() || keys.some(key => staged[key] !== file[key])) continue;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path, 'recover-stage',
+        JSON.stringify({ name, file: proof, directory: snapshot(parent, ['dev','ino','mode','uid','gid']) })], {
+        encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
+      });
+      if (result.error || result.status !== 0 || result.signal) return false;
+      const ack = JSON.parse(result.stdout);
+      if (!ack || Array.isArray(ack) || Object.keys(ack).sort().join(',') !== 'dev,directorySynced,ino' ||
+          ack.dev !== proof.dev || ack.ino !== proof.ino || ack.directorySynced !== true) return false;
+      const after = sqliteFileStat(path);
+      return after.isFile() && !after.isSymbolicLink() && after.nlink === 1n &&
+        ['dev','ino','mode','uid','gid','size','mtimeNs'].every(key => after[key] === file[key]);
+    }
+  } catch { /* An absent proof or failed recovery cannot authorize a retry. */ }
+  return false;
+}
+export function createExclusiveSqliteFile(path, productReplacement, productInitialization, {observe} = {}) {
+  if(observe)return observe(()=>runCreation(path,productReplacement,productInitialization,true));
+  return runCreation(path,productReplacement,productInitialization,false);
+}
+// Closed initialization envelope. The child needs public schema/identity data,
+// never an extension bag that could accidentally transport signing material.
+function validateProductInitialization(init) {
+  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype;
+  const exact=(value,required,optional=[])=>object(value)&&required.every(k=>Object.hasOwn(value,k))&&Object.keys(value).every(k=>[...required,...optional].includes(k));
+  const text=value=>typeof value==='string';
+  if(!exact(init,['autoVacuum','sql','storeId','profile','incarnation','attestation'],['journalMode','expectedStamp','expectedAttestation','foreignBindingDigest']) ||
+    init.autoVacuum!=='INCREMENTAL'||!['sql','storeId','profile','incarnation'].every(k=>text(init[k]))||
+    Object.hasOwn(init,'journalMode')&&!['DELETE','WAL'].includes(init.journalMode)||
+    ['expectedStamp','expectedAttestation','foreignBindingDigest'].some(k=>Object.hasOwn(init,k)&&!text(init[k]))||
+    !exact(init.attestation,['applicationId','userVersion','schema'])||
+    !Number.isSafeInteger(init.attestation.applicationId)||!Number.isSafeInteger(init.attestation.userVersion)||
+    !Array.isArray(init.attestation.schema)||!init.attestation.schema.every(row=>exact(row,['type','name','tbl_name','sql'])&&Object.values(row).every(text)))
+    throw new TypeError('invalid_cache_initialization');
+}
+function runCreation(path, productReplacement, productInitialization, structured) {
+  if(productInitialization!==undefined)validateProductInitialization(productInitialization);
+  if (productReplacement) {
+    const current = sqliteFileStat(path);
+    if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||
+        (current.mode & 0o777n) !== 0o600n || String(current.dev)+':'+String(current.ino) !== productReplacement) throw Error('unsafe_cache');
+  }
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path,
+    ...(productReplacement || productInitialization ? [productReplacement ? 'replace-product-cache' : 'initialize-product-cache', productReplacement ?? '', ...(productInitialization ? [JSON.stringify(productInitialization), ...(structured?['observe-native']:[])] : [])] : [])], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: structured ? 65536 : 4096, env: {},
+  });
+  checkChildResult(result, 'sqlite_file_creation_failed', result.error?.code === 'ETIMEDOUT' && recoverCreationTimeout(path, result.pid));
+  if(structured){
+    const events=[];let value,calls,complete=!result.error && result.status===0 && !result.signal;
+    try {
+      for(const line of result.stdout.trim().split('\n')){
+        const event=JSON.parse(line);
+        if(event.value){if(value)complete=false;value=event.value;calls=event.calls;}
+        else {if(value)complete=false;events.push(event);}
+      }
+    }catch{complete=false;}
+    return {value,calls,events,complete:complete && Boolean(value)};
+  }
+  const value = JSON.parse(result.stdout);
+  if (value.error) throw Object.assign(new Error('sqlite_file_creation_failed'), { code: Number.isInteger(value.errcode) ? 'ERR_SQLITE_ERROR' : value.error, ...(Number.isInteger(value.errcode) ? {errcode:value.errcode} : {}), published: value.published });
+  return value;
+}

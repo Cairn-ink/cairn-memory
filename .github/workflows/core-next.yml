@@ -51,6 +51,20 @@ jobs:
       - run: node --test packaging/test/core-local-candidate.check.mjs packaging/test/core-local-inventory.check.mjs
         working-directory: .
       - run: node --test ../../packaging/test/local-host-wire.check.mjs
+  macos-cutover:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.16.0", "24.22.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci --prefix adapters/mcp --ignore-scripts
+      - run: npm ci --prefix packages/adapter-sqlite --ignore-scripts --omit=dev
+      - run: node --test packages/setup/test/local-cutover*.test.mjs
   adapter-postgres-db:
     runs-on: ubuntu-latest
     strategy:

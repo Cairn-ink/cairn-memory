@@ -37,6 +37,10 @@ function memory({ id, scope, kind, origin, confidence, revision, state, filing, 
     ...(text !== undefined && { content: text }) };
 }
 
+function legacyReceipt({ id, client, sessionId, eventId, role, excerpt, createdAtMs }) {
+  return { id, client, sessionId, eventId, role, excerpt, createdAt: iso(createdAtMs) };
+}
+
 function inspectResult(result) {
   if (result.mode === 'list') {
     return { memories: result.memories.map(memory), nextCursor: result.nextCursor, exhausted: result.exhausted };
@@ -46,14 +50,48 @@ function inspectResult(result) {
     origin: procedural.origin, anchors: procedural.anchors };
   return {
     memory: memory(result.memory),
-    receipts: receipts.map(({ id, client, sessionId, eventId, role, excerpt, createdAtMs }) =>
-      ({ id, client, sessionId, eventId, role, excerpt, createdAt: iso(createdAtMs) })),
+    receipts: receipts.map(legacyReceipt),
     ...(procedural !== undefined && { procedural: tag }),
     placements: placements.map(({ id, mocRevision, title }) => ({ mocId: id, mocRevision, title })), conflicts,
     ...(qualification !== undefined && { qualification }),
     ...(supersession !== undefined && { supersession }),
     nextReceiptCursor, exhausted,
   };
+}
+
+async function recallResult(recall, readSet, scope,
+  { query, limit = 6, contextMode, includeQualification, selectionMode }) {
+  const { diagnostics } = await recall.readContext(readSet, { query, types: ['memory'], intent: 'current',
+    semantic: true, raw: false, representation: 'memory-compact-v1', budget: { maxItems: limit } });
+  const { candidates, items: selected, omitted } = diagnostics;
+  const refs = selected.slice().sort((a, b) => a.rank - b.rank).map(({ ref }) => ref);
+  const { items, indexRevision } = await recall.inspect(readSet, refs, {
+    includeQualification: includeQualification === true, includeIndexRevision: contextMode === 'rationale-evidence',
+  });
+  const memoryCoverage = candidates.coverage.byType.memory;
+  const mapExhausted = candidates.coverage.status === 'complete' &&
+    Object.values(candidates.coverage.omitted).every(count => count === 0) &&
+    (memoryCoverage.eligible === 0 ||
+      (candidates.channels.semantic.state === 'ready' && memoryCoverage.embeddedFraction === 1)) &&
+    omitted.items === 0 && omitted.unavailable === 0;
+  const fetchExhausted = items.every(item => item.receipts.length === item.memory.receiptCount);
+  if (contextMode && !fetchExhausted) return fail('context_item_too_large');
+  const memories = items.map(({ memory: current, receipts, qualification }) => {
+    const { id, revision, receiptCount } = current;
+    if (!contextMode) return { memory: memory(current), receipts: receipts.map(legacyReceipt), receiptCount,
+      ...(receipts.length < receiptCount && { receiptsOmitted: receiptCount - receipts.length }),
+      ...(includeQualification && { qualification: qualification ?? null }) };
+    const evidence = { memory: { id, revision, currentness: 'current' },
+      receipts: receipts.map(({ id, role, excerpt }) => ({ id, role, excerpt })),
+      receiptCount, interpretationStatus: 'omitted', sourceSelectionCoverage: 'unassessed' };
+    if (contextMode === 'source-evidence') return evidence;
+    // This installed service retains the root receipts but has no rationale edge store.
+    return { ...evidence, rationale: { root: { memoryId: id, revision }, status: 'unassessed',
+      sources: [evidence], edges: [], coverage: 'linked-evidence-only', indexRevision } };
+  });
+  return ok({ memories, namespaces: [{ namespace: legacyNamespace(scope), mapExhausted, fetchExhausted }],
+    ...(selectionMode && { selection: { mode: selectionMode, strategy: candidates.trace.effective, semanticCoverage: 'unassessed' } }),
+    coverage: mapExhausted && fetchExhausted ? 'complete' : 'budget_exhausted' });
 }
 
 function fetchInput(args, readSet, handles) {
@@ -84,7 +122,7 @@ export function missingAuthority(name) {
   return response(name, fail('authority_required'));
 }
 
-export async function callTool(service, scope, handles, name, args) {
+export async function callTool(service, scope, handles, name, args, checkpointForget, recall) {
   const readSet = { owner: scope.owner, namespaces: [scope.namespace], accessGenerations: [0] };
   const reply = value => response(name, ok(value));
   const refuse = code => response(name, fail(code));
@@ -94,7 +132,9 @@ export async function callTool(service, scope, handles, name, args) {
         const { query, contextMode, includeQualification, selectionMode } = args;
         const badContext = contextMode && includeQualification === true;
         const badSelection = selectionMode && !contextMode;
-        return refuse(!query.trim() || badContext || badSelection ? 'invalid_input' : 'model_not_configured');
+        if (!query.trim() || badContext || badSelection) return refuse('invalid_input');
+        if (!recall) return refuse('model_not_configured');
+        return response(name, await recallResult(recall, readSet, scope, args));
       }
       case 'remember_memory': {
         const result = await service.save(scope, args.content, source, args.kind ?? 'fact',
@@ -117,6 +157,7 @@ export async function callTool(service, scope, handles, name, args) {
         if (result.status !== 'forgotten' && result.status !== 'not_found') {
           return refuse(writeErrors.get(result.status) ?? 'memory_operation_failed');
         }
+        await checkpointForget?.();
         return reply({ forgotten: result.status === 'forgotten', indexRevision: result.indexRevision });
       }
       case 'inspect_memory':

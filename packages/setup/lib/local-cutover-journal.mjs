@@ -11,6 +11,11 @@ export const legacyTargetFor = (source, id) => join(dirname(source), prefix + id
 export const targetFor = (source, id) => join(dirname(source), prefix + storeTag(source) + '-' + id + '.sqlite');
 const capturePrefix = 'cairn-capture-';
 export const captureTargetFor = (source, id) => join(dirname(source), capturePrefix + storeTag(source) + '-' + id + '.sqlite');
+export function activeVector({ migration }, vector) {
+  const { cutover } = migration;
+  return migration.state === 'verified' && !cutover.aborting && !cutover.reclaiming &&
+    vector.engineId === migration.targetEngineId && vector.databasePath === captureTargetFor(cutover.sourcePath, cutover.attemptId);
+}
 export function taggedCutoverAttemptForName(source, name) {
   const match = /^\.cairn-cutover-([a-f0-9]{64})-([a-f0-9-]{36})\.sqlite(?:\.stale)?(?:-wal|-shm|-journal)?$/u.exec(name);
   if (match?.[0] !== name || !cutoverId(match[2]) || match[1] !== storeTag(source)) return undefined;
@@ -52,9 +57,13 @@ export function validCutover(descriptor, iso, validIdentifier) {
       !cutoverId(cutover.id) || !cutoverId(cutover.attemptId) || cutover.sourcePath !== database.path ||
       ![targetFor(database.path, cutover.attemptId), legacyTargetFor(database.path, cutover.attemptId)].includes(cutover.targetPath) ||
       !iso(cutover.previousUpdatedAt) ||
-      typeof cutover.aborting !== 'boolean' || state !== 'installed' ||
+      typeof cutover.aborting !== 'boolean' ||
+      (state !== 'installed' && (!['pending', 'uninstalling', 'uninstalled'].includes(state) ||
+        migration.state !== 'verified' || cutover.aborting || reclaiming)) ||
+      (state === 'pending' && descriptor.engine?.id !== migration.targetEngineId) ||
       !cutoverSteps.includes(checkpointOf(migration)) ||
-      Object.values(clients).some(receipt => receipt && !legacyEngineIdPattern.test(receipt.vector?.engineId))) return false;
+      Object.values(clients).some(receipt => receipt && !legacyEngineIdPattern.test(receipt.vector?.engineId) &&
+        (!receipt.vector || !activeVector(descriptor, receipt.vector)))) return false;
   if (atLeast(migration, 'quiesced') ? !exact(cutover.source, 'storeId layout') ||
       !validIdentifier(cutover.source.storeId) || ![18, 29, 48, 53].includes(cutover.source.layout) : cutover.source !== null) return false;
   if (atLeast(migration, 'backup-proved') ? !exact(cutover.backup, 'logicalDigest byteDigest sourceDigest sourceIdentity') ||
