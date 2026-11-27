@@ -195,7 +195,8 @@ export const relationHintCases = [
     },
   },
   {
-    id: "K-RELH-5", title: "rejects malformed hints before reading storage and rejects self-links", needs: ["supersession", "conflictEdges"],
+    id: "K-RELH-5", title: "rejects malformed hints before reading storage and rejects self-links",
+    needs: ["supersession", "conflictEdges", "rawArchive"],
     async run(ctx) {
       const api = service(ctx);
       const scope = ctx.scope(null);
@@ -220,9 +221,24 @@ export const relationHintCases = [
 
       await unchanged(ctx, scope, [target], async () => {
         await rejects(() => api.save(scope, target.text, source, "fact", { relations: { replaces: valid } }), "invalid_input");
+        await rejects(() => api.save(scope, target.text, source, "fact", { relations: { contradicts: [valid] } }), "invalid_input");
+      });
+
+      const { raw, uow } = ctx.adapter;
+      check(raw, "Expected the Raw archive port");
+      const receipt = /** @satisfies {NonNullable<SaveOptions["receipt"]>} */ ({
+        client: "fixture", sessionId: "fixture-session", messageId: "self-link", occurredAtMs: 100, role: "user",
+      });
+      const { client, sessionId, messageId, occurredAtMs, role } = receipt;
+      const capture = { scope, client, sessionId, eventId: messageId, payloadDigest: "0".repeat(64) };
+      const archived = await uow.run(scope.owner, { pauseLock: true }, tx =>
+        raw.archive(tx, capture, [{ id: messageId, occurredAtMs, role, content: target.text }]));
+      equal(archived, { archived: 1 }, "Expected a Raw source for the explicit receipt");
+
+      await unchanged(ctx, scope, [target], async () => {
         await rejects(() => api.save(scope, target.text, source, "fact", {
           relations: { contradicts: [valid] },
-          receipt: { client: "fixture", sessionId: "fixture-session", messageId: "self-link", occurredAtMs: 100, role: "user" },
+          receipt,
         }), "invalid_input");
       });
     },
