@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { transportFixture } from '../../../integrations/client/test/fixtures/local-transport-workspace.mjs';
@@ -23,7 +23,7 @@ const preload = fileURLToPath(import.meta.url);
 process.execArgv.splice(process.execArgv.indexOf(preload) - 1, 2);
 const trace = ${JSON.stringify(trace)};
 const record = event => appendFileSync(trace, JSON.stringify(event) + '\\n');
-for (const method of ['spawn', 'spawnSync', 'execFile', 'execFileSync', 'fork', 'exec']) {
+for (const method of ['spawn', 'spawnSync', 'execFile', 'execFileSync', 'fork', 'exec', 'execSync']) {
   const original = cp[method];
   cp[method] = (command, ...args) => {
     const index = Array.isArray(args[0]) ? 1 : 0;
@@ -51,6 +51,19 @@ syncBuiltinESMExports();
   // Local status also probes the two clients for coexisting hosted registrations.
   operator(f, ['status'], secret);
   assert.deepEqual(read().filter(row => row.key), [], 'local status passed a credential to a child');
+
+  const descriptor = join(f.root, 'installation.json');
+  renameSync(descriptor, descriptor + '.saved');
+  try {
+    assert.ok(existsSync(join(f.root, 'engine')));
+    for (const client of ['claude', 'codex']) {
+      const before = read().length;
+      operator(f, ['status', '--client', client], { ...secret, code: 2 });
+      const observed = read().slice(before);
+      assert.ok(observed.some(row => row.child === client));
+      assert.deepEqual(observed.filter(row => row.key), [], 'orphan status passed a credential to ' + client);
+    }
+  } finally { renameSync(descriptor + '.saved', descriptor); }
 
   const legacy = transportFixture(t);
   legacy.config.interpretation = 'raw-only';

@@ -129,10 +129,30 @@ test('explicit setup records consent on an already verified cutover', linux, asy
   const legacy = claude(f);
   const verified = operator(f, setup, { env });
   assert.match(verified, /Local cutover verified/u);
-  assert.equal(verified.split('\n').filter(line => warning.test(line) && /Run setup --local/u.test(line)).length, 1);
+  assert.doesNotMatch(verified, warning);
   assert.deepEqual(claude(f), legacy);
   const { ownerId, projectId } = readJSON(join(f.root, 'installation.json'));
   assert.deepEqual(readJSON(consentPath(f)), { version: 1, owner: ownerId, project: projectId, profile: 'openai-baseline-v1' });
   operator(f, confirm);
   assert.notDeepEqual(claude(f), legacy);
+});
+
+test('explicit setup records and reuses consent without reading a provider key value', linux, async t => {
+  const f = await legacyFixture(t);
+  const probe = observer(f);
+  const disclosure = /Memory stays on this computer/u;
+  assert.match(operator(f, setup, { env, preload: probe.preload }), disclosure);
+  assert.deepEqual(probe.read(), []);
+  assert.equal(readJSON(consentPath(f)).profile, 'openai-baseline-v1');
+  assert.doesNotMatch(operator(f, setup, { env, preload: probe.preload }), disclosure);
+  assert.deepEqual(probe.read(), []);
+});
+
+test('the keyless notice follows active engine authority even with Raw-only legacy capture', linux, async t => {
+  const f = await legacyFixture(t, { capture: true });
+  assert.doesNotMatch(operator(f, ['status'], { env }), warning);
+  operator(f, prepare);
+  assert.doesNotMatch(operator(f, ['status'], { env }), warning);
+  operator(f, confirm);
+  assert.match(operator(f, ['status'], { env }), warning);
 });

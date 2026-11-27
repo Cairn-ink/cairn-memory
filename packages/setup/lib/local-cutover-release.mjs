@@ -15,7 +15,7 @@ import { SetupError } from './errors.mjs';
 const { privateRead, privateWrite } = await cutoverImport('state');
 const { captureStoreIdentity } = await cutoverImport('binding');
 const { pinColdFile } = await cutoverImport('paths');
-const { documentCardsReady, localModelKey, localProviderConsentFile, localProviderConsentText } = await cutoverImport('provider');
+const { documentCardsReady, localProviderProfile, localProviderConsentFile, localProviderConsentText } = await cutoverImport('provider');
 
 export async function checkActivationClients({ root, descriptor, env, context, target, resume = false, rollback = false }) {
   const { runClaude, inspection, write, t } = context ?? {};
@@ -83,11 +83,7 @@ export async function hasLegacyProviderConfiguration(root) {
 }
 
 export async function activationModelConfigured(root, descriptor, env, requestModel = false) {
-  let offered = false;
-  if (requestModel) {
-    try { offered = !!localModelKey(env); }
-    catch { throw refuse('cutover_model_configured'); }
-  }
+  const offered = requestModel && Object.hasOwn(env, localProviderProfile.providerApiKeyEnv);
   const consented = await hasProviderConsent(root, descriptor);
   if (((consented || offered) && !documentCardsReady) || await hasLegacyProviderConfiguration(root)) {
     throw refuse('cutover_model_configured');

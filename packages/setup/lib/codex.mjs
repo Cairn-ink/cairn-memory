@@ -315,7 +315,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const validate = async token => {
       await privateWrite(candidatePath, candidate(token));
       try {
-        const saved = await get({ env: { ...process.env, CODEX_HOME: validationHome } });
+        const saved = await get({ env: { CODEX_HOME: validationHome } });
         if (!saved.enabled || saved.transport.type !== 'streamable_http' ||
             saved.transport.url !== endpoint + '/api/mcp' || saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
           throw fail('codex_candidate');
@@ -342,7 +342,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       await privateWrite(stage, candidate(token));
       if (!unchanged(before, await snapshot(configPath))) throw fail('codex_changed');
       await rename(stage, configPath); stage = null;
-      const saved = await get({ env: { ...process.env, CODEX_HOME: home } });
+      const saved = await get({ env: { CODEX_HOME: home } });
       if (!saved.enabled || saved.transport.url !== endpoint + '/api/mcp' ||
           saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
         throw fail('codex_saved_unverified');

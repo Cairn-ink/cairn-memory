@@ -70,9 +70,10 @@ export async function runActiveDaemon(action, root, descriptor) {
 }
 
 export async function showKeylessProviderNotice(root, descriptor, { env, write, t }) {
-  if (!Object.hasOwn(env, 'OPENAI_API_KEY')) return;
-  const { hasProviderConsent, hasLegacyProviderConfiguration } = await import('./local-cutover-release.mjs');
-  if (await hasProviderConsent(root, descriptor) || await hasLegacyProviderConfiguration(root)) return;
+  if (descriptor.state !== 'installed' || !descriptor.migration?.cutover || !Object.hasOwn(env, 'OPENAI_API_KEY')) return;
+  if (!await activeCutoverTarget(root, descriptor).catch(() => undefined)) return;
+  const { hasProviderConsent } = await import('./local-cutover-release.mjs');
+  if (await hasProviderConsent(root, descriptor)) return;
   const { documentCardsReady } = await cutoverImport('provider');
   write.literal(t(documentCardsReady ? 'local_keyless_provider_ready' : 'local_keyless_provider_later'));
 }

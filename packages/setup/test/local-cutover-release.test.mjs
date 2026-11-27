@@ -226,11 +226,15 @@ test('a legacy change after verification refuses early, and a late writer blocks
   assert.equal((await f.run('confirm-activation')).state, 'active');
 });
 
-test('an invalid explicit model key is refused before touching the descriptor or client', linux, async t => {
+test('explicit setup records consent from key presence even when MCP would reject the value', linux, async t => {
   const f = await fixture(t);
-  await assert.rejects(runLocalCutover({ ...f.options, env: { ...f.env, OPENAI_API_KEY: 'synthetic\ninvalid' },
-    action: 'prepare-activation', requestModel: true }), refused('cutover_model_configured'));
-  assert.equal((await readDescriptor(f.root)).version, 'cairn-local-installation-v1');
+  const result = await runLocalCutover({ ...f.options, env: { ...f.env, OPENAI_API_KEY: 'synthetic\ninvalid' },
+    action: 'prepare-activation', requestModel: true });
+  assert.equal(result.state, 'verified');
+  const { migration } = await readDescriptor(f.root, { allowV2: true });
+  const consent = join(f.root, '.cutover-' + migration.cutover.id, 'provider-consent.json');
+  assert.equal(JSON.parse(await readFile(consent, 'utf8')).profile, 'openai-baseline-v1');
+  assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
   assert.deepEqual(await readFile(f.database), f.initial);
 });
 

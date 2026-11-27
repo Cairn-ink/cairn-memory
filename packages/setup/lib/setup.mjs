@@ -218,6 +218,9 @@ export async function main(argv, {
     const translate = t;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
+    if (['setup', 'status'].includes(selection.argv[0])) {
+      clientEnvironment = localClientEnvironment(clientEnvironment ?? env);
+    }
     t = (key, params) => {
       const text = technical.has(key) && !verbose && !options.argv.includes('--dry-run') ? undefined : translate(key, params);
       if (text && selection.argv[0] === 'status' && ['codex_tmpdir', 'codex_managed'].includes(key)) {
@@ -239,12 +242,11 @@ export async function main(argv, {
         runClaude: runLocalClaude, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting, inspection });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
-      if (selection.argv[0] === 'status' && localDetection?.descriptor) clientEnvironment = localClientEnvironment(env);
     } else beforeRouting();
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
         authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
-        signal, supportedNode, SetupError, validEndpoint, inspectCodex, inspection,
+        signal, supportedNode, SetupError, validEndpoint, inspectCodex, inspection, clientEnvironment,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
           authOptions, env, locale, progress, inspection, coordinated: true, clientEnvironment, ...overrides }) }));

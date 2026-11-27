@@ -95,6 +95,27 @@ export async function assertTombstone(path) {
   }
 }
 
+async function recoverTombstoneLink(retired) {
+  const published = entry(retired);
+  if (published?.nlink !== 2n) return;
+  const parent = dirname(retired), prefix = basename(retired) + '.tmp-';
+  const matches = info => inode(info) === inode(published) && info.nlink === 2n &&
+    info.ctimeNs === published.ctimeNs;
+  const paths = (await privateList(parent))
+    .filter(name => name.startsWith(prefix) &&
+      /^[1-9]\d*-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(name.slice(prefix.length)))
+    .map(name => join(parent, name));
+  const temporary = paths.find(path => matches(entry(path)));
+  // A killed exclusive publication may leave just its temporary hard link.
+  if (!temporary || !published.isFile() || published.uid !== BigInt(process.getuid()) ||
+      (published.mode & 0o7777n) !== 0o600n || published.size !== BigInt(Buffer.byteLength(tombstone)) ||
+      await privateRead(retired) !== tombstone || !matches(entry(retired)) || !matches(entry(temporary))) {
+    throw refuse('cutover_activation_changed');
+  }
+  await privateRemove(temporary);
+  await syncDirectory(parent);
+}
+
 const assertCompanionsClosed = path => {
   if (['-wal', '-shm', '-journal'].some(suffix => entry(path + suffix))) {
     throw refuse('cutover_store_busy');
@@ -135,6 +156,7 @@ export async function retireLegacy({ maintenance, cutover, receipt, targetIdenti
       drain();
       await withColdStoreLease(source, async assertLease => {
         if (!entry(retired)) await privateWrite(retired, tombstone, { exclusive: true });
+        else await recoverTombstoneLink(retired);
         await assertTombstone(retired);
         await reattest(assertLease);
         exchange(source, retired, receipt.source);
@@ -188,6 +210,7 @@ export async function abortRetirement(cutover, receipt, reclaim, notify) {
     });
   } else await reclaim();
   if (entry(retired)) {
+    await recoverTombstoneLink(retired);
     await assertTombstone(retired);
     await privateRemove(retired);
   }
