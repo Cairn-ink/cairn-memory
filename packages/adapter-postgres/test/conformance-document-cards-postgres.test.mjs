@@ -152,9 +152,9 @@ function postgresFactory(t) {
 }
 
 for (const testCase of allCases) {
-  const reason = notApplicable.get(testCase.id);
+  if (notApplicable.has(testCase.id)) continue;
   test(`${testCase.id} ${testCase.title}`,
-    { skip: reason ?? (databaseUrl ? false : "CORE_PG_TEST_URL is not set"), timeout: 120_000 }, async t => {
+    { skip: databaseUrl ? false : "CORE_PG_TEST_URL is not set", timeout: 120_000 }, async t => {
       const factory = postgresFactory(t);
       const prepared = run => async ctx => {
         // The kit creates these owner IDs after opening the adapter.

@@ -7,6 +7,7 @@ import {
   applyMigrations, createPostgresDocumentCardStore, createPostgresDocumentCardCandidates,
   createPostgresMemoryStore, createPostgresRawPorts, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
+import { readCatalog } from "./catalog.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const owner = "owner";
@@ -85,6 +86,7 @@ test("Postgres card migration preserves the production schema and writer default
   try {
     await writer.query("BEGIN");
     await writer.query("UPDATE document_cards SET title = 'Concurrent update' WHERE user_id = $1", [owner]);
+    // Migration 0027 changes the keys and is covered by k4.
     await applyMigrations({
       async connect() {
         const connection = await source.connect();
@@ -102,7 +104,7 @@ test("Postgres card migration preserves the production schema and writer default
           },
         };
       },
-    }, migrations);
+    }, migrations.slice(0, last + 1));
   } finally {
     try { await writer.query("ROLLBACK"); } finally { writer.release(); }
   }
@@ -123,6 +125,137 @@ test("Postgres card migration preserves the production schema and writer default
   const { rows: [state] } = await pool.query(`SELECT to_regclass('core_document_card_amendments') AS amendments,
     document_card_search_text('Title', 'Body') AS titled, document_card_search_text(NULL, 'Body') AS untitled`);
   assert.deepEqual(state, { amendments: "core_document_card_amendments", titled: "Title\n\nBody", untitled: "Body" });
+});
+
+test("Postgres installs the document card team keys", migrationDbTest, async t => {
+  const { pool } = await migrationDatabase(t);
+  const catalog = await readCatalog(pool, ["document_cards"]);
+  const entries = new Set(catalog.map(entry => entry.split("\t").slice(1).join("\t")));
+  for (const entry of [
+    "column\tuser_id\ttext NULL",
+    "constraint\tdocument_cards_scope_id_id_pk\tPRIMARY KEY (scope_id, id)",
+    "constraint\tdocument_cards_user_id_id_pk\tUNIQUE (user_id, id)",
+    "constraint\tdocument_cards_scope_id_id_unique\tUNIQUE (scope_id, id)",
+    "constraint\tdocument_cards_team_author_check\tCHECK (((user_id IS NOT NULL) OR (scope_id ~~ 'team:%'::text)))",
+    "constraint\tdocument_cards_user_id_users_id_fk\tFOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL",
+  ]) {
+    assert.ok(entries.has(entry), entry);
+  }
+  const { rows } = await pool.query(`SELECT pg_get_triggerdef(oid) AS definition, tgenabled AS enabled
+    FROM pg_trigger WHERE tgrelid = 'public.users'::regclass
+      AND tgname = 'document_cards_delete_personal' AND NOT tgisinternal`);
+  assert.deepEqual(rows, [{
+    definition: "CREATE TRIGGER document_cards_delete_personal BEFORE DELETE ON public.users "
+      + "FOR EACH ROW EXECUTE FUNCTION delete_personal_document_cards()",
+    enabled: "O",
+  }]);
+});
+
+test("Postgres retains team cards when their author is deleted", migrationDbTest, async t => {
+  const { pool } = await migrationDatabase(t);
+  await pool.query(`
+    INSERT INTO users (id) VALUES ('owner'), ('other');
+    INSERT INTO document_cards (user_id, scope_id, id, content_hash, title, body, origin, source_memories, sentences, stale)
+    VALUES ('owner', 'owner', 'personal', 'hash', 'Title', 'Personal', 'manual', '[]', '[]', '[]'),
+           ('owner', 'team:x', 'team', 'hash', 'Title', 'Shared', 'manual', '[]', '[]', '[]'),
+           ('other', 'other', 'personal', 'hash', 'Title', 'Other', 'manual', '[]', '[]', '[]'),
+           ('other', 'team:x', 'other-team', 'hash', 'Title', 'Other shared', 'manual', '[]', '[]', '[]');
+    INSERT INTO topics (user_id, id, level, title, title_key)
+    SELECT id, 'topic', 1, 'Topic', 'topic' FROM users;
+    INSERT INTO core_document_card_amendments
+      (user_id, card_id, amendment_id, date, sentence, quote, source_client, source_session_id, source_message_id)
+    SELECT user_id, id, 'amendment', '2025-02-01', 'Sentence', 'Quote', 'client', 'session', 'message'
+      FROM document_cards WHERE scope_id = user_id;
+    INSERT INTO card_topics (user_id, card_id, topic_id, content_hash)
+    SELECT user_id, id, 'topic', content_hash FROM document_cards WHERE scope_id = user_id;
+    INSERT INTO card_placements (user_id, card_id, content_hash, status)
+    SELECT user_id, id, content_hash, 'filed' FROM document_cards WHERE scope_id = user_id;
+  `);
+  const relatedRows = table => pool.query(`SELECT user_id, card_id FROM ${table} ORDER BY user_id COLLATE "C"`);
+  const otherPersonal = { user_id: "other", card_id: "personal" };
+  const tables = ["core_document_card_amendments", "card_topics", "card_placements"];
+  for (const table of tables) {
+    assert.deepEqual((await relatedRows(table)).rows, [otherPersonal, { user_id: "owner", card_id: "personal" }], table);
+  }
+  assert.equal((await pool.query("DELETE FROM users WHERE id = 'owner'")).rowCount, 1);
+  assert.deepEqual((await pool.query(`SELECT user_id, scope_id, id, body FROM document_cards
+    ORDER BY scope_id COLLATE "C", id COLLATE "C"`)).rows, [
+    { user_id: "other", scope_id: "other", id: "personal", body: "Other" },
+    { user_id: "other", scope_id: "team:x", id: "other-team", body: "Other shared" },
+    { user_id: null, scope_id: "team:x", id: "team", body: "Shared" },
+  ]);
+  for (const table of tables) {
+    assert.deepEqual((await relatedRows(table)).rows, [otherPersonal], table);
+  }
+});
+
+test("Postgres rejects personal cards without an author", migrationDbTest, async t => {
+  const { pool } = await migrationDatabase(t);
+  await assert.rejects(pool.query(`
+    INSERT INTO document_cards (user_id, scope_id, id, content_hash, title, body, origin, source_memories, sentences, stale)
+    VALUES (NULL, 'owner', 'personal', 'hash', 'Title', 'Personal', 'manual', '[]', '[]', '[]')
+  `), { code: "23514", constraint: "document_cards_team_author_check" });
+});
+
+test("Postgres applies all migrations after hosted document card team keys", migrationDbTest, async t => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const teamKeys = migrations.find(({ id }) => id === "0027_core_document_card_team_keys.sql");
+  assert.ok(teamKeys);
+  // Hosted creates the pre-upgrade card table before running its copy of the migration.
+  await pool.query(`
+    CREATE TABLE document_cards (
+      user_id text NOT NULL, id text NOT NULL, content_hash text NOT NULL, title text NOT NULL, body text NOT NULL,
+      date_ms bigint, origin text NOT NULL DEFAULT 'router', source_client text, source_session_id text, source_message_id text,
+      source_memories jsonb NOT NULL, sentences jsonb NOT NULL, stale jsonb NOT NULL, hidden_reason text,
+      tombstoned boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT document_cards_user_id_id_pk PRIMARY KEY (user_id, id),
+      CONSTRAINT document_cards_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT document_cards_origin_check CHECK (origin IN ('router', 'import', 'manual')),
+      CONSTRAINT document_cards_router_source_check CHECK (origin <> 'router'
+        OR (source_client IS NOT NULL AND source_session_id IS NOT NULL AND source_message_id IS NOT NULL))
+    );
+    CREATE INDEX document_cards_user_created_idx ON document_cards (user_id, created_at DESC NULLS LAST, id);
+    CREATE INDEX document_cards_source_memories_idx ON document_cards USING gin (source_memories jsonb_path_ops)
+      WHERE hidden_reason IS NULL AND NOT tombstoned;
+  `);
+  await shapeProduction(pool);
+  await pool.query(teamKeys.sql);
+  const readFunction = async () => (await pool.query(`SELECT oid, xmin::text, pg_get_functiondef(oid) AS definition
+    FROM pg_proc WHERE oid = 'public.delete_personal_document_cards()'::regprocedure`)).rows;
+  const hostedFunction = await readFunction();
+  await applyMigrations(source, migrations);
+  const readLedger = async () => (await pool.query(`SELECT id, applied_at::text
+    FROM core_schema_migrations ORDER BY id COLLATE "C"`)).rows;
+  const ledger = await readLedger();
+  assert.deepEqual(ledger.map(({ id }) => id), migrations.map(({ id }) => id));
+
+  const writer = await pool.connect();
+  try {
+    await writer.query("BEGIN");
+    await writer.query(`
+      INSERT INTO users (id) VALUES ('owner');
+      INSERT INTO document_cards (user_id, id, content_hash, title, body, origin, source_memories, sentences, stale)
+      VALUES ('owner', 'card', 'hash', 'Title', 'Body', 'manual', '[]', '[]', '[]');
+    `);
+    const replay = await pool.connect();
+    try {
+      await replay.query("BEGIN");
+      // Replay the SQL itself since the runner skips migrations already in the ledger.
+      await replay.query(teamKeys.sql);
+      const { rows } = await replay.query(`SELECT relation::regclass::text, mode FROM pg_locks
+        WHERE pid = pg_backend_pid() AND relation IN ('public.document_cards'::regclass, 'public.users'::regclass)`);
+      assert.deepEqual(rows, []);
+      await replay.query("COMMIT");
+    } finally {
+      replay.release(true);
+    }
+    await applyMigrations(source, migrations);
+    assert.deepEqual(await readLedger(), ledger);
+    assert.deepEqual(await readFunction(), hostedFunction);
+  } finally {
+    try { await writer.query("ROLLBACK"); } finally { writer.release(); }
+  }
 });
 
 async function setup(t, profile) {
@@ -163,28 +296,6 @@ async function archive(pool, message, source = sourceMessage) {
 }
 
 const selectors = [{ sourceMemoryId: "memory" }, { sourceMessage }, { session: sourceMessage }];
-
-async function promoteScopeKey(pool) {
-  await pool.query(`
-    ALTER TABLE document_cards
-      DROP CONSTRAINT document_cards_user_id_id_pk,
-      DROP CONSTRAINT document_cards_scope_id_id_unique,
-      DROP CONSTRAINT document_cards_user_id_users_id_fk,
-      ALTER COLUMN user_id DROP NOT NULL,
-      ADD CONSTRAINT document_cards_scope_id_id_pk PRIMARY KEY (scope_id, id),
-      ADD CONSTRAINT document_cards_user_id_id_unique UNIQUE (user_id, id),
-      ADD CHECK (user_id IS NOT NULL OR scope_id LIKE 'team:%'),
-      ADD CONSTRAINT document_cards_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL;
-    CREATE FUNCTION delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      DELETE FROM document_cards WHERE scope_id = OLD.id;
-      RETURN OLD;
-    END;
-    $$;
-    CREATE TRIGGER users_delete_personal_document_cards BEFORE DELETE ON users
-      FOR EACH ROW EXECUTE FUNCTION delete_personal_document_cards();
-  `);
-}
 
 const memoryContent = text => ({
   text, textHash: "sha256:" + digest(text), confidence: 1, kind: "fact", origin: "explicit",
@@ -405,7 +516,6 @@ for (const profile of ["keyless", "keyed"]) {
 
   test(`Postgres ${profile} isolates team cards under the promoted scope key`, migrationDbTest, async t => {
     const { store, pool, candidates, read, write, put } = await setup(t, profile);
-    await promoteScopeKey(pool);
     await pool.query("INSERT INTO users (id) VALUES ('departing')");
     const memories = createPostgresMemoryStore();
     const { id: memoryId, revision } = await write(tx => memories.insert(tx, scope, memoryContent("Inventory memory"), [], 1));

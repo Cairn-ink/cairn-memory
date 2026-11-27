@@ -101,7 +101,7 @@ const hostedDDL = `
   ALTER TABLE "memories" ADD CONSTRAINT "memories_revision_check" CHECK ("memories"."revision" >= 1);
 
   CREATE TABLE "document_cards" (
-    "user_id" text NOT NULL,
+    "user_id" text,
     "id" text NOT NULL,
     "content_hash" text NOT NULL,
     "title" text NOT NULL,
@@ -123,8 +123,9 @@ const hostedDDL = `
     "embedding_model" text,
     "embedding_text_version" smallint,
     "embedding_content_hash" text,
-    CONSTRAINT "document_cards_user_id_id_pk" PRIMARY KEY ("user_id", "id"),
-    CONSTRAINT "document_cards_scope_id_id_unique" UNIQUE ("scope_id", "id"),
+    CONSTRAINT "document_cards_scope_id_id_pk" PRIMARY KEY ("scope_id", "id"),
+    CONSTRAINT "document_cards_user_id_id_pk" UNIQUE ("user_id", "id"),
+    CONSTRAINT "document_cards_team_author_check" CHECK (user_id IS NOT NULL OR scope_id LIKE 'team:%'),
     CONSTRAINT "document_cards_embedding_check"
       CHECK (num_nonnulls(embedding, embedding_model, embedding_text_version, embedding_content_hash) IN (0, 4)),
     CONSTRAINT "document_cards_origin_check" CHECK ("document_cards"."origin" IN ('router', 'import', 'manual')),
@@ -132,8 +133,17 @@ const hostedDDL = `
       ("document_cards"."source_client" IS NOT NULL AND "document_cards"."source_session_id" IS NOT NULL AND
        "document_cards"."source_message_id" IS NOT NULL))
   );
+  ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_scope_id_id_unique" UNIQUE ("scope_id", "id");
   ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_user_id_users_id_fk"
-    FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+  CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql AS $personal$
+  BEGIN
+    DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id = OLD.id;
+    RETURN OLD;
+  END;
+  $personal$;
+  CREATE TRIGGER document_cards_delete_personal BEFORE DELETE ON public.users
+    FOR EACH ROW EXECUTE FUNCTION public.delete_personal_document_cards();
   -- The engine schema has no scopes table, so this fixture omits its foreign key.
   CREATE FUNCTION public.default_document_card_scope() RETURNS trigger LANGUAGE plpgsql AS $scope$
   BEGIN
