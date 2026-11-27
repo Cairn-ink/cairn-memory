@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-d6d58c61c638e62cbd0197a5cb286c59285ac8468a2259be2912a71b5313c1ac",
+  "engineId": "core-local-v1-930f4d588c584d1999c92ac4a772f9902984f4d0d4fada7988a771a21f22bfb2",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2917123,
-    "sha256": "8085c79b3eca01aae608636ca28503d41c0b2b0bb8f29ccf33d50e72ca1fc7b6"
+    "bytes": 2918094,
+    "sha256": "a2bb3178e48a50c91f830e6c20181daa61ec93b1909b212745c187aca10d8b16"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -167,7 +167,7 @@
     "packages/core/src/service/import.mjs": "05b727a16f0f06bdcdc9f78c7b1e8dd25d921a4d5a21e4660832e36a86d4580b",
     "packages/core/src/service/index.mjs": "1f0afb222affb23560261875a2305933eaf24e979919dd9945ad491ecf610ef8",
     "packages/core/src/service/inspect-cursor.mjs": "48eb7c4b2e261606d522b10b7fea98b3ed21de0c97ef8485d3a7db9d0403b19c",
-    "packages/core/src/service/inspect.mjs": "c5b1ce6f8eca367753bd5c3d595f8cbb9758e361931a099393810940be34593e",
+    "packages/core/src/service/inspect.mjs": "fe7961eb1d6d9e08edcb4c6eecbb0cb438b6550605a4dce33f5f285b990d2719",
     "packages/core/src/service/pause.mjs": "772b3176027d6942cb0bdcd93c03f7e7c7d15061cd8c9ffe941def5c8547eb6c",
     "packages/core/src/service/reads.mjs": "13df9aeb864ed92a33e3c140cc132fcfa3583241444bfe5b114d7fe32ac9ed08",
     "packages/core/src/service/recall.mjs": "8d01a24a8d51881348e3082c82d84b9635b30b1449442de773cb8eed004a94e2",
@@ -186,7 +186,7 @@
     "packages/core/src/topics/proposal.mjs": "493c7a9a26143b5ac8b006957f5f39d1f097bf67a3336d4084d526df0aa42bda",
     "packages/core/src/topics/wire.mjs": "cb39361bd3319927225a5bd31c030f7c4f4d2ae17951616728a00677c5fc0d7a",
     "packages/core/src/utf8.mjs": "fa464162e80801ea62e83dda9ebd60132cedec86004c8e7d2ee28d51c9e6e4e4",
-    "packaging/core-local/adapter-slot.mjs": "7d3c75b1ea662fbf97bc96c3bf29baa071b094c68b43f93e79f474c9ca44e67f",
+    "packaging/core-local/adapter-slot.mjs": "e34ca929cf1f10545eb66cfe678d24844ff5ac43ffe893fb3b1e6364e9194a86",
     "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
     "packaging/core-local/capture-cli.mjs": "064c25459424ae2f046a93315363209fdf1fa8be7462462bcd68ada88d07ec1b",
     "packaging/core-local/capture-codex-qualification.mjs": "4b1c6f4400a5be51f21ec5bad10a52346b5e4118eb2f698a3aacfe5ad8215799",
@@ -204,7 +204,7 @@
     "packaging/core-local/daemon-authority.mjs": "b268b40591cf85c5fddec6873ba58aaddd157552dbbc6ad518faf18ceccaa3ca",
     "packaging/core-local/daemon-entry.mjs": "350a3a4666e39262002233d309feed3ea8e6b59e56de1129b1ddf3e7fad6cf62",
     "packaging/core-local/daemon-worker.mjs": "89b7b89107b040bf5505b6ee4babc3d4afeb1daff1eb98ef0b79361e2d7054ca",
-    "packaging/core-local/host.mjs": "f501c498ee37e8b7b4108df09772d07342e0d415fb6de876f85f84395d4c4f7b",
+    "packaging/core-local/host.mjs": "b6873740c8f6bbd4c9c19c8a2e7be62231b12c56d282aed2a9a45c76c9023a3d",
     "packaging/core-local/local-provider.mjs": "a0411163c65c682737445749a9f20823e92d00d1190e1e6e2a869413cf40e832",
     "packaging/core-local/profile.mjs": "93a646d26089a8b8f8cd0cae4bad34290ea62888cf453b2b6b9f9675bec6af93",
     "packaging/core-local/provider-check.mjs": "1a991faf5dd73e3bd02fbf423a4319f66183c14b2c12d9fcbe41d70b6b420aea",
@@ -216,7 +216,7 @@
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.cjs": "85b2bfcc1cab757b81b3ebfd200a188175c20ce9c9f7ccd340dfa479813d1205",
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.wasm": "dedd9a7b5d8d98b44448bedb371ade1c5327f7bb5dd9effe159da816473a415f",
     "packaging/core-local/wal-checkpoint.mjs": "a1eb0edccded85c4a383b17c897e0d653711c0210ba4a9b8b3746c88efb403db",
-    "packaging/core-local/wire-tools.mjs": "2c43468cb508d24702c780b281ad77262ee85d806d7582520425ae49c3a0393c",
+    "packaging/core-local/wire-tools.mjs": "8f9772f84d750d43c95214e0ab18fef7ebd6c2e4a89bc32f71b8973458564c5b",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5",
     "plugins/cairn-memory/lib/source-time.mjs": "b1c0b9ccf03ff76103ed759840b60effdfdc4b31e93f3dfd107ae876aa5dcb27",
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75"
