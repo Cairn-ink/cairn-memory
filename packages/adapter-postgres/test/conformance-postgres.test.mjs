@@ -6,6 +6,7 @@ import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
+import { placePendingBatch } from "../../core/src/index.mjs";
 import { publishFingerprintKey, readFingerprintKeyId } from "../src/digest-gate.mjs";
 import { toPostgresError } from "../src/errors.mjs";
 import {
@@ -40,6 +41,7 @@ const dumpSql = `SELECT jsonb_build_object(
   'memories', ARRAY(
     SELECT to_jsonb(m) || jsonb_build_object('embedding', m.embedding::text) FROM memories m ORDER BY m.user_id, m.id
   ),
+  'memoryPlacements', ARRAY(SELECT to_jsonb(p) FROM memory_placements p ORDER BY p.user_id, p.memory_id),
   'receipts', ARRAY(
     SELECT to_jsonb(r) FROM core_memory_receipts r ORDER BY r.user_id, r.memory_id, r.client, r.session_id, r.message_id
   ),
@@ -255,8 +257,9 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const lineageSecret = randomUUID();
       const nearDuplicate = requested.nearDuplicate !== false;
       let elapsed = 0;
+      const now = () => Date.now() + elapsed;
       const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey, nearDuplicate,
-        allowNonNullNamespace: true, now: () => Date.now() + elapsed });
+        allowNonNullNamespace: true, now });
       const semanticRetrieval = requested.semanticRetrieval !== false;
       const rawArchive = requested.rawArchive === true;
       const fingerprintKey = requested.fingerprintKey === true;
@@ -306,6 +309,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const harnessOwners = [];
       /** @type {Omit<TestHarness, "counters"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
+        placePendingBatch,
         hashSessionKey,
         async advanceClock(ms) { elapsed += ms; },
         async rowsMissingKeyedDigest(owner) {
@@ -381,7 +385,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
-          placement: createPostgresTopicStore({ hashSessionKey }),
+          placement: createPostgresTopicStore({ hashSessionKey, now }),
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
@@ -444,7 +448,8 @@ const selected = new Set([
   "K-RELJ-19", "K-RELJ-20",
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
-  "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
+  "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15", "T-TOP-16", "T-TOP-17",
+  "T-TOP-18", "T-TOP-19", "T-TOP-20",
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
@@ -475,7 +480,7 @@ const notApplicable = {
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session", "CAPTURE-CARD-1", "CAPTURE-AMEND-1",
     "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2", "T-CARD-PURGE-1", "T-CARD-PURGE-2", "CAPTURE-LEDGER-2",
     "K-LEG-PASS-7-router"],
-  "topics.cards": ["T-TCARD-1", "T-TCARD-2", "T-TCARD-3", "T-TCARD-4", "T-TCARD-5", "T-TCARD-6", "T-TCARD-7", "T-TCARD-8", "T-TCARD-9", "T-TCARD-10"],
+  "topics.cards": ["T-TCARD-1", "T-TCARD-2", "T-TCARD-3", "T-TCARD-4", "T-TCARD-5", "T-TCARD-6", "T-TCARD-7", "T-TCARD-8", "T-TCARD-9", "T-TCARD-10", "T-TCARD-11", "T-TCARD-12", "T-TCARD-13", "T-TCARD-14", "T-TCARD-15"],
   "topics.forCards": ["T-FOR-CARDS-1", "T-FOR-CARDS-2", "T-FOR-CARDS-3", "T-FOR-CARDS-4", "T-FOR-CARDS-5", "T-FOR-CARDS-6", "T-FOR-CARDS-7", "T-FOR-CARDS-8", "T-FOR-CARDS-9"],
   rationaleEdges: ["T-RAT-content", "T-RAT-correct", "T-RAT-currentness", "T-RAT-degree", "T-RAT-duplicate", "T-RAT-forget",
     "T-RAT-hidden", "T-RAT-index", "T-RAT-insert", "T-RAT-namespace", "T-RAT-raw-deleted", "T-RAT-receipt-add",

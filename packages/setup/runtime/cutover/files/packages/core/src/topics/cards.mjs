@@ -94,19 +94,26 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
   if (hidden.length) await markFailed(hidden, 'source_excluded');
   if (!snapshot.cards.length) return { status: 'idle' };
 
+  /** @param {Tx} tx */
+  async function indexIsStale(tx) {
+    const { indexRevision } = await placement.catalog(tx, scope, { cursor: null, limit: 1 });
+    return indexRevision !== basedOn.indexRevision;
+  }
+
+  let hashesChanged = false;
   /** @type {TopicCardGuard[]} */
   let newlyExcluded = [];
   const validateFresh = async () => {
-    const fresh = await uow.run(owner, { readOnly: true }, async (tx) => {
+    const conflict = await uow.run(owner, { readOnly: true }, async (tx) => {
       const cards = await readCards(tx, basedOn.cards);
+      hashesChanged ||= cards.length !== basedOn.cards.length;
       const visible = await visibleIds(tx, cards);
       newlyExcluded = cards.filter(({ id }) => !visible.has(id))
         .map(({ id: cardId, contentHash }) => ({ cardId, contentHash }));
-      if (visible.size !== basedOn.cards.length || newlyExcluded.length) return false;
-      const { indexRevision } = await placement.catalog(tx, scope, { cursor: null, limit: 1 });
-      return indexRevision === basedOn.indexRevision;
+      if (cards.length !== basedOn.cards.length || newlyExcluded.length) return 'revision_conflict';
+      return await indexIsStale(tx) ? 'topic_index_moved' : null;
     });
-    if (!fresh) throw new CoreError('revision_conflict');
+    if (conflict) throw new CoreError(conflict);
   };
 
   try {
@@ -119,8 +126,18 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     if (kind !== 'paused') {
       try {
         if (newlyExcluded.length) await markFailed(newlyExcluded, 'source_excluded');
-        const remaining = basedOn.cards.filter(({ cardId }) => !newlyExcluded.some((guard) => guard.cardId === cardId));
-        if (remaining.length) await markFailed(remaining, code);
+        if (!hashesChanged && !newlyExcluded.length) {
+          await uow.run(owner, {}, async (tx) => {
+            const cards = await readCards(tx, basedOn.cards);
+            if (cards.length !== basedOn.cards.length) return;
+            const receiptCode = await indexIsStale(tx) ? 'topic_index_moved' : code;
+            const visible = await visibleIds(tx, cards);
+            const ids = cards.map(({ id }) => id);
+            const excluded = ids.filter((id) => !visible.has(id));
+            if (excluded.length) return placement.markCardsFailed(tx, scope, excluded, 'source_excluded');
+            await placement.markCardsFailed(tx, scope, ids, receiptCode);
+          });
+        }
       } catch {
         // A failed receipt write cannot replace the original error.
       }

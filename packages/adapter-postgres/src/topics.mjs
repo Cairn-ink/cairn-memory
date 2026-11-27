@@ -432,8 +432,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
             memory_revision = EXCLUDED.memory_revision, code = EXCLUDED.code, placed_at = EXCLUDED.placed_at,
             attempts = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
               THEN least(memory_placements.attempts + 1, 3) ELSE 1 END,
-            status = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
-              THEN memory_placements.status ELSE 'failed' END`,
+            status = EXCLUDED.status
+          WHERE memory_placements.memory_revision <> EXCLUDED.memory_revision OR memory_placements.status = 'failed'`,
         [owner, visibleIds, code, new Date(now())]);
       });
     },

@@ -67,7 +67,7 @@ test('missing model methods emit the engine diagnostic before reading freshness'
 });
 
 for (const phase of ['before', 'after']) {
-  test(`freshness failure ${phase} the provider call records failure without applying`, async () => {
+  test(`freshness failure ${phase} the provider call leaves no placement or receipt`, async () => {
     const operations = [];
     let activeTx;
     let modelCalled = false;
@@ -101,18 +101,13 @@ for (const phase of ['before', 'after']) {
         return { items: catalog.map.map(({ moc }) => moc), exhausted: true, indexRevision: snapshot.indexRevision };
       },
       async applyPlacement() { assert.fail('must not apply'); },
-      async markFailed(tx, actualScope, ids, code) {
-        assert.equal(tx, activeTx);
-        assert.equal(tx.readOnly, false);
-        assert.deepEqual([actualScope, ids, code], [scope, [memory.id], 'revision_conflict']);
-        operations.push('failure');
-      },
+      async markFailed() { operations.push('failure'); },
     };
     const gate = { async assertOpen() {} };
     assert.deepEqual(await placePending({ scope, uow, memories, placement, model, gate }), {
       status: 'failed', error: { code: 'revision_conflict', retryable: false },
     });
-    assert.deepEqual(operations, phase === 'before' ? ['fresh', 'failure'] : ['fresh', 'fresh', 'call', 'fresh', 'failure']);
+    assert.deepEqual(operations, phase === 'before' ? ['fresh'] : ['fresh', 'fresh', 'call', 'fresh']);
   });
 }
 

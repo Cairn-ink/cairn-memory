@@ -139,11 +139,17 @@ export function memoryReceiptSourcesSql(ids) {
 }
 
 /** @param {string} ids SQL expression returning the selected memory IDs as text[].
- * @param {string} [limit] SQL expression limiting the returned receipts. */
-export function memoryReceiptsSql(ids, limit = "NULL") {
+ * @param {string} [limit] SQL expression limiting the returned receipts.
+ * @param {boolean} [delivery] Exclude addresses withdrawn by a forgotten sharer. */
+export function memoryReceiptsSql(ids, limit = "NULL", delivery = false) {
   return `SELECT memory_id, client, session_id, message_id, role,
       COALESCE(core_occurred_at_ms, EXTRACT(EPOCH FROM occurred_at) * 1000)::text AS occurred_ms
     ${activeReceiptsSql(ids)}
+    ${delivery ? `AND NOT EXISTS (
+      SELECT 1 FROM core_memory_receipts forgotten WHERE forgotten.forgotten_at IS NOT NULL
+        AND (forgotten.user_id, forgotten.client, forgotten.session_id, forgotten.message_id) =
+          (core_memory_receipts.user_id, core_memory_receipts.client, core_memory_receipts.session_id, core_memory_receipts.message_id)
+    )` : ""}
     ORDER BY memory_id COLLATE "C", client COLLATE "C", session_id COLLATE "C", message_id COLLATE "C"
     LIMIT ${limit}`;
 }
@@ -163,11 +169,11 @@ export function decodeReceipts(rows) {
   return result;
 }
 
-/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit]
+/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit] @param {boolean} [delivery]
  * @returns {Promise<Map<string, Receipt[]>>} */
-export async function readReceipts(query, owner, ids, limit) {
+export async function readReceipts(query, owner, ids, limit, delivery) {
   if (ids.length === 0) return new Map();
-  const { rows } = await query(memoryReceiptsSql("$2::text[]", "$3"), [owner, ids, limit ?? null]);
+  const { rows } = await query(memoryReceiptsSql("$2::text[]", "$3", delivery), [owner, ids, limit ?? null]);
   return decodeReceipts(rows);
 }
 
