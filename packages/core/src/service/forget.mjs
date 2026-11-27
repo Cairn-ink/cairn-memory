@@ -68,18 +68,19 @@ async function similarCount({ memories, capabilities }, tx, scope, row, withKey)
  */
 async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
   if (typeof hydrate?.hydrate !== "function") throw new CoreError("raw_lineage_unavailable");
-  const items = await hydrate.hydrate(tx, { owner: scope.owner, namespaces: [scope.namespace] },
-    [{ type: "memory", id: row.id, namespace: scope.namespace }], "read");
-  const source = items.find(({ ref }) => ref.type === "memory" && ref.id === row.id && ref.namespace === scope.namespace);
+  const receipts = hydrate.receiptsForForget ? await hydrate.receiptsForForget(tx, scope, row.id) :
+    (await hydrate.hydrate(tx, { owner: scope.owner, namespaces: [scope.namespace] },
+      [{ type: "memory", id: row.id, namespace: scope.namespace }], "read"))
+      .find(({ ref }) => ref.type === "memory" && ref.id === row.id && ref.namespace === scope.namespace)?.receipts;
   // A confirmed empty span lookup can outlive the hydrated source. The memory
   // and session selectors still invalidate their dependent cards.
-  if (source?.receipts === undefined && resolvedEmptySpans) return [];
-  if (!Array.isArray(source?.receipts)) throw new CoreError("raw_lineage_unavailable");
+  if (receipts === undefined && resolvedEmptySpans) return [];
+  if (!Array.isArray(receipts)) throw new CoreError("raw_lineage_unavailable");
   /** @type {Map<string, DocumentCardSourceMessage>} */
   const messages = new Map();
   /** @type {Map<string, string>} */
   const clearBySpan = new Map();
-  for (const receipt of source.receipts) {
+  for (const receipt of receipts) {
     const { client, sessionId, messageId } = receipt;
     if (!sourceId(client) || !sourceId(sessionId) || !sourceId(messageId)) throw new CoreError("raw_lineage_unavailable");
     const clearId = JSON.stringify([client, sessionId, messageId]);

@@ -1,4 +1,4 @@
-import type { CallOptions, ItemRef, MemoryRow, Namespace, OwnerId, Receipt, SortKeyUs } from "./common.d.ts";
+import type { CallOptions, ItemRef, MemoryRow, Namespace, OwnerId, Receipt, Scope, SortKeyUs } from "./common.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
 /**
@@ -93,6 +93,8 @@ export interface HydratedItem {
 
 export interface HydrateItems {
   hydrate(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent: "recall" | "read" | "export"): Promise<HydratedItem[]>;
+  /** Internal lineage for card invalidation in the pause-locked forget transaction. */
+  receiptsForForget?(tx: Tx, scope: Scope, memoryId: string): Promise<HydratedItem["receipts"]>;
 }
 
 export interface ListRecent {

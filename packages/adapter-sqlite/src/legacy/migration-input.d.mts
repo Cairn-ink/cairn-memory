@@ -50,6 +50,7 @@ export interface LegacyInput {
   };
   memories: LegacyMemory[];
   receipts: LegacyReceipt[];
+  retiredReceiptIds: Set<string>;
   placement: {
     topics: Array<NamespaceRow & {id: string; level: bigint; title: string; revision: bigint; created_at: string; updated_at: string}>;
     edges: Array<{parent_id: string; parent_revision: bigint; child_id: string; child_revision: bigint}>;
