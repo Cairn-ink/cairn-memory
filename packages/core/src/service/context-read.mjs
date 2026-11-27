@@ -130,7 +130,7 @@ export function readContextMethod({ storage, clock, find, startEmbedding, fetch,
     /** @type {AssemblyCandidates} */
     let found;
     try {
-      const pendingFind = find(readSet, candidate, { ...options, deadlineAtMs: deadline }, embedding, compact);
+      const pendingFind = find(readSet, candidate, { ...options, deadlineAtMs: deadline }, embedding, compact, budget.maxItems);
       if (pendingRaw) [found] = await Promise.all([pendingFind, pendingRaw]);
       else found = await pendingFind;
     } catch (error) {
