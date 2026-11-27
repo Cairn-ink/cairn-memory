@@ -80,7 +80,7 @@ async function assertAttached(adapter, api, target = scope, turn = message) {
   const [evidence] = item.evidence;
   assert.deepEqual(evidence.ref, { ns: 0, type: "raw", conversationId, messageId: turn.id });
   assert.equal(evidence.date, sourceDate);
-  assert.equal(evidence.occurredAt, new Date(turn.occurredAtMs).toISOString());
+  assert.equal(Object.hasOwn(evidence, "occurredAt"), false);
   assert.ok(turn.content.includes(evidence.body) && evidence.body.includes("compass"));
   return evidence;
 }

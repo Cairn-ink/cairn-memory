@@ -391,8 +391,8 @@ export interface ContextAssemblyRawExcerpt {
   role: Role;
   occurredAt?: string;
   date?: string;
-  start: number;
-  end: number;
+  start?: number;
+  end?: number;
 }
 
 export type ContextRawCoverage = "included" | "partial" | "unavailable" | "unsupported_store" | "lexical_unsupported";
