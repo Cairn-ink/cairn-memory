@@ -30,8 +30,21 @@ const indexState = [
     WHERE owner_id = ? ORDER BY namespace_key, fingerprint`,
 ];
 
-/** @param {string} storeKey */
-export function createSnapshotToken(storeKey) {
+const scopedMemoryState = [
+  `SELECT namespace_key, id, revision, created_at_ms, CAST(updated_at_us AS TEXT) AS sort_key, historical, deleted
+    FROM cairn_memories WHERE owner_id = ? AND namespace_key IN (SELECT value FROM json_each(?))
+    ORDER BY namespace_key, id`,
+  `SELECT namespace_key, memory_id, ordinal FROM cairn_receipts
+    WHERE owner_id = ? AND namespace_key IN (SELECT value FROM json_each(?)) ORDER BY namespace_key, memory_id, ordinal`,
+  `SELECT fact_id, incarnation FROM cairn_suppression_facts
+    WHERE owner_id = ? AND namespace_key IN (SELECT value FROM json_each(?))
+    AND json_extract(body, '$.kind') <> 'rawSpan' ORDER BY fact_id`,
+  `SELECT namespace_key, fingerprint FROM cairn_legacy_denials
+    WHERE owner_id = ? AND namespace_key IN (SELECT value FROM json_each(?)) ORDER BY namespace_key, fingerprint`,
+];
+
+/** @param {string} storeKey @param {boolean} [memoryOnly] */
+export function createSnapshotToken(storeKey, memoryOnly = false) {
   const key = Buffer.from(storeKey, "hex");
 
   /** @param {Connection} db @param {RetrievalScope} scope */
@@ -39,12 +52,14 @@ export function createSnapshotToken(storeKey) {
     const hash = createHmac("sha256", key);
     // The service cursor binds the request separately. This token binds the
     // canonical read set to the state of the index in the supplied snapshot.
-    hash.update(JSON.stringify(["retrieval-snapshot-v1", owner, [...namespaces].sort(compareNamespaces),
+    hash.update(JSON.stringify([memoryOnly ? "memory-find-snapshot-v1" : "retrieval-snapshot-v1",
+      owner, [...namespaces].sort(compareNamespaces),
       clients ? [...clients].sort(compareStrings) : null,
       window && [window.sinceMs ?? null, window.untilMs ?? null]]));
-    for (const sql of indexState) {
+    const args = memoryOnly ? [owner, JSON.stringify(namespaces.map(namespace => JSON.stringify(namespace)))] : [owner];
+    for (const sql of memoryOnly ? scopedMemoryState : indexState) {
       hash.update("\n");
-      for (const row of db.prepare(sql).iterate(owner)) hash.update(JSON.stringify(row));
+      for (const row of db.prepare(sql).iterate(...args)) hash.update(JSON.stringify(row));
     }
     return "v1." + hash.digest("hex");
   };
