@@ -72,7 +72,7 @@ export async function serveStdio(input, output, options, { shared, closed = () =
                 if (closed()) break;
                 runtime = shared ? await openLocalService(options, shared) : runtime ?? await openLocalService(options);
                 if (closed()) break;
-                result = await callTool(runtime.service, scope, handles, tool.name, args, shared?.checkpointForget);
+                result = await callTool(runtime.service, scope, handles, tool.name, args, shared?.checkpointForget, runtime.recall);
               } finally {
                 await release?.(result !== undefined && tool.name === 'forget_memory');
               }
