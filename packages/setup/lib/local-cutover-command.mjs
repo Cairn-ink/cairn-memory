@@ -3,6 +3,7 @@ import { boundedJSON, localRoot, readDescriptor, withLocalLock } from './local-d
 import { installEngine, readBundledCoreLocal } from './local-engine.mjs';
 import { captureTargetFor } from './local-cutover-journal.mjs';
 import { SetupError } from './errors.mjs';
+import { shellArgument } from './output.mjs';
 import { cutoverImport } from './local-cutover-runtime.mjs';
 
 const lines = {
@@ -184,6 +185,11 @@ export async function runInstalledCutover(action, context, { requestModel = fals
   } catch (error) {
     if (error.key === 'cutover_timeless_raw') {
       writeTimelessRawNotice(context, error.params.timeless);
+      return 2;
+    }
+    if (error.key === 'codex_lock_empty') {
+      write(context.t('codex_lock_empty'));
+      write.literal('rm -- ' + shellArgument(error.params.path));
       return 2;
     }
     const refusal = error.params?.code ?? error.code;

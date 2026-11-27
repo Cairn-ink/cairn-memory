@@ -258,6 +258,12 @@ cutover. Use `cairn-memory local-cutover --activate` to verify it explicitly.
 removes the previous store, migration backup and legacy search indexes.
 Before confirmation, `cairn-memory local-cutover --abort` restores legacy service.
 
+Known issue: if cutover confirmation is interrupted just as it takes the Codex
+configuration lock, it can leave an empty Codex lock file, and later setup runs
+refuse until you remove it. This applies on Linux and macOS. Make sure no other
+Cairn setup is running, run the `rm` command that setup prints, then run
+`setup --local` again.
+
 On Linux, eligible sessions from the same installation share a background
 server. The first session starts it, and it exits about 30 seconds after the
 last one closes. Sessions with different server environments, such as a different `PATH`, use separate

@@ -7,7 +7,6 @@ import { tomlString } from './output.mjs';
 import { SetupError } from './errors.mjs';
 import { localClientEnvironment } from './local-client-environment.mjs';
 import { cutoverImport } from './local-cutover-runtime.mjs';
-import { withColdStoreLease } from './local-cutover-lease.mjs';
 
 export function inspectLocalCodexServers({ env, ...options }) {
   return inspectCodexServers({ ...options, env: localClientEnvironment(env) });
@@ -28,8 +27,9 @@ export async function recoverCutoverCodexLock(home, root) {
   const path = join(home, '.cairn-setup.lock');
   let owner;
   try {
-    const info = await lstat(path, { bigint: true });
-    if (info.size === 0n && process.platform === 'linux') return await recoverEmptyCodexLock(path, info);
+    // An empty lock can belong to a live hosted setup, so it is never removed
+    // automatically. The refusal names the path for manual removal.
+    if ((await lstat(path)).size === 0) throw new SetupError('codex_lock_empty', 2, { path, local: true });
     owner = await boundedJSON(path, 1024, { privateFile: true });
   }
   catch (error) { if (error.code === 'ENOENT') return; throw error; }
@@ -41,25 +41,6 @@ export async function recoverCutoverCodexLock(home, root) {
     throw new SetupError('codex_lock', 2, { path, local: true });
   }
   await rm(path);
-}
-
-async function recoverEmptyCodexLock(path, info) {
-  const busy = () => new SetupError('codex_lock', 2, { path, local: true });
-  const { ctimeNs, dev, ino } = info;
-  if (!info.isFile() || info.nlink !== 1n || info.uid !== BigInt(process.getuid()) ||
-      (info.mode & 0o7777n) !== 0o600n || BigInt(Date.now()) * 1_000_000n - ctimeNs < 1_000_000_000n) throw busy();
-  try {
-    // An empty hosted lock can also be live. The Linux lease proves that
-    // nobody has it open and fences writers during the identity check.
-    await withColdStoreLease(path, async assertLease => {
-      await assertLease();
-      const current = await lstat(path, { bigint: true });
-      if (current.dev !== dev || current.ino !== ino || current.ctimeNs !== ctimeNs || current.size !== 0n) throw busy();
-      await rm(path);
-    });
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw busy();
-  }
 }
 
 async function withCodexLock(home, work, cutover) {

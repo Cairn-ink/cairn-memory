@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -129,7 +129,7 @@ test('confirmation recovers the exact two-link tombstone left by SIGKILL', linux
   await assertServing(f, target);
 });
 
-test('confirmation recovers an empty Codex lock left by SIGKILL once it is stale and unheld', linux, async t => {
+test('an empty Codex lock left by SIGKILL refuses with its path until removed by hand', linux, async t => {
   const f = await legacyFixture(t, { both: true });
   operator(f, prepare);
   const { cutover } = readJSON(join(f.root, 'installation.json')).migration;
@@ -139,14 +139,16 @@ test('confirmation recovers an empty Codex lock left by SIGKILL once it is stale
   assert.equal(lstatSync(lock).size, 0);
   assert.equal(claude(f).args[2], target);
   assert.equal((await codex(f)).args[2], f.database);
-  const held = openSync(lock, 'r+');
-  try {
-    await delay(1100);
-    operator(f, setup, { code: 2 });
+  // An empty lock can belong to a live hosted setup, so retries never remove it.
+  await delay(1100);
+  for (const command of [setup, confirm]) {
+    const refused = operator(f, command, { code: 2 });
+    assert.match(refused, /empty Codex lock file/u);
+    assert.ok(refused.includes('rm -- "' + lock + '"'));
     assert.equal(lstatSync(lock).size, 0);
     assert.equal((await codex(f)).args[2], f.database);
-  } finally { closeSync(held); }
-
+  }
+  unlinkSync(lock);
   assert.match(operator(f, setup), /Local cutover active/u);
   assert.equal(existsSync(lock), false);
   await assertServing(f, target);

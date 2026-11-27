@@ -1623,6 +1623,7 @@ Object.assign(messages, {
   "local_root_invalid": {"zh": "本機記憶目錄不安全，請檢查路徑、擁有者和權限。", "en": "The local memory directory is unsafe. Check its path, owner and permissions."},
   "local_lock_stale": {"zh": "找到已停止的安裝鎖檔。請確認沒有 npm 安裝仍在執行，再刪除鎖檔重試。", "en": "A stopped setup left a lock file. Confirm no npm install is running before removing it and trying again."},
   "local_operation_pending": {"zh": "本機安裝尚未完成，請先解除所有本機連接，不能只選一個工具。", "en": "Local setup is unfinished. Uninstall all local connections without --client."},
+  "codex_lock_empty": {"zh": "中斷的 Cairn 安裝留下一個空的 Codex 設定鎖檔。請先確認沒有其他 Cairn 安裝程式正在執行，再刪除它後重試。", "en": "An interrupted Cairn setup left an empty Codex lock file. If no other Cairn setup is running, remove it and try again."},
   "codex_lock_stale": {"zh": "找到已停止的 Codex 設定鎖檔，請先刪除它再試。", "en": "A stopped Codex setup left a lock file. Remove it before trying again."},
   "local_recovery_required": {"zh": "本機安裝紀錄無法安全讀取，請先解除連接並清除設定。", "en": "The local installation record cannot be read safely. Detach and purge it first."},
   "local_orphan": {"zh": "找到本機記憶，但沒有有效的安裝紀錄，請先解除連接。", "en": "Local memory has no valid installation record. Detach it first."},

@@ -446,9 +446,9 @@ export async function main(argv, {
       for (const stage of ['local_engine', 'local_claude', 'local_codex']) if (progress[stage]) write(t('progress_' + stage));
       if (error.key === 'codex_lock') write(t('lock_retry'));
       if (params.path) write.literal(shellArgument(params.path));
-      if (['local_lock_stale', 'codex_lock_stale'].includes(error.key)) write.literal('rm -- ' + shellArgument(params.path));
+      if (['local_lock_stale', 'codex_lock_stale', 'codex_lock_empty'].includes(error.key)) write.literal('rm -- ' + shellArgument(params.path));
       if (error.key === 'local_recovery_required') write.literal('npx @cairn-ink/memory uninstall --local --purge-config');
-      const recoveryOnly = ['local_lock_stale', 'lock_retry', 'codex_lock', 'codex_lock_stale', 'local_recovery_required', 'local_root_invalid', 'local_option_invalid'];
+      const recoveryOnly = ['local_lock_stale', 'lock_retry', 'codex_lock', 'codex_lock_stale', 'codex_lock_empty', 'local_recovery_required', 'local_root_invalid', 'local_option_invalid'];
       if (progress.localAction === 'uninstall') {
         write(t('local_data_kept')); write.literal(progress.localUninstallCommand);
       } else if (/mcp_/u.test(error.key ?? '') || (progress.localOperation && !recoveryOnly.includes(error.key))) writeLocalResume(write, t);
