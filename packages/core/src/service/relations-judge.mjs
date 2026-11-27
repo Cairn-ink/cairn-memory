@@ -30,6 +30,8 @@ const endpoint = ({ id, revision }) => ({ id, revision });
 /** @param {"stale" | "no_candidates" | "incomplete_coverage"} reason */
 const skippedResult = reason => /** @type {const} */ ({ status: "skipped", reason });
 const pausedResult = Object.freeze({ status: "paused" });
+const pausedBeforeSend = new CoreError("capture_paused");
+const staleBeforeSend = new CoreError("snapshot_stale");
 
 /** @param {MemoryServiceDeps} deps */
 export function relationJudgeMethods({ storage, model, embedder, gate, clock, config, diagnostics }) {
@@ -61,6 +63,16 @@ export function relationJudgeMethods({ storage, model, embedder, gate, clock, co
       return current;
     }
 
+    /** @param {number} generation @param {ReturnType<typeof endpoint>[]} [candidates] */
+    const recheckBeforeSend = (generation, candidates = []) => uow.run(owner, { readOnly: true, pauseLock: true }, async tx => {
+      const state = await pause.get(tx, owner);
+      if (state.paused || state.generation !== generation) return pausedResult;
+      const rows = await currentRows(tx, [ref, ...candidates.map(row => memoryRef(scope, row.id))]);
+      if (rows.get(id)?.revision !== expectedRevision || candidates.some(row => rows.get(row.id)?.revision !== row.revision)) {
+        return skippedResult("stale");
+      }
+    });
+
     /** @param {{ query: Float32Array; generation: number }} [fallback] */
     const discover = fallback => uow.run(owner, { readOnly: true, pauseLock: true }, async tx => {
       const state = await pause.get(tx, owner);
@@ -91,6 +103,8 @@ export function relationJudgeMethods({ storage, model, embedder, gate, clock, co
     let discovery = await discover();
     if (discovery.status === "embed") {
       await gate.assertOpen(owner, "dispatch");
+      const blocked = await recheckBeforeSend(discovery.generation);
+      if (blocked) return blocked;
       checkCallOptions(options, clock);
       const [query] = await embedder.embed([normalizeForHash(discovery.text)], options);
       if (!validWriteEmbedding(query, embedder.dimensions)) throw new CoreError("embedding_failed");
@@ -103,10 +117,22 @@ export function relationJudgeMethods({ storage, model, embedder, gate, clock, co
     const { memory, candidates, generation } = discovery;
     const remaining = checkCallOptions(options, clock);
     const deadline = createCaptureDeadline(Math.min(config.deadlines?.reconcile ?? 30_000, remaining), clock);
-    // callBuiltModel checks the gate before sizing, at dispatch, and after the provider returns.
-    const verdicts = await judgeMemoryRelations(model, memory, candidates, {
-      gate, owner, deadline, signal: options.signal, onDiagnostic: options.onDiagnostic ?? diagnostics,
-    });
+    let verdicts;
+    try {
+      verdicts = await judgeMemoryRelations(model, memory, candidates, {
+        gate, owner, deadline, signal: options.signal, onDiagnostic: options.onDiagnostic ?? diagnostics,
+        // The window after refresh is the host gate's dispatch await plus a synchronous section.
+        async refresh() {
+          const blocked = await recheckBeforeSend(generation, candidates);
+          if (blocked?.status === "paused") throw pausedBeforeSend;
+          if (blocked) throw staleBeforeSend;
+        },
+      });
+    } catch (error) {
+      if (error === pausedBeforeSend) return pausedResult;
+      if (error === staleBeforeSend) return skippedResult("stale");
+      throw error;
+    }
 
     return uow.run(owner, { pauseLock: true }, async tx => {
       const state = await pause.get(tx, owner);
