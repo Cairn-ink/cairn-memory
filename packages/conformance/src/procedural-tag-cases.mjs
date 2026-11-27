@@ -1,6 +1,6 @@
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock } from "./context-assembly-cases.mjs";
-import { caught, check, equal, evidence, rejects, row, source } from "./support.mjs";
+import { caught, check, equal, evidence, fixtureEmbedding, rejects, row, source } from "./support.mjs";
 
 /** @import { InsertRow, ProceduralTag, ProceduralTagStore, Receipt, SaveOptions, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
@@ -28,15 +28,36 @@ function tagsOf({ adapter }) {
   return tags;
 }
 
-/** @param {CaseContext} ctx @param {Partial<Adapter>} [overrides] */
-function service(ctx, overrides) {
+/**
+ * Stores that require an embedding on insert get separated fixture vectors; the others save without one.
+ * @param {CaseContext} ctx @param {boolean} refuse fail the case if the service reaches the embedder
+ */
+function embedderFor(ctx, refuse) {
+  if (ctx.adapter.capabilities.embeddingRequiredOnInsert !== true) return null;
+  return {
+    model: "fixture-only", dimensions: ctx.embeddingDimensions ?? 1,
+    /** @param {readonly string[]} texts */
+    async embed(texts) {
+      check(!refuse, "The service must refuse the procedural save before embedding");
+      return texts.map(() => {
+        const embedding = fixtureEmbedding(ctx);
+        check(embedding, "Expected a fixture embedding");
+        return Float32Array.from(embedding.vector);
+      });
+    },
+  };
+}
+
+/** @param {CaseContext} ctx @param {Partial<Adapter>} [overrides] @param {{ refuseEmbedding?: boolean }} [options] */
+function service(ctx, overrides, { refuseEmbedding = false } = {}) {
   const countTokens = () => 0;
+  const embedder = embedderFor(ctx, refuseEmbedding);
   return createMemoryService({
     storage: { name: "conformance", ...ctx.adapter, ...overrides },
     clock, config: {},
     model: { model: "unused", contextWindow: 1, countTokens,
       async call() { throw new Error("Procedural save used the model"); } },
-    embedder: null,
+    embedder,
     gate: { async assertOpen() {} },
     tokens: { countTokens },
   });
@@ -93,9 +114,27 @@ function assertTag(actual, expected) {
   return tagRevision;
 }
 
-/** @param {CaseContext} ctx */
-async function portFixture(ctx) {
-  const scope = ctx.scope(null);
+/**
+ * Ports can hide a tag whose receipt is suppressed, so a null read does not prove the anchor is gone.
+ * When the harness can dump stored state, no record may still bind the receipt to its digest.
+ * @param {CaseContext} ctx @param {{ receiptId: string, digest: string }} anchor @param {string} scenario
+ */
+async function assertNoRetainedAnchor(ctx, { receiptId, digest }, scenario) {
+  if (typeof ctx.harness?.dump !== "function") return;
+  /** @type {unknown[]} */
+  const pending = [await ctx.harness.dump()];
+  while (pending.length) {
+    const value = pending.pop();
+    if (value === null || typeof value !== "object") continue;
+    const record = /** @type {Record<string, unknown>} */ (value);
+    check(!(record.receiptId === receiptId && record.digest === digest), `${scenario} must not retain the receipt anchor`);
+    pending.push(...Object.values(record));
+  }
+}
+
+/** @param {CaseContext} ctx @param {string | null} [namespace] */
+async function portFixture(ctx, namespace = null) {
+  const scope = ctx.scope(/** @type {import("@cairn-ink/core/ports").Namespace} */ (namespace));
   const tags = tagsOf(ctx);
   const { memories } = ctx.adapter;
   const input = /** @type {InsertRow} */ ({ ...await row(ctx, text), kind: "instruction" });
@@ -194,16 +233,39 @@ export const PROCEDURAL_TAG_CASES = [
   {
     id: "K-PROC-3", title: "isolates tag reads and clears by owner and namespace", needs: ["proceduralTags"],
     async run(ctx) {
-      const { scope, tags, tagged, readTag } = await portFixture(ctx);
-      const { id, tag } = await tagged();
-      const originalRevision = assertTag(await readTag(id), tag);
-      for (const [label, other] of [
-        /** @type {const} */ (["owner", { ...scope, owner: ctx.otherOwner }]),
-        /** @type {const} */ (["namespace", ctx.scope("project\0other")]),
-      ]) {
-        equal(await read(ctx, other, tx => tags.read(tx, other, id)), null, `Tag read leaked across ${label}`);
-        await write(ctx, other, tx => tags.clear(tx, other, id));
-        equal(assertTag(await readTag(id), tag), originalRevision, `Tag clear crossed ${label}`);
+      const { uow } = ctx.adapter;
+      const namespaces = [null, "project\0alpha", "project\0beta"];
+      const seeded = [];
+      for (const namespace of namespaces) {
+        const { scope, tags, tagged, readTag } = await portFixture(ctx, namespace);
+        const { id, tag } = await tagged();
+        seeded.push({ namespace, scope, tags, readTag, id, tag, revision: assertTag(await readTag(id), tag) });
+      }
+      for (const { namespace, scope, tags, readTag, id, tag, revision } of seeded) {
+        const label = namespace === null ? "the default namespace" : "a named namespace";
+        /** @type {[string, Scope][]} */
+        const others = [["owner", { ...scope, owner: ctx.otherOwner }],
+          ...namespaces.filter(other => other !== namespace).map(other =>
+            /** @type {[string, Scope]} */ (["namespace", ctx.scope(/** @type {import("@cairn-ink/core/ports").Namespace} */ (other))]))];
+        for (const [kind, other] of others) {
+          equal(await read(ctx, other, tx => tags.read(tx, other, id)), null, `Tag read leaked across ${kind} from ${label}`);
+          await write(ctx, other, tx => tags.clear(tx, other, id));
+          equal(assertTag(await readTag(id), tag), revision, `Tag clear crossed ${kind} from ${label}`);
+        }
+        // Another owner's transaction must not read or clear this owner's tag, even when it names this scope.
+        let leaked = null;
+        try {
+          leaked = await uow.run(ctx.otherOwner, { readOnly: true }, tx => tags.read(tx, scope, id));
+        } catch {
+          leaked = null;
+        }
+        equal(leaked, null, `A foreign owner's transaction read the tag in ${label}`);
+        try {
+          await uow.run(ctx.otherOwner, { pauseLock: true }, tx => tags.clear(tx, scope, id));
+        } catch {
+          // Refusing the foreign transaction is the expected outcome.
+        }
+        equal(assertTag(await readTag(id), tag), revision, `A foreign owner's transaction cleared the tag in ${label}`);
       }
     },
   },
@@ -320,7 +382,8 @@ export const PROCEDURAL_TAG_CASES = [
       const { memory, assertCleared } = clearingService(ctx, scope, id);
       const tags = tagsOf(ctx);
       const readTag = () => read(ctx, scope, tx => tags.read(tx, scope, id));
-      check((await readTag())?.positive, "Expected a positive tag before correction");
+      const before = await readTag();
+      check(before?.positive && before.anchors[0], "Expected a positive tag before correction");
       const replacement = "Use a map before leaving.";
       const corrected = await memory.correct(scope, id, revision, replacement, source);
       check(corrected.status === "saved", `Expected a saved correction, got ${corrected.status}`);
@@ -328,6 +391,7 @@ export const PROCEDURAL_TAG_CASES = [
       const cleared = await readTag();
       if (cleared !== null) assertTag(cleared, { positive: false, origin: null, anchors: [] });
       assertCleared();
+      await assertNoRetainedAnchor(ctx, before.anchors[0], "Correct");
     },
   },
   {
@@ -337,10 +401,12 @@ export const PROCEDURAL_TAG_CASES = [
       const { memory, assertCleared } = clearingService(ctx, scope, id);
       const tags = tagsOf(ctx);
       const readTag = () => read(ctx, scope, tx => tags.read(tx, scope, id));
-      check((await readTag())?.positive, "Expected a positive tag before forget");
+      const before = await readTag();
+      check(before?.positive && before.anchors[0], "Expected a positive tag before forget");
       equal((await memory.forget(scope, id, source)).status, "forgotten", "Expected the memory to be forgotten");
       equal(await readTag(), null, "The forgotten memory's tag must be absent");
       assertCleared();
+      await assertNoRetainedAnchor(ctx, before.anchors[0], "Forget");
     },
   },
   {
@@ -401,7 +467,8 @@ export const PROCEDURAL_TAG_CASES = [
       check(/** @type {Adapter} */ (ctx.adapter).proceduralTags == null, "Disabled proceduralTags must have no tag port");
       const scope = ctx.scope(null);
       const before = await revision(ctx, scope);
-      await rejects(() => service(ctx).save(scope, text, source, "instruction", options("disabled")), "capability_unavailable");
+      await rejects(() => service(ctx, undefined, { refuseEmbedding: true })
+        .save(scope, text, source, "instruction", options("disabled")), "capability_unavailable");
       await emptyScope(ctx, scope, "Capability refusal");
       equal(await revision(ctx, scope), before, "Capability refusal must preserve the owner revision");
     },
