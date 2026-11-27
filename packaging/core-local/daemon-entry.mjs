@@ -134,6 +134,15 @@ async function serveDirect(options, readKey) {
   }
 }
 
+export async function readManagedModelConsent(options) {
+  try {
+    const { modelConsent } = await assertActiveAuthority(managedGeneration(), options, { modelConsent: true });
+    return modelConsent;
+  } catch {
+    return false;
+  }
+}
+
 export async function serveManaged(args, options) {
   try {
     const environment = selectedEnvironment(undefined, { providerKeys: false });

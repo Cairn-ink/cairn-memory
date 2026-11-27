@@ -52,6 +52,43 @@ function serve(f, probe, input) {
   return reply.stdout.trim().split('\n').map(line => JSON.parse(JSON.parse(line).result.content[0].text));
 }
 
+function checkConfig(f, probe) {
+  const { command: node, args: [entry, ...vector] } = claude(f);
+  const result = launch(f, entry, ['--check-config', ...vector], { preload: probe.preload, env, node });
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.databaseOpened, false);
+  assert.equal(report.providerContacted, false);
+  return report;
+}
+
+test('the installed configuration check reads the key value only with valid local consent', linux, async t => {
+  const f = await legacyFixture(t);
+  operator(f, prepare);
+  operator(f, confirm);
+  const probe = observer(f);
+  const checkKeyless = () => {
+    const report = checkConfig(f, probe);
+    assert.deepEqual(probe.read(), []);
+    assert.equal(report.openAIKeySet, true);
+    assert.equal(report.modelKeyPresent, false);
+    assert.equal(report.cloudProcessing, false);
+    assert.equal(report.recall, 'model_not_configured');
+  };
+  assert.throws(() => readFileSync(consentPath(f)), { code: 'ENOENT' });
+  checkKeyless();
+  writeFileSync(consentPath(f), '{}\n', { mode: 0o600 });
+  checkKeyless();
+  const { ownerId: owner, projectId: project } = readJSON(join(f.root, 'installation.json'));
+  writeFileSync(consentPath(f), JSON.stringify({ version: 1, owner, project, profile: 'openai-baseline-v1' }) + '\n');
+  const report = checkConfig(f, probe);
+  assert.deepEqual(probe.read(), [{ read: 'OPENAI_API_KEY' }]);
+  assert.equal(report.openAIKeySet, true);
+  assert.equal(report.modelKeyPresent, true);
+  assert.equal(report.cloudProcessing, true);
+  assert.equal(report.recall, 'configured-not-verified');
+});
+
 test('a stray key keeps MCP keyless until explicit local setup records consent', linux, async t => {
   const f = await legacyFixture(t);
   assert.match(operator(f, prepare, { env }), /Local cutover verified/u);

@@ -22,7 +22,7 @@ const run = (entry, args, env, input, nodeArgs = []) => {
   return { code: child.status, stdout: child.stdout, stderr: child.stderr };
 };
 
-test('configuration-check matches the legacy managed vector and never uses a provider or opens SQLite', t => {
+test('configuration-check without a managed install reports key presence separately from provider configuration', t => {
   const { path } = createTestWorkspace(t);
   const environment = { HOME: path, TMPDIR: path, LANG: 'C.UTF-8' };
   const database = join(path, 'missing', 'database.sqlite');
@@ -31,15 +31,16 @@ test('configuration-check matches the legacy managed vector and never uses a pro
   const legacy = join(repo, 'adapters/mcp/cli.mjs');
   for (const key of [undefined, '', syntheticKey, 'invalid\nsynthetic']) {
     const env = { ...environment, ...(key === undefined ? {} : { OPENAI_API_KEY: key }) };
-    const expected = run(legacy, args, env);
-    assert.deepEqual(run(candidate, args, env), expected);
-    if (expected.code === 0) {
-      const report = JSON.parse(expected.stdout);
-      assert.equal(report.modelKeyPresent, key === syntheticKey);
-      assert.equal(report.databaseOpened, false);
-      assert.equal(report.providerContacted, false);
-      assert.doesNotMatch(expected.stdout, new RegExp(syntheticKey));
-    } else assert.equal(expected.code, 1);
+    const result = run(candidate, args, env);
+    assert.equal(result.code, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.openAIKeySet, key !== undefined);
+    assert.equal(report.modelKeyPresent, false);
+    assert.equal(report.cloudProcessing, false);
+    assert.equal(report.recall, 'model_not_configured');
+    assert.equal(report.databaseOpened, false);
+    assert.equal(report.providerContacted, false);
+    assert.doesNotMatch(result.stdout, new RegExp(syntheticKey));
   }
   assert.deepEqual(run(candidate, ['--check-config'], environment), run(legacy, ['--check-config'], environment));
 });
