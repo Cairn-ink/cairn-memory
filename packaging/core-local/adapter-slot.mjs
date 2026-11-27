@@ -1,5 +1,7 @@
 import { openSqliteAdapter } from '../../packages/adapter-sqlite/src/adapter.mjs';
+import { fetchForAssembly } from '../../packages/core/src/service/context-read-assembly-evidence.mjs';
 import { findCandidatesMethod } from '../../packages/core/src/service/context-read-find.mjs';
+import { readContextMethod } from '../../packages/core/src/service/context-read.mjs';
 import { createMemoryService } from '../../packages/core/src/service/index.mjs';
 import { inspectRecallEvidence } from '../../packages/core/src/service/inspect.mjs';
 import tokenizer from './vendor/tiktoken/tiktoken.cjs';
@@ -37,10 +39,16 @@ export async function openStorage(database, localAuthority, { model = null, embe
         storage.hashSessionKey(localAuthority.scope, client, sessionId) }),
       contextReadCounter: { count: countTokens }, contextReadFormat: formatBlock,
     });
-    const recall = provider && {
-      findCandidates: findCandidatesMethod({ storage, clock: ports.clock, gate: ports.gate, embedQuery: ports.embedQuery }).findCandidates,
-      inspect: inspectRecallEvidence.bind(null, storage),
-    };
+    let recall;
+    if (provider) {
+      const { clock, gate, embedQuery } = ports;
+      const { findForAssembly, startAssemblyEmbedding } = findCandidatesMethod({ storage, clock, gate, embedQuery });
+      recall = {
+        readContext: readContextMethod({ storage, clock, find: findForAssembly, startEmbedding: startAssemblyEmbedding,
+          fetch: fetchForAssembly(storage), counter: { count: countTokens }, format: formatBlock, includeCompactItemRank: true }),
+        inspect: inspectRecallEvidence.bind(null, storage),
+      };
+    }
     return { service, storage, recall, async close() {
       try { encoding.free(); } finally { await storage.close(); }
     } };
