@@ -31,6 +31,24 @@ export function legacyRawHash(key, scope, purpose, client, value) {
     .update(JSON.stringify([purpose, ...boundary, client, value])).digest("hex");
 }
 
+/** @param {string} key @param {Scope} scope @param {string} client @param {string} id */
+function legacyUuidTag(key, scope, client, id) {
+  return legacyRawHash(key, scope, "local-raw-forgotten-uuid-v1", client, id);
+}
+
+/** @param {Connection} db @param {string} owner @param {string} key @param {string} id */
+export function hasMigratedUuidCandidate(db, owner, key, id) {
+  const coordinates = db.prepare(`SELECT DISTINCT namespace_key, client_key FROM cairn_migrated_raw_privacy
+    WHERE owner_id = ? AND kind = 'uuid'`);
+  const match = db.prepare(`SELECT 1 FROM cairn_migrated_raw_privacy
+    WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND kind = 'uuid' AND selector = ? LIMIT 1`);
+  for (const { namespace_key, client_key } of coordinates.iterate(owner)) {
+    const scope = { owner, namespace: decodeJson(namespace_key) };
+    if (match.get(owner, namespace_key, client_key, legacyUuidTag(key, scope, decodeJson(client_key), id))) return true;
+  }
+  return false;
+}
+
 /** @param {Connection} db @param {Scope} scope @param {string} hash */
 function fenced(db, scope, hash) {
   return Boolean(db.prepare("SELECT 1 FROM cairn_raw_fences WHERE owner_id = ? AND namespace_key = ? AND session_hash = ?")
@@ -58,7 +76,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
   function blocksUuid(db, scope, { client }, id) {
     return client === "claude-code" && Boolean(db.prepare(`SELECT 1 FROM cairn_migrated_raw_privacy
       WHERE owner_id=? AND namespace_key=? AND client_key=? AND kind='uuid' AND selector=?`)
-      .get(...scopeKey(scope), JSON.stringify(client), legacyRawHash(key, scope, "local-raw-forgotten-uuid-v1", client, id)));
+      .get(...scopeKey(scope), JSON.stringify(client), legacyUuidTag(key, scope, client, id)));
   }
 
   /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions */
@@ -120,7 +138,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
       for (const { namespace_key } of ancestors.iterate(owner, namespace, clientKey)) {
         const ancestor = { owner, namespace: decodeJson(namespace_key) };
         if (messages.some(({ id }) => matches.get(owner, namespace_key, clientKey,
-          legacyRawHash(key, ancestor, "local-raw-forgotten-uuid-v1", client, id)))) return true;
+          legacyUuidTag(key, ancestor, client, id)))) return true;
       }
       return false;
     },
@@ -163,7 +181,7 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
         const ids = [...positions.map(item => item.id), ...archived.map(row => decodeJson(row.message_key)),
           ...queued.flatMap(row => decodeJson(row.messages).map((/** @type {Position} */ item) => item.id))];
         for (const id of ids) {
-          const uuid = legacyRawHash(key, scope, "local-raw-forgotten-uuid-v1", client, id);
+          const uuid = legacyUuidTag(key, scope, client, id);
           if (uuid !== null) insert.run(...keys, JSON.stringify(client), uuid);
         }
       }

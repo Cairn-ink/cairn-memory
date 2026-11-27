@@ -3,7 +3,11 @@ import { test } from "node:test";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { contextReadTestService } from "@cairn-ink/conformance/context-read";
+import { openMemoryCore } from "../../../core/index.mjs";
+import { rationaleModel } from "../../../core/testing/rationale-model.mjs";
+import { rawRequest, splitRaw } from "../../../core/testing/raw-fixtures.mjs";
 import { createSqliteAdapter } from "../src/adapter.mjs";
+import { migrateLegacyStore } from "../src/migrate/index.mjs";
 import { createMigratedRawPolicy } from "../src/migrate/raw-privacy.mjs";
 import { rawFactPolicy } from "../src/raw-facts.mjs";
 import { allowsRawSession } from "../src/raw-lineage.mjs";
@@ -12,6 +16,8 @@ import { receiptIdentityKey } from "../src/receipt-identity.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { copyReceipts, invalidInput } from "../src/storage-values.mjs";
 import { scopedSuppression } from "../src/suppressions.mjs";
+import { editFixture, fixture as legacyFixture, scratch as legacyScratch } from "./legacy/fixtures.mjs";
+import { coreScope, createLegacyBackup, ok, personal, prepareInput, project, service } from "./migration-fixtures.mjs";
 import { scratch, seedFact, sha256 } from "./storage-fixtures.mjs";
 
 const scope = { owner: "fixture-owner", namespace: "project\0notes" };
@@ -146,14 +152,15 @@ async function paths({ adapter, api }, receipt, ref) {
 
 test("an unarchived placeholder remains visible under an unknown-time window", async t => {
   const opened = await fixture(t);
-  const ref = await retain(opened.adapter, placeholder);
+  const ref = await retain(opened.adapter, { ...placeholder, messageId: "fixture-read-message" });
   await seedWindow(opened.adapter);
   assert.deepEqual(await delivery(opened.api, ref), visible);
   assert.equal(await withholds(opened.adapter, placeholder), false);
   assert.equal((await opened.api.save(scope, text, source, "fact", { receipt: placeholder })).status, "saved");
 
   const replacement = "Revised synthetic receipt evidence";
-  assert.equal((await opened.api.correct(scope, ref.id, ref.revision, replacement, source, { receipt: placeholder })).status, "saved");
+  const receipt = { ...placeholder, messageId: "fixture-correction-message" };
+  assert.equal((await opened.api.correct(scope, ref.id, ref.revision, replacement, source, { receipt })).status, "saved");
 });
 
 test("an unrelated archived turn in the placeholder session does not block explicit writes", async t => {
@@ -271,7 +278,7 @@ for (const [location, target] of [["another session", scope], ["another namespac
   }
 }
 
-test("every Raw candidate uses the merge-base admission policy", async t => {
+test("every cited candidate uses the merge-base admission policy", async t => {
   for (const [name, candidate, options, citedAddress] of [
     ["direct archive", {}, { recordRoot: false }, true],
     ["same-id archive in another session", { sessionId: "fixture-other" }, { recordRoot: false }, false],
@@ -281,14 +288,16 @@ test("every Raw candidate uses the merge-base admission policy", async t => {
     ["root only in another session", { sessionId: "fixture-root" }, { storeTurn: false }, false],
     ["root only in another namespace", { sessionId: "fixture-root" }, { target: rootScope, storeTurn: false }, false],
     ["root only from another client", { client: "fixture-client" }, { storeTurn: false }, false],
+    ["retained receipt without Raw", {}, { receiptOnly: true }, false],
   ]) {
     await t.test(name, async t => {
-      const { legacyRawHashing = false, ...archiveOptions } = options;
+      const { legacyRawHashing = false, receiptOnly = false, ...archiveOptions } = options;
       const { adapter, baseReceiptWithheld } = await fixture(t, { legacyRawHashing });
       const sessionId = legacyRawHashing
         ? "legacy-raw:" + adapter.hashSessionKey(scope, placeholder.client, placeholder.sessionId)
         : candidate.sessionId ?? placeholder.sessionId;
-      await archive(adapter, { ...placeholder, ...candidate, sessionId }, { ...archiveOptions, occurredAtMs: 15 });
+      if (receiptOnly) await retain(adapter, placeholder);
+      else await archive(adapter, { ...placeholder, ...candidate, sessionId }, { ...archiveOptions, occurredAtMs: 15 });
 
       async function check(expected) {
         const receipt = { ...placeholder, excerpt: changedText };
@@ -308,15 +317,83 @@ test("every Raw candidate uses the merge-base admission policy", async t => {
   }
 });
 
+async function migrateDeletedClaudeTurn(t, messageId) {
+  const directory = legacyScratch(t);
+  const input = prepareInput(directory, await legacyFixture(directory, 29, { localPrivacy: true }));
+  const client = "claude-code";
+  const engine = openMemoryCore({ path: input.path, raw: true, rawSearch: false, model: {
+    ...rationaleModel(), extract: () => ({ items: [] }),
+  } });
+  try {
+    const [part] = splitRaw(text, { id: messageId, occurredAt: new Date(Date.now() - 1000).toISOString() });
+    const captured = ok(await engine.captureRaw(rawRequest(part, {
+      namespace: personal, client, sessionId: "deleted-conversation", eventId: "deleted-capture",
+    })));
+    ok(captured.interpretation);
+    const { conversations } = ok(engine.listRawConversations({ namespace: personal, client }));
+    const { id, revision } = conversations.find(row => row.id === captured.raw.conversationId);
+    ok(await engine.deleteConversation({
+      namespace: personal, conversationId: id, expectedRevision: revision, actionId: "delete-source",
+    }));
+  } finally {
+    await engine.close();
+  }
+  await createLegacyBackup(input);
+  await migrateLegacyStore(input);
+  editFixture(input.destination, db => {
+    assert.equal(db.prepare("SELECT count(*) AS n FROM cairn_raw_messages").get().n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM cairn_raw_anchors").get().n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM cairn_receipts").get().n, 0);
+    assert.deepEqual(db.prepare("SELECT kind, body FROM cairn_migrated_raw_privacy WHERE kind = 'uuid'")
+      .all().map(row => [row.kind, row.body]), [["uuid", "null"]]);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM cairn_migrated_raw_privacy WHERE kind IN ('span', 'reservation')")
+      .get().n, 0);
+  });
+  return input.destination;
+}
+
+for (const client of ["claude-code", "codex"]) {
+  for (const operation of ["save", "correct"]) {
+    test(`migrated UUID-only fence preserves base admission for ${client} ${operation}`, async t => {
+      const messageId = "52d3bad6-9453-40bd-893b-91ab59c533df";
+      const storage = await openStorage(await migrateDeletedClaudeTurn(t, messageId));
+      try {
+        const adapter = createSqliteAdapter(storage);
+        const api = service(adapter);
+        const target = coreScope(project);
+        const receipt = { ...placeholder, client, messageId };
+        const before = await api.save(target, "Independent synthetic memory", source, "fact");
+        assert.equal(before.status, "saved");
+        await seedWindow(adapter, { ...target, client });
+        const body = operation === "save" ? text : changedText;
+        const base = baseAdmission(storage, adapter.hashSessionKey, true);
+        assert.equal(await adapter.uow.run(target.owner, { readOnly: true },
+          tx => base(tx, target, { ...receipt, excerpt: body })), true);
+        const actual = await adapter.uow.run(target.owner, { readOnly: true },
+          tx => adapter.suppressions.receiptWithheld(tx, target, { ...receipt, excerpt: body }));
+        const result = operation === "save"
+          ? await api.save(target, body, source, "fact", { receipt })
+          : await api.correct(target, before.item.id, before.item.revision, body, source, { receipt });
+        assert.deepEqual({ receiptWithheld: actual, status: result.status }, { receiptWithheld: true, status: "suppressed" });
+      } finally {
+        await storage.close();
+      }
+    });
+  }
+}
+
 test("an unrelated id and a same-id turn under another owner do not remove the exemption", async t => {
   const { adapter, api } = await fixture(t);
   await archive(adapter, { ...placeholder, messageId: "other-message" });
-  await archive(adapter, placeholder, { target: { ...scope, owner: "other-owner" } });
-  const ref = await retain(adapter, placeholder);
+  const correction = { ...placeholder, messageId: "fixture-correction-message" };
+  const target = { ...scope, owner: "other-owner" };
+  await archive(adapter, placeholder, { target });
+  await archive(adapter, correction, { target });
+  const ref = await retain(adapter, { ...placeholder, messageId: "fixture-read-message" });
   await seedWindow(adapter);
   assert.equal(await withholds(adapter, placeholder), false);
   assert.equal((await api.save(scope, text, source, "fact", { receipt: placeholder })).status, "saved");
-  assert.equal((await api.correct(scope, ref.id, ref.revision, changedText, source, { receipt: placeholder })).status, "saved");
+  assert.equal((await api.correct(scope, ref.id, ref.revision, changedText, source, { receipt: correction })).status, "saved");
 });
 
 test("address-only Raw evidence is withheld by an unknown-time window in the root namespace", async t => {
@@ -363,10 +440,10 @@ test("a finite window still withholds a placeholder that cites an in-window turn
 test("forget-origin source and passage withholds still apply to placeholders", async t => {
   const opened = await fixture(t);
   const { adapter, api } = opened;
-  const ref = await retain(adapter, placeholder);
   await seedWindow(adapter);
   const saved = await api.save(scope, text, source, "fact", { receipt: placeholder });
   assert.equal(saved.status, "saved");
+  const ref = await retain(adapter, placeholder);
   assert.equal((await api.forget(scope, saved.item.id, source)).status, "forgotten");
   assert.deepEqual(await paths(opened, placeholder, ref), {
     receiptWithheld: true, ...hidden, save: "suppressed", correct: "suppressed",
