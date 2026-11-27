@@ -73,28 +73,34 @@ async function fixture(t, keyed, overrides) {
   const key = keyed ? await userFingerprintKey(secret, scope.owner, HOSTED_FINGERPRINT_LABELS) : null;
   if (key) await keys.publish(scope.owner, key.id);
 
-  const options = { lineageSecret: "forget-receipt-lineage", nearDuplicate: false, allowNonNullNamespace: true };
-  const { raw: archive, sessionLineage } = createPostgresRawPorts({ ...options,
-    fingerprintKeys: async owner => key && owner === scope.owner ? [{ pipeline: "core", key }] : [] });
-  const raw = { ...archive, ...createPostgresRawReads(options) };
-  const reads = createPostgresMemoryReads(options);
-  const memories = createPostgresMemoryStore(options);
-  const quantityLedger = createPostgresQuantityLedgerStore(options);
+  const readOptions = { allowNonNullNamespace: true };
+  const rawOptions = {
+    lineageSecret: "forget-receipt-lineage",
+    fingerprintKeys: async owner => key && owner === scope.owner ? [key] : [],
+  };
+  const { raw: archive, sessionLineage } = createPostgresRawPorts({ ...rawOptions,
+    fingerprintKeys: async owner => (await rawOptions.fingerprintKeys(owner)).map(key => ({ pipeline: "core", key })) });
+  const raw = { ...archive, ...createPostgresRawReads(rawOptions) };
+  const reads = createPostgresMemoryReads({ ...readOptions, ...rawOptions });
+  const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate: false });
+  const quantityLedger = createPostgresQuantityLedgerStore(readOptions);
   const hostWriteHookPort = overrides && createPostgresHostWriteHookPort({
-    context: new AsyncLocalStorage(), rawVisibility: options,
+    context: new AsyncLocalStorage(), rawVisibility: rawOptions,
   });
   let extraction = [];
-  const createService = (rawEnabled = true) => createMemoryService({
+  const createService = ({ rawEnabled = true, sessionLineageEnabled = rawEnabled } = {}) => createMemoryService({
     storage: {
       name: "postgres", uow, keys, memories, quantityLedger, hostWriteHookPort, raw, sessionLineage,
       ...reads,
-      capture: createPostgresCapturePorts({ ...options, now: () => now }),
+      capture: createPostgresCapturePorts({ ...readOptions, lineageSecret: rawOptions.lineageSecret,
+        nearDuplicate: false, now: () => now }),
       pause: createPostgresPauseStore(),
-      suppressions: createPostgresSuppressionStore(options),
-      ...createPostgresMemoryCandidates(options),
+      suppressions: createPostgresSuppressionStore({ ...readOptions, lineageSecret: rawOptions.lineageSecret }),
+      ...createPostgresMemoryCandidates(readOptions),
       capabilities: capabilities({ fingerprintKey: keyed, embeddingRequiredOnInsert: true, nearDuplicate: false,
-        rawArchive: rawEnabled, sessionLineage: rawEnabled, quantityLedger: true, hostWriteHooks: !!overrides }),
+        rawArchive: rawEnabled, sessionLineage: sessionLineageEnabled, quantityLedger: true, hostWriteHooks: !!overrides }),
     },
+    config: {},
     ...(overrides && { hostWriteHooks: syntheticHooks(overrides) }),
     clock: { nowMs: () => now, monotonicMs: () => performance.now(), sha256Hex,
       hmacHex: (key, text) => createHmac("sha256", key).update(text).digest("hex") },
@@ -252,6 +258,28 @@ for (const keyed of [false, true]) {
     assert.deepEqual(before.filter(row => !remaining.has(row.id)).map(tuple), affected);
   });
 
+  test(`Postgres ${mode} forget deletes, marks and reports a different-role receipt in the primary session`, migrationDbTest, async t => {
+    let affected;
+    const f = await fixture(t, keyed, { async onForget(_tx, ctx) { affected = ctx.affectedMessages.map(tuple); } });
+    const id = await f.capture(primary, [primaryTurn, differentRole], memoryText);
+    const evidence = receipt(primary, secondaryTurn);
+    await f.attach(id, [evidence]);
+    const row = (await f.rawRows()).find(raw => raw.messageId === evidence.messageId);
+    assert.deepEqual(tuple(row), tuple(evidence));
+    assert.equal(row.role, "assistant");
+    const receipts = await f.receiptRows(id);
+    assert.deepEqual(receipts.find(item => item.messageId === row.messageId), {
+      client: evidence.client, sessionId: evidence.sessionId, messageId: evidence.messageId, role: "user", marked: false,
+    });
+
+    // Fence the session without erasing it wholesale, so receipt erasure must delete the row.
+    const service = f.createService({ sessionLineageEnabled: false });
+    assert.equal((await service.forget(scope, id, source)).status, "forgotten");
+    assert.ok((await f.rawRows()).every(raw => raw.id !== row.id));
+    assert.deepEqual(await f.receiptRows(id), receipts.map(item => ({ ...item, marked: true })));
+    assert.deepEqual(affected, [tuple(receipt(primary, primaryTurn)), tuple(evidence)]);
+  });
+
   test(`Postgres ${mode} named namespace forget removes receipts only`, migrationDbTest, async t => {
     const f = await fixture(t, keyed);
     const named = { ...scope, namespace: "project" };
@@ -261,7 +289,7 @@ for (const keyed of [false, true]) {
     const before = await f.rawRows();
     assert.equal(before.length, 1);
     assert.deepEqual((await f.receiptRows(id)).map(({ marked }) => marked), [false]);
-    assert.equal((await f.createService(false).forget(named, id, source)).status, "forgotten");
+    assert.equal((await f.createService({ rawEnabled: false }).forget(named, id, source)).status, "forgotten");
     assert.deepEqual(await f.rawRows(), before);
     assert.deepEqual(await f.receiptRows(id), []);
   });
