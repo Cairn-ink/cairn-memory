@@ -436,6 +436,8 @@ const selected = new Set([
   "K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-8w",
   "K-REL-1", "K-REL-2", "K-REL-3", "K-REL-4", "K-REL-5", "K-REL-6",
   "K-REL-7", "K-REL-8", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12",
+  "K-RELH-1", "K-RELH-2", "K-RELH-3", "K-RELH-4", "K-RELH-5", "K-RELH-6",
+  "K-RELH-7", "K-RELH-8", "K-RELH-9", "K-RELH-10",
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
