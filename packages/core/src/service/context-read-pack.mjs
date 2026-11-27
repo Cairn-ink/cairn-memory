@@ -1,20 +1,22 @@
 import { isWellFormedText } from "../capture/validate.mjs";
 import { renderCardAmendments } from "../routing/amendment-read.mjs";
 import { CoreError } from "../errors.mjs";
+import { COMPACT_MEMORY_REPRESENTATION } from "./context-read-input.mjs";
 import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, sourceDate, wireItem } from "./context-read-projection.mjs";
 
-/** @import { ContextAssemblyDiagnostics, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblySource, ContextAssemblyValue, ContextLedgerDiagnostics, ContextLedgerDigest } from "../ports/index.d.ts" */
+/** @import { ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy,
+  ContextAssemblySource, ContextAssemblyValue, ContextCompactAssemblyItem, ContextLedgerDiagnostics, ContextLedgerDigest } from "../ports/index.d.ts" */
 /** @import { LedgerReading } from "./context-read-assembly-evidence.mjs" */
 /** @import { LedgerLine } from "../ledger/digest.mjs" */
 /** @import { PreparedItem, Source } from "./context-read-projection.mjs" */
 /** @typedef {Pick<ContextAssemblyDiagnostics, "items" | "omitted" | "dedup" | "stops" | "trace">} PackDiagnostics */
 /** @typedef {{ maxTokens: number, maxItems: number }} Budget */
-/** @typedef {{ value: ContextAssemblyValue, details: PackDiagnostics["items"], selected: PreparedItem[], amendmentSourceCount?: number }} Projection */
-/** @typedef {{ budget: Budget, policy: ContextAssemblyPolicy, representation: ContextAssemblyRepresentation,
+/** @typedef {ContextAssemblyValue<ContextAssemblyItem | ContextCompactAssemblyItem>} AssemblyValue */
+/** @typedef {{ value: AssemblyValue, details: PackDiagnostics["items"], selected: PreparedItem[], amendmentSourceCount?: number }} Projection */
+/** @typedef {{ budget: Budget, policy: ContextAssemblyPolicy, representation: ContextAssemblyDiagnostics["representation"],
  * now: () => number, deadline: number, ledger?: ContextLedgerDigest,
- * format: (value: ContextAssemblyValue) => string, count: (text: string) => number,
- * fitsBytes: (value: ContextAssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
+ * format: (value: AssemblyValue) => string, count: (text: string) => number,
+ * fitsBytes: (value: AssemblyValue, text: string, details: PackDiagnostics, selected: PreparedItem[], used: number) => boolean }} PackOptions */
 /** @typedef {{ tokens: number, sources: { source: Source, tokens: number }[],
  * body?: string, amendmentSources?: Source[] }} Choice */
 
@@ -69,7 +71,7 @@ export function meter({ budget, now, deadline, format, count, fitsBytes }) {
     }
     throw new CoreError("token_count_unavailable");
   }
-  /** @param {ContextAssemblyValue} value */
+  /** @param {AssemblyValue} value */
   function block(value) {
     try {
       freezeTree(value);
@@ -186,13 +188,19 @@ export function packContext(items, options, metering) {
   /** @param {ReadonlyMap<PreparedItem, Choice>} selection @returns {Projection} */
   function project(selection) {
     const selected = prepared.filter(item => selection.has(item));
-    const rendered = dated ? selected.slice().sort((a, b) => compareDates(a.sortDate, b.sortDate)) : selected;
+    const rendered = dated || representation === COMPACT_MEMORY_REPRESENTATION
+      ? selected.slice().sort((a, b) => compareDates(a.sortDate, b.sortDate)) : selected;
     /** @type {Map<string, {item: number, source: number}>} */
     const concrete = new Map();
     /** @type {PackDiagnostics["items"][number][]} */
     const details = [];
     const wire = rendered.map((item, itemIndex) => {
       const { tokens, sources: included, body = item.body, amendmentSources = [] } = /** @type {Choice} */ (selection.get(item));
+      if (representation === COMPACT_MEMORY_REPRESENTATION) {
+        details.push({ ref: item.evidence.item.ref, metadata: item.metadata, body: { tokens }, sources: [],
+          sourceAccess: item.sourceAccess, sourcesComplete: item.sourcesComplete, fence: item.evidence.fence, f: item.compact.f });
+        return { date: item.date ?? null, body };
+      }
       const eligibleSources = [...item.sources, ...amendmentSources];
       /** @type {NonNullable<PackDiagnostics["items"][number]["sources"]>[number][]} */
       const sourceDetails = [];
@@ -295,7 +303,7 @@ export function packContext(items, options, metering) {
 
   /** @param {PreparedItem} item */
   const visitSources = item => {
-    if (!chosen.has(item)) return;
+    if (representation === COMPACT_MEMORY_REPRESENTATION || !chosen.has(item)) return;
     const sources = policy === "rank-first-first-source-v1" ? item.sources.slice(0, 1) : item.sources;
     for (const source of sources) { if (expired()) break; visit(item, source); }
   };
@@ -306,7 +314,7 @@ export function packContext(items, options, metering) {
     visit(item);
     if (policy !== "coverage-first-v1") visitSources(item);
   }
-  if (policy === "coverage-first-v1") for (const item of prepared) {
+  if (representation !== COMPACT_MEMORY_REPRESENTATION && policy === "coverage-first-v1") for (const item of prepared) {
     if (expired()) break;
     visitSources(item);
   }
