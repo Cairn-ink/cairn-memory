@@ -1559,3 +1559,11 @@ authority reader for its lifetime. A second registration throws `invalid_input`.
 
 While a hook is active, the port context refuses to run without a hook record. It throws
 `host_write_hook_failed` before calling the supplied callback.
+
+Core binds the authority reader while it builds the service. If service construction fails
+after that bind, the slot stays used and the port can serve no service. This fails closed:
+build a new port and a new service.
+
+The context guard throws synchronously from `run`. A detached continuation, such as a timer
+or an unawaited promise, that calls `run` without a hook record while a hook is active throws
+there, not as a hook failure. Hook callbacks must await all of their work.
