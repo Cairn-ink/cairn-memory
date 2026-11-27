@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
-import { dirname, join, sep } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { availableClient, codexHome, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
@@ -10,6 +10,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities, inspectLocalCodexServers } from './local-codex.mjs';
 import { isLegacyCutoverInstaller } from './local-cutover-eligibility.mjs';
+import { cutoverImport } from './local-cutover-runtime.mjs';
 import { shellArgument } from './output.mjs';
 import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup, engineOperatorEnvironment } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
@@ -19,6 +20,18 @@ const clientNames = ['claude', 'codex'];
 const controls = ['disable', 'pause', 'resume', 'prompt-recall-on', 'prompt-recall-off', 'config'];
 const yes = value => /^(?:y|yes)$/iu.test(value.trim());
 const exists = path => lstat(path).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
+const retryAsCutover = Symbol('retryAsCutover');
+async function absentCutoverStore(path) {
+  try {
+    if (await exists(path) || /^\.cairn-(?:cutover|retired)-/u.test(basename(path))) return false;
+    const { privateLocation } = await cutoverImport('paths');
+    const location = privateLocation(path);
+    if (location.path !== path) return false;
+    for (const suffix of ['-journal', '-wal', '-shm']) if (await exists(path + suffix)) return false;
+    location.check();
+    return !await exists(path);
+  } catch { return false; }
+}
 const recorded = (descriptor, client) => Boolean(descriptor?.clients[client] ||
   (descriptor?.operation?.checkpoints[client] && descriptor.operation.checkpoints[client].state !== 'detached'));
 export function modeUnion(states, pending = false) {
@@ -278,8 +291,14 @@ export async function routeLocalMode(options, selection, context) {
   for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
     { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
-  if (descriptor?.state === 'installed' && isLegacyCutoverInstaller(descriptor.installerVersion) &&
+  // Ordinary setup records the current installer while still using the legacy engine.
+  if (descriptor?.state === 'installed' && descriptor.version === 'cairn-local-installation-v1' &&
+      (isLegacyCutoverInstaller(descriptor.installerVersion) || descriptor.installerVersion === context.installerVersion) &&
       (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform)) {
+    if (await absentCutoverStore(descriptor.database.path)) {
+      const code = await setupLocal(options, selection, detection, context, { requireAbsentStore: true });
+      if (code !== retryAsCutover) return { handled: true, code };
+    }
     if (options.noCapture || selection.client) throw new SetupError('local_option_invalid', 2);
     const { runInstalledCutover } = await import('./local-cutover-command.mjs');
     return { handled: true, code: await runInstalledCutover('prepare-activation', context, { requestModel }) };
@@ -324,7 +343,7 @@ async function localDryRun(options, selection, detection, context) {
   if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
   return 0;
 }
-async function setupLocal(options, selection, detection, context) {
+async function setupLocal(options, selection, detection, context, { requireAbsentStore = false } = {}) {
   const { write, t, prompt, interactive, env, runClaude, installerVersion, progress = {} } = context;
   write(t('local_privacy'));
   let selected = detection.descriptor?.operation?.clients;
@@ -363,7 +382,8 @@ async function setupLocal(options, selection, detection, context) {
   const root = await localRoot(env, { create: true });
   return withLocalLock(root, async updateChild => {
     let descriptor = await readDescriptor(root);
-    if (descriptor && JSON.stringify(descriptor) !== JSON.stringify(detection.descriptor)) throw new SetupError('local_recovery_required', 2, { path: join(root, 'installation.json') });
+    if ((descriptor || requireAbsentStore) && JSON.stringify(descriptor) !== JSON.stringify(detection.descriptor)) throw new SetupError('local_recovery_required', 2, { path: join(root, 'installation.json') });
+    if (requireAbsentStore && !await absentCutoverStore(descriptor.database.path)) return retryAsCutover;
     descriptor ??= newDescriptor(root, installerVersion, options);
     if (options.project !== undefined) descriptor.projectId = options.project;
     if (options.db && inside(root, await canonicalPath(options.db)) && options.db !== join(root, 'data/memory.sqlite')) throw new SetupError('local_option_invalid', 2);
