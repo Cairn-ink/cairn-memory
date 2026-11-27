@@ -189,7 +189,7 @@ export function createPostgresCapturePorts(options) {
       const incoming = copyReceipts(receipts);
       return runOperation(tx, async query => {
         const { rows } = await query(memoryReceiptsSql(`ARRAY(SELECT id FROM memories WHERE user_id = $1
-          AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3)`), [tx.owner, namespace, id]);
+          AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3)`, undefined, true), [tx.owner, namespace, id]);
         // The hosted receipt table has a composite key and does not store excerpts.
         /** @param {Receipt} receipt */
         const address = ({ client, sessionId, messageId, role, occurredAtMs }) =>

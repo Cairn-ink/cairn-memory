@@ -1,6 +1,6 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { copyReadScope, copyRefs, guardOwner, invalid, namespaceKey, pgText } from "./memory-input.mjs";
-import { MEMORY_COLUMNS, readEntry, timestampUs } from "./memory-rows.mjs";
+import { MEMORY_COLUMNS, readEntry, readReceipts, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { createRawRefReader } from "./raw-read.mjs";
 import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
@@ -67,21 +67,21 @@ export function memoryPage(tx, scope, page, historical, hashSessionKey) {
 }
 
 /** @param {Query} query @param {ReadSet} scope @param {ReturnType<typeof copyRefs>} refs
- * @param {boolean} historical @param {boolean} includeReceipts @param {FactMatchPolicy["hashSessionKey"]} hashSessionKey
+ * @param {boolean} historical @param {FactMatchPolicy["hashSessionKey"]} hashSessionKey
  * @param {VisibilityFactsCache} [cache] */
-async function visibleRefs(query, scope, refs, historical, includeReceipts, hashSessionKey, cache) {
+async function visibleRefs(query, scope, refs, historical, hashSessionKey, cache) {
   const keys = new Set(scope.keys);
   const selected = refs.filter(({ ref, key }) => ref.type === "memory" && keys.has(key));
   if (!selected.length) return [];
   const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${MEMORY_FILTER} AND id = ANY($7::text[])`,
     [...memoryScopeParams(scope, historical), [...new Set(selected.map(({ ref }) => ref.id))]]);
   const visibility = await readVisibility(query, scope.owner, hashSessionKey, cache);
-  const checked = await visibility.check(rows.map(row => readEntry(row, scope.owner)), includeReceipts);
+  const checked = await visibility.check(rows.map(row => readEntry(row, scope.owner)));
   const byId = new Map(checked.map(entry => [entry.memory.id, entry]));
   return selected.flatMap(({ ref }) => {
     const entry = byId.get(ref.id);
     return entry && !entry.hidden && entry.memory.scope.namespace === ref.namespace
-      ? [{ ref, memory: entry.memory, receipts: entry.evidence }]
+      ? [{ ref, memory: entry.memory }]
       : [];
   });
 }
@@ -171,7 +171,8 @@ export function createPostgresMemoryReads(options = {}) {
         const references = copyRefs(refs);
         if (intent !== "recall" && intent !== "read" && intent !== "export") invalid();
         return runOperation(tx, async (query, run) => {
-          const rows = await visibleRefs(query, selection, references, intent !== "recall", true, hashSessionKey, run.visibilityFacts);
+          const rows = await visibleRefs(query, selection, references, intent !== "recall", hashSessionKey, run.visibilityFacts);
+          const receipts = await readReceipts(query, tx.owner, rows.map(({ memory }) => memory.id), undefined, true);
           if (intent === "read") {
             const historical = rows.map(({ memory }) => memory).filter(memory => memory.historical);
             for (const namespace of new Set(historical.map(memory => memory.scope.namespace))) {
@@ -185,7 +186,10 @@ export function createPostgresMemoryReads(options = {}) {
               }
             }
           }
-          return rows.map(item => ({ ...structuredClone(item), sourceDates: sourceDates(item.receipts) }));
+          return rows.map(item => {
+            const sources = receipts.get(item.memory.id) ?? [];
+            return { ...structuredClone(item), receipts: structuredClone(sources), sourceDates: sourceDates(sources) };
+          });
         });
       },
     },
@@ -196,7 +200,7 @@ export function createPostgresMemoryReads(options = {}) {
         const references = copyRefs(refs);
         if (intent !== undefined && intent !== "read") invalid();
         return runOperation(tx, async (query) => {
-          const memories = await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey);
+          const memories = await visibleRefs(query, selection, references, intent === "read", hashSessionKey);
           if (!visibleRawRows) return memories.map(({ ref }) => ref);
           const raw = await visibleRawRows(query, selection, rawIds(references));
           const visibleMemoryRefs = new Set(memories.map(({ ref }) => ref));
