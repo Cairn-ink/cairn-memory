@@ -179,7 +179,10 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * provider work.
    */
   visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[],
-    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<DocumentCardVisibilityInput | null>>;
+    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<(DocumentCardVisibilityInput & {
+      /** Stored card and body revisions from this snapshot, when available. */
+      version?: { revision: Revision; bodyRevision: Revision };
+    }) | null>>;
 }
 
 /**

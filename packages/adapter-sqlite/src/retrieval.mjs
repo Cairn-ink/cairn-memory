@@ -458,7 +458,7 @@ function hydrateRow(db, { row }) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
- * @param {(db: Connection, selection: RetrievalScope, refs: readonly ItemRef[]) => ItemRef[]} visibleRawRefs
+ * @param {ReturnType<typeof import("./raw-read.mjs").createRawReads>["visibleRawRefs"]} visibleRawRefs
  * @param {ReturnType<typeof createVectorCache> | undefined} cache @param {() => number} now
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
@@ -664,13 +664,13 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       },
     },
     fence: {
-      assertVisible(tx, scope, refs, intent) {
+      assertVisible(tx, scope, refs, intent, matchesRawVersion) {
         // Core supplies a new read transaction for the final delivery check.
         return port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           const references = copyArray(refs);
           const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
-          return [...visible, ...visibleRawRefs(db, selection, references)];
+          return [...visible, ...visibleRawRefs(db, selection, references, matchesRawVersion)];
         });
       },
     },

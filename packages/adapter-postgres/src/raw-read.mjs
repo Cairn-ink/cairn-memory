@@ -6,7 +6,7 @@ import { createRawVisibility } from "./raw-visibility.mjs";
 import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
 import { runOperation } from "./uow.mjs";
 
-/** @import { ListRawMessages, RawCandidates, RawSegment } from "../../core/src/ports/index.d.ts" */
+/** @import { ListRawMessages, RawCandidates, RawSegment, RawVersionMatch } from "../../core/src/ports/index.d.ts" */
 /** @import { RawReadOptions } from "./raw-visibility.mjs" */
 /** @import { Query } from "./memory-rows.mjs" */
 /** @typedef {ReturnType<typeof copyReadScope>} ReadSet */
@@ -75,14 +75,19 @@ export function createPostgresRawReads(options) {
     return runOperation(tx, async query => {
       const visibility = await readVisibility(query, selection.owner, selection.clients);
       const segments = [];
+      /** @type {Map<string, string>} */
+      const witnesses = new Map();
       const depth = start === undefined ? limit : RAW_FIND_DEPTH;
       const batchSize = Math.min(BATCH_SIZE, limit);
       for (let offset = 0; segments.length < depth; offset += batchSize) {
-        const { rows } = await query(`SELECT ${COLUMNS}, pgroonga_score(r.tableoid, r.ctid) AS score
+        const { rows } = await query(`SELECT ${COLUMNS}, r.xmin::text AS witness, pgroonga_score(r.tableoid, r.ctid) AS score
           FROM raw_messages r WHERE ${FILTER} AND r.content &@~ pgroonga_query_escape($8)
           ORDER BY score DESC, r.occurred_at DESC NULLS LAST, r.id COLLATE "C" DESC LIMIT $9 OFFSET $10`,
         [...params(selection, visibility), text, batchSize, offset]);
-        segments.push(...(await visibility.visibleBatch(rows.map(segment))).slice(0, depth - segments.length));
+        const batch = new Map(rows.map(row => [segment(row), row.witness]));
+        const visible = (await visibility.visibleBatch([...batch.keys()])).slice(0, depth - segments.length);
+        for (const item of visible) witnesses.set(item.ref.id, batch.get(item));
+        segments.push(...visible);
         if (rows.length < batchSize) break;
       }
       let version;
@@ -94,7 +99,7 @@ export function createPostgresRawReads(options) {
           FROM raw_messages r WHERE ${SELECTED}`, params(selection, visibility).slice(0, 5));
         version = row.version;
       }
-      return page(segments, version);
+      return { ...await page(segments, version), witnesses };
     });
   }
 
@@ -154,14 +159,19 @@ export function createPostgresRawReads(options) {
 /** @param {RawReadOptions} options */
 export function createRawRefReader(options) {
   const readVisibility = createRawVisibility(options);
-  /** @param {Query} query @param {ReadSet} scope @param {string[]} ids */
-  return async function visibleRawIds(query, scope, ids) {
+  /** @param {Query} query @param {ReadSet} scope @param {string[]} ids @param {RawVersionMatch} [matchesVersion] */
+  return async function visibleRawIds(query, scope, ids, matchesVersion) {
     const visibleIds = new Set();
     if (!scope.keys.includes(null) || !ids.length) return visibleIds;
     const visibility = await readVisibility(query, scope.owner, scope.clients);
-    const { rows } = await query(`SELECT ${COLUMNS} FROM raw_messages r WHERE ${FILTER} AND r.id = ANY($8::text[])`,
+    const { rows } = await query(`SELECT ${COLUMNS}, r.xmin::text AS witness
+      FROM raw_messages r WHERE ${FILTER} AND r.id = ANY($8::text[])`,
       [...params(scope, visibility), ids]);
-    for (const item of await visibility.visibleBatch(rows.map(segment))) visibleIds.add(item.ref.id);
+    const witnesses = matchesVersion && new Map(rows.map(row => [row.id, row.witness]));
+    for (const item of await visibility.visibleBatch(rows.map(segment))) {
+      const { id } = item.ref;
+      if (!matchesVersion || matchesVersion(item, witnesses?.get(id))) visibleIds.add(id);
+    }
     return visibleIds;
   };
 }

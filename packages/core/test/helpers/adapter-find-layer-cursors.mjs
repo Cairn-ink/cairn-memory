@@ -46,12 +46,20 @@ function createService(storage, createMemoryService, embedding) {
   const embedQuery = embedding && { async embedQuery() {
     return { model: embedding.model, vector: Float32Array.from(embedding.vector) };
   } };
-  return createMemoryService({ ...deps, storage, ...(embedQuery && { embedQuery }), clock: {
-    nowMs: Date.now,
-    monotonicMs: () => performance.now(),
-    sha256Hex: async value => createHash("sha256").update(value).digest("hex"),
-    hmacHex: async (key, value) => createHmac("sha256", key).update(value).digest("hex"),
-  } });
+  const embedder = embedding && {
+    model: embedding.model, dimensions: embedding.vector.length,
+    async embed(texts) { return texts.map(() => Float32Array.from(embedding.vector)); },
+  };
+  return createMemoryService({
+    ...deps, storage, embedder: embedder ?? null, ...(embedQuery && { embedQuery }),
+    gate: { async assertOpen() {} },
+    clock: {
+      nowMs: Date.now,
+      monotonicMs: () => performance.now(),
+      sha256Hex: async value => createHash("sha256").update(value).digest("hex"),
+      hmacHex: async (key, value) => createHmac("sha256", key).update(value).digest("hex"),
+    },
+  });
 }
 
 async function seed({ storage, embedding, rawNamespaces = true }, scope, label, { memory = 9, raw = 9, card = 9 } = {}) {
@@ -212,6 +220,74 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     assert.equal(rawResult.layers.raw.status, "ok");
     assert.deepEqual(rawResult.raw, stalePage.segments.slice(1), "forgotten Raw candidate passed the continuation fence");
   });
+}
+
+export function testAdapterFindVersions(open, createMemoryService, cases, testOptions = {}) {
+  for (const kind of cases) {
+    const layer = kind === "Raw witness" ? "raw" : kind;
+    for (const mode of ["plain", "first page", "continuation"]) {
+      test(`find drops a replaced ${kind} at delivery (${mode})`, testOptions, async t => {
+        const fixture = await open(t);
+        const { storage, scope, embedding, seedRaw, replaceRaw } = fixture;
+        await seed(fixture, scope, "version", {
+          memory: layer === "memory" ? 9 : 0,
+          raw: layer === "raw" && !seedRaw ? 9 : 0,
+          card: layer === "card" ? 9 : 0,
+        });
+        if (layer === "raw" && seedRaw) {
+          for (let i = 0; i < 9; i++) await seedRaw({
+            id: `message-${i}`, role: "user", content: makeText("version", i), occurredAtMs: 1_000 + i,
+          });
+        }
+        const service = createService(storage, createMemoryService, embedding);
+        const options = { kinds: [layer], limit: 2 };
+        if (mode !== "plain") options.cursors = {};
+        if (mode === "continuation") {
+          options.cursors = takeCursors((await service.find(scope, query, options)).layers);
+          assert.ok(options.cursors[layer]);
+        }
+        const field = fields[layer];
+        const [target, untouched] = (await service.find(scope, query, options))[field];
+        assert.ok(untouched);
+        const id = itemId(target);
+        const replacement = "Quartz replacement text.";
+        async function replace() {
+          if (layer === "card") {
+            const { amendments, ...card } = await read(storage, scope, tx => storage.documentCards.get(tx, scope, id));
+            const result = await write(storage, scope, tx => storage.documentCards.put(tx, scope, {
+              ...card, body: replacement, contentHash: "replacement",
+            }));
+            assert.equal(result.status, "replaced");
+          } else if (layer === "memory") {
+            const result = await service.correct(scope, id, target.revision, replacement, source);
+            assert.equal(result.status, "saved");
+            assert.equal(result.item.revision, target.revision + 1);
+          } else {
+            await replaceRaw(target, kind === "Raw witness" ? target.content : replacement);
+          }
+        }
+        let reads = 0;
+        let replacementRun;
+        const racingStorage = { ...storage, uow: { ...storage.uow, async run(owner, opts, body) {
+          if (++reads === (mode === "plain" ? 2 : 3)) {
+            assert.equal(opts.readOnly, true);
+            replacementRun = replace();
+            await replacementRun;
+          }
+          return storage.uow.run(owner, opts, body);
+        } } };
+        const racing = createService(racingStorage, createMemoryService, embedding);
+        const actual = await racing.find(scope, query, options);
+        assert.ok(replacementRun);
+        await replacementRun;
+        assert.equal(actual.layers[layer].status, "ok");
+        assert.equal(actual.layers[layer].count, 1);
+        assert.deepEqual(actual[field], [untouched]);
+        const fresh = await service.find(scope, kind === "Raw witness" ? query : "quartz", { kinds: [layer], limit: 20 });
+        assert.ok(fresh[field].some(item => itemId(item) === id));
+      });
+    }
+  }
 }
 
 export function testMemoryFindDelivery(open, createMemoryService) {

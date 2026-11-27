@@ -75,13 +75,19 @@ export interface RawCandidates {
     coverage: { complete: boolean };
     /** Present for paged reads. State identifies the ranked pool in this snapshot. */
     page?: { state: string; hasMore: boolean };
+    /** Store row witnesses by ref id, when available. */
+    witnesses?: ReadonlyMap<string, string>;
   }>;
 }
 
+export type RawVersionMatch = (current: Omit<RawSegment, "score">, witness?: string) => boolean;
+
 /** Final fence: re-checks refs in the same snapshot right before delivery; drops anything now hidden. */
 export interface VisibilityFence {
-  /** The "read" intent includes historical memories that pass the other visibility checks. */
-  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent?: "read"): Promise<ItemRef[]>;
+  /** The "read" intent includes historical memories that pass the other visibility checks.
+   * For a Raw ref, also require the supplied version predicate to match the current row. */
+  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent?: "read",
+    matchesRawVersion?: RawVersionMatch): Promise<ItemRef[]>;
 }
 
 export interface ReadSnapshot {

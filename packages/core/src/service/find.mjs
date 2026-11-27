@@ -2,6 +2,7 @@ import { isWellFormedText, validateDenseArray, validateObject } from "../capture
 import { FUSION_PRESETS } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { prepareCoreText } from "../privacy/text.mjs";
+import { canonicalKey } from "../retrieval/bm25.mjs";
 import { fuseHostedWithCards } from "../retrieval/fusion.mjs";
 import { decodeCursor, RAW_FIND_DEPTH } from "../retrieval/hosted-paging.mjs";
 import { documentCardFindItem, documentCardVisible, visibleDocumentCardRows } from "../routing/index.mjs";
@@ -22,6 +23,7 @@ import { isReadMac, signedReadToken } from "./signed-read-token.mjs";
 /** @typedef {import("../routing/index.mjs").DocumentCardFindItem} DocumentCardFindItem */
 /** @typedef {NonNullable<StorageAdapter["documentCards"]>} CardStore */
 /** @typedef {NonNullable<CardStore["visibilityInputs"]>} CardVisibilityLoader */
+/** @typedef {NonNullable<Awaited<ReturnType<CardVisibilityLoader>>[number]>} CardVisibilityInput */
 /** @typedef {"memory" | "card" | "raw"} Kind */
 /** @typedef {{ position: string | number, state: string | null, model: string | null }} FindPosition */
 /** @typedef {Awaited<ReturnType<NonNullable<import("./index.d.mts").MemoryServiceDeps["embedQuery"]>["embedQuery"]>>} Embedding */
@@ -146,6 +148,16 @@ function cardVisibilityLoader(store) {
   return typeof store?.visibilityInputs === "function" ? store.visibilityInputs.bind(store) : undefined;
 }
 
+/** @param {CardVisibilityInput} input @param {Pick<CardVisibilityInput["card"], "title" | "body">} [card] */
+function cardVersion({ version, card: ranked }, { title, body } = ranked) {
+  return [version?.revision, version?.bodyRevision, title ?? null, body];
+}
+
+/** @param {Omit<RawSegment, "score">} segment @param {string} [witness] */
+function rawVersion({ client, sessionId, messageId, role, occurredAtMs, content }, witness) {
+  return [client, sessionId, messageId, role, occurredAtMs, content, witness];
+}
+
 /**
  * @param {CardStore} store @param {CardVisibilityLoader} load
  * @param {Tx} tx @param {Scope} scope @param {ItemRef} ref
@@ -161,7 +173,7 @@ async function readVisibleCard(store, load, tx, scope, ref) {
   const verdict = await documentCardVisible({
     ...input, requestedScope: scope, card: { ...checkedCard, canonicalSessionKey: input.card.canonicalSessionKey },
   });
-  return verdict.visible ? { card: checkedCard, memoryStates: input.memoryStates } : null;
+  return verdict.visible ? { card: checkedCard, memoryStates: input.memoryStates, version: cardVersion(input, checkedCard) } : null;
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["find"]} */
@@ -288,7 +300,7 @@ export function findMethod(deps) {
         if (searchRaw) {
           const embedding = page ? await rankingEmbedding(page, tokens) : firstEmbedding;
           const offset = Number(page?.position ?? 0);
-          const { segments, layer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+          const { segments, versions, layer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
             const result = await searchRaw.raw(tx, readScope, query, "search",
               { limit, ...(paging && { offset }), ...(embedding?.vector && { queryVector: embedding.vector }) });
             const state = tokens && result.page
@@ -300,11 +312,16 @@ export function findMethod(deps) {
             /** @type {Layer} */
             const layer = { status: "ok", count: 0, ...(paging && { nextCursor }) };
             if (result.coverage.complete === false) layer.code = "index_unavailable";
-            return { segments: result.segments, layer };
+            const versions = new Map(result.segments.map(segment =>
+              [canonicalKey(segment.ref), rawVersion(segment, result.witnesses?.get(segment.ref.id))]));
+            return { segments: result.segments, versions, layer };
           });
           rawLayer = {
             layer,
-            deliver: tx => visibleRawSegments(segments, readScope, tx, fence),
+            deliver: tx => visibleRawSegments(segments, readScope, tx, fence, (current, witness) => {
+              const ranked = versions.get(canonicalKey(current.ref));
+              return ranked !== undefined && rawVersion(current, witness).every((value, i) => value === ranked[i]);
+            }),
           };
         } else if (page) throw new CoreError("cursor_stale");
       } catch (error) {
@@ -323,7 +340,7 @@ export function findMethod(deps) {
           const pool = FUSION_PRESETS.hosted.pool;
           const embedding = page ? await rankingEmbedding(page, tokens) : firstEmbedding;
           const offset = Number(page?.position ?? 0);
-          const { pageRefs, nextCursor } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+          const { pageCards, nextCursor } = await uow.run(scope.owner, { readOnly: true }, async tx => {
             const words = await documentCardCandidates.lexical(tx, readScope, query, pool, {});
             const semantic = embedding?.vector && embedding.model
               ? await documentCardCandidates.vector(tx, readScope, embedding.vector, embedding.model, pool)
@@ -356,15 +373,25 @@ export function findMethod(deps) {
             const nextCursor = tokens && hasMore ? await tokens.write({
               position: offset + limit, state, model: semantic && embedding ? await tokens.mac(embedding.model) : null,
             }, request) : null;
-            return { pageRefs: rows.slice(offset, offset + limit).map(({ ref }) => ref), nextCursor };
+            const pageCards = [];
+            for (const { ref } of rows.slice(offset, offset + limit)) {
+              const input = byRef.get(ref);
+              if (!input) continue;
+              const record = input.card.body === undefined || input.card.title === undefined
+                ? await documentCards.get(tx, scope, ref.id) : input.card;
+              if (record) pageCards.push({ ref, version: cardVersion(input, record) });
+            }
+            return { pageCards, nextCursor };
           });
           card = {
             layer: { status: "ok", count: 0, ...(paging && { nextCursor }) },
-            ...(pageRefs.length && { async deliver(tx) {
+            ...(pageCards.length && { async deliver(tx) {
               const items = [];
-              for (const ref of pageRefs) {
+              for (const { ref, version } of pageCards) {
                 const visible = await readVisibleCard(documentCards, loadCardVisibility, tx, scope, ref);
-                if (visible) items.push(documentCardFindItem(visible.card, query));
+                if (visible && visible.version.every((value, i) => value === version[i])) {
+                  items.push(documentCardFindItem(visible.card, query));
+                }
               }
               return items;
             } }),

@@ -468,7 +468,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs, intent) {
+      async assertVisible(tx, scope, refs, intent, matchesRawVersion) {
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
@@ -478,7 +478,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
             const visible = Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
             if (!rawFence) return visible;
-            return rawFence(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
+            return rawFence(state, selection, references, matchesRawVersion).then(rawRefs => [...visible, ...rawRefs]);
           }
           return (async () => {
             const byNamespace = policies(state, selection);
@@ -495,7 +495,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
               }
             }
             if (!rawFence) return visible;
-            return [...visible, ...await rawFence(state, selection, references)];
+            return [...visible, ...await rawFence(state, selection, references, matchesRawVersion)];
           })();
         });
       },

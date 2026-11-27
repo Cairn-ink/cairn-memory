@@ -186,7 +186,7 @@ export function createPostgresMemoryReads(options = {}) {
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs, intent) {
+      async assertVisible(tx, scope, refs, intent, matchesRawVersion) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         const references = copyRefs(refs);
@@ -195,7 +195,7 @@ export function createPostgresMemoryReads(options = {}) {
           const memories = await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey);
           if (!visibleRawIds) return memories.map(({ ref }) => ref);
           const rawIds = await visibleRawIds(query, selection, references.flatMap(({ ref }) =>
-            ref.type === "raw" && ref.namespace === null ? [ref.id] : []));
+            ref.type === "raw" && ref.namespace === null ? [ref.id] : []), matchesRawVersion);
           const visibleMemoryRefs = new Set(memories.map(({ ref }) => ref));
           return references.flatMap(({ ref }) => visibleMemoryRefs.has(ref) ||
             (ref.type === "raw" && ref.namespace === null && rawIds.has(ref.id)) ? [ref] : []);
