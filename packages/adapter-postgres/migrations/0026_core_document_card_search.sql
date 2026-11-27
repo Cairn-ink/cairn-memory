@@ -3,23 +3,55 @@ SET LOCAL statement_timeout = '30s';
 
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+      WHERE attrelid = 'public.document_cards'::regclass AND attname = 'scope_id' AND NOT attisdropped) THEN
+    ALTER TABLE public.document_cards ADD COLUMN scope_id text;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+      WHERE attrelid = 'public.document_cards'::regclass AND attname = 'scope_id' AND NOT attnotnull AND NOT attisdropped) THEN
+    UPDATE public.document_cards SET scope_id = user_id WHERE scope_id IS NULL;
+    ALTER TABLE public.document_cards ALTER COLUMN scope_id SET NOT NULL;
+  END IF;
+
   IF EXISTS (
-    SELECT 1 FROM unnest(ARRAY['scope_id', 'embedding', 'embedding_model', 'embedding_text_version',
+    SELECT 1 FROM unnest(ARRAY['embedding', 'embedding_model', 'embedding_text_version',
       'embedding_content_hash']) AS wanted(name)
     WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
       WHERE attrelid = 'public.document_cards'::regclass AND attname = wanted.name AND NOT attisdropped)
   ) THEN
     ALTER TABLE public.document_cards
-      ADD COLUMN IF NOT EXISTS scope_id text,
       ADD COLUMN IF NOT EXISTS embedding vector(1536),
       ADD COLUMN IF NOT EXISTS embedding_model text,
       ADD COLUMN IF NOT EXISTS embedding_text_version smallint,
       ADD COLUMN IF NOT EXISTS embedding_content_hash text;
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.document_cards'::regclass
-      AND conname = 'document_cards_scope_id_id_unique') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+      WHERE conrelid = 'public.document_cards'::regclass AND (
+        conname = 'document_cards_scope_id_id_unique' OR (contype = 'p' AND conkey = ARRAY[
+          (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid = conrelid AND attname = 'scope_id'),
+          (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid = conrelid AND attname = 'id')
+        ])
+      )) THEN
     ALTER TABLE public.document_cards ADD CONSTRAINT document_cards_scope_id_id_unique UNIQUE (scope_id, id);
+  END IF;
+  IF pg_catalog.to_regprocedure('public.default_document_card_scope()') IS NULL THEN
+    CREATE FUNCTION public.default_document_card_scope() RETURNS trigger LANGUAGE plpgsql AS $scope$
+    BEGIN
+      IF NEW.scope_id IS NULL THEN
+        NEW.scope_id := NEW.user_id;
+      END IF;
+      RETURN NEW;
+    END;
+    $scope$;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = 'public.document_cards'::regclass
+      AND tgname = 'document_cards_default_scope') THEN
+    CREATE TRIGGER document_cards_default_scope BEFORE INSERT ON public.document_cards
+      FOR EACH ROW EXECUTE FUNCTION public.default_document_card_scope();
+  END IF;
+  IF pg_catalog.to_regclass('public.document_cards_scope_created_idx') IS NULL THEN
+    CREATE INDEX document_cards_scope_created_idx ON public.document_cards (scope_id, created_at DESC NULLS LAST, id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.document_cards'::regclass
       AND conname = 'document_cards_embedding_check') THEN

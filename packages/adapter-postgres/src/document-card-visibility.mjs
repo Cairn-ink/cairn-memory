@@ -4,6 +4,7 @@ import { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
 import { hasRawFence } from "./capture-source.mjs";
 import { selectMemory, readReceipts } from "./memory-rows.mjs";
 import { matchesRowFact, readVisibility, readVisibilityFacts, rowFactCandidate, rowVisibilityPolicy } from "./memory-visibility.mjs";
+import { rawSpanFilter } from "./raw-import.mjs";
 import { RAW_READ_COLUMNS, RAW_READ_FILTER, decodeRawSegment } from "./raw-read.mjs";
 import { rawTextDefinitelyWithheld } from "./raw-purge.mjs";
 import { conversationSessions, rawSession } from "./raw-session.mjs";
@@ -20,6 +21,8 @@ import { createRawVisibility } from "./raw-visibility.mjs";
  *   sessionKey?: (client: string, sessionId: string) => string,
  *   fingerprintKey?: (owner: string) => FingerprintKey | null | Promise<FingerprintKey | null>,
  * }} DocumentCardOptions */
+
+const MISSING_RAW = "missing_raw";
 
 /** @param {CardWrite} card */
 function bindings(card) {
@@ -83,7 +86,7 @@ export function createCardVisibility({
       (actionIds.has(factId) && fact.origin === "forget"));
     /** @type {Map<string, Promise<MemoryEntry | null>>} */
     const memories = new Map();
-    /** @type {Map<string, Promise<boolean | null>>} */
+    /** @type {Map<string, Promise<boolean | null | typeof MISSING_RAW>>} */
     const verdicts = new Map();
     /** @type {ReturnType<typeof readKeys> | undefined} */
     let keys;
@@ -128,19 +131,23 @@ export function createCardVisibility({
         WHERE user_id = $1 AND client = ANY($2::text[]) AND session_id = $3 AND message_id = $4
           AND forgotten_at IS NOT NULL LIMIT 1`, address);
       if (tombstones.length || await hasRawFence(query, { ...source, scope })) return true;
+      const policy = await facts();
       for (const { client, sessionId } of related) {
-        if ((await facts()).some(stored => stored.fact.kind === "session" && factHidesRow(stored, {
+        if (policy.some(stored => stored.fact.kind === "session" && factHidesRow(stored, {
           type: "raw", scope, source: { client, sessionId }, messageKey: source.messageId,
           sessionKeyHash: "", startUtf16: 0, endUtf16: 0,
         }, { hashSessionKey }) !== false)) return true;
+        if (!rows.length && rawSpanFilter(policy, { scope, client, sessionId }, hashSessionKey)({ id: source.messageId })) {
+          return true;
+        }
       }
       const physicalPresent = rows.some(row => row.client === physical.client);
-      if (!rawVisibility) return physicalPresent ? true : null;
+      if (!rawVisibility) return rows.length === 0 ? MISSING_RAW : physicalPresent ? true : null;
       const visibility = await (raw ??= rawVisibility(query, owner, null));
       const withheldSessions = /** @type {{client: string, session_id: string}[]} */ (JSON.parse(visibility.sessions));
       if (related.some(ref => visibility.withheldClients.includes(ref.client) || withheldSessions.some(session =>
         session.client === ref.client && session.session_id === ref.sessionId))) return true;
-      if (!physicalPresent) return null;
+      if (!physicalPresent) return rows.length === 0 ? MISSING_RAW : null;
       const { rows: allowed } = await query(`SELECT ${RAW_READ_COLUMNS} FROM raw_messages r
         WHERE ${RAW_READ_FILTER} AND r.client = ANY($8::text[]) AND r.session_id = $9 AND r.message_id = $10`,
       [owner, null, false, null, null, visibility.withheldClients, visibility.sessions, ...address.slice(1)]);
@@ -149,7 +156,7 @@ export function createCardVisibility({
     }
 
     /** @param {DocumentCardSourceMessage} source */
-    function withheld(source) {
+    function sourceEvidence(source) {
       const key = JSON.stringify([source.client, source.sessionId, source.messageId]);
       let result = verdicts.get(key);
       if (!result) {
@@ -162,6 +169,12 @@ export function createCardVisibility({
       return result;
     }
 
+    /** @param {DocumentCardSourceMessage} source */
+    async function withheld(source) {
+      const verdict = await sourceEvidence(source);
+      return verdict === MISSING_RAW ? null : verdict;
+    }
+
     /** @param {string} content @param {StoredFact[]} policy */
     async function definitelyWithheld(content, policy) {
       const text = textFacts(policy);
@@ -169,6 +182,13 @@ export function createCardVisibility({
       const { keys: available } = await (keys ??= readKeys(owner));
       return rawTextDefinitelyWithheld(content, undefined,
         available.flatMap(key => [{ key, pipeline: "core" }, { key, pipeline: "hosted-v1" }]), text, scope);
+    }
+
+    /** @param {string} memoryId */
+    async function erasedMemoryText(memoryId) {
+      const policy = (await facts()).filter(({ fact }) =>
+        fact.kind === "text" && fact.origin === "forget" && fact.sourceMemory?.id === memoryId);
+      return (/** @type {string} */ content) => definitelyWithheld(content, policy);
     }
 
     /** @param {Links[number]} link */
@@ -218,11 +238,11 @@ export function createCardVisibility({
       const policy = await selected();
       const text = textFacts(policy);
       const verdicts = [];
-      for (const source of bindings(card)) verdicts.push(await withheld(source));
+      for (const source of bindings(card)) verdicts.push(await sourceEvidence(source));
       const blocked = verdicts.includes(true) || (sourceMessage !== null &&
         (await definitelyWithheld(title, policy) || await definitelyWithheld(body, policy)));
       const sourceWithheld = blocked ? true :
-        verdicts.includes(null) && (action || requireRaw || rawVisibility !== null) ? null : false;
+        verdicts.includes(null) || (requireRaw && verdicts.includes(MISSING_RAW)) ? null : false;
       /** @type {Map<string, DocumentCardMemoryState>} */
       const memoryStates = new Map();
       for (const link of sourceMemories) memoryStates.set(link.id, await memoryState(link));
@@ -258,7 +278,7 @@ export function createCardVisibility({
       });
     }
 
-    return { input, visible, stored, withheld, memory, correction };
+    return { input, visible, stored, withheld, memory, correction, erasedMemoryText };
   }
 
   return reader;

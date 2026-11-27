@@ -39,9 +39,10 @@ function readIndexRevision(tx, committed) {
   });
 }
 
-/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options]
+/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & Pick<import("./raw-options.d.mts").RawOptions, "purgeCards">
+ *   & {nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options]
  * @returns {MemoryStore} */
-export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNamespace = false, hashSessionKey } = {}) {
+export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNamespace = false, hashSessionKey, purgeCards } = {}) {
   return {
     async insert(tx, scope, row, receipts, nowMs) {
       guardOwner(tx, scope, true);
@@ -175,7 +176,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         // Postgres Raw is null-namespace only.
         if (ns === null) {
           // Core forget holds the pause lock while erasing receipt Raw and scrubbing the capture ledger.
-          await eraseReceiptRaw(query, { owner, namespace: null }, key);
+          await eraseReceiptRaw(query, run, { owner, namespace: null }, key, purgeCards);
           await query(`UPDATE core_memory_receipts SET forgotten_at = now()
             WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [owner, key]);
         } else {

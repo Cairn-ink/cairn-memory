@@ -78,7 +78,8 @@ export { createPostgresRawPorts } from "./raw.mjs";
 export type { RawOptions } from "./raw-options.mjs";
 
 export function createPostgresMemoryStore(
-  options?: SessionHashOptions & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
+  options?: SessionHashOptions & Pick<import("./raw-options.mjs").RawOptions, "purgeCards">
+    & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
 ): MemoryStore;
 export function createPostgresDigestGate(uow: UnitOfWork,
   keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>,

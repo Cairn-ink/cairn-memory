@@ -12,6 +12,7 @@ import { conversationSessions } from "./raw-session.mjs";
 /** @import { StoredFact, TextFact, TextDigest } from "../../core/src/suppression-fact.mjs" */
 /** @import { Connection } from "./driver.mjs" */
 /** @import { RawOptions } from "./raw-options.d.mts" */
+/** @import { Run } from "./uow.mjs" */
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{client: string, sessionId: string}} Session */
 /** @typedef {Session & {messageId?: string}} SourceAddress */
@@ -110,8 +111,9 @@ export async function dropSourceQuantities(query, scope, addresses) {
 }
 
 /** @param {Query} query @param {Scope} scope @param {readonly StoredFact<TextFact>[]} facts
- * @param {RawOptions["fingerprintKeys"]} fingerprintKeys @param {RawSourceTuple[]} [deletedSources] */
-export async function purgeRawText(query, scope, facts, fingerprintKeys, deletedSources) {
+ * @param {RawOptions["fingerprintKeys"]} fingerprintKeys @param {RawSourceTuple[]} [deletedSources]
+ * @param {MessageAddress[]} [ledgerSources] */
+export async function purgeRawText(query, scope, facts, fingerprintKeys, deletedSources, ledgerSources) {
   if (!facts.length) return { rawDeleted: 0, ledgerBlanked: 0, ledgerChanged: false };
   const keys = await fingerprintKeys?.(scope.owner) ?? [];
   /** @param {LedgerMessage} message */
@@ -137,14 +139,18 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys, deleted
     }
     after = rows.at(-1).id;
   }
-  return { rawDeleted, ...await scrubLedger(query, scope, [], { matches }) };
+  return { rawDeleted, ...await scrubLedger(query, scope, [], { matches, ledgerSources }) };
 }
 
-/** @param {Query} query @param {Scope} scope @param {string} memoryId */
-export async function eraseReceiptRaw(query, scope, memoryId) {
+/** @param {Query} query @param {Run} run @param {Scope} scope @param {string} memoryId
+ * @param {RawOptions["purgeCards"]} [purgeCards] */
+export async function eraseReceiptRaw(query, run, scope, memoryId, purgeCards) {
   const { rows: receipts } = await query(`SELECT client, session_id, message_id FROM core_memory_receipts
     WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [scope.owner, memoryId]);
-  if (!receipts.length) return;
+  if (!receipts.length) {
+    if (purgeCards) await purgeCards(query, run, scope, [], memoryId);
+    return;
+  }
   const { rows } = await query(`DELETE FROM raw_messages r
     USING jsonb_to_recordset($2::jsonb) AS p(client text, session_id text, message_id text)
     WHERE r.user_id = $1 AND (r.client, r.session_id, r.message_id) = (p.client, p.session_id, p.message_id)
@@ -165,11 +171,16 @@ export async function eraseReceiptRaw(query, scope, memoryId) {
     ids.add(messageId);
   }
   await scrubLedger(query, scope, [...sessions.values()], { messageIds });
+  if (purgeCards) {
+    await purgeCards(query, run, scope, receipts.map(({ client, session_id, message_id }) =>
+      ({ client, sessionId: session_id, messageId: message_id })), memoryId);
+  }
 }
 
 /** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions
- * @param {{matches?: (message: LedgerMessage) => boolean | Promise<boolean>, messageIds?: Map<string, Set<string>>}} [options] */
-export async function scrubLedger(query, scope, sessions, { matches, messageIds } = {}) {
+ * @param {{matches?: (message: LedgerMessage) => boolean | Promise<boolean>, messageIds?: Map<string, Set<string>>,
+ *   ledgerSources?: MessageAddress[]}} [options] */
+export async function scrubLedger(query, scope, sessions, { matches, messageIds, ledgerSources } = {}) {
   const targets = JSON.stringify(sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId })));
   let ledgerBlanked = 0;
   let ledgerChanged = false;
@@ -226,6 +237,15 @@ export async function scrubLedger(query, scope, sessions, { matches, messageIds 
         ledgerChanged = true;
       }
       await dropSourceQuantities(query, scope, removed);
+      if (ledgerSources && removed.length) {
+        // A matching capture copy is erasure evidence only if no Raw row survived at that address.
+        const { rows } = await query(`SELECT p.client, p."sessionId", p."messageId"
+          FROM jsonb_to_recordset($2::jsonb) AS p(client text, "sessionId" text, "messageId" text)
+          WHERE NOT EXISTS (SELECT 1 FROM raw_messages r WHERE r.user_id = $1
+            AND (r.client, r.session_id, r.message_id) = (p.client, p."sessionId", p."messageId"))`,
+        [scope.owner, JSON.stringify(removed)]);
+        ledgerSources.push(...rows);
+      }
     }
     ({ client: afterClient, event_id: afterEvent } = rows.at(-1));
   }

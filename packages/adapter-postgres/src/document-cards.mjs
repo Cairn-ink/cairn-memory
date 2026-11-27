@@ -13,6 +13,7 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @import { DocumentCardOptions } from "./document-card-visibility.mjs" */
 /** @import { Query } from "./memory-rows.mjs" */
 /** @import { Run } from "./uow.mjs" */
+/** @import { CardPurge } from "./raw-options.d.mts" */
 /** @typedef {Required<DocumentCardStore<StoredDocumentCardRecord>>} Store */
 /** @typedef {ReturnType<ReturnType<typeof createCardVisibility>>} Reader */
 /** @typedef {ReturnType<typeof copySelector>} Selector */
@@ -73,36 +74,41 @@ async function dropMemberships(query, owner, ids) {
   await query("DELETE FROM card_placements WHERE user_id = $1 AND card_id = ANY($2::text[])", [owner, ids]);
 }
 
-/** @param {Selector} selector @param {unknown[]} args */
-function selectorSql(selector, args) {
-  if (selector.sourceMemoryId !== undefined) {
-    args.push(JSON.stringify([{ id: selector.sourceMemoryId }]));
-    return { card: `c.source_memories @> $${args.length}::jsonb`, amendment: "false" };
-  }
-  const source = selector.sourceMessage ?? selector.session;
-  args.push(source.client, source.sessionId);
-  const client = `$${args.length - 1}`, session = `$${args.length}`;
-  const message = selector.sourceMessage && `$${args.push(selector.sourceMessage.messageId)}`;
+/** @param {Parameters<CardPurge>[3]} sources @param {unknown[]} args */
+function sourceSelectorsSql(sources, args) {
+  if (!sources.length) return { card: "false", amendment: "false" };
+  const target = `jsonb_to_recordset($${args.push(JSON.stringify(sources))}::jsonb)
+    AS target(client text, "sessionId" text, "messageId" text)`;
   /** @param {string} alias */
-  const match = alias => `(${alias}.source_client = ${client} AND ${alias}.source_session_id = ${session}
-    ${message ? `AND ${alias}.source_message_id = ${message}` : ""})`;
-  const sentence = `EXISTS (SELECT 1 FROM jsonb_array_elements(
+  const match = alias => `EXISTS (SELECT 1 FROM ${target}
+    WHERE (${alias}.source_client, ${alias}.source_session_id) = (target.client, target."sessionId")
+      AND (target."messageId" IS NULL OR ${alias}.source_message_id = target."messageId"))`;
+  const sentence = `EXISTS (SELECT 1 FROM ${target} JOIN LATERAL jsonb_array_elements(
     CASE WHEN jsonb_typeof(c.sentences) = 'array' THEN c.sentences ELSE '[]'::jsonb END) s
-    WHERE s #>> '{source,client}' = ${client} AND s #>> '{source,sessionId}' = ${session}
-    ${message ? `AND s #>> '{source,messageId}' = ${message}` : ""})`;
+    ON (s #>> '{source,client}', s #>> '{source,sessionId}') = (target.client, target."sessionId")
+      AND (target."messageId" IS NULL OR s #>> '{source,messageId}' = target."messageId"))`;
   return { card: `(${match("c")} OR ${sentence})`, amendment: match("a") };
 }
 
 /** @param {Query} query @param {string} owner @param {readonly Selector[] | undefined} selectors
- * @param {{id?: string, purge?: boolean, lock?: boolean}} [options] */
-async function selectAffected(query, owner, selectors, { id, purge = false, lock = false } = {}) {
+ * @param {{id?: string, purge?: boolean, lock?: boolean, sources?: Parameters<CardPurge>[3], textMatches?: string[]}} [options] */
+async function selectAffected(query, owner, selectors, { id, purge = false, lock = false, sources = [], textMatches = [] } = {}) {
   /** @type {unknown[]} */
   const args = [owner];
-  const predicates = selectors?.map(selector => selectorSql(selector, args));
-  const card = predicates ? predicates.map(({ card }) => card).join(" OR ") || "false" : "true";
+  const addresses = [...sources];
+  const cardMatches = [];
+  for (const selector of selectors ?? []) {
+    if (selector.sourceMemoryId !== undefined) {
+      cardMatches.push(`c.source_memories @> $${args.push(JSON.stringify([{ id: selector.sourceMemoryId }]))}::jsonb`);
+    } else {
+      addresses.push(selector.sourceMessage ?? selector.session);
+    }
+  }
+  const { card: sourceMatch, amendment } = sourceSelectorsSql(addresses, args);
+  if (textMatches.length) cardMatches.push(`c.id = ANY($${args.push(textMatches)}::text[])`);
+  const card = selectors === undefined ? "true" : [...cardMatches, sourceMatch].join(" OR ");
   const constraints = `${PERSONAL_CARD} AND ${purge ? "NOT c.tombstoned" : LIVE_CARD}
     ${id === undefined ? "" : `AND c.id = $${args.push(id)}`}`;
-  const amendment = predicates?.map(({ amendment }) => amendment).join(" OR ") || "false";
   // Select both sets in one statement, with all selector parameters bound for both branches.
   const { rows } = await query(`SELECT ${CARD_COLUMNS}, (${card}) AS selected,
       ARRAY(SELECT a.amendment_id FROM ${AMENDMENTS} a WHERE ${AMENDMENT_PARENT}
@@ -166,7 +172,7 @@ async function readAmendments(query, owner, ids, purge) {
   return rows;
 }
 
-/** @param {DocumentCardOptions} [options] @returns {Store} */
+/** @param {DocumentCardOptions} [options] @returns {Store & {purgeCards: CardPurge}} */
 export function createPostgresDocumentCardStore(options = {}) {
   const visibility = createCardVisibility(options);
 
@@ -208,6 +214,24 @@ export function createPostgresDocumentCardStore(options = {}) {
   }
 
   return {
+    async purgeCards(query, run, scope, sources, memoryId) {
+      if (!sources.length && memoryId === undefined) return;
+      const { owner } = scope;
+      const textMatches = [];
+      if (memoryId !== undefined) {
+        const { rows } = await query(`SELECT c.id, c.title, c.body FROM document_cards c
+          WHERE ${PERSONAL_CARD} AND NOT c.tombstoned`, [owner]);
+        if (rows.length) {
+          const matches = await visibility(query, scope).erasedMemoryText(memoryId);
+          for (const { id, title, body } of rows) if (await matches(title) || await matches(body)) textMatches.push(id);
+        }
+      }
+      const selectors = memoryId === undefined ? [] : [{ sourceMemoryId: memoryId }];
+      const affected = await selectAffected(query, owner, selectors, { sources, textMatches, purge: true, lock: true });
+      const reason = memoryId === undefined ? "raw_deleted" : "source_memory_forgotten";
+      if ((await hideSelection(query, owner, affected, reason, true)).changed) await advanceIndex(query, owner, run, perCall);
+    },
+
     async put(tx, scope, input, embedding) {
       const owner = personalOwner(tx, scope, true);
       const card = copyCard(owner, input);
