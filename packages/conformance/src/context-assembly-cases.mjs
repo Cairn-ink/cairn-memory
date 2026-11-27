@@ -337,7 +337,8 @@ export const CONTEXT_ASSEMBLY_CASES = [
       const result = await service.readContext(readSet, { ...query, semantic: false });
       const [item] = result.assembly.items;
       check(item && "layer" in item && item.layer === "Raw", "Expected a Raw-only unit");
-      equal(item.body, content.slice(item.start, item.end), "The selected excerpt is an exact authorized span");
+      check(content.includes(item.body) && !Object.hasOwn(item, "start") && !Object.hasOwn(item, "end"),
+        "The selected excerpt is an exact authorized span, delivered without offsets");
       check(fixtureCount(item.body) <= 200 && item.body.includes("albatross") && new TextDecoder().decode(encoder.encode(item.body)) === item.body,
         "The exact span is relevant, Unicode-safe and capped");
       equal(result.diagnostics.budget.used, fixtureCount(formatAssembly(result.assembly)), "Whole Raw unit is metered in the block");
