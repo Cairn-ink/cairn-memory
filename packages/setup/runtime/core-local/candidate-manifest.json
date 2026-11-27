@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-a1af5761b883ad5e8f32a26d077440a1bdd75fa0a2336bef827fda9ad4e7e6a2",
+  "engineId": "core-local-v1-3602f1a5551ee7d552aa28561906f70516f9cd1ca8e38ed594cd2ab1953e6118",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2919897,
-    "sha256": "d0db1ee50bbdde8e7604331f09dff0f781084dc05e20868634a601bb84a4208f"
+    "bytes": 2923719,
+    "sha256": "51e05088eaeff3de2bd4223e1f097c323cf187f03211c06fce0fe815198c3d75"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -43,7 +43,7 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
-    "package.json": "519fdd8ee6c23ab12ff7ba738f06ce1027a8703d3919de486923fc31757929e7",
+    "package.json": "3518308a390e5c41e672a0a1c19cc20c18ebe0706b4fca590568de819623fda4",
     "packages/adapter-sqlite/src/adapter.mjs": "26ff6db688a224a5f8295d94a0517a52172ca4b105149a23a265c64fb63ac9dc",
     "packages/adapter-sqlite/src/capture-finish.mjs": "e99b03f12d5a20fb92940304f2267ccf9d11ab9cc723d2296f302865ffb6faf8",
     "packages/adapter-sqlite/src/capture.mjs": "2c1dc512d62cf648c13639fe47bae292260fdb764da4515b210ba812d29a42af",
@@ -132,6 +132,8 @@
     "packages/core/src/rationale/relate-placed.mjs": "bd8913f0859f792d75624fd762c6438596b6a72f9d147d711dd6304f08325630",
     "packages/core/src/rationale/relate.mjs": "e00c36b2f89947326940bc39998db12bc709177810ec5d31c6e4a1eff1d561f6",
     "packages/core/src/rationale/store-plan.mjs": "164b7e14b2694244d72ae1cd14f5dcf83bf62b5b5a6588e34d838a057bb8ebd3",
+    "packages/core/src/relations/generated/prompt.mjs": "df260870babe9e562aaf8883f947266fe2852c52ada3fddc01dae7d8dcf59657",
+    "packages/core/src/relations/judge.mjs": "55d00b14b61c39aa4b180af727fbb38c4b786ffb8a766cd484f8ba80b426b712",
     "packages/core/src/retrieval/bm25.mjs": "5f59680dafd3b7e6bdf4abd53239915fed7a9a5213b647680a49c8030d520e40",
     "packages/core/src/retrieval/fusion.mjs": "5013b1fabb3aca7ae81f995548db1e203435ffda8701039fa033f26bade71da1",
     "packages/core/src/retrieval/hosted-paging.mjs": "9865ba08d8712cdbe0880627936c1d8f152483dd51df53bd4d547781b0a07c55",
@@ -165,12 +167,13 @@
     "packages/core/src/service/find.mjs": "e56c723cf26504bb90e78473d07d5e01984a9ebf0902a6bcce1435a9e515b6de",
     "packages/core/src/service/forget.mjs": "ec4c84d7eeb75990a091484d8771f1eef7149aa79b748a6aa2e953bb0952b987",
     "packages/core/src/service/import.mjs": "05b727a16f0f06bdcdc9f78c7b1e8dd25d921a4d5a21e4660832e36a86d4580b",
-    "packages/core/src/service/index.mjs": "1f0afb222affb23560261875a2305933eaf24e979919dd9945ad491ecf610ef8",
+    "packages/core/src/service/index.mjs": "886c06cf5185c39089111f747ac53de8adfa257f3d63f1413250d2584708e64b",
     "packages/core/src/service/inspect-cursor.mjs": "48eb7c4b2e261606d522b10b7fea98b3ed21de0c97ef8485d3a7db9d0403b19c",
     "packages/core/src/service/inspect.mjs": "fe7961eb1d6d9e08edcb4c6eecbb0cb438b6550605a4dce33f5f285b990d2719",
     "packages/core/src/service/pause.mjs": "772b3176027d6942cb0bdcd93c03f7e7c7d15061cd8c9ffe941def5c8547eb6c",
     "packages/core/src/service/reads.mjs": "13df9aeb864ed92a33e3c140cc132fcfa3583241444bfe5b114d7fe32ac9ed08",
     "packages/core/src/service/recall.mjs": "8d01a24a8d51881348e3082c82d84b9635b30b1449442de773cb8eed004a94e2",
+    "packages/core/src/service/relations-judge.mjs": "dab8961c5fc7b3bd456303e8b4c04a2f3459a83bff0e66208b948ad807da1d16",
     "packages/core/src/service/session-wire.mjs": "10713363562a3f4f34953f34aaea407eac9edf7ce50be6210e5e5a67342eb38f",
     "packages/core/src/service/signed-read-token.mjs": "33f3085097ffec7aa2795bef53fab2531e299da70980ff6f68fff65d61dcc075",
     "packages/core/src/service/writes.mjs": "d012e87481b3d7fc914cbead4bfe22424a41d55a2c732a2b993bf24208ea0e18",
