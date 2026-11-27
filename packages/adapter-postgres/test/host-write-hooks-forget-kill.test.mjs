@@ -102,11 +102,12 @@ async function fixture(t, { intercept = (connection, sql, values) => connection.
       },
     };
   } });
-  const hostWriteHookPort = createPostgresHostWriteHookPort({ context: new AsyncLocalStorage(), operations: {
+  const context = new AsyncLocalStorage();
+  const operations = {
     blocked: { mode: "read", sql: `SELECT 1 FROM test_legacy_suppressions
       WHERE owner = $1 AND namespace IS NOT DISTINCT FROM $2 AND text_hash = $3` },
     mirror: { mode: "write", sql: insertMirror },
-  } });
+  };
   const memories = createPostgresMemoryStore({ nearDuplicate: false });
   const reads = createPostgresMemoryReads();
   const candidates = createPostgresMemoryCandidates();
@@ -114,7 +115,7 @@ async function fixture(t, { intercept = (connection, sql, values) => connection.
   const vector = Float32Array.from([1, ...Array(1535).fill(0)]);
   const deps = {
     storage: {
-      name: "postgres", uow, hostWriteHookPort, memories, ...reads, ...candidates,
+      name: "postgres", uow, memories, ...reads, ...candidates,
       capabilities: capabilities({ hostWriteHooks: true, contextRead: true, embeddingRequiredOnInsert: true }),
       contextRead: contextReadStore(memories, candidates.lexical, reads.hydrate),
       pause: createPostgresPauseStore(), suppressions: createPostgresSuppressionStore(),
@@ -129,6 +130,7 @@ async function fixture(t, { intercept = (connection, sql, values) => connection.
   };
 
   function service({ incomingText = original, afterMirror = () => {}, onAdmission = () => {} } = {}) {
+    const hostWriteHookPort = createPostgresHostWriteHookPort({ context, operations });
     const admit = async (tx, ctx) => {
       const { rowCount } = await hostWriteHookPort.execute(tx, ctx.scope, "blocked", [sha256(incomingText)]);
       onAdmission(ctx);
@@ -136,7 +138,7 @@ async function fixture(t, { intercept = (connection, sql, values) => connection.
     };
     const mirror = (tx, ctx, kind, factId) => hostWriteHookPort.execute(tx, ctx.scope, "mirror",
       [kind, sha256(original), ctx.predecessor.id, factId]);
-    return createMemoryService({ ...deps, hostWriteHooks: {
+    return createMemoryService({ ...deps, storage: { ...deps.storage, hostWriteHookPort }, hostWriteHooks: {
       beforeSave: admit, beforeCorrect: admit,
       async onSave() {},
       async onCaptureFinish() {},

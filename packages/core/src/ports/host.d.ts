@@ -51,11 +51,10 @@ export interface ImportResult {
   invalid: number;
 }
 
-export interface Layer {
-  status: "ok" | "not_searched" | "unavailable";
-  count: number;
-  code?: ErrorCode;
-}
+export type Layer = { count: number; code?: ErrorCode } & (
+  { status: "ok" | "unavailable"; nextCursor?: string | null } |
+  { status: "not_searched"; nextCursor?: never }
+);
 
 interface FindOptions {
   limit?: number;
@@ -63,6 +62,8 @@ interface FindOptions {
   clients?: string[];
   sinceMs?: number;
   untilMs?: number;
+  /** An empty map pages the requested kinds from the start. A nonempty map continues only its layers. */
+  cursors?: Partial<Record<"memory" | "card" | "raw", string>>;
 }
 
 interface FindResult {
@@ -391,8 +392,8 @@ export interface ContextAssemblyRawExcerpt {
   role: Role;
   occurredAt?: string;
   date?: string;
-  start: number;
-  end: number;
+  start?: number;
+  end?: number;
 }
 
 export type ContextRawCoverage = "included" | "partial" | "unavailable" | "unsupported_store" | "lexical_unsupported";
@@ -441,6 +442,8 @@ export interface ContextAssemblyDiagnostics {
   counter: { id: "tiktoken-o200k_base" };
   items: readonly {
     ref: ContextReadRef;
+    /** Candidate rank when the compact reader opts in to item ranks. */
+    rank?: number;
     metadata: ContextMemoryMetadata | ContextReadFields;
     body?: { tokens: number };
     sourceAccess?: "available" | "unavailable-for-noncurrent-memory" | "unsupported";
@@ -625,6 +628,10 @@ export interface SaveOptions {
   receipt?: ExplicitWriteReceipt;
   /** Requires proceduralTags. Offsets refer to the explicit receipt excerpt. */
   procedural?: { anchors: readonly { receiptIndex: 0; start: number; end: number }[] };
+  relations?: {
+    replaces?: { id: string; expectedRevision: Revision };
+    contradicts?: readonly { id: string; expectedRevision: Revision }[];
+  };
 }
 
 interface CorrectOptions {
@@ -647,10 +654,11 @@ export interface MemoryService {
   readContext?(readSet: ContextReadSet, input: ReadContextInput, options?: CallOptions): Promise<ReadContextResult>;
   inspect?(scope: Scope, input: InspectListInput | InspectItemInput, options?: CallOptions): Promise<InspectListResult | InspectItemResult>;
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
-  /** Throws capability_unavailable if procedural options are supplied without proceduralTags. */
+  /** Procedural and relation options require their corresponding storage ports. */
   save(scope: Scope, text: string, source: SourceRef, kind?: MemoryKind, options?: SaveOptions): Promise<
-    { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number } |
-    { status: "suppressed" | "paused" | "invalid"; indexRevision?: number }
+    { status: "saved" | "duplicate"; item: MemoryRow; indexRevision?: number;
+      relations?: { replaced: string | null; contradicts: string[] } } |
+    { status: "suppressed" | "paused" | "invalid" | "not_found"; indexRevision?: number }
   >;
   correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef, options?: CorrectOptions): Promise<
     { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |
@@ -664,7 +672,9 @@ export interface MemoryService {
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   /** A null query leaves the card and raw layers empty. */
   find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "cards" | "raw"> & { cards: []; raw: [] }>;
-  find(scope: Scope, query: string | null, options: FindOptions & { kinds: ("memory" | "raw")[] }): Promise<Omit<FindResult, "cards"> & { cards: [] }>;
+  find(scope: Scope, query: string | null, options: FindOptions & {
+    kinds: ("memory" | "raw")[]; cursors?: FindOptions["cursors"] & { card?: never };
+  }): Promise<Omit<FindResult, "cards"> & { cards: [] }>;
   find(scope: Scope, query: string | null, options: FindOptions): Promise<FindResult>;
   read(scope: Scope, ref: { type: "memory" | "card"; id: string }): Promise<
     { status: "found"; item: MemoryRow; receipts: Receipt[]; sourceDates: { firstMs: number | null; lastMs: number | null } | null } |
@@ -685,6 +695,12 @@ export interface MemoryService {
   importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | ({ status: "paused" } & ImportResult)>;
   /** Raw import goes through the full capture suppression (session, window, lineage, text) and pause. */
   importRawMessages(scope: Scope, sessions: readonly ImportRawSession[]): Promise<ImportResult | { status: "paused" }>;
+  /** Judge relations for a committed memory revision. The host schedules this after save. */
+  judgeRelations?(scope: Scope, memory: { id: string; revision: Revision }, options?: CallOptions): Promise<
+    { status: "judged"; superseded: string[]; contradicts: string[]; skipped: number; indexRevision?: number } |
+    { status: "skipped"; reason: "stale" | "no_candidates" | "incomplete_coverage" } |
+    { status: "paused" }
+  >;
 }
 
 export interface StoreMigrator {

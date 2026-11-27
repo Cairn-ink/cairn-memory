@@ -60,13 +60,20 @@ function inspectResult(result) {
 }
 
 async function recallResult(recall, readSet, scope,
-  { query, limit = 6, contextMode, includeQualification, selectionMode }) {
-  const candidates = await recall.findCandidates(readSet, { query, types: ['memory'], intent: 'current', semantic: true, limit });
-  const { items, indexRevision } = await recall.inspect(readSet, candidates.items.map(({ ref }) => ref), {
+  { query, limit = 24, contextMode, includeQualification, selectionMode }) {
+  const { diagnostics } = await recall.readContext(readSet, { query, types: ['memory'], intent: 'current',
+    semantic: true, raw: false, representation: 'memory-compact-v1', budget: { maxItems: limit } });
+  const { candidates, items: selected, omitted } = diagnostics;
+  const refs = selected.slice().sort((a, b) => a.rank - b.rank).map(({ ref }) => ref);
+  const { items, indexRevision } = await recall.inspect(readSet, refs, {
     includeQualification: includeQualification === true, includeIndexRevision: contextMode === 'rationale-evidence',
   });
-  const mapExhausted = candidates.nextCursor === null && candidates.coverage.status === 'complete' &&
-    Object.values(candidates.coverage.omitted).every(count => count === 0);
+  const memoryCoverage = candidates.coverage.byType.memory;
+  const mapExhausted = candidates.coverage.status === 'complete' &&
+    Object.values(candidates.coverage.omitted).every(count => count === 0) &&
+    (memoryCoverage.eligible === 0 ||
+      (candidates.channels.semantic.state === 'ready' && memoryCoverage.embeddedFraction === 1)) &&
+    omitted.items === 0 && omitted.unavailable === 0;
   const fetchExhausted = items.every(item => item.receipts.length === item.memory.receiptCount);
   if (contextMode && !fetchExhausted) return fail('context_item_too_large');
   const memories = items.map(({ memory: current, receipts, qualification }) => {

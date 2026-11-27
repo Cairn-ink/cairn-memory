@@ -17,6 +17,7 @@ import { inspectMethod } from "./inspect.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { recallMethod } from "./recall.mjs";
 import { listRawMessagesMethod, readMethods } from "./reads.mjs";
+import { relationJudgeMethods } from "./relations-judge.mjs";
 import { writeMethods } from "./writes.mjs";
 
 /** @param {unknown} value */
@@ -232,6 +233,7 @@ export function createMemoryService(input) {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
+      ...relationJudgeMethods(deps),
       ...captureMethods(deps),
       ...readContractMethods(deps.storage, deps.clock, deps, deps.config.quantityLedger),
       forget: forgetMethod(deps),

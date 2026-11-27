@@ -181,7 +181,7 @@ test("a secondary Memory date follows Raw evidence in the formatted JSON", async
     sources: [{ index: 0, role: "user", excerpt: body }, { memory: secondaryRef, index: datedSource.index, date, role: "user" }],
     sourcesComplete: false,
     evidence: [{ ref: { ns: 0, type: "raw", conversationId: JSON.stringify([key.client, key.sessionId]),
-      messageId: shared.id }, role: "user", start: 0, end: body.length, body }],
+      messageId: shared.id }, role: "user", body }],
     date,
   }] }));
   assert.equal(item.date, date);

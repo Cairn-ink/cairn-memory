@@ -77,13 +77,15 @@ test("card-only find is lexical, applies the read set and uses one snapshot", as
     layers: { memory: skipped, raw: skipped, card: { status: "ok", count: 1 } },
   });
   assert.deepEqual(transactions.map(({ method }) => method), ["lexical", "visibilityInputs", "get", "visibilityInputs"]);
-  assert.equal(new Set(transactions.map(({ tx }) => tx)).size, 1);
   assert.deepEqual(transactions[0].args, [
     { owner: scope.owner, namespaces: [scope.namespace], window: { sinceMs: 10, untilMs: 20 }, clients: ["fixture"] },
     "spare key", 50,
   ]);
   assert.deepEqual(transactions[1].args, [scope, [lexical(item, 2).ref]]);
-  assert.deepEqual(calls, [["run", scope.owner, { readOnly: true }]]);
+  assert.deepEqual(
+    { cardRuns: transactions.map(({ tx }) => tx.runId), runs: calls },
+    { cardRuns: [1, 1, 2, 2], runs: Array(2).fill(["run", scope.owner, { readOnly: true }]) },
+  );
 });
 
 test("hybrid cards reuse the memory embedding and leave memory and Raw delivery byte-identical", async () => {
@@ -100,6 +102,7 @@ test("hybrid cards reuse the memory embedding and leave memory and Raw delivery 
   storage.capabilities.rawArchive = true;
   const segment = { ref: { type: "raw", id: "raw", namespace: scope.namespace }, client: "fixture",
     sessionId: "conversation", messageId: "message", role: "user", content: "spare key", occurredAtMs: 12, score: 3 };
+  hooks.rawRows = [segment];
   let rawVector;
   storage.raw = {
     async raw(_tx, _selection, _query, _intent, options) {
@@ -125,7 +128,10 @@ test("hybrid cards reuse the memory embedding and leave memory and Raw delivery 
   assert.equal(queryVector, rawVector);
   assert.equal(model, "query-model");
   assert.equal(depth, 50);
-  assert.equal(new Set(transactions.map(({ tx }) => tx)).size, 1);
+  assert.deepEqual({
+    cardRuns: transactions.map(({ tx }) => tx.runId - transactions[0].tx.runId),
+    runs: calls.filter(([method]) => method === "run").length,
+  }, { cardRuns: [0, 0, 0, 1, 1, 1, 1], runs: 4 });
   const [batch, ...fresh] = transactions.filter(({ method }) => method === "visibilityInputs");
   assert.deepEqual(batch.args[1].map(({ id }) => id), [weak.id, strong.id, strong.id, weak.id]);
   assert.deepEqual(fresh.map(({ args }) => args[1].map(({ id }) => id)), [[strong.id], [weak.id]]);
@@ -180,7 +186,7 @@ test("delivery checks a fresh visibility input after get in the candidate snapsh
   assert.deepEqual(result.cards, []);
   assert.deepEqual(result.layers.card, { status: "ok", count: 0 });
   assert.equal(visibilityReads, 2);
-  assert.equal(new Set(transactions.map(({ tx }) => tx)).size, 1);
+  assert.deepEqual(transactions.map(({ tx }) => tx.runId), [1, 1, 2, 2]);
 });
 
 test("find skips cards for blank queries and reports missing card capabilities", async () => {

@@ -1,5 +1,5 @@
 import { detach, identifier, isWellFormedText, validateObject } from "../capture/validate.mjs";
-import { CoreError, isErrorCode } from "../errors.mjs";
+import { CoreError, isErrorCode, toCoreError } from "../errors.mjs";
 
 /** @param {unknown} error */
 export function entryError(error) {
@@ -56,6 +56,8 @@ export { identifier as ownerOf };
  *   HostAdmissionDecision, SaveRequestDecision } from "../ports/index.d.ts" */
 /** @type {Set<HostWriteHookPort["context"]>} */
 const hookContexts = new Set();
+/** @type {WeakMap<HostWriteHookPort["context"], HostWriteHookPort["context"]>} */
+const guardedHookContexts = new WeakMap();
 
 /** @returns {HostHookRun | undefined} */
 function currentHookRun() {
@@ -69,11 +71,35 @@ function currentHookRun() {
 const hookFailures = new WeakSet();
 
 /** @param {HostWriteHookPort["context"]} context */
-export function registerHostWriteContext(context) {
+function validateHostWriteContext(context) {
   if (typeof context?.getStore !== "function" || typeof context?.run !== "function") {
     throw new CoreError("invalid_input");
   }
+}
+
+/** @param {HostWriteHookPort["context"]} context */
+export function registerHostWriteContext(context) {
+  validateHostWriteContext(context);
   hookContexts.add(context);
+}
+
+/** @param {HostWriteHookPort["context"]} context @returns {HostWriteHookPort["context"]} */
+export function guardHostWriteContext(context) {
+  validateHostWriteContext(context);
+  // Ports that share a delegate also share an entry in the context registry.
+  const existing = guardedHookContexts.get(context);
+  if (existing) return existing;
+  const guarded = Object.freeze(/** @type {HostWriteHookPort["context"]} */ ({
+    getStore() { return context.getStore(); },
+    run(store, fn) {
+      if ((store === null || typeof store !== "object") && context.getStore()) {
+        throw new CoreError("host_write_hook_failed");
+      }
+      return context.run(store, fn);
+    },
+  }));
+  guardedHookContexts.set(context, guarded);
+  return guarded;
 }
 
 export function assertOutsideHostWriteHook() {
@@ -86,26 +112,23 @@ export function isHostWriteHookFailure(error) {
 }
 
 /**
- * Port-owned authorization: a port asks only the readers that core registered through
+ * Port-owned authorization: a port asks only the reader that core registered through
  * `bindHookAuthority`, keyed by the live transaction. Records entered through the async
  * context grant nothing; that context only tells whether code runs inside a hook.
  * @returns {{ bind(reader: (tx: Tx) => HostHookRun | undefined): void, authorize(tx: Tx): HostHookRun | undefined }}
  */
 export function createHookAuthorizer() {
-  /** @type {Set<(tx: Tx) => HostHookRun | undefined>} */
-  const readers = new Set();
+  /** @type {((tx: Tx) => HostHookRun | undefined) | undefined} */
+  let authorityReader;
   return Object.freeze({
     bind(reader) {
       assertOutsideHostWriteHook();
       if (typeof reader !== "function") throw new CoreError("invalid_input");
-      readers.add(reader);
+      if (authorityReader) throw new CoreError("invalid_input");
+      authorityReader = reader;
     },
     authorize(tx) {
-      for (const reader of readers) {
-        const run = reader(tx);
-        if (run) return run;
-      }
-      return undefined;
+      return authorityReader?.(tx);
     },
   });
 }
@@ -206,7 +229,12 @@ export function bindHostWriteHooks(input, port) {
   registerHostWriteContext(adapter.context);
   /** @type {WeakMap<Tx, HostHookRun>} */
   const live = new WeakMap();
-  adapter.bindHookAuthority(tx => live.get(tx));
+  try {
+    adapter.bindHookAuthority(tx => live.get(tx));
+  } catch (error) {
+    // The adapter can load a separate copy of core and its error class.
+    throw toCoreError(error);
+  }
 
   /**
    * @template {keyof HostWriteHooks} K

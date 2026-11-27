@@ -190,6 +190,30 @@ export async function withStdio(entry, args, directory, work) {
   }
 }
 
+// Installed 0.6.11 has Document Cards disabled, so its card maintenance
+// reports phase 4. The golden records the candidate's phase 1 (cards on).
+// Only these two legacy replies expect the 0.6.11 value.
+const legacyCardPhase = 4;
+function legacyResponse(label, response) {
+  if (label === 'find cards disabled') {
+    const reply = structuredClone(response);
+    const content = reply.result.content[0];
+    const text = JSON.parse(content.text);
+    assert.equal(text.value.coverage.maintenance.progress.phase, 1, 'golden card phase');
+    text.value.coverage.maintenance.progress.phase = legacyCardPhase;
+    content.text = JSON.stringify(text);
+    return reply;
+  }
+  if (label === 'read context cards disabled') {
+    const reply = structuredClone(response);
+    const progress = reply.result._meta['ink.cairn/context-read-diagnostics'].candidates.coverage.maintenance.progress;
+    assert.equal(progress.phase, 1, 'golden card phase');
+    progress.phase = legacyCardPhase;
+    return reply;
+  }
+  return response;
+}
+
 export async function compareWire(request, notify, count, { legacy = false } = {}) {
   const cases = Object.entries(golden.exchanges);
   cases.splice(2, 0, ['tools/list', { method: 'tools/list', response: { result: { tools: golden.toolsList } } }]);
@@ -215,7 +239,7 @@ export async function compareWire(request, notify, count, { legacy = false } = {
       }
       const normalizedReply = normaliseResponse(actual, reply, count, label);
       const errors = [...diff(expected(item.params, ''), actual(params, ''), 'request'),
-        ...diff(expected(item.response, ''), normalizedReply)];
+        ...diff(expected(legacy ? legacyResponse(label, item.response) : item.response, ''), normalizedReply)];
       if (errors.length) differences.push(...errors.map(error => label + ' ' + error));
       else matched++;
     } catch (error) {

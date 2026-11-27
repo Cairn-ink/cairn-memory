@@ -13,6 +13,10 @@ const allowlist = {
   "topics/cards.mjs: placement.pendingCards(tx, scope, { limit: 5 })": "Pending guards feed the fetched card batch that is fenced before classification.",
   "rationale/store-plan.mjs: store.sourceEvidence(tx, scope, refs)": "Receipt admission enforces Raw and excerpt visibility before evidence is used by rationale.",
   "rationale/store-plan.mjs: store.degree(tx, scope, id)": "The incident count is internal to the insertion limit check.",
+  "service/writes.mjs: conflicts.degree(tx, scope, targetId)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/writes.mjs: conflicts.degree(tx, scope, id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/relations-judge.mjs: conflicts.degree(tx, scope, id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/relations-judge.mjs: conflicts.degree(tx, scope, candidate.id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'supports-decision', page)":
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'challenges-premise', page)":
@@ -21,6 +25,8 @@ const allowlist = {
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "service/context-read-assembly-evidence.mjs: documentCards.get(tx, ref.scope, ref.id)":
     "Read only after contextCardVerdict (fresh visibilityInputs + documentCardVisible in the same Tx); the card's id and scope are rechecked, and each amendment is gated by documentCardAmendmentVisible on its own Raw source before delivery.",
+  "service/find.mjs: documentCards.get(tx, scope, ref.id)":
+    "Ranking reads the card only to record its version; nothing read here is delivered. Delivery rereads it through readVisibleCard (fresh visibilityInputs + documentCardVisible) in the final read-only transaction and delivers it only if that version still matches.",
 };
 
 function walk(node, visit, parent) {
