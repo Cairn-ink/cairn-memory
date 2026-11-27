@@ -93,11 +93,11 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
         const deadline = options.deadlineAtMs ?? Infinity;
         const remaining = Math.max(0, deadline - monotonicMs());
         const bounded = Number.isFinite(deadline) && selection.types.includes("memory");
-        // After rebuilding memories, give cards at most a third of the time left.
+        // After rebuilding memories, aim to give cards a third of the time left.
         // The shared transaction still has to commit before search and delivery.
         const reserve = bounded ? remaining * 2 / 3 : Math.min(250, remaining / 2);
         const cardStopped = contextDeadline({ ...options, deadlineAtMs: deadline - reserve }, monotonicMs);
-        const cardMetrics = await index.reconcileCards(tx, readSet, selection, cardStopped, bounded);
+        const cardMetrics = await index.reconcileCards(tx, readSet, selection, cardStopped, bounded, options.signal);
         return {
           canonicalRows: metrics.canonicalRows + cardMetrics.canonicalRows,
           sidecarRows: metrics.sidecarRows + cardMetrics.sidecarRows,
