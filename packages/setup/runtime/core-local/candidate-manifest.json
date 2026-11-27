@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-47fa8cfc14c2e42a7c99f8996c82dd248fa851aa17a6ff7381f143f7c1bd04fe",
+  "engineId": "core-local-v1-d6d58c61c638e62cbd0197a5cb286c59285ac8468a2259be2912a71b5313c1ac",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2916974,
-    "sha256": "4410101c8f7a96e98cd2ee1ee8f1f186ee48bdf98d70b2fc790c26daae9e6f80"
+    "bytes": 2917123,
+    "sha256": "8085c79b3eca01aae608636ca28503d41c0b2b0bb8f29ccf33d50e72ca1fc7b6"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -199,16 +199,16 @@
     "packaging/core-local/capture-source.mjs": "52f064669c2cadd1c7425f7f2da2a33cd113863c6c38b6b4bfdcea552f65d400",
     "packaging/core-local/capture-start.mjs": "7f874af95769005ba60ef421e8419de72ae1b211ba3746ee201990ef7df99a52",
     "packaging/core-local/capture-state.mjs": "40c418eb1a853de37f5a90bcc64ec8fb1a85d248998a8effc940aabe2b560deb",
-    "packaging/core-local/cli.mjs": "82a370cddc96bb5737c4e316082a1cf0b15e14f0b4da6a107b261b76787d85c6",
+    "packaging/core-local/cli.mjs": "5911991c4661e8e4b7bb515bcdbc0d86c9673cdedc5fe41a4e9fbe5757333f9c",
     "packaging/core-local/continuations.mjs": "2b33a8c0f5a8826d4c06c0c05939c666dda25e2f75cafa3f798f57893e789a43",
     "packaging/core-local/daemon-authority.mjs": "b268b40591cf85c5fddec6873ba58aaddd157552dbbc6ad518faf18ceccaa3ca",
-    "packaging/core-local/daemon-entry.mjs": "66bd1f036b72da82b724e9ad693704a25a87f7929d8e09b1e972adf1ddcd6e41",
+    "packaging/core-local/daemon-entry.mjs": "350a3a4666e39262002233d309feed3ea8e6b59e56de1129b1ddf3e7fad6cf62",
     "packaging/core-local/daemon-worker.mjs": "89b7b89107b040bf5505b6ee4babc3d4afeb1daff1eb98ef0b79361e2d7054ca",
     "packaging/core-local/host.mjs": "f501c498ee37e8b7b4108df09772d07342e0d415fb6de876f85f84395d4c4f7b",
     "packaging/core-local/local-provider.mjs": "a0411163c65c682737445749a9f20823e92d00d1190e1e6e2a869413cf40e832",
     "packaging/core-local/profile.mjs": "93a646d26089a8b8f8cd0cae4bad34290ea62888cf453b2b6b9f9675bec6af93",
-    "packaging/core-local/provider-check.mjs": "3032d78e7c20d84a7803b5e48b35b96a816b46e20821bc9d0a7060ca8b9f2c13",
-    "packaging/core-local/provider-config.mjs": "a2f5fb2faf68f9b7bb9aca909f6070fb0fd01d605954ac01c2792a8324c60338",
+    "packaging/core-local/provider-check.mjs": "1a991faf5dd73e3bd02fbf423a4319f66183c14b2c12d9fcbe41d70b6b420aea",
+    "packaging/core-local/provider-config.mjs": "9febfb7c69f914659bafe15b4dba7d6ebf872d869e791a2aff3a0e02cd6cb03e",
     "packaging/core-local/raw-cli.mjs": "7fefea3dab4c59c11586cc859de87cfd29faa7afc33239d26e1045c200850ca1",
     "packaging/core-local/tool-input.mjs": "1c0f13d8a1c439794cd427211c0bfd590fcbb5a93a10705e892a752279e76578",
     "packaging/core-local/vendor/tiktoken/package.json": "aa9ac5822add55718d3f6cff328c2b06e9226db770947575fd4e10868caad02d",

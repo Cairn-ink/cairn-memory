@@ -1221,7 +1221,7 @@
     "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
     "packaging/core-local/capture-input.mjs": "25ba8e79874da395a8cd2dadaa19939359adb9aebd226a0988c137f2a29308d7",
     "packaging/core-local/capture-lock.mjs": "3bb798d7cf56f49792a510136f982df675e7251fccbb24829125a6403386cba3",
-    "packaging/core-local/provider-config.mjs": "a2f5fb2faf68f9b7bb9aca909f6070fb0fd01d605954ac01c2792a8324c60338",
+    "packaging/core-local/provider-config.mjs": "9febfb7c69f914659bafe15b4dba7d6ebf872d869e791a2aff3a0e02cd6cb03e",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5"
   }
 }
