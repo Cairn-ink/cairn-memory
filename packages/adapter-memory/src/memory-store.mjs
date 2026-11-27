@@ -347,14 +347,14 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const entries = state.rows.get(namespace);
           const entry = entries?.get(id);
           if (!entries || !entry) return false;
+          // Hydration also delivers receipt addresses when inspect is disabled.
+          for (const receipt of entry.receipts) {
+            state.receiptDenials.add(await receiptAddressKey(namespace, receipt));
+            const key = entry.receiptKeys?.get(receipt);
+            if (key) state.receiptDenials.add(JSON.stringify([namespace, key]));
+          }
+          if (entry.receipts.length && state.rawAnchors.size) advanceRawInspectEpoch(state);
           if (capabilities.inspect || capabilities.contextRead) {
-            // Retain only opaque suppression coordinates before erasing the source links.
-            for (const receipt of entry.receipts) {
-              state.receiptDenials.add(await receiptAddressKey(namespace, receipt));
-              const key = entry.receiptKeys?.get(receipt);
-              if (key) state.receiptDenials.add(JSON.stringify([namespace, key]));
-            }
-            if (entry.receipts.length && state.rawAnchors.size) advanceRawInspectEpoch(state);
             // An explicit save may have retained the full source text without a
             // receipt. Carry a digest of its normalized cutoff through erase.
             if (entry.row.text.length > 800) {
