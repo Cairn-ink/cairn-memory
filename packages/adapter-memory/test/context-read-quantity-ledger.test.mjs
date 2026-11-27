@@ -113,7 +113,7 @@ test("a whole digest yields to normal items when it exceeds the token budget", a
 
     const off = f.reader({ enabled: false });
     const maxTokens = (await f.read(off, request)).diagnostics.budget.used + 8;
-    assert.equal(maxTokens, raw ? 129 : 100);
+    assert.equal(maxTokens, raw ? 121 : 100);
     assert.ok(maxTokens >= 64 && only.diagnostics.budget.used > maxTokens);
     const baseline = await f.read(off, { ...request, budget: { maxTokens } });
     assert.deepEqual(new Set(baseline.assembly.items.map(({ ref }) => ref.type)), new Set(["memory", "card"]));

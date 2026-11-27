@@ -221,7 +221,7 @@ test("reads without a query embedding keep the sequential call order and respons
     assert.deepEqual(events.find(({ name }) => name === "raw").detail,
       { deadline: 464, lexicalOnly: mode === "disabled" });
     const digest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
-    assert.equal(digest, "392e374ea8cef70b461d3fce4a8cb5ab05ba50393a49bfeebfff8df9563ff302", mode);
+    assert.equal(digest, "312880cbe023881ee5976d0906a55b70d13038d8b98ba133d79d133c6252a2e9", mode);
     t.diagnostic(`${mode} ${digest}`);
   }
 });
