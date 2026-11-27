@@ -65,6 +65,23 @@ jobs:
       - run: npm ci --prefix adapters/mcp --ignore-scripts
       - run: npm ci --prefix packages/adapter-sqlite --ignore-scripts --omit=dev
       - run: node --test packages/setup/test/local-cutover*.test.mjs
+  linux-cutover:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.16.0", "24.22.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci --prefix adapters/mcp --ignore-scripts
+      - run: npm ci --prefix packages/adapter-sqlite --ignore-scripts --omit=dev
+      # Committed generated runtime must match its sources.
+      - run: node packages/setup/build-runtime.mjs --check
+      - run: node --test packages/setup/test/local-cutover*.test.mjs
+      - run: node --test packaging/test/core-local-*.check.mjs
   adapter-postgres-db:
     runs-on: ubuntu-latest
     strategy:
