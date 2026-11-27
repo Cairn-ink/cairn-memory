@@ -14,6 +14,7 @@ function setup(ctx, scope = ctx.scope(null)) {
   check(placement, "placement port is required");
   return {
     placement, scope,
+    placePendingBatch: ctx.harness.placePendingBatch ?? placePendingBatch,
     /** @template T @param {(tx: Tx) => Promise<T>} fn */
     write: (fn) => uow.run(scope.owner, {}, fn),
     /** @param {string} content @param {number} [now] @param {readonly Receipt[]} [receipts] @returns {Promise<Guard>} */
@@ -366,7 +367,7 @@ export const topicCases = [
     const { scope, placement } = store;
     const options = { uow, memories, scope, placement };
     const editedText = "After classification edit";
-    const stale = await placePendingBatch({
+    const stale = await store.placePendingBatch({
       ...options,
       async classify({ memories: snapshot }, _catalog, { validateFresh }) {
         equal(snapshot.map(({ id, revision }) => ({ memoryId: id, revision })), [original], "Expected the original revision");
@@ -379,7 +380,7 @@ export const topicCases = [
     const edited = { ...original, revision: original.revision + 1 };
     equal(await store.pending(), [edited], "A conflict receipt must not consume the edited revision");
 
-    const next = await placePendingBatch({
+    const next = await store.placePendingBatch({
       ...options,
       async classify({ memories: snapshot }, _catalog, { validateFresh }) {
         equal(snapshot.map(({ revision, content }) => ({ revision, content })),
@@ -413,5 +414,66 @@ export const topicCases = [
       check(after && typeof after === "object" && "memoryPlacements" in after, "Expected placement rows in the dump");
       equal(after.memoryPlacements, before.memoryPlacements, "A late failure must preserve every outcome column");
     }
+  }),
+
+  topicCase(18, "deterministic title conflicts write receipts and let the next memory run", async (ctx) => {
+    const store = setup(ctx);
+    const title = "Existing topic";
+    const source = await store.seed("Source for the existing title");
+    await store.apply([source], [item(source, [], topic(title))]);
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(await store.seed(`Pending memory ${i}`, i + 2));
+
+    /** @type {string[][]} */
+    const batches = [];
+    const options = { uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement };
+    const run = () => store.placePendingBatch({
+      ...options,
+      async classify({ memories }, _catalog, { validateFresh }) {
+        await validateFresh();
+        batches.push(memories.map(({ id }) => id));
+        return { items: memories.map(({ id, revision }) => item({ memoryId: id, revision }, [], topic(title))) };
+      },
+    });
+    const failure = { status: "failed", error: { code: "moc_title_conflict", retryable: false } };
+    equal(await run(), failure, "The existing title must be rejected");
+    equal(await store.pending(), queue.slice(5), "Title conflict receipts must consume the oldest five memories");
+    equal(await run(), failure, "The sixth memory must reach the same classifier");
+    equal(batches, [queue.slice(0, 5), queue.slice(5)].map(batch => batch.map(({ memoryId }) => memoryId)),
+      "The second batch must reach the sixth memory");
+    equal(await store.pending(), [], "A terminal receipt must also consume the sixth memory");
+  }),
+
+  topicCase(19, "an index change after validation keeps the memory pending for a fresh catalog", async (ctx) => {
+    const store = setup(ctx);
+    const pending = await store.seed("Awaiting a catalog update");
+    const title = "Concurrent topic";
+    const options = { uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement };
+    const stale = await store.placePendingBatch({
+      ...options,
+      async classify({ memories }, { map }, { validateFresh }) {
+        equal(memories.map(({ id }) => id), [pending.memoryId], "Expected the original pending memory");
+        equal(map, [], "The original catalog must be empty");
+        await validateFresh();
+        const writer = await store.seed("Concurrent writer's memory");
+        await store.apply([writer], [item(writer, [], topic(title))]);
+        return { items: [item(pending)] };
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the old index revision");
+    equal(await store.pending(), [pending], "An old index revision must leave the unchanged memory pending");
+
+    const next = await store.placePendingBatch({
+      ...options,
+      async classify({ memories }, { map }, { validateFresh }) {
+        equal(memories.map(({ id }) => id), [pending.memoryId], "Expected to classify the same memory again");
+        const entry = map.find(({ moc }) => moc.title === title);
+        check(entry, "The next batch must read the concurrent topic");
+        await validateFresh();
+        return { items: [item(pending, [entry.moc.id])] };
+      },
+    });
+    check(next.status === "applied" && next.placed[0]?.topicIds.length === 1, "The re-read must file the memory");
+    equal(await store.pending(), [], "The current filing must consume the pending memory");
   }),
 ];

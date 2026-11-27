@@ -275,4 +275,65 @@ export const TOPIC_CARD_CASES = [
       "The next batch must file both cards");
     equal(await store.pending(), [], "Current filings must consume both card hashes");
   }),
+  topicCardCase(12, "deterministic invalid card parents write receipts and let the next card run", async (ctx) => {
+    const store = setup(ctx);
+    const source = await store.memory("Source for the invalid parent");
+    const { parent } = await store.topics(source, "Child topic");
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(guard(await store.card(`card-${i}`)));
+
+    /** @type {string[][]} */
+    const batches = [];
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const run = () => placePendingCardsBatch({
+      uow, fence, scope, placement, documentCards,
+      async classify({ cards }, _catalog, { validateFresh }) {
+        await validateFresh();
+        batches.push(cards.map(({ cardId }) => cardId));
+        return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [parent] })) };
+      },
+    });
+    const failure = { status: "failed", error: { code: "revision_conflict", retryable: false } };
+    equal(await run(), failure, "An L2 topic cannot be a card parent");
+    equal(await store.pending(), queue.slice(5), "Invalid parent receipts must consume the oldest five cards");
+    equal(await run(), failure, "The sixth card must reach the same classifier");
+    equal(batches, [queue.slice(0, 5), queue.slice(5)].map(batch => batch.map(({ cardId }) => cardId)),
+      "The second batch must reach the sixth card");
+    equal(await store.pending(), [], "A terminal receipt must also consume the sixth card");
+  }),
+  topicCardCase(13, "an index change after validation keeps the card pending for a fresh catalog", async (ctx) => {
+    const store = setup(ctx);
+    const source = await store.memory("Source for the concurrent topic");
+    const card = await store.card("awaiting-index-update");
+    const title = "Concurrent card topic";
+    const { uow, fence } = ctx.adapter;
+    const { scope, placement, documentCards } = store;
+    const options = { uow, fence, scope, placement, documentCards };
+    const stale = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, { map }, { validateFresh }) {
+        equal(cards.map(({ cardId }) => cardId), [card.id], "Expected the original pending card");
+        equal(map, [], "The original catalog must be empty");
+        await validateFresh();
+        await store.topics(source, title);
+        return { items: [{ cardId: card.id, parentIds: [] }] };
+      },
+    });
+    equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the old index revision");
+    equal(await store.pending(), [guard(card)], "An old index revision must leave the unchanged card pending");
+
+    const next = await placePendingCardsBatch({
+      ...options,
+      async classify({ cards }, { map }, { validateFresh }) {
+        equal(cards.map(({ cardId }) => cardId), [card.id], "Expected to classify the same card again");
+        const entry = map.find(({ moc }) => moc.title === title);
+        check(entry, "The next batch must read the concurrent topic");
+        await validateFresh();
+        return { items: [{ cardId: card.id, parentIds: [entry.moc.id] }] };
+      },
+    });
+    check(next.status === "applied" && next.placed[0]?.topicIds.length === 1, "The re-read must file the card");
+    equal(await store.pending(), [], "The current filing must consume the pending card");
+  }),
 ];

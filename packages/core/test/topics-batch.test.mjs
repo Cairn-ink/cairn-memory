@@ -21,7 +21,7 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
     assert.equal(tx, active);
     assert.notEqual(tx, null);
     assert.equal(actualScope, scope);
-    assert.equal(tx.readOnly, readOnly);
+    if (readOnly !== undefined) assert.equal(tx.readOnly, readOnly);
   }
   const options = {
     scope,
@@ -43,7 +43,7 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
           call.method === 'markFailed' && call.memoryIds.includes(memoryId))).slice(0, query.limit);
       },
       async catalog(tx, scope, query) {
-        check(tx, scope, true);
+        check(tx, scope);
         catalogRequests.push(query);
         const start = Number(query.cursor ?? 0);
         const items = topics.slice(start, start + Math.min(query.limit, pageSize));
@@ -70,7 +70,7 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
         return stored.get(id) ?? null;
       },
       async readRevision(tx, scope, id) {
-        check(tx, scope, true);
+        check(tx, scope);
         const memory = stored.get(id);
         return memory ? { revision: memory.revision, textHash: 'unused' } : null;
       },
@@ -159,10 +159,10 @@ test('a provider_error on the oldest five pending memories lets the sixth run ne
   });
 });
 
-test('CoreError reports retryability and skips receipts for paused and conflict kinds', async () => {
+test('CoreError reports retryability and writes a fresh failure receipt unless paused', async () => {
   for (const [code, retryable, recorded] of [
     ['storage_busy', true, true], ['provider_error', true, true],
-    ['capture_evidence_closed', false, false], ['memory_conflict', false, false], ['invalid_model_output', false, true],
+    ['capture_evidence_closed', false, false], ['memory_conflict', false, true], ['invalid_model_output', false, true],
   ]) {
     const f = fixture({ classify: () => { throw new CoreError(code); } });
     assert.deepEqual(await f.run(), { status: 'failed', error: { code, retryable } });
@@ -179,7 +179,7 @@ test('forget between classification and apply reports the conflict without a rec
   } });
   assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'revision_conflict', retryable: false } });
   assert.deepEqual(f.calls.map(({ method }) => method), ['classify', 'apply']);
-  assert.deepEqual(f.runModes, ['read', 'read', 'write']);
+  assert.deepEqual(f.runModes, ['read', 'read', 'write', 'write']);
 });
 
 test('validateFresh catches a changed revision or index before the model call', async () => {
