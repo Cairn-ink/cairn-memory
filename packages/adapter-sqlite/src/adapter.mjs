@@ -4,7 +4,7 @@ import { createContextLexical } from "./context-lexical.mjs";
 import { createContextRawRead, reconcileRawInventory } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { contextDeadline, contextEpochs } from "./context-read-state.mjs";
-import { createCardVisibility, visibleCardRefs } from "./document-card-visibility.mjs";
+import { cardSourceConflictKey, createCardVisibility, visibleCardRefs } from "./document-card-visibility.mjs";
 import { createDocumentCards } from "./document-cards.mjs";
 import { handleWriteRejections } from "./errors.mjs";
 import { createIndexRevisions } from "./index-revisions.mjs";
@@ -88,10 +88,13 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const inspect = createInspectStore(port, hashSessionKey, receiptReadSafety, visibility, inspectFlags, legacyInspectPlacements);
   const proceduralTags = createProceduralTagStore(port, hashSessionKey, (db, scope, policy, id, anchors) =>
     anchorsVisible(db, scope, id, receiptProjector(db, scope, policy, receiptReadSafety), anchors), index.markDirty);
-  const rawContext = flags.contextRawRead
-    ? createContextRawRead(port, hashSessionKey, sessionHashKey, lineage, receiptReadSafety, monotonicMs, migratedRaw, captureControls) : undefined;
+  const contextSources = flags.contextRawRead || (flags.contextRead && loadCards)
+    ? createContextRawRead(port, hashSessionKey, sessionHashKey, lineage, receiptReadSafety, monotonicMs,
+      migratedRaw, captureControls, loadCards && cardSourceConflictKey) : undefined;
+  const rawContext = flags.contextRawRead ? contextSources?.raw : undefined;
   const contextRead = flags.contextRead ? createContextReadStore(uow, port, hashSessionKey, receiptReadSafety, inspect.identity,
-    createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs), sessionHashKey, monotonicMs, rawContext) : undefined;
+    createContextLexical(port, hashSessionKey, sessionHashKey, monotonicMs, loadCards), sessionHashKey, monotonicMs, rawContext,
+    loadCards && contextSources?.documentCardAmendmentSource) : undefined;
   const vectorClock = () => performance.now();
   const vectorCache = flags.semanticRetrieval ? createVectorCache(uow, port, hashSessionKey, vectorClock) : undefined;
   const adapter = {

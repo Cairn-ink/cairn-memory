@@ -62,6 +62,11 @@ export function rawFactPolicy(scope, session, facts, hashSession) {
     sessionKeyHash,
 
     /** @param {CaptureMessage} message */
+    evidence(message) {
+      return evidence(scope, session, message, sessionKeyHash, withText);
+    },
+
+    /** @param {CaptureMessage} message */
     hides(message) {
       if (facts.length === 0) return false;
       const candidate = evidence(scope, session, message, sessionKeyHash, withText);
