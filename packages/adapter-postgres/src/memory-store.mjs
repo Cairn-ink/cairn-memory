@@ -176,9 +176,11 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         if (ns === null) {
           // Core forget holds the pause lock while erasing receipt Raw and scrubbing the capture ledger.
           await eraseReceiptRaw(query, { owner, namespace: null }, key);
+          await query(`UPDATE core_memory_receipts SET forgotten_at = now()
+            WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [owner, key]);
+        } else {
+          await deleteActiveReceipts(query, owner, key);
         }
-        await query(`UPDATE core_memory_receipts SET forgotten_at = now()
-          WHERE user_id = $1 AND memory_id = $2 AND forgotten_at IS NULL`, [owner, key]);
         for (const table of ["memory_topics", "memory_placements"]) {
           await query(`DELETE FROM ${table} WHERE user_id = $1 AND memory_id = $2`, [owner, key]);
         }
