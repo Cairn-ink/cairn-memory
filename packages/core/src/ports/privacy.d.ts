@@ -89,15 +89,20 @@ export interface SpanLineageStore {
   resolveSpans(tx: Tx, scope: Scope, memoryId: string): Promise<RawSpanFact[]>;
 }
 
+export type RawSourceTuple = Readonly<Pick<import("./common.d.ts").Receipt,
+  "client" | "sessionId" | "messageId" | "role" | "occurredAtMs">>;
+type RawPurgeOptions = { includeDeletedSources?: boolean };
+type RawPurgeResult = { rawDeleted: number; ledgerBlanked: number; deletedSources?: readonly RawSourceTuple[] };
+
 export interface RawStore {
   fenceSession(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<void>;
   /** Deletes Raw rows and blanks ledger text for a PROVEN closure only, tombstoning bound card and amendment payloads. */
-  eraseSessions(tx: Tx, scope: Scope, closure: ProvenClosure): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  eraseSessions(tx: Tx, scope: Scope, closure: ProvenClosure, options?: RawPurgeOptions): Promise<RawPurgeResult>;
   /** Deletes withheld Raw rows, blanks withheld ledger messages, and tombstones bound card and amendment payloads. */
-  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>, options?: {
+  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>, options?: RawPurgeOptions & {
     /** Report the source binding of each deleted Raw row inside the write. */
     onDelete?: (source: import("./document-card.d.ts").DocumentCardSourceMessage) => void;
-  }): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  }): Promise<RawPurgeResult>;
   /** Hosts with document cards must tombstone cards and amendments bound to deleted messages in this transaction. */
   deleteConversation(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<{ rawDeleted: number }>;
 }

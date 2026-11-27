@@ -27,6 +27,8 @@
       "default": "./src/document-card-visibility-input-cases.mjs"
     },
     "./capture-documents-support": "./src/capture-documents-support.mjs",
+    "./host-forget-raw": "./src/host-forget-raw.mjs",
+    "./host-write-hooks": "./src/host-write-hooks-cases.mjs",
     "./raw-import-controls": "./src/raw-import-controls-case.mjs",
     "./node-test": { "types": "./src/node-test.d.mts", "default": "./src/node-test.mjs" }
   },

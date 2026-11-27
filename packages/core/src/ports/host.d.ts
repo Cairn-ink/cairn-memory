@@ -598,7 +598,8 @@ type ExplicitWriteReceipt = Pick<Receipt, "client" | "sessionId" | "occurredAtMs
   { role: "user" } &
   ({ messageId: string; eventId?: never } | { eventId: string; messageId?: never });
 
-interface SaveOptions {
+export interface SaveOptions {
+  hostRequest?: import("./host-write-hooks.d.ts").HostSaveRequest;
   receipt?: ExplicitWriteReceipt;
   /** Requires proceduralTags. Offsets refer to the explicit receipt excerpt. */
   procedural?: { anchors: readonly { receiptIndex: 0; start: number; end: number }[] };

@@ -1,10 +1,11 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
+  HostWriteHooks, CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
   LexicalFindCandidatesResult, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
+export type * from "../ports/host-write-hooks.d.ts";
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
@@ -50,6 +51,7 @@ export interface MemoryServiceConfig {
 
 export interface MemoryServiceDeps {
   readonly storage: ReadContractStorage<StoredDocumentCardRecord>;
+  readonly hostWriteHooks?: HostWriteHooks;
   readonly model: ModelPort | null;
   readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;

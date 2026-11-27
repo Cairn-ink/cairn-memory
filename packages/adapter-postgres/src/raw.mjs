@@ -12,13 +12,13 @@ import { readVisibilityFacts } from "./memory-visibility.mjs";
 import { archiveCandidates, rawMessageStorable } from "./raw-archive.mjs";
 import { createImportTextFilter, copyWithheldPositions, rawSpanFilter } from "./raw-import.mjs";
 import { LATE_PROVEN_CLOSURE, MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
-import { dropSourceQuantities, purgeRawText, scrubLedger } from "./raw-purge.mjs";
+import { dropSourceQuantities, purgeRawText, RAW_SOURCE_COLUMNS, scrubLedger } from "./raw-purge.mjs";
 import { conversationSessions, rawSession } from "./raw-session.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { Scope } from "../../core/src/ports/common.d.ts" */
 /** @import { CaptureMessage, RawCapture } from "../../core/src/ports/capture.d.ts" */
-/** @import { RawStore, SessionLineageStore, ProvenClosure } from "../../core/src/ports/privacy.d.ts" */
+/** @import { RawSourceTuple, RawStore, SessionLineageStore, ProvenClosure } from "../../core/src/ports/privacy.d.ts" */
 /** @import { StoredFact, TextFact } from "../../core/src/suppression-fact.mjs" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
 /** @import { Run } from "./uow.mjs" */
@@ -60,31 +60,38 @@ const SUPPRESS = `INSERT INTO suppressions (id, user_id, kind, client, session_i
 const DELETE = `DELETE FROM raw_messages r
   USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text)
   WHERE r.user_id = $1
-    AND (r.client, r.session_id) = (target.client, target.session_id) RETURNING 1`;
+    AND (r.client, r.session_id) = (target.client, target.session_id)`;
 
 /** @param {Session} session */
 function copySession(session) {
   return { client: identifier(session?.client), sessionId: identifier(session?.sessionId) };
 }
 
-/** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions @param {string} statement */
-async function changeSessions(query, scope, sessions, statement) {
+/** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions @param {string} statement
+ * @param {RawSourceTuple[]} [deletedSources] */
+async function changeSessions(query, scope, sessions, statement, deletedSources) {
   if (!sessions.length) return 0;
   const target = sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId,
     ...(statement === SUPPRESS && { id: crypto.randomUUID() }) }));
-  return (await query(statement, [scope.owner, JSON.stringify(target)])).rows.length;
+  const { rows } = await query(statement === DELETE ? `${DELETE} RETURNING ${deletedSources ? RAW_SOURCE_COLUMNS : "1"}` : statement,
+    [scope.owner, JSON.stringify(target)]);
+  if (deletedSources) for (const row of rows) deletedSources.push(row);
+  return rows.length;
 }
 
-/** @param {Query} query @param {Run} run @param {Scope} scope @param {readonly Session[]} sessions */
-async function erase(query, run, scope, sessions) {
+/** @param {Query} query @param {Run} run @param {Scope} scope @param {readonly Session[]} sessions
+ * @param {boolean} [includeDeletedSources] */
+async function erase(query, run, scope, sessions, includeDeletedSources) {
   const fenced = await changeSessions(query, scope, sessions, FENCE);
   const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
-  const rawDeleted = await changeSessions(query, scope, sessions, DELETE);
+  /** @type {RawSourceTuple[] | undefined} */
+  const deletedSources = includeDeletedSources ? [] : undefined;
+  const rawDeleted = await changeSessions(query, scope, sessions, DELETE, deletedSources);
   const quantitiesDeleted = await dropSourceQuantities(query, scope, sessions);
   const { ledgerBlanked, ledgerChanged } = sessions.length ? await scrubLedger(query, scope, sessions) :
     { ledgerBlanked: 0, ledgerChanged: false };
   if (fenced || suppressed || rawDeleted || quantitiesDeleted || ledgerChanged) await advanceIndex(query, scope.owner, run);
-  return { rawDeleted, ledgerBlanked };
+  return { rawDeleted, ledgerBlanked, ...(deletedSources && { deletedSources }) };
 }
 
 /** @param {Query} query @param {Run} run @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
@@ -250,16 +257,16 @@ export function createPostgresRawPorts(options) {
       });
     },
 
-    eraseSessions(tx, scope, closure) {
+    eraseSessions(tx, scope, closure, { includeDeletedSources } = {}) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
         const proof = proven.get(closure);
         if (proof?.tx !== tx) throw new CoreError("raw_lineage_unavailable");
-        return (query, run) => erase(query, run, target, proof.sessions);
+        return (query, run) => erase(query, run, target, proof.sessions, includeDeletedSources);
       });
     },
 
-    purgeWithheld(tx, scope, facts) {
+    purgeWithheld(tx, scope, facts, { includeDeletedSources } = {}) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
         const selected = copyArray(facts).flatMap((stored) => {
@@ -270,9 +277,11 @@ export function createPostgresRawPorts(options) {
             ? [/** @type {StoredFact<TextFact>} */ ({ fact: snap })] : [];
         });
         return async (query, run) => {
-          const { rawDeleted, ledgerBlanked, ledgerChanged } = await purgeRawText(query, target, selected, fingerprintKeys);
+          /** @type {RawSourceTuple[] | undefined} */
+          const deletedSources = includeDeletedSources ? [] : undefined;
+          const { rawDeleted, ledgerBlanked, ledgerChanged } = await purgeRawText(query, target, selected, fingerprintKeys, deletedSources);
           if (rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
-          return { rawDeleted, ledgerBlanked };
+          return { rawDeleted, ledgerBlanked, ...(deletedSources && { deletedSources }) };
         };
       });
     },
