@@ -8,7 +8,7 @@ import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { memoryCorrectionEvidence } from "./privacy.mjs";
-import { receiptAddressKey } from "./receipt-read-safety.mjs";
+import { MEMORY_FORGET_RECEIPT, receiptAddressKey } from "./receipt-read-safety.mjs";
 import { matchesMemoryFilters, withinWindow } from "./retrieval-window.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
@@ -449,8 +449,10 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           return Promise.all(Array.from(visibleRefs(state, selection, references, intent !== "recall"), async ({ ref, entry }) => {
             const receipts = [];
             for (const receipt of entry.receipts) {
+              // Raw deletion leaves an address for the span resolver, while
+              // forgetting a Memory explicitly retires the shared address.
               if (state.receiptDenials.size &&
-                  state.receiptDenials.has(await receiptAddressKey(ref.namespace, receipt))) continue;
+                  state.receiptDenials.has(MEMORY_FORGET_RECEIPT + await receiptAddressKey(ref.namespace, receipt))) continue;
               const { client, sessionId, messageId, role, occurredAtMs } = receipt;
               receipts.push({ client, sessionId, messageId, role, occurredAtMs });
             }

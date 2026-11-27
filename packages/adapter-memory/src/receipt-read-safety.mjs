@@ -6,6 +6,8 @@ import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 /** @typedef {Receipt & { createdAtMs?: number, captureEventId?: string, includeUnknownTime?: true }} StoredReceipt */
 /** @typedef {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} Policy */
 
+export const MEMORY_FORGET_RECEIPT = "memory-forget:";
+
 /** @param {Pick<Receipt, "client" | "sessionId" | "messageId" | "role" | "excerpt">} receipt */
 export function receiptIdentityKey({ client, sessionId, messageId, role, excerpt }) {
   // The legacy hash serializes the message ID under the eventId property.
