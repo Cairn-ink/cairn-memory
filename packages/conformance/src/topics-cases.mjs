@@ -444,7 +444,8 @@ export const topicCases = [
     equal(await store.pending(), [], "A terminal receipt must also consume the sixth memory");
   }),
 
-  topicCase(19, "an index change after validation keeps the memory pending for a fresh catalog", async (ctx) => {
+  topicCase(19, "an index change after validation defers the memory until a fresh catalog can be read", async (ctx) => {
+    if (!ctx.harness.advanceClock) return "needs a controllable clock to verify retries";
     const store = setup(ctx);
     const pending = await store.seed("Awaiting a catalog update");
     const title = "Concurrent topic";
@@ -461,7 +462,9 @@ export const topicCases = [
       },
     });
     equal(stale, { status: "failed", error: { code: "revision_conflict", retryable: false } }, "Apply must reject the old index revision");
-    equal(await store.pending(), [pending], "An old index revision must leave the unchanged memory pending");
+    equal(await store.pending(), [], "An index-only failure must start the retry cooldown");
+    await ctx.harness.advanceClock(3_600_000);
+    equal(await store.pending(), [pending], "The unchanged revision must become eligible after cooldown");
 
     const next = await store.placePendingBatch({
       ...options,
@@ -475,5 +478,49 @@ export const topicCases = [
     });
     check(next.status === "applied" && next.placed[0]?.topicIds.length === 1, "The re-read must file the memory");
     equal(await store.pending(), [], "The current filing must consume the pending memory");
+  }),
+
+  topicCase(20, "continuous index movement lets the sixth memory run and caps deterministic failures", async (ctx) => {
+    if (!ctx.harness.advanceClock) return "needs a controllable clock to verify retries";
+    const store = setup(ctx);
+    const title = "Existing topic";
+    const source = await store.seed("Source for the existing topic");
+    await store.apply([source], [item(source, [], topic(title))]);
+    const queue = [];
+    for (let i = 0; i < 6; i++) queue.push(await store.seed(`Waiting memory ${i}`, i + 2));
+    const [failing] = queue;
+    const sixth = queue[5];
+    const oldestIds = queue.slice(0, 5).map(({ memoryId }) => memoryId);
+    /** @type {string[][]} */
+    const batches = [];
+    let tick = 0;
+    const run = () => store.placePendingBatch({
+      uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement,
+      async classify({ memories }, _catalog, { validateFresh }) {
+        await validateFresh();
+        const ids = memories.map(({ id }) => id);
+        batches.push(ids);
+        const writer = await store.seed(`Concurrent writer ${++tick}`, tick + 10);
+        await store.apply([writer], [item(writer, [], topic(`Concurrent topic ${tick}`))]);
+        if (ids.includes(failing.memoryId)) {
+          // Use the fresh index for the deterministic rejection after the original snapshot has gone stale.
+          await store.apply([failing], [item(failing, [], topic(title))]);
+        }
+        return { items: memories.map(({ id }) => ({ memoryId: id, parentIds: [] })) };
+      },
+    });
+    const deterministic = { status: "failed", error: { code: "moc_title_conflict", retryable: false } };
+    equal(await run(), deterministic, "The first memory must fail deterministically");
+    await run();
+    equal(batches, [oldestIds, [sixth.memoryId]], "The sixth memory must run while the oldest five are cooling down");
+
+    for (let attempt = 2; attempt <= 3; attempt++) {
+      await ctx.harness.advanceClock(3_600_000);
+      equal(await store.pending(), queue.slice(0, 5), `The oldest five must be eligible for attempt ${attempt}`);
+      equal(await run(), deterministic, `The first memory must fail on attempt ${attempt}`);
+    }
+    equal(batches, [oldestIds, [sixth.memoryId], oldestIds, oldestIds], "The index must advance on every classification tick");
+    await ctx.harness.advanceClock(3_600_000);
+    equal(await store.pending(), [sixth], "The deterministic failure and its four batchmates must leave the queue at the cap");
   }),
 ];

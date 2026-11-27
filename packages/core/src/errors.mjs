@@ -90,6 +90,7 @@ export const ERROR_CODES = Object.freeze({
   invalid_ref: "invalid_input",
   // Topics
   moc_title_conflict: "conflict",
+  topic_index_moved: "retryable",
 });
 
 /** @param {unknown} code @returns {code is keyof typeof ERROR_CODES} */

@@ -61,18 +61,19 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
 
   const { snapshot, catalogView, basedOn } = batch;
   /** @param {Tx} tx */
-  const snapshotIsStale = async (tx) => {
+  const snapshotConflict = async (tx) => {
     for (const { memoryId, revision } of basedOn.memoryRevisions) {
-      if ((await memories.readRevision(tx, scope, memoryId))?.revision !== revision) return true;
+      if ((await memories.readRevision(tx, scope, memoryId))?.revision !== revision) return 'revision_conflict';
     }
     const { indexRevision } = await placement.catalog(tx, scope, { cursor: null, limit: 1 });
-    return indexRevision !== basedOn.indexRevision;
+    return indexRevision !== basedOn.indexRevision ? 'topic_index_moved' : null;
   };
-  let stale = false;
+  let revisionsChanged = false;
   const validateFresh = async () => {
-    if (await uow.run(scope.owner, { readOnly: true }, snapshotIsStale)) {
-      stale = true;
-      throw new CoreError('revision_conflict');
+    const conflict = await uow.run(scope.owner, { readOnly: true }, snapshotConflict);
+    if (conflict) {
+      revisionsChanged ||= conflict === 'revision_conflict';
+      throw new CoreError(conflict);
     }
   };
 
@@ -83,13 +84,14 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused' && !stale) {
+    if (kind !== 'paused' && !revisionsChanged) {
       try {
         await uow.run(scope.owner, {}, async (tx) => {
           // Hold the write lock from the guard reads through the receipt write.
-          if (await snapshotIsStale(tx)) return;
+          const conflict = await snapshotConflict(tx);
+          if (conflict === 'revision_conflict') return;
           const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
-          await placement.markFailed(tx, scope, ids, code);
+          await placement.markFailed(tx, scope, ids, conflict ?? code);
         });
       } catch {
         // A failed receipt write cannot replace the original error.

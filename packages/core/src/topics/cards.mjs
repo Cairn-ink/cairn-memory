@@ -100,23 +100,20 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     return indexRevision !== basedOn.indexRevision;
   }
 
-  let stale = false;
+  let hashesChanged = false;
   /** @type {TopicCardGuard[]} */
   let newlyExcluded = [];
   const validateFresh = async () => {
-    const fresh = await uow.run(owner, { readOnly: true }, async (tx) => {
+    const conflict = await uow.run(owner, { readOnly: true }, async (tx) => {
       const cards = await readCards(tx, basedOn.cards);
-      const cardsChanged = cards.length !== basedOn.cards.length;
-      if (cardsChanged) stale = true;
+      hashesChanged ||= cards.length !== basedOn.cards.length;
       const visible = await visibleIds(tx, cards);
       newlyExcluded = cards.filter(({ id }) => !visible.has(id))
         .map(({ id: cardId, contentHash }) => ({ cardId, contentHash }));
-      if (visible.size !== basedOn.cards.length || newlyExcluded.length) return false;
-      const indexChanged = await indexIsStale(tx);
-      if (indexChanged) stale = true;
-      return !indexChanged;
+      if (cards.length !== basedOn.cards.length || newlyExcluded.length) return 'revision_conflict';
+      return await indexIsStale(tx) ? 'topic_index_moved' : null;
     });
-    if (!fresh) throw new CoreError('revision_conflict');
+    if (conflict) throw new CoreError(conflict);
   };
 
   try {
@@ -129,12 +126,12 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
     if (kind !== 'paused') {
       try {
         if (newlyExcluded.length) await markFailed(newlyExcluded, 'source_excluded');
-        if (!stale && newlyExcluded.length < basedOn.cards.length) {
+        if (!hashesChanged && !newlyExcluded.length) {
           await uow.run(owner, {}, async (tx) => {
             const cards = await readCards(tx, basedOn.cards);
-            if (cards.length !== basedOn.cards.length || await indexIsStale(tx)) return;
-            const ids = cards.map(({ id }) => id).filter(id => !newlyExcluded.some(({ cardId }) => cardId === id));
-            await placement.markCardsFailed(tx, scope, ids, code);
+            if (cards.length !== basedOn.cards.length) return;
+            const receiptCode = await indexIsStale(tx) ? 'topic_index_moved' : code;
+            await placement.markCardsFailed(tx, scope, cards.map(({ id }) => id), receiptCode);
           });
         }
       } catch {
