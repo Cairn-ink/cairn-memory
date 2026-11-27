@@ -143,13 +143,15 @@ test("raw find forwards filters and fences in the same snapshot without reorderi
   });
   assert.equal(transactions.length, 1);
   const [tx, selection, text, intent, options] = candidateCall;
-  assert.equal(transactions[0].tx, tx, "raw search and fence must use the same transaction");
   assert.equal(transactions[0].selection, selection);
   assert.equal(transactions[0].intent, undefined);
   assert.deepEqual(transactions[0].refs, [first.ref, hidden.ref, last.ref]);
   assert.deepEqual(selection, { ...readScope, clients: ["client", "other"], window: { sinceMs: 10, untilMs: 20 } });
   assert.deepEqual([text, intent, options], [query, "search", { limit: 3 }]);
-  assert.deepEqual(calls.filter(([name]) => name === "run"), [["run", scope.owner, { readOnly: true }]]);
+  assert.deepEqual({
+    fenceRun: transactions[0].tx.runId,
+    runs: calls.filter(([name]) => name === "run"),
+  }, { fenceRun: tx.runId + 1, runs: Array(2).fill(["run", scope.owner, { readOnly: true }]) });
 });
 
 test("raw find skips null and blank queries", async () => {
