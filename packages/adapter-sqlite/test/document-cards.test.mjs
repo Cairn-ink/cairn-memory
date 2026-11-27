@@ -5,7 +5,7 @@ import test from "node:test";
 import { coreDigest } from "@cairn-ink/core";
 import { buildDocumentCard } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { captureService, correction, extract, plan, update } from "../../conformance/src/capture-documents-support.mjs";
+import { captureService, correction, extract, plan, update } from "@cairn-ink/conformance/capture-documents-support";
 import { createSqliteAdapter } from "../src/adapter.mjs";
 import { readCardGeneration } from "../src/document-card-rows.mjs";
 import { openSqliteAdapter, SQLITE_PHYSICAL_VERSION } from "../src/index.mjs";

@@ -2,9 +2,9 @@ import { CoreError } from "../errors.mjs";
 import { createBM25, scoreBM25 } from "../retrieval/bm25.mjs";
 import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
-import { CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
+import { COMPACT_MEMORY_REPRESENTATION, CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
 import { fitCardAmendments } from "./context-read-pack.mjs";
-import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey,
+import { canReplaceCitedMemory, cardHits, citesMemory, compareDates, FRAMING, isDateTime, minute, sourceDate, turnKey,
   wireItem } from "./context-read-projection.mjs";
 
 /** @import { CallOptions, ContextAssemblyRawExcerpt, ContextAssemblyRepresentation, ContextRawCoverage,
@@ -20,21 +20,24 @@ const deadline = new Error("raw assembly deadline");
 
 /** @param {ContextRawReadStore | undefined} store @param {UnitOfWork} uow @param {ContextReadSet} readSet
  * @param {string} query @param {boolean} lexicalOnly @param {CallOptions} options @param {() => number} now
- * @param {number} end @returns {Promise<Channel>} */
-export async function readRawChannel(store, uow, readSet, query, lexicalOnly, options, now, end) {
+ * @param {number} end @param {number} [readStarted] @returns {Promise<Channel>} */
+export async function readRawChannel(store, uow, readSet, query, lexicalOnly, options, now, end, readStarted) {
   if (!store) return { turns: [], coverage: "unavailable" };
   // Legacy context-read-three-layer.mjs:21–102. Scope, cap and timeout apply
   // to the qualified search and preparation together.
-  const started = now();
+  const started = readStarted ?? now();
   const cutoff = Math.min(end - 50, started + (end - started) * 0.4);
   /** @type {Channel} */
   const partial = { turns: [], coverage: "partial" };
   if (cutoff <= started || options.signal?.aborted) return partial;
-  const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(cutoff - now())));
+  const remaining = cutoff - now();
+  if (readStarted !== undefined && remaining <= 0) return partial;
+  const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(remaining)));
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   let onAbort = () => {};
   try {
     const search = uow.run(readSet.owner, { readOnly: true }, async tx => {
+      if (signal.aborted) return partial;
       const result = await store.search(tx, readSet, query, { limit: CONTEXT_HORIZON, lexicalOnly, deadlineAtMs: cutoff, signal });
       if (now() >= cutoff || signal.aborted) return partial;
       if (result.coverage !== "included" && result.coverage !== "partial") {
@@ -133,7 +136,7 @@ function excerptFor(turn, i, readSet, terms, representation, count, check) {
   const { scope, conversationId, messageId, role, occurredAtMs } = turn;
   return { key: turnKey(turn), session: JSON.stringify([scope.namespace, conversationId]), rank: i + 1,
     wire: { ref: { ns: namespaceSlot(readSet, scope), type: "raw", conversationId, messageId }, role,
-      ...(occurredAtMs !== null && { occurredAt: new Date(occurredAtMs).toISOString(),
+      ...(isDateTime(occurredAtMs) && { occurredAt: new Date(occurredAtMs).toISOString(),
         ...(representation === "representation-v2-dated" && { date: minute(occurredAtMs) }) }),
       start: span.start, end: span.end, body: span.body } };
 }
@@ -220,6 +223,8 @@ function projectUnit(group, representation, count) {
  * @param {PackOptions} options @param {ReturnType<typeof meter>} metering */
 export function packRawContext(items, raw, readSet, query, options, metering) {
   const { now, representation, deadline: end, budget } = options;
+  if (representation === COMPACT_MEMORY_REPRESENTATION) return null;
+  const rawRepresentation = representation;
   const { tokens, trace, stops, check } = metering;
   const cutoff = end - Math.min(250, Math.max(25, (end - now()) * 0.25));
   const active = () => { if (now() >= cutoff) throw deadline; };
@@ -265,7 +270,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       const surviving = proposed.flatMap(unit => {
         const members = unit.members.filter(item => !cards.some(card => citesMemory(card, item)));
         if (members.length === unit.members.length) return [unit];
-        return members.length || unit.evidence.length ? [projectUnit({ ...unit, members }, representation, items.length)] : [];
+        return members.length || unit.evidence.length ? [projectUnit({ ...unit, members }, rawRepresentation, items.length)] : [];
       });
       const selected = surviving.flatMap(unit => unit.members);
       const rendered = surviving.slice().sort((a, b) =>

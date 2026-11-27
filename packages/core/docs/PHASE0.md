@@ -966,7 +966,8 @@ advances the index.
 - `affectedSessions`, a list of scoped `{ client, sessionId, effect }` with `effect: "hide" | "erase"`.
   Only proven closure authorizes session erasure. Identity-only links and unknown proofs are hide-only.
   `affectedMessages` lists exact scoped `{ client, sessionId, messageId }` selectors for resolved Raw or
-  card sources. `affectedSpans` lists resolved `{ sessionKeyHash, messageKey, start, end }` with
+  card sources and includes Raw deletion metadata for forget as defined in Addendum 30 §5.
+  `affectedSpans` lists resolved `{ sessionKeyHash, messageKey, start, end }` with
   store-defined half-open offsets. These lists identify the resolved evidence. A text fact can affect
   additional rows. Use the same transaction to apply a fact to those wider results; never infer an
   unbounded purge from an empty list.
@@ -1294,3 +1295,223 @@ embedder, extraction or the quantity ledger. The result is `done` with no
 memories and the finish's index revision. Pause, generation, lease and
 durable-deletion rules are the same as for model-backed capture. A source
 withdrawn between admission and finish is not archived.
+
+## Addendum 27 — Raw fallback when model-stage capture fails
+
+`config.rawCapture` accepts `enabled` and `onModelFailure`, each an optional
+boolean. At least one must be present, and no other key is allowed.
+`enabled: true` keeps the Addendum 26 rules and requires no model.
+`onModelFailure: true` requires a model; registration without one throws
+`invalid_input`. Unset or `false` leaves model-backed capture byte-identical.
+
+With `onModelFailure: true`, a `runCapture` failure whose code is
+`model_timeout`, `extraction_failed`, `provider_error`,
+`invalid_model_output`, `token_count_unavailable`,
+`context_budget_exceeded`, `embedding_failed`, `qualification_failed`,
+`reconciliation_failed`, `classification_failed` or `rationale_failed`
+does not abandon the claim. The event instead finishes on the Addendum 26
+Raw-only path in a new transaction: withdraw blank or changed slots,
+`assertEligible` on the survivors, re-read the passages, apply the core
+source filter, `finish(tx, token, [])`, `archiveAllowed`, and `archive` of
+the admitted copies of the allowed positions. The fallback checks the
+caller's signal but not the expired extraction deadline. It writes no
+memories. The result is `done` with no memories, the finish's index
+revision and `code` set to the original failure code.
+
+The fallback never runs when the host's signal aborted, or for any other code:
+privacy, pause, lineage, changed inputs, key mismatch, storage or commit
+uncertainty. If the fallback itself fails, the claim is abandoned with the
+original failure, as without the option. A source withdrawn between the
+model failure and the fallback finish is not archived.
+
+## Addendum 28 — Window fence for session-less explicit memories
+
+`config.explicitWindowFence = { enabled: true }` opts a service into this
+fence. Unset or `false` leaves forget and correct byte-identical. The option
+takes the same validation as `rawCapture`: one own boolean key, `enabled`.
+
+With the option on, forget and correct of a session-less explicit memory
+write durable window suppression facts in the same transaction as the rest of
+the operation.
+
+A memory is session-less explicit when its source kind is `"mcp"` or `"web"`
+and its source session is `null`. An explicit tool never learns which
+conversation it serves, so its saves name no session, and migrated explicit
+memories carry the same source. Captured, imported and migrated captured
+memories keep the existing session fence and add no window. The trigger reads
+only the memory row.
+
+The anchors are the memory's `createdAtMs` and `updatedAtMs`. For each
+distinct anchor `t`, the operation writes:
+
+```
+{ kind: "window", owner, namespace, actionId, origin: "forget",
+  client: null, window: { startMs: t - 1800000, endMs: t + 1800000 },
+  anchor: "pm30min" }
+```
+
+`client: null` covers every client, because an explicit tool's client name
+is not the captured client's name. Every window uses the origin `"forget"`,
+so a correction and a later forget of the same memory reuse the same window.
+`actionId` is the operation's action. The facts carry no text. Correct
+computes its windows from the row it reads before its write transaction
+begins, as it does for its predecessor fact. An unchanged correction writes
+nothing.
+
+Windows are durable. Raw, router cards and captures that arrive later inside
+a window are withheld, as are rows already stored inside it. A store that
+cannot write a window fact fails the whole operation.
+
+Known limits:
+
+- Messages whose time is unknown are not covered by these windows.
+- An explicit save that only touched an existing captured memory leaves that
+  memory's source unchanged. Its forget fences the captured session, not the
+  conversation where the explicit save happened.
+- Where explicit receipts carry finite times, a window also withholds explicit
+  saves whose receipts fall inside it.
+
+## Addendum 29 — Query embedding alongside lexical and Raw work
+
+A Context Read that attempts query embedding starts one memoized recall
+embedding at the read's start alongside lexical maintenance, lexical search
+and Raw search. For that read, the Raw cutoff is the earlier of 50 ms before
+the read deadline and the point 40% of the way from read start to deadline.
+Find joins the embedding before semantic ranking and fusion, and
+an embedding error or timeout leaves lexical and Raw evidence available.
+Reads without a query embedding run Raw after find and measure its window
+from the start of Raw work.
+
+## Addendum 30 — Hosted write hook implementation boundaries
+
+### 1. Hook mechanism and Postgres snapshot protocol
+
+The engine implements hook registration, the read-only admission callbacks, the write callbacks,
+scoped execution and effect metadata on the live transaction, and failure and replay handling.
+The Postgres host supplies the async context used to carry the run marker across continuations.
+This keeps the engine and Postgres adapter independent of Node-specific runtime APIs.
+The pause-locked Postgres exporter/importer protocol and explicit
+`BEGIN ISOLATION LEVEL READ COMMITTED` for writers remain open. Addendum 20 defines the
+snapshot protocol independently of hook registration. The snapshot protocol changes the
+connection and lock lifecycle even with hooks omitted. Explicit writer isolation changes
+the existing writer SQL trace. Postgres hooks in this implementation use the database's
+default READ COMMITTED isolation, verified in the Postgres hook driver with
+`SHOW transaction_isolation` on the callback's transaction.
+
+The follow-up needs the following test changes and separate pooler qualification.
+
+| Existing test | Required change in the follow-up |
+| --- | --- |
+| `packages/adapter-postgres/test/uow.test.mjs:7,66–82` | Change the writer BEGIN expectation. Replace the single-session pause-read trace with distinct exporter and reader connections, overlapping transaction locks, and exporter acknowledgement before callback entry. |
+| `packages/adapter-postgres/test/read-tx-round-trips.test.mjs:13,74–91,137–151` | Change the batched and individual writer BEGIN expectations. Replace the session lock, timeout restore and unlock trace with export, import, try-lock and handoff traces. |
+| `packages/adapter-postgres/test/pause-shared-postgres.test.mjs:115–185` | Exercise snapshot-after-wait through the importing reader. Replace session unlock/reset assertions and unlock injection with exporter-loss, handoff and reader transaction cleanup assertions. |
+
+The pooler qualification also covers snapshot freshness without a watermark advance, exclusive
+waiters during handoff, failed import and unknown exporter acknowledgement, capacity and lock
+budget exhaustion, transaction-local limits and backend reuse, and pause generation. Hook cases
+use the separate `@cairn-ink/conformance/host-write-hooks` driver. SQLite omits the runtime
+flag and port.
+
+### 2. Failure precedence during Raw fallback
+
+Addendum 20 governs failures originating in `onCaptureFinish` during Addendum 27's Raw fallback.
+A throw, rejection, invalid decision or pending operation at settlement rolls back the
+finish and returns `{ status: "failed", code: "host_write_hook_failed" }`. Claim cleanup uses
+that nonretryable code. A latched SQL failure in the hook keeps its native mapping and
+retryability. For example, SQLSTATE `40001` or `40P01` returns `storage_busy` and releases
+the claim for retry. Other fallback failures retain Addendum 27's abandonment with the
+original model error. Commit acknowledgement uncertainty keeps the existing reconciliation.
+
+### 3. Hosted admission decisions
+
+On every explicit `mcp` or `web` save, `beforeSave` runs after the preflight pause check and
+again in the final locked write run after the pause and generation check, before any mutation.
+The executor is read-only in both calls. The request context has `request: null` for an
+unkeyed save, which can proceed or return `{ status: "refuse" }`. A keyed save can proceed,
+replay, conflict or refuse. Refusal returns the existing suppressed outcome with the
+starting index revision. Replay still passes through the delivery fence.
+
+For a correction that reaches the guarded replacement, `beforeCorrect(tx, { scope, predecessor })`
+runs in the final locked transaction before the predecessor fact, receipt mutation or replacement.
+It uses a read-only executor and accepts `proceed` or `refuse`. Refusal returns the existing
+correct-withheld outcome with the predecessor and its receipts intact. Both admission callbacks
+are required members of the complete registered hook set. Contexts carry metadata only.
+
+### 4. Writer ownership and hosted switch-back
+
+The per-owner writer-ownership marker is deferred. Phase-1 switches explicit save, forget and
+correct to core and keeps capture on the legacy writer for the same owner. A single per-owner
+marker cannot express that split. Phase-1 ownership comes from per-operation routing fixed at the
+authenticated entry and switching under the pause barrier after in-flight work drains. The
+same-transaction legacy mirror keeps a late legacy write privacy-safe. Phase-2 requires an
+adapter-side marker by operation class before capture switches. That check is an opt-in on the
+hosted hook path to preserve the no-hook SQL trace. A follow-up should add opt-in lock-order,
+refusal and routing tests alongside the existing writer trace tests in
+`packages/adapter-postgres/test/uow.test.mjs:7–15,66–82` and
+`packages/adapter-postgres/test/read-tx-round-trips.test.mjs:137–151`. The current owner-lock
+sequence and existing tests remain as filed.
+
+The hosted composition owns and tests legacy mirror writes, their keys and consumers, and the
+switch-back contract. A hosted correction projects an edit-origin legacy suppression for the
+predecessor ID and exact creation time inside `onCorrect`. The engine conformance cases use a
+synthetic host table so they can verify callback order, metadata, the shared transaction and
+rollback. Hosted cutover qualification covers switch-back of reads, writes and queued capture,
+including legacy matching, retained signing domains and suppression of superseded evidence.
+
+### 5. Raw deletions in the forget context
+
+`onForget` receives every Raw row physically deleted by the current forget in
+`affectedMessages`, including text or containment purges, session erasure through a proven
+closure, and any span purge that physically deletes a row. Core document cards can be disabled.
+Each deleted source is projected as `{ client, sessionId, messageId, role, occurredAtMs }`.
+`occurredAtMs` may be `null`. The tuple carries no text. A deleted source replaces an existing
+selector at the same address. The resulting list is deduplicated by address and ordered
+by its serialized `[client, sessionId, messageId]` address. `affectedSessions` continues to
+report proven erasure with `effect: "erase"`.
+
+The current span step writes suppression facts and leaves Raw rows in storage. Correct
+writes suppression facts and replaces the memory without purging Raw, so `onCorrect` keeps
+its predecessor selectors. Memory and Postgres project tuples from the rows already deleted
+in the write. With hooks omitted, the Raw purge uses its existing results and queries.
+
+### 6. Port-owned hook authorization
+
+Hook operations are authorized only from runs that core created. When core binds the hook
+set, it registers a reader of its live runs with the adapter through
+`port.bindHookAuthority(reader)`. Each port method and scoped executor looks up the run for the
+call's live transaction through that reader. Core adds the run before the callback starts and
+removes it after the callback settles. A record entered through the port's async context grants
+nothing, so it cannot widen the namespace, write during `beforeSave` or `beforeCorrect`, or act
+after the hook returns. The async context only tells whether code runs inside a hook, for the
+outside-a-hook checks. `bindHookAuthority` refuses registration from inside a hook. The adapters
+keep their hook context module-private and share no global marker. Because authorization flows
+through the registered reader instead of a module-private brand, it holds when the adapter and
+the service load separate copies of the core module.
+
+## Addendum 32 — Explicit window fences never hide memories
+
+This amends Addendum 28. A window with `anchor: "pm30min"` never hides a
+memory row, whatever the memory's times. Only `config.explicitWindowFence`
+writes such windows, on forget and on correct. A correction therefore keeps its
+replacement visible at the same ID, as Addendum 20 requires. Memories saved
+near a forgotten one also stay visible.
+
+These windows still fence Raw rows, router cards, receipt excerpts for turns
+inside them, and capture and import admission inside them. The forgotten
+memory stays hidden by its identity fact, and its text by its text fact.
+Windows without the anchor keep their existing matching.
+
+Known limit: an adapter that decides placement reads from a memory's receipts
+can still drop that memory from a placement read when one of its receipts
+falls inside such a window. Direct reads still return the memory.
+
+## Addendum 33 — memory-compact-v1 (opt-in)
+
+`readContext` accepts `representation: "memory-compact-v1"` as an engine API opt-in for `types: ["memory"]` with explicit `raw: false` and `intent: "current"`.
+Compact deliberately narrows the 0.6.x intent grammar to current memories. Other intents return `invalid_input`, and compact snapshots replay only current evidence.
+Compact reads reject source selection and cursors, and discovery and tool schemas retain their existing representation lists.
+Lexical retrieval, semantic fusion and the item budget use a horizon of 64, with the existing token budget and deadline.
+Compact follows Addendum 25. Omitting `semantic` selects semantic retrieval when the query embedder, `semanticRetrieval` capability and vector port are available, while `semantic: false` selects lexical retrieval. This deliberately differs from the 0.6.x lexical default.
+Pack whole `{ date, body }` items in ascending date order with undated items last, and meter the formatted block without source excerpts or ledger digests.
+Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
+Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.

@@ -17,7 +17,7 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {ReturnType<typeof scopedSuppression>} Policy */
 /** @typedef {Pick<StoredReceipt, "legacy" | "legacyRawAncestryEmpty">} LegacyAttestation */
 /** @typedef {[Connection, Scope, Policy, Receipt, string | undefined, string | undefined,
- * LegacyAttestation?, string?]} ReceiptCheck */
+ * LegacyAttestation?, string?, ReadonlySet<StoredFact>?, ((row: RawRow) => void)?, RawRow?]} ReceiptCheck */
 
 /** Evaluate a retained receipt or bare address inside the caller's transaction.
  * @param {SessionHasher} hashSession
@@ -30,8 +30,10 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
    * @param {LegacyAttestation} [stored]
    * @param {string} [memoryId]
    * @param {ReadonlySet<StoredFact>} [correctionFacts]
+   * @param {(row: RawRow) => void} [onVisibleArchive]
+   * @param {RawRow} [visibleSource] A Raw search row that already passed the direct and lineage checks in this scope and transaction.
    */
-  function checkReceipt(db, scope, policy, receipt, key, legacyKey, stored, memoryId, correctionFacts) {
+  function checkReceipt(db, scope, policy, receipt, key, legacyKey, stored, memoryId, correctionFacts, onVisibleArchive, visibleSource) {
     const { client, sessionId, messageId, role, excerpt, occurredAtMs } = receipt;
     const textFacts = correctionFacts ? policy.facts.filter(stored => !correctionFacts.has(stored)) : policy.facts;
     if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant")) return false;
@@ -58,7 +60,10 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
     }
     const session = rootSessions.length ? { client, sessionId: rootSessions[0] }
       : addressOnly || legacyKey ? migratedRaw?.storageSession(db, scope, receipt) ?? receipt : receipt;
-    const archived = readRawRow(db, scope, session, messageId) ?? (session === receipt ? undefined : readRawRow(db, scope, receipt, messageId));
+    const sameSource = visibleSource && visibleSource.client === session.client && visibleSource.sessionId === session.sessionId &&
+      visibleSource.message.id === messageId && visibleSource.message.role === role;
+    const archived = sameSource ? visibleSource
+      : readRawRow(db, scope, session, messageId) ?? (session === receipt ? undefined : readRawRow(db, scope, receipt, messageId));
     if (migratedRaw) {
       if (legacyKey && ((!attested && !migratedRaw.receiptAncestryEmpty(db, stored?.legacyRawAncestryEmpty)) ||
           migratedRaw.blocksSpan(db, scope, receipt, messageId) ||
@@ -78,9 +83,11 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
         !migratedRaw?.blocks(db, target, row, [message]);
     }
 
-    return visible(scope, archived, policy) &&
+    const allowed = sameSource || visible(scope, archived, policy) &&
       lineage.receiptRootsVisible(db, scope, archived, (target, row) =>
         visible(target, row, target.namespace === scope.namespace ? policy : scopedSuppression(db, target, hashSession)));
+    if (allowed) onVisibleArchive?.(archived);
+    return allowed;
   }
 
   /** @param {ReceiptCheck} args */

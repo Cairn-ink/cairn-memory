@@ -1,5 +1,5 @@
 import {
-  assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES, WRITE_PARITY_CAPABILITIES,
+  assertHostWriteHookCapability, assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES, WRITE_PARITY_CAPABILITIES,
 } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
@@ -9,8 +9,8 @@ import { fetchForAssembly } from "./context-read-assembly-evidence.mjs";
 import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
 import { readContextMethod } from "./context-read.mjs";
-import { entryError } from "./entry.mjs";
 import { findMethod, readCardMethod, readMethod } from "./find.mjs";
+import { bindHostWriteHooks, entryError } from "./entry.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
 import { inspectMethod } from "./inspect.mjs";
@@ -44,7 +44,9 @@ function freezeConfig(input) {
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
     rowShingles: true,
   };
-  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger", "rawCapture"]);
+  validateObject(input, [
+    ...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger", "rawCapture", "explicitWindowFence",
+  ]);
   const {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
@@ -55,6 +57,7 @@ function freezeConfig(input) {
     documentCards,
     quantityLedger,
     rawCapture,
+    explicitWindowFence,
   } = input;
   for (const weight of [nearDuplicateDistance, lexicalWeight, vectorWeight]) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
@@ -80,17 +83,36 @@ function freezeConfig(input) {
   }
   let raw;
   if (rawCapture !== undefined) {
-    const fields = validateObject(rawCapture, ["enabled"]);
+    const fields = validateObject(rawCapture, ["enabled", "onModelFailure"]);
+    // Read enabled as in the base validator, and read the fallback option only when own.
+    const { enabled } = fields;
+    const onModelFailure = Object.hasOwn(fields, "onModelFailure") ? fields.onModelFailure : undefined;
+    const keys = Reflect.ownKeys(fields);
+    if (!keys.length || keys.some(key => key !== "enabled" && key !== "onModelFailure") ||
+        keys.some(key => !Object.hasOwn(fields, key))) {
+      throw new CoreError("invalid_input");
+    }
+    const hasEnabled = keys.includes("enabled");
+    const hasOnModelFailure = keys.includes("onModelFailure");
+    if ((hasEnabled && typeof enabled !== "boolean") || (hasOnModelFailure && typeof onModelFailure !== "boolean")) {
+      throw new CoreError("invalid_input");
+    }
+    raw = Object.freeze({ enabled: hasEnabled && enabled === true, onModelFailure: hasOnModelFailure && onModelFailure === true });
+  }
+  let windowFence;
+  if (explicitWindowFence !== undefined) {
+    const fields = validateObject(explicitWindowFence, ["enabled"]);
     const { enabled } = fields;
     if (Reflect.ownKeys(fields).length !== 1 || !Object.hasOwn(fields, "enabled") || typeof enabled !== "boolean") {
       throw new CoreError("invalid_input");
     }
-    raw = Object.freeze({ enabled });
+    windowFence = Object.freeze({ enabled });
   }
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
     documentCards: cards, quantityLedger: freezeQuantityLedger(quantityLedger), rawCapture: raw,
+    explicitWindowFence: windowFence,
   });
 }
 
@@ -154,7 +176,10 @@ function freezeDeps(input) {
     throw new CoreError("invalid_input");
   }
 
-  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config) });
+  assertHostWriteHookCapability(storage.capabilities, storage.hostWriteHookPort);
+  const hooks = bindHostWriteHooks(deps.hostWriteHooks, storage.hostWriteHookPort);
+  if (hooks) requireMethods(storage.memories, "committedIndexRevision", "readRevision");
+  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config), hooks });
 }
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
@@ -165,11 +190,13 @@ function freezeDeps(input) {
  * @returns {Required<Pick<import("../ports/index.d.ts").MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>}
  */
 function readContractMethods(storage, clock, host, quantityLedger) {
-  const { findCandidates, findForAssembly } = findCandidatesMethod({ storage, clock, embedQuery: host.embedQuery, gate: host.gate });
+  const { findCandidates, findForAssembly, startAssemblyEmbedding } =
+    findCandidatesMethod({ storage, clock, embedQuery: host.embedQuery, gate: host.gate });
   return {
     findCandidates,
     fetchEvidence: fetchEvidenceMethod(storage),
-    readContext: readContextMethod({ storage, clock, find: findForAssembly, fetch: fetchForAssembly(storage),
+    readContext: readContextMethod({ storage, clock, find: findForAssembly, startEmbedding: startAssemblyEmbedding,
+      fetch: fetchForAssembly(storage),
       counter: host.contextReadCounter, format: host.contextReadFormat,
       calendarReading: quantityLedger?.enabled === true && quantityLedger.calendarReading === true }),
     inspect: inspectMethod(storage, clock),
@@ -187,6 +214,7 @@ export function createMemoryService(input) {
       requireMethods(storage.uow, "run");
       requireMethods(clock, "hmacHex");
       validateReadRegistration(storage);
+      if ("hostWriteHooks" in input) throw new CoreError("invalid_input");
       if (!storage.inspect) throw new CoreError("capability_unavailable");
       if (storage.capabilities.contextRead === true) {
         if (!("fence" in storage)) throw new CoreError("invalid_input");
@@ -199,6 +227,7 @@ export function createMemoryService(input) {
     }
     const deps = freezeDeps(input);
     if (deps.model !== null && deps.config.rawCapture?.enabled === true) throw new CoreError("invalid_input");
+    if (deps.model === null && deps.config.rawCapture?.onModelFailure === true) throw new CoreError("invalid_input");
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),

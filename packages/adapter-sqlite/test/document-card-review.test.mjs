@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { coreDigest } from "@cairn-ink/core";
 import { documentCardVisible } from "@cairn-ink/core/routing";
-import { captureService, extract, plan } from "../../conformance/src/capture-documents-support.mjs";
+import { captureService, extract, plan } from "@cairn-ink/conformance/capture-documents-support";
 import { createSqliteAdapter, openSqliteAdapter } from "../src/adapter.mjs";
 import { readCardGeneration } from "../src/document-card-rows.mjs";
 import { openStorage } from "../src/schema/open.mjs";

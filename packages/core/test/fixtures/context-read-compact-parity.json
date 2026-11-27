@@ -1,0 +1,48 @@
+{
+  "corpus": [
+    {
+      "body": "Telescope telescope telescope records a later observation.",
+      "occurredAt": "2026-03-01T08:00:59.000Z"
+    },
+    {
+      "body": "A telescope records an undated observation.",
+      "occurredAt": null
+    },
+    {
+      "body": "A telescope records an earlier observation near the northern ridge tonight.",
+      "occurredAt": "2026-01-01T08:00:02.000Z"
+    },
+    {
+      "body": "Telescope readings from the lower terrace at dusk.",
+      "occurredAt": "2026-02-14T16:32:41.000Z"
+    }
+  ],
+  "input": {
+    "query": "telescope",
+    "types": [
+      "memory"
+    ],
+    "intent": "current",
+    "raw": false,
+    "semantic": false,
+    "representation": "memory-compact-v1"
+  },
+  "items": [
+    {
+      "date": "2026-01-01T08:00Z",
+      "body": "A telescope records an earlier observation near the northern ridge tonight."
+    },
+    {
+      "date": "2026-02-14T16:32Z",
+      "body": "Telescope readings from the lower terrace at dusk."
+    },
+    {
+      "date": "2026-03-01T08:00Z",
+      "body": "Telescope telescope telescope records a later observation."
+    },
+    {
+      "date": null,
+      "body": "A telescope records an undated observation."
+    }
+  ]
+}

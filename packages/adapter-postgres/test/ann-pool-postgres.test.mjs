@@ -120,7 +120,7 @@ test("a 400-row ANN pool recovers the exact top 50 and feeds the existing fusion
     strictMisses += exact.filter(id => !strict.includes(id)).length;
     const actual = await uow.run(owner, readOnly, tx => candidates.vector.vector(tx, scope, vector, model, 50));
     assert.deepEqual(ids(actual), exact);
-    assert.deepEqual(actual.coverage, { eligible: 1700, embedded: 1700, complete: true });
+    assert.deepEqual(actual.coverage, { eligible: 1700, embedded: 1700, complete: true, pool: { requested: 400, returned: 400 } });
   }
   assert.ok(strictMisses > 0, "strict-order control must miss at least one exact hit");
   assert.equal(pages.length, 5);
@@ -185,7 +185,7 @@ test("pool extension has no gaps or duplicates and honors committed suppression"
   pages.length = 0;
   const extended = await search(5);
   assert.deepEqual(ids(extended), expected.slice(0, 5));
-  assert.deepEqual(extended.coverage, { eligible: 19, embedded: 19, complete: true });
+  assert.deepEqual(extended.coverage, { eligible: 19, embedded: 19, complete: true, pool: { requested: 800, returned: 700 } });
   assert.equal(pages.length, 2);
   assert.equal(pages[0].rows.length, 400);
   assert.ok(pages[0].rows.some(row => row.id === "target-0001" && row.vector_hidden));
@@ -201,7 +201,7 @@ test("pool extension has no gaps or duplicates and honors committed suppression"
   const exhausted = await search(20);
   assert.equal(pages.length, 2);
   assert.deepEqual(ids(exhausted), expected);
-  assert.deepEqual(exhausted.coverage, { eligible: 19, embedded: 19, complete: true });
+  assert.deepEqual(exhausted.coverage, { eligible: 19, embedded: 19, complete: true, pool: { requested: 800, returned: 700 } });
 });
 
 test("zero-vector fallback cannot complete a bounded ANN scan", migrationDbTest, async t => {
@@ -235,5 +235,5 @@ test("zero-vector fallback cannot complete a bounded ANN scan", migrationDbTest,
   assert.deepEqual(ids(result), [...annIds, ...fallbackIds]);
   assert.ok(result.rows.slice(annIds.length).every(row => row.distance === 1));
   assert.deepEqual((await scan(pool, vector, "exact")).slice(0, 3), ["target-1", "target-2", "target-3"]);
-  assert.deepEqual(result.coverage, { eligible: 125, embedded: 125, complete: false });
+  assert.deepEqual(result.coverage, { eligible: 125, embedded: 125, complete: false, pool: { requested: 400, returned: annIds.length } });
 });

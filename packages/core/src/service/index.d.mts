@@ -1,19 +1,21 @@
 import type {
   ClockAndHash, ContextReadBlockFormatter, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
-  CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
+  HostWriteHooks, CallOptions, ContextReadSet, DocumentCardSession, EmbedderPort, EmbedQuery, FindCandidatesInput, FinishResult, InspectStore,
   LexicalFindCandidatesResult, MemoryService, ModelGate, ModelPort,
   ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
+export type * from "../ports/host-write-hooks.d.ts";
 export type { DiagnosticEvent } from "../ports/common.d.ts";
 export type {
   ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
-  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextLedgerDiagnostics, ContextLedgerDigest,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextCompactAssemblyItem,
+  ContextCompactRepresentation, ContextLedgerDiagnostics, ContextLedgerDigest,
   ContextLedgerErrorStage, ContextMemoryEvidence,
   ContextReadBlockFormatter, ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
   FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult, LexicalFindCandidatesResult,
   InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
-  InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
+  InspectReceipt, InspectState, ReadCompactContextInput, ReadContextInput, ReadContextResult,
 } from "../ports/host.d.ts";
 
 export interface MemoryServiceConfig {
@@ -37,12 +39,20 @@ export interface MemoryServiceConfig {
    * no provider call, no extraction, no memories. Valid only without a model; registration with a
    * model throws invalid_input. Capture still requires rawArchive storage and capture.admit.
    * With documentCards enabled, the existing keyless card path runs instead.
+   *
+   * Addendum 27. `onModelFailure: true` is valid only with a model (without one, registration throws
+   * invalid_input). When model-backed capture fails with a model-stage code, the event finishes on the
+   * Addendum 26 Raw-only path instead of being abandoned: no memories, admitted text archived, result
+   * `done` carrying the failure code. Unset or false keeps model-backed capture byte-identical.
    */
-  readonly rawCapture?: { readonly enabled: boolean };
+  readonly rawCapture?: { readonly enabled?: boolean; readonly onModelFailure?: boolean };
+  /** Addendum 28. Opt in to suppression windows when forgetting or correcting a session-less explicit memory. */
+  readonly explicitWindowFence?: { readonly enabled: boolean };
 }
 
 export interface MemoryServiceDeps {
   readonly storage: ReadContractStorage<StoredDocumentCardRecord>;
+  readonly hostWriteHooks?: HostWriteHooks;
   readonly model: ModelPort | null;
   readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;

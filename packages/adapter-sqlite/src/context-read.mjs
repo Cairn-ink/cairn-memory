@@ -1,6 +1,6 @@
 import { CoreError } from "@cairn-ink/core";
 import { contextDeadline, contextEpochs, namespaceCardGenerations, namespaceEpochs } from "./context-read-state.mjs";
-import { exactReceiptTurn, reconcileRawInventory } from "./context-raw-read.mjs";
+import { addressReceipt, exactReceiptTurn, reconcileRawInventory, withRawEvidence } from "./context-raw-read.mjs";
 import { readCardLinks, readCardRow } from "./document-card-rows.mjs";
 import { anchorsVisible, receiptProjector, storedEvidence } from "./inspect.mjs";
 import { decodeJson, readEntry } from "./memory-rows.mjs";
@@ -12,7 +12,9 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @import { ReceiptProjector, ReceiptReadSafety } from "./inspect.mjs" */
+/** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @typedef {Extract<ContextEvidenceRow, {type: "memory"}>} Evidence */
+/** @typedef {Evidence["receipts"][number]} EvidenceReceipt */
 
 const RECEIPT_LIMIT = 16;
 
@@ -36,30 +38,27 @@ function cardEvidence(db, scope, id, intent, policy) {
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project
+ * @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety @param {boolean} current
  * @param {boolean} includeRaw @returns {Pick<Evidence, "receipts" | "receiptCoverage">}
  */
-function receiptEvidence(db, scope, id, project, includeRaw) {
+function receiptEvidence(db, scope, id, project, policy, receiptReadSafety, current, includeRaw) {
   const rows = db.prepare(`SELECT i.id, i.memory_id, i.excerpt, i.position, CAST(i.created_at_us AS TEXT) AS time,
       r.body, r.legacy_receipt_key
     FROM cairn_inspect_receipts i JOIN cairn_receipts r USING (owner_id, namespace_key, memory_id, ordinal)
     WHERE i.owner_id = ? AND i.namespace_key = ? AND i.memory_id = ?
     ORDER BY i.created_at_us, i.id`).iterate(...scopeKey(scope), id);
-  /** @type {Array<Evidence["receipts"][number]>} */
+  /** @type {EvidenceReceipt[]} */
   const receipts = [];
   let examined = 0;
   for (const row of rows) {
     examined++;
-    const safe = project(row)?.receipt;
+    const safe = row.excerpt === null && current
+      ? addressReceipt(db, scope, id, policy, receiptReadSafety, row) : project(row)?.receipt;
     if (!safe) continue;
     if (receipts.length === RECEIPT_LIMIT) break;
-    const archived = includeRaw ? readRawRow(db, scope, safe, safe.messageId) : undefined;
-    if (!archived || !exactReceiptTurn(db, scope, id, safe, archived)) {
-      receipts.push(safe);
-      continue;
-    }
-    const { client, sessionId, message } = archived;
-    receipts.push({ ...safe, rawTurns: [{ scope, conversationId: JSON.stringify([client, sessionId]), messageId: message.id }],
-      ...(message.occurredAtMs !== null && { sourceTimesMs: [message.occurredAtMs] }) });
+    const archived = includeRaw && row.excerpt !== null ? readRawRow(db, scope, safe, safe.messageId) : undefined;
+    receipts.push(archived && exactReceiptTurn(db, scope, id, safe, archived)
+      ? withRawEvidence(scope, safe, archived) : safe);
   }
   const exhausted = examined > RECEIPT_LIMIT;
   const withheld = examined - receipts.length;
@@ -154,7 +153,7 @@ export function createContextReadStore(uow, port, hashSession, receiptReadSafety
             qualification: qualification && anchorsVisible(db, scope, id, project, qualification.anchors) ? qualification : null,
             attribution: { status: "unassessed", commitment: "unknown" },
             sourceAccess: historical ? "unavailable-for-noncurrent-memory" : "available",
-            ...receiptEvidence(db, scope, id, project, Boolean(raw) && !historical),
+            ...receiptEvidence(db, scope, id, project, policy, receiptReadSafety, !historical, Boolean(raw) && !historical),
           };
         });
       });
