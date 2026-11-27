@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
 import { CoreError, factHidesRow } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
+import { hasMigratedUuidCandidate } from "./migrate/raw-privacy.mjs";
 import { decodeRawRow, rawScopeWhere, rawSessionKey, rawSessionWhere, readRawRow } from "./raw-rows.mjs";
-import { scopeKey, sha256, validateId } from "./storage-values.mjs";
+import { encodeMessageKey, scopeKey, sha256, validateId } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
 /** @import { RawSpanFact } from "@cairn-ink/core" */
@@ -41,15 +42,57 @@ export function blocksRawSession(scope, client, sessionHash, facts) {
   return facts.some(stored => stored.fact.kind === "session" && factHidesRow(stored, candidate) !== false);
 }
 
+/** @param {Connection} db @param {string} owner @param {string} messageId */
+function hasPlainMessageCandidate(db, owner, messageId) {
+  // Compare JSON strings as encoded by the writers, including escaped control characters.
+  return !!db.prepare(`
+    SELECT 1 FROM cairn_raw_messages WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_raw_maps WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_document_card_sources WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_document_card_amendments WHERE owner_id = $owner AND message_key = $id
+    UNION ALL SELECT 1 FROM cairn_receipts WHERE owner_id = $owner AND source_key -> '$[2]' = $id
+    UNION ALL SELECT 1 FROM cairn_receipts WHERE owner_id = $owner AND body -> '$.messageId' = $id
+    UNION ALL SELECT 1 FROM cairn_capture_claims c, json_each(c.source_positions) p
+      WHERE c.owner_id = $owner AND p.value -> '$.id' = $id
+    UNION ALL SELECT 1 FROM cairn_capture_outbox o, json_each(o.messages) m
+      WHERE o.owner_id = $owner AND m.value -> '$.id' = $id
+    UNION ALL SELECT 1 FROM cairn_suppression_facts WHERE owner_id = $owner
+      AND slot ->> '$[0]' = 'rawSpan' AND slot -> '$[2]' = $id
+    UNION ALL SELECT 1 FROM cairn_suppression_facts WHERE owner_id = $owner
+      AND body ->> '$.kind' = 'rawSpan' AND body -> '$.messageKey' = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_raw_privacy WHERE owner_id = $owner
+      AND kind IN ('event', 'admission') AND json_quote(selector) = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_raw_privacy WHERE owner_id = $owner
+      AND kind = 'span' AND body -> '$[0]' = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_raw_privacy WHERE owner_id = $owner
+      AND kind = 'reservation' AND body = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_safety WHERE owner_id = $owner
+      AND kind = 'fact' AND body ->> '$.kind' = 'raw' AND body -> '$.message_key' = $id
+    UNION ALL SELECT 1 FROM cairn_migrated_safety WHERE owner_id = $owner AND kind = 'fact'
+      AND body ->> '$.kind' = 'raw'
+      AND CASE WHEN json_valid(body ->> '$.source_version')
+        THEN (body ->> '$.source_version') ->> '$[0]' = 'raw-span-v1'
+          AND (body ->> '$.source_version') -> '$[1]' = $id END
+    UNION ALL SELECT 1 FROM cairn_migrated_safety WHERE owner_id = $owner AND kind = 'reservation'
+      AND CASE WHEN identity ->> '$[0]' IN ('raw-message', 'raw-part')
+        THEN (identity ->> '$[1]') -> '$[1]' = $id END
+    UNION ALL SELECT 1 FROM cairn_migrated_safety WHERE owner_id = $owner AND kind = 'reservation'
+      AND CASE WHEN body ->> '$.kind' IN ('raw-message', 'raw-part')
+        THEN (body ->> '$.stable_key') -> '$[1]' = $id END
+    LIMIT 1`).get({ $owner: owner, $id: encodeMessageKey(messageId) });
+}
+
 /** @param {string} storeKey @param {SessionHasher} hashSession @param {MigratedRawPolicy} [migratedRaw] */
 export function createRawLineage(storeKey, hashSession, migratedRaw) {
   const secret = Buffer.from(storeKey, "hex");
   const tag = (/** @type {string[]} */ parts) => createHmac("sha256", secret).update(JSON.stringify(parts)).digest("hex");
+  const idTag = (/** @type {string} */ owner, /** @type {string} */ client, /** @type {string} */ id) =>
+    tag(["raw-lineage-id", owner, client, id]);
 
   /** @param {string} owner @param {string} client @param {readonly CaptureMessage[]} messages @returns {Proof[]} */
   function proofs(owner, client, messages) {
     return messages.map(({ id, content }) => {
-      const messageTag = tag(["raw-lineage-id", owner, client, id]);
+      const messageTag = idTag(owner, client, id);
       return [messageTag, content === "" ? "" : tag(["raw-lineage-content", messageTag, content])];
     });
   }
@@ -137,7 +180,7 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
       const { client, sessionId, messageId } = receipt;
       if (db.prepare(`SELECT 1 FROM cairn_raw_messages WHERE ${rawSessionWhere} LIMIT 1`)
         .get(...rawSessionKey(scope, receipt))) return true;
-      const messageTag = tag(["raw-lineage-id", scope.owner, client, messageId]);
+      const messageTag = idTag(scope.owner, client, messageId);
       const sessionTag = tag(["raw-lineage-session", scope.owner, client, sessionId]);
       const clientKey = JSON.stringify(client);
       const [owner, namespace] = scopeKey(scope);
@@ -148,6 +191,26 @@ export function createRawLineage(storeKey, hashSession, migratedRaw) {
         UNION ALL SELECT 1 FROM cairn_raw_anchors WHERE owner_id = ? AND client_key = ?
         AND namespace_key = ? AND session_tag = ? LIMIT 1`)
         .get(owner, clientKey, messageTag, namespace, addressOnly ? 0 : 1, owner, namespace, clientKey, sessionTag));
+    },
+
+    /** @param {Connection} db @param {Scope} scope @param {string} messageId */
+    hasReceiptCandidate(db, scope, messageId) {
+      const [owner] = scopeKey(scope);
+      if (hasPlainMessageCandidate(db, owner, messageId)) return true;
+      // The anchor ID match covers receipt roots even when no archived row or matching proof remains.
+      const keyed = db.prepare(`
+        SELECT 1 FROM cairn_raw_anchors WHERE owner_id = $owner AND client_key = $client AND message_tag = $tag
+        UNION ALL SELECT 1 FROM cairn_capture_claims c, json_each(c.source_proofs) p
+          WHERE c.owner_id = $owner AND c.client_key = $client AND p.value ->> '$[0]' = $tag
+        LIMIT 1`);
+      // These tags are bound to the recorded client, independently of the receipt's client.
+      const clients = db.prepare(`
+        SELECT client_key FROM cairn_raw_anchors WHERE owner_id = ?
+        UNION SELECT client_key FROM cairn_capture_claims WHERE owner_id = ? AND source_proofs IS NOT NULL`);
+      for (const { client_key } of clients.iterate(owner, owner)) {
+        if (keyed.get({ $owner: owner, $client: client_key, $tag: idTag(owner, decodeJson(client_key), messageId) })) return true;
+      }
+      return hasMigratedUuidCandidate(db, owner, storeKey, messageId);
     },
 
     /** @param {Connection} db @param {Scope} scope @param {RawRow} row

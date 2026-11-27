@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, hasLegacyPassageDigest, validateSuppressionFact } from "@cairn-ink/core";
+import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, hasLegacyPassageDigest, placeholderReceipt, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts, readSuppressionEpoch } from "./memory-rows.mjs";
 import { legacyRawHash, opaqueSessionHash } from "./migrate/raw-privacy.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
@@ -20,6 +20,7 @@ import { copyReceipts, digestAliases, invalidInput, scopeKey, sha256 } from "./s
 
 const matchPolicy = { rowShingles: false };
 const capture = /** @type {const} */ ({ ...matchPolicy, mode: "capture" });
+const explicitSave = /** @type {const} */ ({ ...matchPolicy, mode: "explicitSave" });
 const capturePassages = /** @type {const} */ ({ mode: "capture", rowShingles: true });
 /** @type {WeakMap<Tx, bigint>} */
 const firstReplacementEpoch = new WeakMap();
@@ -310,8 +311,7 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
     blocks(query, mode, sourceMemory) {
       const digests = digestAliases(query);
       return legacyText(digests) || texts.some(stored =>
-        factBlocksIncoming(stored, { scope, passages: [{ digests }], sourceMemory },
-          mode === "hash" ? { ...matchPolicy, mode: "explicitSave" } : capture) !== false);
+        factBlocksIncoming(stored, { scope, passages: [{ digests }], sourceMemory }, mode === "hash" ? explicitSave : capture) !== false);
     },
 
     blocksSession,
@@ -321,14 +321,17 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
     legacy,
     hasReceiptDenial,
 
-    /** @param {Receipt} receipt @param {string} [key] @param {string} [legacyKey] */
-    withholdsReceipt(receipt, key, legacyKey) {
+    /** @param {Receipt} receipt @param {string} [key] @param {string} [legacyKey]
+     * @param {{ ownPosition?: boolean }} [options]
+     */
+    withholdsReceipt(receipt, key, legacyKey, { ownPosition = false } = {}) {
       const { client, sessionId, messageId, occurredAtMs } = receipt;
       const sessionKeyHash = hashSession(scope, client, sessionId);
+      const windowPolicy = ownPosition && placeholderReceipt(receipt) ? explicitSave : capture;
       return hasReceiptDenial(receipt, key, legacyKey) || blocksSession(client, sessionId) ||
         facts.some(({ fact }) => fact.kind === "rawSpan" && fact.messageKey === messageId && fact.sessionKeyHash === sessionKeyHash) ||
         windows.some(stored => factBlocksIncoming(stored,
-          { scope, passages: [], session: { client, sessionId }, occurredAtMs }, capture) !== false);
+          { scope, passages: [], session: { client, sessionId }, occurredAtMs }, windowPolicy) !== false);
     },
 
     /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
@@ -387,13 +390,14 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession
+ * @param {ReturnType<typeof import("./raw-lineage.mjs").createRawLineage>["hasReceiptCandidate"]} hasReceiptCandidate
  * @param {(db: Connection, tx: Tx) => void} [markDirty]
  * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls]
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @param {(db: Connection, tx: Tx, scope: Scope, stored: StoredFact<RawSpanFact>) => void} [purgeForgottenSpan]
  * @returns {SuppressionStore}
  */
-export function createSuppressionStore(port, hashSession, markDirty, migratedRaw, controls, scrubTitles, purgeForgottenSpan) {
+export function createSuppressionStore(port, hashSession, hasReceiptCandidate, markDirty, migratedRaw, controls, scrubTitles, purgeForgottenSpan) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -450,7 +454,11 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
         if (policy.hasReceiptDenial(receipt, receiptIdentityKey(receipt))) return true;
         const raw = rawFactPolicy(scope, receipt, policy.facts, hashSession);
         const position = { id: messageId, occurredAtMs };
-        if (!allowsRawSession(db, scope, client, raw.sessionKeyHash, policy.facts) || raw.refusesSource(position, true) ||
+        // Check for a candidate only when the null position would be the reason to refuse.
+        if (!allowsRawSession(db, scope, client, raw.sessionKeyHash, policy.facts) ||
+            (raw.refusesSource(position, true) &&
+              (!placeholderReceipt(receipt) || raw.refusesSource(position, true, false) ||
+                hasReceiptCandidate(db, scope, messageId))) ||
             migratedRaw?.blocksEvent(db, { scope, client, eventId: messageId }) ||
             migratedRaw?.blocks(db, scope, receipt, [position]) ||
             migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;

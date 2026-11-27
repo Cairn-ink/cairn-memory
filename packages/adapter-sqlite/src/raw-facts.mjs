@@ -74,8 +74,10 @@ export function rawFactPolicy(scope, session, facts, hashSession) {
       return facts.some(stored => match(stored, candidate) === true);
     },
 
-    /** @param {Pick<CaptureMessage, "id" | "occurredAtMs">} message @param {boolean} failClosed */
-    refusesSource(message, failClosed) {
+    /** @param {Pick<CaptureMessage, "id" | "occurredAtMs">} message @param {boolean} failClosed
+     * @param {boolean} [includeUnknownTime]
+     */
+    refusesSource(message, failClosed, includeUnknownTime = true) {
       const candidate = evidence(scope, session, message, sessionKeyHash, false);
       return facts.some(stored => {
         const { fact } = stored;
@@ -83,7 +85,7 @@ export function rawFactPolicy(scope, session, facts, hashSession) {
           // A shorter replay of the same message must not evade a span fact.
           return match(stored, { ...candidate, startUtf16: fact.startUtf16, endUtf16: fact.endUtf16 }) !== false;
         }
-        if (fact.kind !== "window") return false;
+        if (fact.kind !== "window" || (!includeUnknownTime && message.occurredAtMs === null)) return false;
         const result = match(stored, candidate);
         return result === true || (failClosed && result !== false);
       });
