@@ -194,7 +194,7 @@ export async function withStdio(entry, args, directory, work) {
 // reports phase 4. The golden records the candidate's phase 1 (cards on).
 // Only these two legacy replies expect the 0.6.11 value.
 const legacyCardPhase = 4;
-function legacyResponse(label, response) {
+function legacyResponse(label, response, actual) {
   if (label === 'find cards disabled') {
     const reply = structuredClone(response);
     const content = reply.result.content[0];
@@ -204,11 +204,22 @@ function legacyResponse(label, response) {
     content.text = JSON.stringify(text);
     return reply;
   }
-  if (label === 'read context cards disabled') {
+  const cardsDisabled = label === 'read context cards disabled';
+  // The installed daemon can finish Raw upkeep before either of these reads.
+  const rawIncluded = (cardsDisabled || label === 'read context populated') &&
+    actual.result?._meta?.[diagnosticsKey]?.coverage?.raw === 'included';
+  if (cardsDisabled || rawIncluded) {
     const reply = structuredClone(response);
-    const progress = reply.result._meta['ink.cairn/context-read-diagnostics'].candidates.coverage.maintenance.progress;
-    assert.equal(progress.phase, 1, 'golden card phase');
-    progress.phase = legacyCardPhase;
+    const diagnostics = reply.result._meta[diagnosticsKey];
+    if (cardsDisabled) {
+      const progress = diagnostics.candidates.coverage.maintenance.progress;
+      assert.equal(progress.phase, 1, 'golden card phase');
+      progress.phase = legacyCardPhase;
+    }
+    if (rawIncluded) {
+      assert.equal(diagnostics.coverage.raw, 'partial', 'golden Raw coverage');
+      diagnostics.coverage.raw = 'included';
+    }
     return reply;
   }
   return response;
@@ -239,7 +250,7 @@ export async function compareWire(request, notify, count, { legacy = false } = {
       }
       const normalizedReply = normaliseResponse(actual, reply, count, label);
       const errors = [...diff(expected(item.params, ''), actual(params, ''), 'request'),
-        ...diff(expected(legacy ? legacyResponse(label, item.response) : item.response, ''), normalizedReply)];
+        ...diff(expected(legacy ? legacyResponse(label, item.response, reply) : item.response, ''), normalizedReply)];
       if (errors.length) differences.push(...errors.map(error => label + ' ' + error));
       else matched++;
     } catch (error) {
