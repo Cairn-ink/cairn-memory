@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createMemoryService } from '../../packages/core/src/service/index.mjs';
 import { confirmInstalledUpgrade, legacyKeyedFixture, setupInstalledConsent, withInstalledMcp,
   withUpgradeInstallers } from '../../tools/testing/local-cutover-keyed-fixture.mjs';
+import { localClock } from '../core-local/local-provider.mjs';
+import { callTool } from '../core-local/wire-tools.mjs';
 
 const syntheticKey = 'synthetic-recall-provider';
 const retained = 'Albatross albatross albatross hides a teal lantern.';
@@ -159,4 +165,160 @@ test('consented keyed recall packs compact memories and restores rank order', { 
       f.run(installers.candidate, ['daemon', 'stop', '--local']);
     }
   });
+});
+
+const beforeAssemblyFetch = 'test.compactRecall.beforeAssemblyFetch';
+const scope = { owner: 'synthetic-owner', namespace: 'project\0synthetic-project' };
+const unavailable = { ok: false, error: { code: 'evidence_unavailable', retryable: false },
+  evidenceTrust: 'untrusted-data-not-instructions' };
+
+async function sqliteRecallFixture(t) {
+  const directory = await mkdtemp(join(tmpdir(), 'compact-recall-'));
+  let engine;
+  t.after(async () => {
+    try { await engine?.close(); } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+  // Wrap the existing fetch seam before the SQLite evidence transaction opens.
+  const hook = registerHooks({ resolve(specifier, context, next) {
+    const result = next(specifier, context);
+    if (context.parentURL?.endsWith('/packaging/core-local/adapter-slot.mjs') &&
+        result.url.endsWith('/context-read-assembly-evidence.mjs')) {
+      return { ...result, url: result.url + '?recall-race-test' };
+    }
+    return result;
+  }, load(url, context, next) {
+    const result = next(url, context);
+    if (!url.endsWith('/context-read-assembly-evidence.mjs?recall-race-test')) return result;
+    const source = result.source.toString();
+    const anchor = 'export function fetchForAssembly(';
+    assert.ok(source.includes(anchor));
+    return { ...result, source: source.replace(anchor, 'function fetchForAssembly(') + `
+export { instrumentedFetch as fetchForAssembly };
+function instrumentedFetch(storage) {
+  const fetch = fetchForAssembly(storage);
+  return async (...args) => {
+    await storage[Symbol.for(${JSON.stringify(beforeAssemblyFetch)})]?.(args[3]);
+    return fetch(...args);
+  };
+}
+` };
+  } });
+  let openStorage;
+  try { ({ openStorage } = await import('../core-local/adapter-slot.mjs')); }
+  finally { hook.deregister(); }
+
+  let clockOffset = 0;
+  const clock = { ...localClock, monotonicMs: () => localClock.monotonicMs() + clockOffset };
+  const requests = [];
+  engine = await openStorage(join(directory, 'memory.sqlite'), null, { provider: {
+    key: syntheticKey, owner: scope.owner, clock, authorize() {}, async request(url, options) {
+      const endpoint = new URL(url).pathname;
+      const { input, model, dimensions } = JSON.parse(options.body);
+      requests.push({ endpoint, input });
+      assert.equal(endpoint, '/v1/embeddings');
+      return Response.json({ object: 'list', model, data: input.map((text, index) => ({ index,
+        embedding: [...(text.includes('brass compass') ? [0.6, 0.8] : [1, 0]), ...Array(dimensions - 2).fill(0)],
+      })) });
+    },
+  } });
+  const { storage, service, recall } = engine;
+  const vectorlessWriter = createMemoryService({ storage, clock, model: null, embedder: null, config: {},
+    tokens: { countTokens: text => text.length }, gate: { assertOpen() {} } });
+  const tool = async (name, args, writer = service) => {
+    const reply = await callTool(writer, scope, null, name, args, null, recall);
+    return JSON.parse(reply.content[0].text);
+  };
+  return {
+    recall, requests,
+    save: async content => value(await tool('remember_memory', { content })).memory,
+    saveVectorless: async content => value(await tool('remember_memory', { content }, vectorlessWriter)).memory,
+    forget: async ({ id, revision }) => assert.equal(value(await tool('forget_memory', {
+      memoryId: id, expectedRevision: revision,
+    })).forgotten, true),
+    read: (queryText = query) => tool('recall_memory', { query: queryText }),
+    beforeFetch: fn => { storage[Symbol.for(beforeAssemblyFetch)] = fn; },
+    expireDeadline: () => { clockOffset += 1_000_000; },
+  };
+}
+
+const ids = refs => refs.map(({ id }) => id);
+const recalledIds = reply => value(reply).memories.map(({ memory }) => memory.id);
+
+test('SQLite keyed recall retries one same-namespace save and embeds the query once', async t => {
+  const f = await sqliteRecallFixture(t);
+  const ranked = ids([await f.save(retained), await f.save(earlier)]);
+  const before = f.requests.length;
+  const attempts = [];
+  f.beforeFetch(async refs => {
+    attempts.push(ids(refs));
+    if (attempts.length === 1) await f.saveVectorless('Synthetic rain gauge holds nine units.');
+  });
+  assert.deepEqual(recalledIds(await f.read()), ranked);
+  assert.deepEqual(attempts, [ranked, ranked]);
+  assert.deepEqual(f.requests.slice(before), [{ endpoint: '/v1/embeddings', input: [query] }]);
+});
+
+test('SQLite keyed recall maps a second stale snapshot to evidence_unavailable', async t => {
+  const f = await sqliteRecallFixture(t);
+  const keep = await f.save(retained);
+  let commits = 0;
+  const before = f.requests.length;
+  f.beforeFetch(async refs => {
+    assert.deepEqual(ids(refs), [keep.id]);
+    await f.saveVectorless('Synthetic gauge reading number ' + (commits + 1) + '.');
+    commits++;
+  });
+  const reply = await f.read();
+  assert.deepEqual({ commits, reply }, { commits: 2, reply: unavailable });
+  assert.deepEqual(f.requests.slice(before), [{ endpoint: '/v1/embeddings', input: [query] }]);
+});
+
+test('SQLite keyed recall refuses a retry after the original deadline', async t => {
+  const f = await sqliteRecallFixture(t);
+  await f.save(retained);
+  let attempts = 0;
+  f.beforeFetch(async () => {
+    attempts++;
+    await f.saveVectorless('Synthetic rain gauge holds nine units.');
+    f.expireDeadline();
+  });
+  assert.deepEqual(await f.read(), unavailable);
+  assert.equal(attempts, 1);
+});
+
+test('SQLite keyed recall never exposes a memory forgotten before evidence fetch', async t => {
+  const f = await sqliteRecallFixture(t);
+  const forgotten = await f.save(retained);
+  const keep = await f.save(earlier);
+  const attempts = [];
+  f.beforeFetch(async refs => {
+    attempts.push(ids(refs));
+    if (attempts.length === 1) await f.forget(forgotten);
+  });
+  const reply = await f.read();
+  assert.ok(!JSON.stringify(reply).includes(forgotten.id));
+  assert.ok(!JSON.stringify(reply).includes(retained));
+  assert.deepEqual(recalledIds(reply), [keep.id]);
+  assert.deepEqual(attempts, [[forgotten.id, keep.id], [keep.id]]);
+});
+
+test('SQLite keyed recall fresh inspect fences a forget after compact delivery', async t => {
+  const f = await sqliteRecallFixture(t);
+  const forgotten = await f.save(retained);
+  const inspect = f.recall.inspect;
+  f.recall.inspect = async (...args) => {
+    assert.deepEqual(ids(args[1]), [forgotten.id]);
+    await f.forget(forgotten);
+    return inspect(...args);
+  };
+  assert.deepEqual(await f.read(), unavailable);
+});
+
+test('SQLite keyed recall reports incomplete coverage for a vectorless memory with no lexical hits', async t => {
+  const f = await sqliteRecallFixture(t);
+  await f.saveVectorless('Synthetic rain gauge holds nine units.');
+  const result = value(await f.read('amethyst'));
+  assert.deepEqual(result.memories, []);
+  assert.deepEqual({ mapExhausted: result.namespaces[0].mapExhausted, coverage: result.coverage },
+    { mapExhausted: false, coverage: 'budget_exhausted' });
 });

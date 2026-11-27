@@ -1,4 +1,5 @@
 import { openSqliteAdapter } from '../../packages/adapter-sqlite/src/adapter.mjs';
+import { CoreError } from '../../packages/core/src/errors.mjs';
 import { fetchForAssembly } from '../../packages/core/src/service/context-read-assembly-evidence.mjs';
 import { findCandidatesMethod } from '../../packages/core/src/service/context-read-find.mjs';
 import { readContextMethod } from '../../packages/core/src/service/context-read.mjs';
@@ -43,9 +44,29 @@ export async function openStorage(database, localAuthority, { model = null, embe
     if (provider) {
       const { clock, gate, embedQuery } = ports;
       const { findForAssembly, startAssemblyEmbedding } = findCandidatesMethod({ storage, clock, gate, embedQuery });
+      const fetch = fetchForAssembly(storage);
       recall = {
-        readContext: readContextMethod({ storage, clock, find: findForAssembly, startEmbedding: startAssemblyEmbedding,
-          fetch: fetchForAssembly(storage), counter: { count: countTokens }, format: formatBlock, includeCompactItemRank: true }),
+        async readContext(readSet, input) {
+          let embedding, deadlineAtMs;
+          const read = readContextMethod({ storage, clock, find: findForAssembly, fetch,
+            counter: { count: countTokens }, format: formatBlock, includeCompactItemRank: true,
+            startEmbedding(set, candidate, options) {
+              if (deadlineAtMs === undefined) {
+                deadlineAtMs = options.deadlineAtMs;
+                embedding = startAssemblyEmbedding(set, candidate, options);
+              }
+              return embedding;
+            },
+          });
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try { return await read(readSet, input, { deadlineAtMs }); }
+            catch (error) {
+              if (error.code !== 'snapshot_stale') throw error;
+              if (deadlineAtMs === undefined || clock.monotonicMs() >= deadlineAtMs) break;
+            }
+          }
+          throw new CoreError('evidence_unavailable');
+        },
         inspect: inspectRecallEvidence.bind(null, storage),
       };
     }

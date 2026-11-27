@@ -68,8 +68,11 @@ async function recallResult(recall, readSet, scope,
   const { items, indexRevision } = await recall.inspect(readSet, refs, {
     includeQualification: includeQualification === true, includeIndexRevision: contextMode === 'rationale-evidence',
   });
+  const memoryCoverage = candidates.coverage.byType.memory;
   const mapExhausted = candidates.coverage.status === 'complete' &&
     Object.values(candidates.coverage.omitted).every(count => count === 0) &&
+    (memoryCoverage.eligible === 0 ||
+      (candidates.channels.semantic.state === 'ready' && memoryCoverage.embeddedFraction === 1)) &&
     omitted.items === 0 && omitted.unavailable === 0;
   const fetchExhausted = items.every(item => item.receipts.length === item.memory.receiptCount);
   if (contextMode && !fetchExhausted) return fail('context_item_too_large');
