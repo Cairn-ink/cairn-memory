@@ -1,5 +1,4 @@
-// Enable after SQLite can migrate, serve and erase the same Document Cards.
-export const documentCardsReady = false;
+export const documentCardsReady = true;
 export const recallModel = 'gpt-4.1-mini-2025-04-14';
 // The installed setup consent selects the OpenAI baseline, with no URL override.
 export const localProviderProfile = Object.freeze({

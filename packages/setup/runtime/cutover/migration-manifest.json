@@ -1149,7 +1149,7 @@
     "packages/adapter-sqlite/src/migrate/safety.mjs": "34332e366b1534837b4349b17907aa17756817bc75fb50a2c0233e37a984202f",
     "packages/adapter-sqlite/src/placement-visibility.mjs": "149959807b29eac5fadc8c28dd26bab2bd9316b1384578561b32ad485af4c6cb",
     "packages/adapter-sqlite/src/port-scope.mjs": "a33bcd13cf18baef1e1086939a8ee751a2dd5e50eee633b8b78db4e836ca83ce",
-    "packages/adapter-sqlite/src/raw-facts.mjs": "d9a43fbffd604dd08547631aaabc80cf3abcc50454c98818dd42b066a39085d4",
+    "packages/adapter-sqlite/src/raw-facts.mjs": "1e03ae70329c57b70c6db46b1eebf6a132f8797fb6bed8cf116c11bed3e22151",
     "packages/adapter-sqlite/src/raw-lineage.mjs": "d52d0a65e67bcb219eaeb0cc417290e30fdc3163231dbce570322d4d21387c4f",
     "packages/adapter-sqlite/src/raw-rows.mjs": "997b0244902246a4d77499e738c7b9435ad49f2fe4545ae49003b8162bd59583",
     "packages/adapter-sqlite/src/receipt-identity.mjs": "071fcbede65bab7cf33009874e78b7b0916135f8848275165334d2815953fd06",
@@ -1221,7 +1221,7 @@
     "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
     "packaging/core-local/capture-input.mjs": "25ba8e79874da395a8cd2dadaa19939359adb9aebd226a0988c137f2a29308d7",
     "packaging/core-local/capture-lock.mjs": "3bb798d7cf56f49792a510136f982df675e7251fccbb24829125a6403386cba3",
-    "packaging/core-local/provider-config.mjs": "0bebb61a67a85638bc165412cf364d3fa7fef46b18586749536fdf82a16317c4",
+    "packaging/core-local/provider-config.mjs": "a2f5fb2faf68f9b7bb9aca909f6070fb0fd01d605954ac01c2792a8324c60338",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5"
   }
 }
