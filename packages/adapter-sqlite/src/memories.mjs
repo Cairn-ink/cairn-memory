@@ -1,5 +1,6 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
 import { eraseContextDocuments } from "./context-lexical.mjs";
+import { noteCardNeutralMemoryChange } from "./context-read-state.mjs";
 import { attachReceipts, clearReceipts, decodeEntry, insertMemory, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { clearProceduralTag, deleteProceduralTag } from "./procedural-tags.mjs";
 import { recordTextReplacement, scopedSuppression } from "./suppressions.mjs";
@@ -165,9 +166,10 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkRepla
  * @param {ReturnType<typeof import("./placement-visibility.mjs").createTitleScrubber>} [scrubTitles]
  * @param {ReturnType<typeof import("./document-cards.mjs").createDocumentCards>["purgeErasedMemory"]} [purgeCardSources]
  * @param {ReturnType<typeof import("./document-card-visibility.mjs").createCardVisibility>["recordReceiptWithdrawals"]} [recordReceiptWithdrawals]
+ * @param {boolean} [trackCardNeutral]
  * @returns {MemoryStore}
  */
-export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources, recordReceiptWithdrawals) {
+export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCardSources, recordReceiptWithdrawals, trackCardNeutral) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -201,7 +203,12 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
           throw new CoreError("suppressed");
         }
         const inserted = insertMemory(db, scope, content, evidence, nowMs, row.createdAtMs ?? nowMs);
-        index.markDirty(db, tx);
+        // A new, uncited Memory with no receipts changes neither card-linked
+        // Memory evidence nor the receipt ancestry of a card's Raw sources.
+        const cardNeutral = !!trackCardNeutral && evidence.length === 0 && !db.prepare(`SELECT 1 FROM cairn_document_card_memories
+          WHERE owner_id = ? AND namespace_key = ? AND memory_id = ? LIMIT 1`).get(...scopeKey(scope), inserted.id);
+        if (cardNeutral) noteCardNeutralMemoryChange(db, scope);
+        index.markDirty(db, tx, cardNeutral);
         return inserted;
       });
     },
@@ -209,7 +216,11 @@ export function createMemoryStore(port, hashSession, index, scrubTitles, purgeCa
     touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
         const result = touchDuplicate(db, scope, id, receipts, merge, nowMs, true);
-        index.markDirty(db, tx);
+        // A touch updates sorting time only. Revision and receipt changes
+        // must still invalidate any earlier card verdicts.
+        const cardNeutral = !!trackCardNeutral && result.outcome === "touched";
+        if (cardNeutral) noteCardNeutralMemoryChange(db, scope);
+        index.markDirty(db, tx, cardNeutral);
         return result;
       });
     },
