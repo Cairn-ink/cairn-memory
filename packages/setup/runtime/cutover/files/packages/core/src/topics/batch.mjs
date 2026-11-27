@@ -3,6 +3,7 @@ import { CLASSIFICATION_CATALOG_LIMIT } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
 /** @import { PlacePendingBatchOptions, PlacePendingBatchResult, PlacePendingOptions } from './batch.mjs' */
+/** @import { Tx } from '../ports/index.d.ts' */
 /** @import { ClassificationCatalogItem } from './catalog.mjs' */
 /** @import { ClassificationCatalog, ClassificationSnapshot } from './classify.mjs' */
 /** @import { PlacementProposal } from './proposal.mjs' */
@@ -59,15 +60,22 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   if (!batch) return { status: 'idle' };
 
   const { snapshot, catalogView, basedOn } = batch;
-  const validateFresh = () => uow.run(scope.owner, { readOnly: true }, async (tx) => {
+  /** @param {Tx} tx */
+  const snapshotConflict = async (tx) => {
     for (const { memoryId, revision } of basedOn.memoryRevisions) {
-      if ((await memories.readRevision(tx, scope, memoryId))?.revision !== revision) {
-        throw new CoreError('revision_conflict');
-      }
+      if ((await memories.readRevision(tx, scope, memoryId))?.revision !== revision) return 'revision_conflict';
     }
     const { indexRevision } = await placement.catalog(tx, scope, { cursor: null, limit: 1 });
-    if (indexRevision !== basedOn.indexRevision) throw new CoreError('revision_conflict');
-  });
+    return indexRevision !== basedOn.indexRevision ? 'topic_index_moved' : null;
+  };
+  let revisionsChanged = false;
+  const validateFresh = async () => {
+    const conflict = await uow.run(scope.owner, { readOnly: true }, snapshotConflict);
+    if (conflict) {
+      revisionsChanged ||= conflict === 'revision_conflict';
+      throw new CoreError(conflict);
+    }
+  };
 
   try {
     const proposal = await classify(snapshot, catalogView, validateFresh);
@@ -76,10 +84,15 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused') {
-      const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
+    if (kind !== 'paused' && !revisionsChanged) {
       try {
-        await uow.run(scope.owner, {}, (tx) => placement.markFailed(tx, scope, ids, code));
+        await uow.run(scope.owner, {}, async (tx) => {
+          // Hold the write lock from the guard reads through the receipt write.
+          const conflict = await snapshotConflict(tx);
+          if (conflict === 'revision_conflict') return;
+          const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
+          await placement.markFailed(tx, scope, ids, conflict ?? code);
+        });
       } catch {
         // A failed receipt write cannot replace the original error.
       }
