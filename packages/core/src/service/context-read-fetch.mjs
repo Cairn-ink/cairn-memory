@@ -30,6 +30,7 @@ function snapshotPayload(readSet, value, scope) {
         data.v !== 1 || data.scope !== scope ||
         JSON.stringify(data.access) !== JSON.stringify(readSet.accessGenerations)) throw new CoreError("snapshot_stale");
     const intent = intentOf(data.intent);
+    if (compact && intent !== "current") throw new CoreError("snapshot_stale");
     const maximum = compact ? COMPACT_MEMORY_MAX_ITEMS : CONTEXT_HORIZON;
     const tuples = validateDenseArray(data.refs, 1, maximum);
     const refs = qualifiedRefs(tuples.map(tuple => {
@@ -77,6 +78,11 @@ export function evidenceFence(signer, item, row, lineageEnabled) {
   const legacy = legacyEvidence(item);
   const value = row.type === "card" && (lineageEnabled || row.lineageStamp !== null) ? [legacy, row.lineageStamp] : legacy;
   return signer.bind("snapshot-item", value);
+}
+
+/** @param {readonly FetchEvidenceResult["items"][number][]} items @param {string} snapshot */
+export function fetchResponseBytes(items, snapshot) {
+  return responseBytes({ items: items.map(legacyEvidence), snapshot });
 }
 
 /** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "capabilities" | "uow" | "fence" | "documentCards">} storage
@@ -134,7 +140,7 @@ export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fen
         v: 1, scope, intent, refs: snapshotRefs(readSet, refs), generations, access: readSet.accessGenerations, fences,
         ...(previous?.compact && { representation: COMPACT_MEMORY_REPRESENTATION }),
       });
-      const tooLarge = responseBytes({ items: items.map(legacyEvidence), snapshot }) > input.responseByteLimit;
+      const tooLarge = fetchResponseBytes(items, snapshot) > input.responseByteLimit;
       if (options.signal?.aborted) throw new CoreError(unavailable);
       await assertContextVisible(fence, tx, readSet, fenceRefs, intent, unavailable);
       if (tooLarge) throw new CoreError("context_item_too_large");

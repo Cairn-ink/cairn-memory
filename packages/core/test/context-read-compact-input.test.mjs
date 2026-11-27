@@ -2,20 +2,18 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixture, format, input, readSet, tokenCount } from "./helpers/context-read-compact.mjs";
 
-test("compact explicitly accepts memory alone with Raw off, in current and history reads", async () => {
+test("compact explicitly accepts current memories alone with Raw off", async () => {
   const { read, lexicalDepths } = fixture([]);
-  for (const intent of ["current", "history"]) {
-    for (const policy of ["rank-first-whole-v1", "coverage-first-v1", "rank-first-first-source-v1"]) {
-      const result = await read({ intent, policy: { id: policy } });
-      assert.equal(result.diagnostics.representation, input.representation);
-      assert.deepEqual(result.diagnostics.budget, { maxItems: 64, maxTokens: 6000, used: tokenCount(format(result.assembly)) });
-      assert.deepEqual(result.assembly.items, []);
-    }
+  for (const policy of ["rank-first-whole-v1", "coverage-first-v1", "rank-first-first-source-v1"]) {
+    const result = await read({ policy: { id: policy } });
+    assert.equal(result.diagnostics.representation, input.representation);
+    assert.deepEqual(result.diagnostics.budget, { maxItems: 64, maxTokens: 6000, used: tokenCount(format(result.assembly)) });
+    assert.deepEqual(result.assembly.items, []);
   }
   const limited = await read({ budget: { maxItems: 1, maxTokens: 64 } });
   assert.equal(limited.diagnostics.budget.maxItems, 1);
   assert.equal(limited.diagnostics.budget.maxTokens, 64);
-  assert.deepEqual(lexicalDepths, Array(7).fill(64));
+  assert.deepEqual(lexicalDepths, Array(4).fill(64));
 });
 
 test("compact refuses invalid types, Raw, sources, budgets and cursors before searching", async () => {
@@ -23,6 +21,7 @@ test("compact refuses invalid types, Raw, sources, budgets and cursors before se
   const { raw: _raw, ...omittedRaw } = input;
   await assert.rejects(service.readContext(readSet, omittedRaw), { code: "invalid_input" });
   const refused = [
+    { intent: "history" }, { intent: undefined }, { intent: "unknown" },
     { raw: true }, { raw: null }, { raw: "false" },
     { types: ["card"] }, { types: ["memory", "card"] }, { types: ["memory", "memory"] },
     { types: "memory" }, { types: [] }, { types: [null] },

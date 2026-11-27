@@ -1400,8 +1400,11 @@ falls inside such a window. Direct reads still return the memory.
 
 ## Addendum 33 — memory-compact-v1 (opt-in)
 
-`readContext` accepts `representation: "memory-compact-v1"` as an engine API opt-in for `types: ["memory"]` with explicit `raw: false`.
+`readContext` accepts `representation: "memory-compact-v1"` as an engine API opt-in for `types: ["memory"]` with explicit `raw: false` and `intent: "current"`.
+Compact deliberately narrows the 0.6.x intent grammar to current memories. Other intents return `invalid_input`, and compact snapshots replay only current evidence.
 Compact reads reject source selection and cursors, and discovery and tool schemas retain their existing representation lists.
 Lexical retrieval, semantic fusion and the item budget use a horizon of 64, with the existing token budget and deadline.
+Compact follows Addendum 25. Omitting `semantic` selects semantic retrieval when the query embedder, `semanticRetrieval` capability and vector port are available, while `semantic: false` selects lexical retrieval. This deliberately differs from the 0.6.x lexical default.
 Pack whole `{ date, body }` items in ascending date order with undated items last, and meter the formatted block without source excerpts or ledger digests.
 Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
+Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.

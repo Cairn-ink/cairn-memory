@@ -151,7 +151,8 @@ export interface ReadContextInput extends ContextReadQuery {
 }
 
 /** Engine API opt-in. */
-export interface ReadCompactContextInput extends Omit<ReadContextInput, "types" | "representation" | "raw"> {
+export interface ReadCompactContextInput extends Omit<ReadContextInput, "intent" | "types" | "representation" | "raw"> {
+  intent: "current";
   types: readonly ["memory"];
   representation: ContextCompactRepresentation;
   raw: false;

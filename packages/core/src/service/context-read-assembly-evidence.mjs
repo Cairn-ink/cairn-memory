@@ -5,8 +5,8 @@ import { weekStart, yearStart } from "../ledger/window.mjs";
 import { documentCardAmendmentVisible, selectVisibleAmendmentsForRead } from "../routing/amendment-read.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { assertContextVisible, contextCardVerdict, hasContextCardLoader, legacyContextCard, qualifyEvidence } from "./context-read-evidence.mjs";
-import { canonicalGenerations, checkRow, evidenceFence, snapshotRefs } from "./context-read-fetch.mjs";
-import { COMPACT_MEMORY_REPRESENTATION, itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
+import { canonicalGenerations, checkRow, evidenceFence, fetchResponseBytes, snapshotRefs } from "./context-read-fetch.mjs";
+import { COMPACT_MEMORY_REPRESENTATION, FETCH_RESPONSE_MAX_BYTES, itemRef, namespaceSlot, readSetBinding } from "./context-read-input.mjs";
 import { readTokenSigner } from "./context-read-tokens.mjs";
 
 /** @import { ContextEvidenceRow, ContextLedgerDigest, ContextLedgerErrorStage, ContextMemoryRef, ContextRawTurn, ContextReadRef,
@@ -331,8 +331,16 @@ export function fetchForAssembly({ contextRead: store, uow, fence, documentCards
             if (reading?.project(reading.lines, ledgerCheck.selection.trimmed).witness() !== ledgerCheck.witness) return staleLedger;
           }
           ledgerCheck?.active();
-          const snapshot = selected.length ? await signer.encode("snapshot", payload(selected)) : null;
+          let snapshot = null;
+          try {
+            if (selected.length) snapshot = await signer.encode("snapshot", payload(selected));
+          } catch (error) {
+            if (!compact || !(error instanceof CoreError) || error.code !== "context_item_too_large") throw error;
+          }
           if (signal?.aborted) throw new CoreError("snapshot_stale");
+          if (compact && snapshot && fetchResponseBytes(selected.map(row => row.item), snapshot) > FETCH_RESPONSE_MAX_BYTES) {
+            return null;
+          }
           return snapshot;
         });
       },

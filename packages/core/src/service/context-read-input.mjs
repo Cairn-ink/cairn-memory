@@ -10,6 +10,7 @@ import { scopeOf } from "./entry.mjs";
 export const CONTEXT_HORIZON = 24;
 export const COMPACT_MEMORY_REPRESENTATION = /** @type {const} */ ("memory-compact-v1");
 export const COMPACT_MEMORY_MAX_ITEMS = 64;
+export const FETCH_RESPONSE_MAX_BYTES = 65_536;
 const readTypes = /** @type {const} */ (["memory", "card"]);
 
 /** @param {Scope} scope */
@@ -114,7 +115,7 @@ export function qualifiedRefs(values, readSet, maximum = CONTEXT_HORIZON) {
 /** @param {unknown} value @param {ContextReadSet} readSet @returns {FetchEvidenceInput & {responseByteLimit: number}} */
 export function fetchEvidenceInput(value, readSet) {
   const data = validateObject(value, ["refs", "intent", "fences", "snapshot", "responseByteLimit"]);
-  const responseByteLimit = boundedInteger(data.responseByteLimit, 65536, 65536);
+  const responseByteLimit = boundedInteger(data.responseByteLimit, FETCH_RESPONSE_MAX_BYTES, FETCH_RESPONSE_MAX_BYTES);
   if (Object.hasOwn(data, "snapshot")) {
     if (["refs", "intent", "fences"].some(key => Object.hasOwn(data, key)) ||
         typeof data.snapshot !== "string" || data.snapshot.length > 16384) throw new CoreError("invalid_input");

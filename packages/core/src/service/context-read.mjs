@@ -63,7 +63,7 @@ function readInput(value) {
     throw new CoreError("invalid_input");
   }
   const compact = representation === COMPACT_MEMORY_REPRESENTATION;
-  if (compact && (candidate.types.length !== 1 || candidate.types[0] !== "memory" || raw !== false)) {
+  if (compact && (candidate.intent !== "current" || candidate.types.length !== 1 || candidate.types[0] !== "memory" || raw !== false)) {
     throw new CoreError("invalid_input");
   }
   const maxItems = compact ? COMPACT_MEMORY_MAX_ITEMS : CONTEXT_HORIZON;
@@ -165,6 +165,7 @@ export function readContextMethod({ storage, clock, find, startEmbedding, fetch,
     let ledgerDetails;
     /** @param {unknown} error */
     const staleSnapshot = error => !options.signal?.aborted && error instanceof CoreError && error.code === "snapshot_stale";
+    let compactSnapshotRoom = 0;
 
     /** @param {import("./context-read-pack.mjs").PackDiagnostics} details @param {number} used
      * @returns {ContextAssemblyDiagnostics} */
@@ -185,11 +186,13 @@ export function readContextMethod({ storage, clock, find, startEmbedding, fetch,
         bounded.stops = { budget: false, items: false, deadline: false };
         bounded.trace = { timings: { assemblyMs: -0.0000010000000000000002 },
           counterCalls: rawPacking || packing.ledger ? Number.MAX_SAFE_INTEGER : 2 + 3 * unitCount + 7 * amendmentTrials };
-        const snapshotSize = selected.length
+        const snapshotSize = !compact && selected.length
           ? Math.ceil(4 * bytes(JSON.stringify(evidence.payload(selected.map(item => item.evidence)))) / 3) + 44
           : 0;
         const full = responseBytes({ metered: null, diagnostics: { ...bounded, items: bounded.items.map(item => ({ ...item, ref: legacyRef(item.ref) })) }, snapshot: null }) - 8 +
           Math.max(bytes(JSON.stringify(assembly)), bytes(text) - blockOverhead) + (snapshotSize ? snapshotSize + 2 : 4);
+        // The final metering check measures the accepted pack with a null snapshot.
+        if (compact) compactSnapshotRoom = MAX_BYTES - full;
         return snapshotSize <= SNAPSHOT_LIMIT && full <= MAX_BYTES;
       } };
     /** @param {Projection} pack @param {LedgerCheck} [ledgerCheck] */
@@ -219,7 +222,9 @@ export function readContextMethod({ storage, clock, find, startEmbedding, fetch,
         packed = packEvidence();
         snapshot = await deliver(packed);
       }
-      return { packed, snapshot: typeof snapshot === "string" ? snapshot : null };
+      // A quoted snapshot replaces the four bytes of the null placeholder.
+      return { packed, snapshot: typeof snapshot === "string" &&
+        (!compact || snapshot.length - 2 <= compactSnapshotRoom) ? snapshot : null };
     }
     // Complete all ordinary validation before optional ledger work can use the
     // deadline or hold a serialized reader.
