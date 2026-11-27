@@ -125,7 +125,10 @@ test('the shipped installer records consent and reaches the synthetic provider t
     const invoke = args => run(join(repo, 'packages/setup/bin/memory.mjs'), [...args, '--lang', 'en'], fixture.env);
     const prepare = invoke(['setup', '--local']);
     assert.equal(prepare.code, 0, prepare.stdout + prepare.stderr);
-    assert.match(prepare.stdout, /With OPENAI_API_KEY available to the Cairn MCP server/u);
+    assert.ok(prepare.stdout.replace(/\s+/gu, ' ').includes(
+      'The upgraded local engine sends memory text to OpenAI for embeddings when saving, correcting or importing memories. ' +
+      'Semantic recall sends the recall query for embeddings. These requests require recorded consent ' +
+      'and an OpenAI key in the Cairn MCP server’s environment.'));
     assert.match(prepare.stdout, /Local cutover verified/u);
     const confirm = invoke(['local-cutover', '--confirm']);
     assert.equal(confirm.code, 0, confirm.stdout + confirm.stderr);

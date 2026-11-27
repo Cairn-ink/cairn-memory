@@ -248,7 +248,10 @@ test('installed local cutover keeps keyed fetch in process and gives keyless ope
         assert.match(operator(f, probe, setup, { env: downgraded, code: 2 }), refusal);
         assert.match(operator(f, probe, ['local-cutover', '--activate'], { env }), /Local cutover verified/u);
         assert.deepEqual(registration(f), legacy);
-        assert.match(operator(f, probe, setup, { env: keyed }), /With OPENAI_API_KEY available to the Cairn MCP server/u);
+        assert.ok(operator(f, probe, setup, { env: keyed }).replace(/\s+/gu, ' ').includes(
+          'The upgraded local engine sends memory text to OpenAI for embeddings when saving, correcting or importing memories. ' +
+          'Semantic recall sends the recall query for embeddings. These requests require recorded consent ' +
+          'and an OpenAI key in the Cairn MCP server’s environment.'));
         assert.match(operator(f, probe, ['local-cutover', '--activate'], { env: downgraded, code: 2 }), refusal);
         assert.match(operator(f, probe, ['local-cutover', '--confirm'], { env: downgraded, code: 2 }), refusal);
         operator(f, probe, ['local-cutover', '--confirm']);
