@@ -257,8 +257,9 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const lineageSecret = randomUUID();
       const nearDuplicate = requested.nearDuplicate !== false;
       let elapsed = 0;
+      const now = () => Date.now() + elapsed;
       const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey, nearDuplicate,
-        allowNonNullNamespace: true, now: () => Date.now() + elapsed });
+        allowNonNullNamespace: true, now });
       const semanticRetrieval = requested.semanticRetrieval !== false;
       const rawArchive = requested.rawArchive === true;
       const fingerprintKey = requested.fingerprintKey === true;
@@ -384,7 +385,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
-          placement: createPostgresTopicStore({ hashSessionKey }),
+          placement: createPostgresTopicStore({ hashSessionKey, now }),
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
