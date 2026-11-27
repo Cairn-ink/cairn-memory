@@ -5,6 +5,11 @@ import { sameVector, vectorArguments, boundedJSON, pidIsDead, localFilesystemErr
 import { observedVector } from './local-claude.mjs';
 import { tomlString } from './output.mjs';
 import { SetupError } from './errors.mjs';
+import { localClientEnvironment } from './local-client-environment.mjs';
+
+export function inspectLocalCodexServers({ env, ...options }) {
+  return inspectCodexServers({ ...options, env: localClientEnvironment(env) });
+}
 
 export const codexAddArguments = (root, vector) => ['mcp', 'add', 'cairn-local', '--', vector.node, ...vectorArguments(root, vector)];
 export const codexSnippet = (root, vector) => '[mcp_servers."cairn-local"]\ncommand = ' + tomlString(vector.node) +
@@ -37,6 +42,7 @@ async function withCodexLock(home, work) {
   } catch (error) { throw localFilesystemError(error, 'codex_mcp_unverified'); }
 }
 export async function codexCapabilities(env) {
+  env = localClientEnvironment(env);
   for (const [args, pattern] of [[['mcp', 'add', '--help'], /--\s+<?COMMAND>/u],
     [['mcp', 'remove', '--help'], /./u], [['mcp', 'list', '--help'], /./u]]) {
     const result = await runCodex(args, { env });
@@ -45,6 +51,7 @@ export async function codexCapabilities(env) {
   return true;
 }
 export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable, allowCoreLocal }) {
+  env = localClientEnvironment(env);
   const home = dirname(checkpoint.destination), { desired } = checkpoint;
   try {
     const original = await lstat(codexHome(env));
@@ -78,6 +85,7 @@ export async function registerCodex({ root, checkpoint, env = process.env, write
   });
 }
 export async function detachCodex({ env = process.env, home = codexHome(env), inspection, write, t }) {
+  env = localClientEnvironment(env);
   return withCodexLock(home, async () => {
     await snapshot(join(home, 'config.toml'));
     const result = await runCodex(['mcp', 'remove', 'cairn-local'], { env: { ...env, CODEX_HOME: home } });

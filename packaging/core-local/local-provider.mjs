@@ -1,7 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { CoreError } from '../../packages/core/src/index.mjs';
-import { recallModel } from './provider-config.mjs';
+import { localProviderProfile, recallModel } from './provider-config.mjs';
 
 const contextWindow = 1_047_576;
 const modelInputLimit = 6_000;
@@ -81,7 +81,7 @@ function orderedVectors(response, count) {
   return vectors;
 }
 
-export function createLocalProvider({ key, owner, countTokens, request, authorize, clock = localClock }) {
+export function createLocalProvider({ key, readKey = () => key, owner, countTokens, request, authorize, clock = localClock }) {
   const tokens = { countTokens };
   const gate = { async assertOpen(requestOwner) {
     if (requestOwner !== owner) throw new CoreError('authority_required');
@@ -94,9 +94,11 @@ export function createLocalProvider({ key, owner, countTokens, request, authoriz
     signal.throwIfAborted();
     let value;
     try {
-      const response = await request('https://api.openai.com/v1/' + path, {
+      const credential = readKey();
+      if (!credential) throw new CoreError('provider_error');
+      const response = await request(localProviderProfile.endpoint + path, {
         method: 'POST', redirect: 'error', signal, body: JSON.stringify(body),
-        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json' },
       });
       if (!response.ok) {
         await response.body?.cancel();

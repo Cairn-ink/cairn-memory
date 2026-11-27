@@ -5,6 +5,7 @@ import { dispatchClient, parseClient } from './codex.mjs';
 import { terminalWriter, technical, wrapLine, shellArgument } from './output.mjs';
 import { DEFAULT_ENDPOINT, PRIVACY_URL } from './constants.mjs';
 import { routeLocalMode, localStatus, writeLocalResume } from './local-mode.mjs';
+import { localClientEnvironment } from './local-client-environment.mjs';
 import { setupDetected } from './clients.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
@@ -63,9 +64,9 @@ export async function ask(question, { secret = false, input = process.stdin, out
   }
 }
 
-function execute(command, args, { input, timeout = 120000, discard = false, signal } = {}) {
+function execute(command, args, { input, timeout = 120000, discard = false, signal, env } = {}) {
   return new Promise(resolve => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, env });
     let stdout = '', stderr = '', error;
     const terminate = () => { child.kill(); setTimeout(() => child.kill('SIGKILL'), 1000).unref(); };
     const abort = () => { error = new AuthError('interrupted'); terminate(); };
@@ -233,8 +234,9 @@ export async function main(argv, {
         write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
     };
     if (!coordinated && !disableLocalMode) {
+      const runLocalClaude = args => run(args, undefined, { env: localClientEnvironment(process.env) });
       const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
-        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting, inspection });
+        runClaude: runLocalClaude, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting, inspection });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
     } else beforeRouting();
