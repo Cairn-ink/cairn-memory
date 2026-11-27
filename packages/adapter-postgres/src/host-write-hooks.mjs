@@ -98,8 +98,8 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
       if (!raw || scope.namespace !== null || !priorReceipts.length) return { priorReceipts, affectedMessages: [] };
       const affectedMessages = await runOperation(tx, async query => {
         const { rows } = await query(`SELECT DISTINCT r.client, r.session_id AS "sessionId", r.message_id AS "messageId"
-          FROM raw_messages r JOIN core_memory_receipts p ON (r.user_id, r.client, r.session_id, r.message_id, r.role)
-            = (p.user_id, p.client, p.session_id, p.message_id, p.role)
+          FROM raw_messages r JOIN core_memory_receipts p ON (r.user_id, r.client, r.session_id, r.message_id)
+            = (p.user_id, p.client, p.session_id, p.message_id)
           WHERE r.user_id = $1 AND p.memory_id = $2 AND p.forgotten_at IS NULL ORDER BY 1, 2, 3`, [tx.owner, id]);
         return rows;
       });
