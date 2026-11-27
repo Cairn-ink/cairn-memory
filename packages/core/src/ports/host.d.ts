@@ -51,11 +51,10 @@ export interface ImportResult {
   invalid: number;
 }
 
-export interface Layer {
-  status: "ok" | "not_searched" | "unavailable";
-  count: number;
-  code?: ErrorCode;
-}
+export type Layer = { count: number; code?: ErrorCode } & (
+  { status: "ok" | "unavailable"; nextCursor?: string | null } |
+  { status: "not_searched"; nextCursor?: never }
+);
 
 interface FindOptions {
   limit?: number;
@@ -63,6 +62,8 @@ interface FindOptions {
   clients?: string[];
   sinceMs?: number;
   untilMs?: number;
+  /** An empty map pages the requested kinds from the start. A nonempty map continues only its layers. */
+  cursors?: Partial<Record<"memory" | "card" | "raw", string>>;
 }
 
 interface FindResult {
@@ -671,7 +672,9 @@ export interface MemoryService {
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   /** A null query leaves the card and raw layers empty. */
   find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "cards" | "raw"> & { cards: []; raw: [] }>;
-  find(scope: Scope, query: string | null, options: FindOptions & { kinds: ("memory" | "raw")[] }): Promise<Omit<FindResult, "cards"> & { cards: [] }>;
+  find(scope: Scope, query: string | null, options: FindOptions & {
+    kinds: ("memory" | "raw")[]; cursors?: FindOptions["cursors"] & { card?: never };
+  }): Promise<Omit<FindResult, "cards"> & { cards: [] }>;
   find(scope: Scope, query: string | null, options: FindOptions): Promise<FindResult>;
   read(scope: Scope, ref: { type: "memory" | "card"; id: string }): Promise<
     { status: "found"; item: MemoryRow; receipts: Receipt[]; sourceDates: { firstMs: number | null; lastMs: number | null } | null } |

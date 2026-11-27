@@ -21,7 +21,7 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { DocumentCardSourceMessage, FingerprintKeyProvider, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { DocumentCardSourceMessage, FingerprintKeyProvider, ReadSnapshot, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 /** @typedef {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceWithholding"]} RawSourceWithholding */
 
@@ -290,6 +290,12 @@ export function createDocumentCardCandidates(port, cardVisible) {
   }
 
   return {
+    stateToken(tx, scope) {
+      return port.read(tx, scope, getState => {
+        const selection = copyReadScope(tx.owner, scope);
+        return JSON.stringify(selection.namespaces.map(namespace => getState().cardGenerations.get(namespace) ?? 0));
+      });
+    },
     async lexical(tx, scope, query, depth) {
       return port.read(tx, scope, async getState => {
         const selection = copyReadScope(tx.owner, scope);
@@ -335,12 +341,12 @@ export function createDocumentCardCandidates(port, cardVisible) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRefs"]} [visibleRawRefs]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRows"]} [visibleRawRows]
  * @param {ReturnType<typeof createCardVisibility>} [cardVisible]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
 export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
-  visibleRawRefs, cardVisible = createCardVisibility(createCardVisibilityInputs(matchFacts, {
+  visibleRawRows, cardVisible = createCardVisibility(createCardVisibilityInputs(matchFacts, {
     async userKey() { return null; },
   }).cardVisibilityInput)) {
   /** @param {State} state @param {RetrievalScope} scope */
@@ -404,6 +410,12 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     },
   };
 
+  /** @type {ReadSnapshot["stateToken"]} */
+  const memoryStateToken = (tx, scope) => port.read(tx, scope, getState => {
+    const selection = copyReadScope(tx.owner, scope);
+    return JSON.stringify(selection.namespaces.map(namespace => getState().inspectEpochs.get(namespace) ?? 1));
+  });
+
   return {
     ...(capabilities.semanticRetrieval ? { vector } : {}),
     lexical: {
@@ -424,6 +436,12 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       },
     },
     snapshot: {
+      findMemory: {
+        stateToken: memoryStateToken,
+        async assertUnchanged(tx, scope, token) {
+          if (await memoryStateToken(tx, scope) !== token) throw new CoreError("cursor_stale");
+        },
+      },
       async stateToken(tx, scope) {
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
@@ -459,11 +477,13 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           const references = copyRefs(refs);
           const state = getState();
           const includeHistorical = intent === "read";
-          const rawFence = visibleRawRefs && references.some(({ type }) => type === "raw") ? visibleRawRefs : undefined;
+          const rawFence = visibleRawRows && references.some(({ type }) => type === "raw")
+            ? () => visibleRawRows(state, selection, references).then(rows => rows.map(({ ref }) => ({ ...ref })))
+            : undefined;
           if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
             const visible = Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
             if (!rawFence) return visible;
-            return rawFence(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
+            return rawFence().then(raw => [...visible, ...raw]);
           }
           return (async () => {
             const byNamespace = policies(state, selection);
@@ -480,8 +500,17 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
               }
             }
             if (!rawFence) return visible;
-            return [...visible, ...await rawFence(state, selection, references)];
+            return [...visible, ...await rawFence()];
           })();
+        });
+      },
+      async readVisibleRaw(tx, scope, refs, matchesVersion) {
+        return port.read(tx, scope, async getState => {
+          const selection = copyReadScope(tx.owner, scope);
+          const references = copyRefs(refs);
+          if (!visibleRawRows) return [];
+          const rows = await visibleRawRows(getState(), selection, references);
+          return rows.map(row => ({ ...row, ref: { ...row.ref } })).filter(row => matchesVersion(row));
         });
       },
     },

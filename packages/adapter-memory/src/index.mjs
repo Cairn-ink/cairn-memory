@@ -102,7 +102,7 @@ export function createMemoryAdapter(options = {}) {
     }, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
-    ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
+    ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRows, cardVisible),
     ...(contextRead && { contextRead: archive && (flags.contextRawRead || flags.documentCards)
       ? withContextRawRead(work, archive, contextRead, matchFacts, receiptReadSafety, {
         raw: flags.contextRawRead, amendmentLineage: flags.documentCards ? cardRawSources?.lineageVisible : undefined,

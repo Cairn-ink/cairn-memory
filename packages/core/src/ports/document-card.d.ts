@@ -1,7 +1,7 @@
 import type { DocumentSentence, DocumentVector } from "../routing/index.mjs";
 import type { DocumentCardVisibilityInput } from "../routing/visibility.mjs";
 import type { ItemRef, Revision, Scope } from "./common.d.ts";
-import type { LexicalCandidates, VectorCandidates } from "./retrieval.d.ts";
+import type { LexicalCandidates, RetrievalScope, VectorCandidates } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
 export interface DocumentCardSession {
@@ -179,7 +179,10 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * provider work.
    */
   visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[],
-    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<DocumentCardVisibilityInput | null>>;
+    options?: { requireRaw?: boolean; newCard?: DocumentCardVisibilityInput }): Promise<Array<(DocumentCardVisibilityInput & {
+      /** Stored card and body revisions from this snapshot, when available. */
+      version?: { revision: Revision; bodyRevision: Revision };
+    }) | null>>;
 }
 
 /**
@@ -189,4 +192,7 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
  * Order vector rows by distance ascending, then updatedAtUs descending, then id
  * descending by UTF-8 bytes. Core uses the vector channel only when coverage.complete is true.
  */
-export interface DocumentCardCandidates extends LexicalCandidates, VectorCandidates {}
+export interface DocumentCardCandidates extends LexicalCandidates, VectorCandidates {
+  /** Optional generation for index changes outside the ranked card pool. */
+  stateToken?(tx: Tx, scope: RetrievalScope): Promise<string>;
+}
