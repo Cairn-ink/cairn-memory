@@ -12,12 +12,16 @@ import { archivedReceiptExcerpt, scopeKey } from "../src/storage-values.mjs";
 const core = JSON.stringify(import.meta.resolve("@cairn-ink/core"));
 const observedCore = "data:text/javascript," + encodeURIComponent(`
   export * from ${core};
-  import { scoreBM25 as score } from ${core};
-  export const observation = { calls: null };
+  import { scoreBM25 as score, termFrequencies as frequencies } from ${core};
+  export const observation = { calls: null, tokenized: null };
   export function scoreBM25(terms, document, stats) {
     observation.calls?.push({ N: stats.N, totalLength: stats.totalLength,
       averageLength: stats.totalLength / stats.N, df: Object.fromEntries(stats.df) });
     return score(terms, document, stats);
+  }
+  export function termFrequencies(text) {
+    observation.tokenized?.push(text.length);
+    return frequencies(text);
   }
 `);
 const rawReader = new URL("../src/context-raw-read.mjs", import.meta.url).href;
@@ -314,7 +318,10 @@ test("A Raw deadline during the inventory scan returns no turns", async t => {
 });
 
 test("Large fenced turns leave time for the visible cited turn", async t => {
-  const { adapter, service } = await open(t);
+  // A work-driven clock: each reading advances 0.01 ms, so the default deadline
+  // depends on the reads the code makes, not on the speed of the machine.
+  let readings = 0;
+  const { adapter, service } = await open(t, () => readings++ / 100);
   const session = { client: "client", sessionId: "visible" };
   const fenced = { ...session, sessionId: "fenced" };
   const visible = message("turn", "archive heliotrope by the planter");
@@ -328,9 +335,19 @@ test("Large fenced turns leave time for the visible cited turn", async t => {
   });
   await publish(adapter);
 
-  const result = await read(service, "heliotrope");
+  const tokenized = [];
+  observation.tokenized = tokenized;
+  let result;
+  try {
+    result = await read(service, "heliotrope");
+  } finally {
+    observation.tokenized = null;
+  }
   assert.deepEqual(rawItems(result).map(({ messageId }) => messageId), [visible.id]);
   assert.equal(result.diagnostics.coverage.raw, "included");
+  // Fenced turns are rejected before any proof work: none of them is tokenized.
+  assert.ok(tokenized.length > 0);
+  assert.equal(tokenized.filter(length => length >= text.length).length, 0);
 });
 
 test("An unproved nonmatch can affect Raw order through corpus length and count", async t => {
