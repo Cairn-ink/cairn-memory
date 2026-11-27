@@ -101,6 +101,37 @@ test("a moved index stales its own continuation while the other two layers advan
   }
 });
 
+test("find delivers all layers in one read after ranking", async () => {
+  const { service, storage } = findFixture();
+  const ranking = new Set();
+  const delivery = new Set();
+  const wrap = (port, method, record) => {
+    const original = port[method];
+    port[method] = async function(tx, ...args) {
+      record(tx);
+      return original.call(this, tx, ...args);
+    };
+  };
+  for (const [port, method] of [[storage.lexical, "lexical"], [storage.raw, "raw"],
+    [storage.documentCardCandidates, "lexical"]]) {
+    wrap(port, method, tx => ranking.add(tx));
+  }
+  for (const [port, method] of [[storage.fence, "assertVisible"], [storage.documentCards, "get"]]) {
+    wrap(port, method, tx => {
+      assert.equal(ranking.size, 3);
+      assert.ok(!ranking.has(tx));
+      delivery.add(tx);
+    });
+  }
+  for (const opts of [options, paging]) {
+    ranking.clear();
+    delivery.clear();
+    const result = await service.find(scope, query, opts);
+    for (const kind of kinds) assert.equal(result.layers[kind].count, opts.limit);
+    assert.equal(delivery.size, 1);
+  }
+});
+
 test("hybrid memory pages exhaust the same bounded union as recall", async () => {
   const { service, hooks } = findFixture({ count: 110 });
   const ordinal = ({ id }) => Number(id.slice("memory-".length));

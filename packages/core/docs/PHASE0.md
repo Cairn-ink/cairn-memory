@@ -1526,5 +1526,7 @@ A store without a read-token identity reports `capability_unavailable` on layers
 The MAC binds owner, namespace, prepared query, layer, clients, time bounds and limit, and binds the embedding model for hybrid memory ranking.
 The card binding reserves a versioned scope field for future use. Malformed, oversized, forged or mismatched tokens return `invalid_cursor`.
 The signed payload carries the memory continuation or the layer's offset and index state, with an 8,192-character token limit.
-Each page repeats the visibility checks. A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
-The page size remains at most 20, using the recall horizon for memory, the existing hosted fusion pool for cards and 100 ranked segments for Raw.
+Plain and paged Find check delivery visibility for all selected items in one fresh read after every layer has ranked.
+A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
+Pages follow one deterministic order per layer, with a stable ID tie-break.
+The page size remains at most 20. Hybrid memory uses fixed lexical and vector pools, lexical memory can page through all matches, cards use the existing hosted fusion pool, and Raw pages through up to 100 segments.

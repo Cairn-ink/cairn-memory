@@ -7,10 +7,11 @@ import { canonicalKey } from "../retrieval/bm25.mjs";
 import { fuseHosted, fuseHostedLexicalOnly } from "../retrieval/fusion.mjs";
 import { encodeCursor, pageLimit } from "../retrieval/hosted-paging.mjs";
 import { entry, scopeOf } from "./entry.mjs";
-import { hydrateMemoryRows, readCursor, readSet, readStateToken, recentPage } from "./reads.mjs";
+import { hydrateMemoryRows, prepareRecentPage, readCursor, readSet, readStateToken } from "./reads.mjs";
 
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
+/** @typedef {import("../ports/unit-of-work.d.ts").Tx} Tx */
 
 /** @param {import("../ports/retrieval.d.ts").EmbedQuery} embedQuery
  * @param {string} owner @param {string} query @param {import("../ports/common.d.ts").CallOptions} [options] */
@@ -33,10 +34,23 @@ export function recallMethod(deps) {
   });
 }
 
+/** @param {import("./index.d.mts").MemoryServiceDeps} deps */
+export function recallSearch(deps) {
+  const prepare = prepareRecallSearch(deps);
+  /** @type {(...args: Parameters<typeof prepare>) => Promise<{items: MemoryRow[], nextCursor: string | null, scores: number[]}>} */
+  return async (scope, ...args) => {
+    const { deliver, nextCursor } = await prepare(scope, ...args);
+    const { items, scores } = deliver
+      ? await deps.storage.uow.run(scope.owner, { readOnly: true }, deliver)
+      : { items: [], scores: [] };
+    return { items, nextCursor, scores };
+  };
+}
+
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps
- * @param {typeof fuseHostedLexicalOnly} [lexicalPage] Optional Find-only paging order.
+ * @param {boolean} [stablePaging] Use a fixed search order for Find continuations.
  */
-export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, lexicalPage = fuseHostedLexicalOnly) {
+export function prepareRecallSearch({ storage, embedQuery, gate, diagnostics, clock }, stablePaging = false) {
   const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
   /**
    * @param {import("../ports/common.d.ts").Scope} scope
@@ -47,17 +61,21 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, 
   return async (scope, query, { cursor, limit, mode }, filters) => {
     // Refuse an unsupported search before any dependency call, as the other placeholders do.
     if (query && (!lexical || !hydrate)) throw new CoreError("capability_unavailable");
-    const binding = ["recall-v2", scope.owner, scope.namespace, await clock.sha256Hex(query), mode, limit];
+    const route = stablePaging && query ? "find-memory-v1" : "recall-v2";
+    const binding = [route, scope.owner, scope.namespace, await clock.sha256Hex(query), mode, limit];
 
     if (!query) {
       const position = readCursor(cursor, binding, 1);
       const [inner] = position ?? [];
       if (position && (typeof inner !== "string" || !inner)) throw new CoreError("cursor_stale");
-      const result = await recentPage(storage, scope, { cursor: inner ?? null, limit }, filters);
+      const result = await prepareRecentPage(storage, scope, { cursor: inner ?? null, limit }, filters);
       return {
-        items: result.items,
         nextCursor: result.nextCursor === null ? null : encodeCursor([...binding, result.nextCursor]),
-        scores: result.items.map(() => 0),
+        /** @param {Tx} tx */
+        async deliver(tx) {
+          const items = await result.deliver(tx);
+          return { items, scores: items.map(() => 0) };
+        },
       };
     }
 
@@ -107,19 +125,23 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, 
 
     const { rows, nextCursor, memories, path } = await uow.run(scope.owner, { readOnly: true }, async tx => {
       const token = await readStateToken(snapshot, tx, readScope, positionToken);
-      const words = await lexical.lexical(tx, readScope, query, lexicalDepth, {});
+      const words = stablePaging ? null : await lexical.lexical(tx, readScope, query, lexicalDepth, {});
       const semantic = embedding && vector
         ? await vector.vector(tx, readScope, embedding.vector, embedding.model, hostedPool)
         : null;
       const complete = semantic?.coverage.complete === true;
       if (positionPath === "hybrid" && !complete) throw new CoreError("cursor_stale");
       const path = complete ? "hybrid" : "lexical";
-      const candidates = !complete && lexicalDepth > lexicalWindow ? words.rows.slice(0, lexicalWindow) : words.rows;
+      // A growing lexical prefix can promote a tie over a previously delivered
+      // row. Find pages the fixed hybrid pool or the full lexical ordering.
+      const candidates = words
+        ? (!complete && lexicalDepth > lexicalWindow ? words.rows.slice(0, lexicalWindow) : words.rows)
+        : (await lexical.lexical(tx, readScope, query, complete ? hostedPool : Number.MAX_SAFE_INTEGER, {})).rows;
       const lexicalRows = candidates.filter(row => isScopedMemory(row.ref));
       const page = { offset, limit, floor: mode === "plugin" };
       const { rows, total } = complete
         ? fuseHosted(lexicalRows, semantic.rows.filter(row => isScopedMemory(row.ref)), page)
-        : lexicalPage(lexicalRows, page);
+        : fuseHostedLexicalOnly(lexicalRows, page);
       const nextOffset = offset + limit;
       const nextCursor = nextOffset < total ? encodeCursor([...binding, token, nextOffset, path]) : null;
       const memories = await hydrateMemoryRows(hydrate, tx, readScope, rows.map(row => row.ref), "recall");
@@ -131,10 +153,11 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, 
       emitDiagnostic(diagnostics, "recall", "core_retrieval", fallback ?? "coverage_incomplete");
     }
 
-    if (!rows.length) return { items: [], nextCursor, scores: [] };
-    // Rehydrate beside the fence in a fresh snapshot. A correction can keep the
+    if (!rows.length) return { nextCursor };
+    // Rehydrate beside the fence in the caller's delivery snapshot. A correction can keep the
     // same ref visible while changing the content ranked by the previous run.
-    return uow.run(scope.owner, { readOnly: true }, async tx => {
+    /** @param {Tx} tx */
+    async function deliver(tx) {
       const refs = rows.map(row => row.ref);
       const current = await hydrateMemoryRows(hydrate, tx, readScope, refs, "recall");
       const visible = new Set((await fence.assertVisible(tx, readScope, refs)).map(canonicalKey));
@@ -150,7 +173,8 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }, 
           scores.push(score);
         }
       }
-      return { items, nextCursor, scores };
-    });
+      return { items, scores };
+    }
+    return { nextCursor, deliver };
   };
 }

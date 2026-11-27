@@ -134,7 +134,7 @@ export function listRawMessagesMethod({ uow, raw, capabilities, snapshot, fence 
 /** @param {StorageAdapter} storage @param {"recent-v1" | "export-v1"} route
  * @param {Scope} scope @param {unknown} options @param {Pick<RetrievalScope, "clients" | "window">} [filters]
  */
-async function storePage({ uow, recent, memories, snapshot, hydrate, fence }, route, scope, options, filters) {
+async function prepareStorePage({ uow, recent, memories, snapshot, hydrate, fence }, route, scope, options, filters) {
   const readScope = readSet(scope, filters);
   const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
   if (limit !== undefined && typeof limit !== "number") throw new CoreError("invalid_input");
@@ -162,7 +162,8 @@ async function storePage({ uow, recent, memories, snapshot, hydrate, fence }, ro
     const nextCursor = result.nextCursor === null ? null : encodeCursor([...binding, token, result.nextCursor]);
     return { items, nextCursor, token };
   });
-  return uow.run(scope.owner, { readOnly: true }, async tx => {
+  /** @param {Tx} tx */
+  async function deliver(tx) {
     if (route === "export-v1") await snapshot.assertUnchanged(tx, readScope, token);
     const candidates = scopedRows(items, readScope);
     const refs = candidates.map(memoryRef);
@@ -173,8 +174,25 @@ async function storePage({ uow, recent, memories, snapshot, hydrate, fence }, ro
       const memory = current.get(key);
       return memory && memory.revision === row.revision && visible.has(key) ? [memory] : [];
     });
-    return { items: delivered, nextCursor };
-  });
+    return delivered;
+  }
+  return { deliver, nextCursor };
+}
+
+/** @param {StorageAdapter} storage @param {"recent-v1" | "export-v1"} route @param {Scope} scope
+ * @param {unknown} options @param {Pick<RetrievalScope, "clients" | "window">} [filters]
+ */
+async function storePage(storage, route, scope, options, filters) {
+  const { deliver, nextCursor } = await prepareStorePage(storage, route, scope, options, filters);
+  const items = await storage.uow.run(scope.owner, { readOnly: true }, deliver);
+  return { items, nextCursor };
+}
+
+/** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options
+ * @param {Pick<RetrievalScope, "clients" | "window">} [filters]
+ */
+export function prepareRecentPage(storage, scope, options, filters) {
+  return prepareStorePage(storage, "recent-v1", scope, options, filters);
 }
 
 /** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options

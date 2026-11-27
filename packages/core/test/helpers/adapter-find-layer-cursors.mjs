@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import { coreDigest } from "../../src/index.mjs";
+import { fuseHosted, fuseHostedLexicalOnly } from "../../src/retrieval/fusion.mjs";
 import { serviceFake } from "./service-fake.mjs";
-import { skipped, stripCursors, takeCursors, unavailable } from "./find-layer-cursor-fixture.mjs";
+import { skipped, takeCursors, unavailable } from "./find-layer-cursor-fixture.mjs";
 
 const query = "cedar";
 const client = "fixture";
 const source = { kind: "mcp", client, sessionId: null };
 const kinds = ["memory", "card", "raw"];
 const fields = { memory: "memories", card: "cards", raw: "raw" };
+const itemId = item => item.ref?.id ?? item.id;
 const viewOf = scope => ({ owner: scope.owner, namespaces: [scope.namespace] });
 const read = (storage, scope, fn) => storage.uow.run(scope.owner, { readOnly: true }, fn);
 const write = (storage, scope, fn) => storage.uow.run(scope.owner, { pauseLock: true }, fn);
@@ -39,9 +41,12 @@ async function insertCard(storage, scope, i, label, at) {
   }));
 }
 
-function createService(storage, createMemoryService) {
-  const { deps } = serviceFake({ hasKey: false });
-  return createMemoryService({ ...deps, storage, clock: {
+function createService(storage, createMemoryService, embedding) {
+  const { deps } = serviceFake({ hasKey: false, recall: Boolean(embedding) });
+  const embedQuery = embedding && { async embedQuery() {
+    return { model: embedding.model, vector: Float32Array.from(embedding.vector) };
+  } };
+  return createMemoryService({ ...deps, storage, ...(embedQuery && { embedQuery }), clock: {
     nowMs: Date.now,
     monotonicMs: () => performance.now(),
     sha256Hex: async value => createHash("sha256").update(value).digest("hex"),
@@ -73,12 +78,10 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     await seed(fixture, otherScope, "separate");
     const service = createService(storage, createMemoryService);
     const limit = 3;
-    const baseline = await service.find(scope, query, { kinds, limit: 20 });
+    const baseline = await service.find(scope, query, { kinds, limit: 20, cursors: {} });
     const activeKinds = storage.documentCardCandidates ? kinds : ["memory", "raw"];
     const options = { kinds, limit };
-    const plain = await service.find(scope, query, options);
     let page = await service.find(scope, query, { ...options, cursors: {} });
-    assert.deepEqual(stripCursors(page), plain);
     if (!storage.documentCardCandidates) {
       assert.deepEqual(page.layers.card, { ...skipped, code: "capability_unavailable" });
     }
@@ -98,9 +101,8 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       } else assert.deepEqual(cursors, {});
     }
     for (const kind of activeKinds) {
-      if (kind === "memory") assert.deepEqual(new Set(seen[kind].map(row => row.id)), new Set(baseline.memories.map(row => row.id)));
-      else assert.deepEqual(seen[kind], baseline[fields[kind]]);
-      assert.equal(new Set(seen[kind].map(item => item.ref?.id ?? item.id)).size, 9);
+      assert.deepEqual(seen[kind], baseline[fields[kind]]);
+      assert.equal(new Set(seen[kind].map(itemId)).size, 9);
     }
     for (const target of [otherOwner, otherScope]) {
       const rejected = await continued.find(target, query, { ...options, cursors: firstCursors });
@@ -121,11 +123,17 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     await seed(fixture, scope, "depth", { memory: 105, raw: 105, card: 55 });
     const service = createService(storage, createMemoryService);
     const options = { kinds, limit: 20 };
-    const [memory, card, raw] = await read(storage, scope, async tx => [
-      (await storage.lexical.lexical(tx, viewOf(scope), query, 105, {})).rows.map(({ ref }) => ref.id),
-      (await storage.documentCardCandidates?.lexical(tx, viewOf(scope), query, 50, {}))?.rows.map(({ ref }) => ref.id) ?? [],
-      (await storage.raw.raw(tx, viewOf(scope), query, "search", { limit: 105 })).segments.map(({ ref }) => ref.id),
-    ]);
+    const [memory, card, raw] = await read(storage, scope, async tx => {
+      const selection = viewOf(scope);
+      const words = await storage.lexical.lexical(tx, selection, query, 105, {});
+      const cardWords = await storage.documentCardCandidates?.lexical(tx, selection, query, 50, {});
+      const archive = await storage.raw.raw(tx, selection, query, "search", { limit: 105 });
+      return [
+        fuseHostedLexicalOnly(words.rows, { offset: 0, limit: 105 }).rows.map(itemId),
+        cardWords?.rows.map(itemId) ?? [],
+        archive.segments.map(itemId),
+      ];
+    });
     assert.equal(memory.length, 105, "lexical recall reaches beyond the hybrid pool");
     assert.equal(raw.length, 105, "the unpaged Raw port retains its larger limit");
     const found = { memory: [], card: [], raw: [] };
@@ -135,14 +143,13 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
       for (const kind of kinds) {
         assert.ok(page.layers[kind].status !== "unavailable", JSON.stringify(page.layers[kind]));
         assert.ok(page[fields[kind]].length <= options.limit);
-        found[kind].push(...page[fields[kind]].map(item => item.ref?.id ?? item.id));
+        found[kind].push(...page[fields[kind]].map(itemId));
       }
       const cursors = takeCursors(page.layers);
       if (!Object.keys(cursors).length) break;
       page = await service.find(scope, query, { ...options, cursors });
     }
-    assert.equal(found.memory.length, memory.length);
-    assert.deepEqual(new Set(found.memory), new Set(memory));
+    assert.deepEqual(found.memory, memory);
     assert.deepEqual(found.card, card);
     assert.deepEqual(found.raw, raw.slice(0, 100));
     await assert.rejects(service.find(scope, query, { ...options, limit: 21 }), { code: "invalid_input" });
@@ -205,4 +212,128 @@ export function testAdapterFindPaging(open, createMemoryService, testOptions = {
     assert.equal(rawResult.layers.raw.status, "ok");
     assert.deepEqual(rawResult.raw, stalePage.segments.slice(1), "forgotten Raw candidate passed the continuation fence");
   });
+}
+
+export function testMemoryFindDelivery(open, createMemoryService) {
+  for (const [kind, mutation] of [
+    ["card", "card hide"],
+    ["raw", "Raw forget"],
+    ["memory", "memory forget during Raw"],
+  ]) {
+    test(`find excludes a committed ${mutation} at delivery`, async t => {
+      for (const mode of ["continuation", "first page", "plain"]) {
+        const fixture = await open(t);
+        const { storage, scope, embedding } = fixture;
+        await seed(fixture, scope, "delivery");
+        const service = createService(storage, createMemoryService);
+        const options = { kinds: kind === "memory" ? ["memory", "raw"] : [kind], limit: 2 };
+        if (mode !== "plain") options.cursors = {};
+        if (mode === "continuation") options.cursors = takeCursors((await service.find(scope, query, options)).layers);
+        const expected = await service.find(scope, query, options);
+        const field = fields[kind];
+        const [target, untouched] = expected[field];
+        assert.ok(untouched);
+        const id = itemId(target);
+        let committed = false;
+        async function commit() {
+          if (committed) return;
+          if (kind === "card") {
+            await write(storage, scope, tx => storage.documentCards.hide(tx, scope, id, "forget"));
+          } else {
+            const forgotten = kind === "raw"
+              ? await insertMemory(storage, scope, target.content, 2_100, embedding)
+              : target;
+            assert.equal((await service.forget(scope, forgotten.id, source)).status, "forgotten");
+          }
+          committed = true;
+        }
+        const racingStorage = { ...storage };
+        if (kind === "card" && mode === "continuation") {
+          racingStorage.documentCardCandidates = { ...storage.documentCardCandidates, async stateToken(...args) {
+            const state = await storage.documentCardCandidates.stateToken(...args);
+            await commit();
+            return state;
+          } };
+        } else if (kind === "card") {
+          racingStorage.documentCards = { ...storage.documentCards, async visibilityInputs(...args) {
+            const inputs = await storage.documentCards.visibilityInputs(...args);
+            await commit();
+            return inputs;
+          } };
+        } else {
+          racingStorage.raw = { ...storage.raw, async raw(...args) {
+            const page = await storage.raw.raw(...args);
+            await commit();
+            return page;
+          } };
+        }
+        const racing = createService(racingStorage, createMemoryService);
+        const actual = await racing.find(scope, query, options);
+        assert.ok(committed, mode);
+        assert.equal(actual.layers[kind].status, "ok", mode);
+        assert.equal(actual.layers[kind].count, 1, mode);
+        assert.deepEqual(actual[field], [untouched], mode);
+        const fresh = await service.find(scope, query, { ...options, cursors: {}, limit: 20 });
+        assert.ok(!fresh[field].some(item => itemId(item) === id), mode);
+      }
+    });
+  }
+}
+
+export function testMemoryFindTieOrder(open, createMemoryService) {
+  for (const [name, kind, count] of [
+    ["hybrid memory", "memory", 100],
+    ["lexical memory", "memory", 110],
+    ["cards", "card", 50],
+    ["Raw", "raw", 100],
+  ]) {
+    test(`find ${name} tie order matches one large read`, async t => {
+      const hybrid = name === "hybrid memory";
+      const { storage, scope, embedding } = await open(t, hybrid);
+      const at = 1_000;
+      const text = i => makeText("tied", String(i).padStart(3, "0"));
+      const selection = viewOf(scope);
+      if (kind === "memory") {
+        for (let i = 0; i < 110; i++) await insertMemory(storage, scope, text(i), at, embedding);
+      } else if (kind === "card") {
+        for (let i = 0; i < 110; i++) await insertCard(storage, scope, String(i).padStart(3, "0"), "tied", at);
+      } else {
+        const messages = Array.from({ length: 110 }, (_, i) => ({
+          id: `message-${i}`, occurredAtMs: at, role: "user", content: text(i),
+        }));
+        for (let i = 0; i < messages.length; i += 20) await archive(storage, scope, messages.slice(i, i + 20), i);
+      }
+      const expected = await read(storage, scope, async tx => {
+        if (kind === "raw") {
+          const { segments } = await storage.raw.raw(tx, selection, query, "search", { limit: count });
+          assert.equal(new Set(segments.map(({ score }) => score)).size, 1);
+          return segments;
+        }
+        const index = kind === "card" ? storage.documentCardCandidates : storage.lexical;
+        const { rows } = await index.lexical(tx, selection, query, hybrid ? 50 : count, {});
+        assert.equal(new Set(rows.map(({ score }) => score)).size, 1, "lexical scores must tie");
+        assert.equal(new Set(rows.map(({ updatedAtUs }) => updatedAtUs)).size, 1, "timestamps must tie");
+        const page = { offset: 0, limit: count };
+        if (!hybrid) return fuseHostedLexicalOnly(rows, page).rows;
+        const vectors = await storage.vector.vector(tx, selection, Float32Array.from(embedding.vector), embedding.model, 50);
+        assert.equal(vectors.coverage.complete, true);
+        return fuseHosted(rows, vectors.rows, page).rows;
+      });
+      const service = createService(storage, createMemoryService, embedding);
+      const options = { kinds: [kind], limit: 20 };
+      const actual = [];
+      let cursors = {};
+      let pages = 0;
+      do {
+        assert.ok(++pages <= Math.ceil(count / options.limit), "search must stop at its horizon");
+        const page = await service.find(scope, query, { ...options, cursors });
+        assert.equal(page.layers[kind].status, "ok");
+        actual.push(...page[fields[kind]].map(itemId));
+        cursors = takeCursors(page.layers);
+      } while (cursors[kind]);
+      assert.equal(expected.length, count);
+      assert.equal(new Set(actual).size, actual.length, "pages must not repeat items");
+      assert.deepEqual(actual, expected.map(itemId));
+    });
+  }
 }
