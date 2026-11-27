@@ -110,10 +110,12 @@ async function beforeLedgerDeadline(now, deadline, signal, attempt) {
 /** @param {{ storage: KeylessStorage | ReadContractStorage, clock: ClockAndHash,
  * find: CandidateMethods["findForAssembly"], startEmbedding?: CandidateMethods["startAssemblyEmbedding"],
  * fetch: ReturnType<typeof import("./context-read-assembly-evidence.mjs").fetchForAssembly>,
+ * includeCompactItemRank?: boolean,
  * calendarReading?: boolean,
  * counter?: KeylessMemoryServiceDeps["contextReadCounter"], format?: KeylessMemoryServiceDeps["contextReadFormat"] }} deps
  * @returns {NonNullable<MemoryService["readContext"]>} */
-export function readContextMethod({ storage, clock, find, startEmbedding, fetch, counter, format, calendarReading = false }) {
+export function readContextMethod({ storage, clock, find, startEmbedding, fetch, counter, format, calendarReading = false,
+  includeCompactItemRank = false }) {
   const now = () => clock.monotonicMs();
   /** @param {ContextReadSet} readSet @param {ReturnType<typeof readInput>} input
    * @param {CallOptions} options @param {number} deadline @param {boolean} includeLedger
@@ -176,7 +178,7 @@ export function readContextMethod({ storage, clock, find, startEmbedding, fetch,
       ...(ledgerDetails && Object.keys(ledgerDetails).length && { ledger: ledgerDetails }),
     });
     /** @type {PackOptions} */
-    const packing = { budget, policy, representation, now, deadline,
+    const packing = { budget, policy, representation, includeCompactItemRank, now, deadline,
       format, count: text => counter.count(text),
       fitsBytes(assembly, text, details, selected) {
         // Bound the mutable diagnostic scalars, including the final clock
