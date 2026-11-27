@@ -6,7 +6,7 @@ import { hasRawFence } from "./raw-lineage.mjs";
 import { decodeRawRow, rawRows, rawSegment, readRawRow } from "./raw-rows.mjs";
 import { rankLexical, readSet, validateLimit } from "./retrieval.mjs";
 import { createSnapshotToken, validateSnapshotToken } from "./retrieval-snapshot.mjs";
-import { invalidInput } from "./storage-values.mjs";
+import { invalidInput, sha256 } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
 /** @import { ItemRef, ListRawMessages, RawCandidates, RawSegment, RetrievalScope, Scope } from "@cairn-ink/core/ports" */
@@ -151,10 +151,17 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
         const selection = readSet(tx.owner, scope);
         if (typeof query !== "string" || (intent !== "search" && intent !== "context") ||
             !options || typeof options !== "object") invalidInput();
-        validateLimit(options.limit);
+        const { limit, offset } = options;
+        validateLimit(limit);
+        if (offset !== undefined && (!Number.isSafeInteger(offset) || offset < 0)) invalidInput();
         const terms = tokenizeT1(query);
         const documents = terms.length === 0 ? [] : Array.from(visibleRows(db, selection), row => ({ ...row, text: row.content }));
-        return { segments: rankLexical(documents, terms, options.limit), coverage: { complete: true } };
+        const pool = rankLexical(documents, terms, offset === undefined ? limit : 100);
+        const coverage = { complete: true };
+        if (offset === undefined) return { segments: pool, coverage };
+        const members = documents.map(({ ref }) => ref.id).sort();
+        const state = sha256(JSON.stringify([members, pool]));
+        return { segments: pool.slice(offset, offset + limit), coverage, page: { state, hasMore: offset + limit < pool.length } };
       });
     },
 
@@ -178,10 +185,10 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
   };
 
   /** @param {Connection} db @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
-  function visibleRawRefs(db, selection, refs) {
+  function visibleRawRows(db, selection, refs) {
     /** @type {Map<Scope["namespace"], ReturnType<typeof visibility>>} */
     const policies = new Map();
-    /** @type {Map<string, ItemRef>} */
+    /** @type {Map<string, RawSegment>} */
     const found = new Map();
     for (const { type, id, namespace } of refs) {
       if (type !== "raw" || namespace === "" || !selection.namespaces.includes(namespace) || found.has(id)) continue;
@@ -195,10 +202,10 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
         visible = visibility(db, scope, selection);
         policies.set(namespace, visible);
       }
-      if (visible(row)) found.set(id, { type, id, namespace });
+      if (visible(row)) found.set(id, rawSegment(scope, row, 0));
     }
     return [...found.values()];
   }
 
-  return { reads, visibleRawRefs };
+  return { reads, visibleRawRows };
 }
