@@ -70,6 +70,12 @@ export function findFixture({ semantic = true, count = 6, writes = false,
         page: { state: String(state.raw), hasMore: offset + limit < raw.length } };
     },
   };
+  storage.fence.readVisibleRaw = async (tx, selection, refs, matchesVersion) => {
+    const visible = await storage.fence.assertVisible(tx, selection, refs);
+    return raw.filter(row => visible.some(({ id }) => row.ref.id === id))
+      .map(row => structuredClone(row))
+      .filter(row => matchesVersion(row));
+  };
   return { ...fake, memories, cards, raw, state, identity, service: createMemoryService(deps) };
 }
 

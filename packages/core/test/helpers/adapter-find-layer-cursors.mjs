@@ -77,6 +77,46 @@ async function seed({ storage, embedding, rawNamespaces = true }, scope, label, 
 }
 
 export function testAdapterFindPaging(open, createMemoryService, testOptions = {}) {
+  for (const mode of ["plain", "first page", "continuation"]) {
+    test(`find delivers current Raw rows (${mode})`, testOptions, async t => {
+      const fixture = await open(t);
+      const { storage, scope } = fixture;
+      await seed(fixture, scope, "current", { memory: 0, raw: 5, card: 0 });
+      const options = { kinds: ["raw"], limit: 2 };
+      if (mode !== "plain") options.cursors = {};
+      if (mode === "continuation") {
+        const service = createService(storage, createMemoryService);
+        options.cursors = takeCursors((await service.find(scope, query, options)).layers);
+        assert.ok(options.cursors.raw);
+      }
+      let ranking;
+      let ranked;
+      let current;
+      const observed = { ...storage, raw: { ...storage.raw, async raw(tx, ...args) {
+        ranking = tx;
+        const result = await storage.raw.raw(tx, ...args);
+        ranked = result.segments;
+        return result;
+      } }, fence: { ...storage.fence, async readVisibleRaw(tx, ...args) {
+        assert.ok(ranking);
+        assert.notEqual(tx, ranking, "Raw delivery uses a fresh transaction");
+        assert.equal(tx.readOnly, true);
+        current = await storage.fence.readVisibleRaw(tx, ...args);
+        return current;
+      } } };
+      const service = createService(observed, createMemoryService);
+      const result = await service.find(scope, query, options);
+      assert.equal(result.layers.raw.status, "ok");
+      assert.equal(result.raw.length, options.limit);
+      for (const [index, item] of result.raw.entries()) {
+        const row = current.find(({ ref }) => ref.id === item.ref.id);
+        assert.notEqual(item, ranked[index], "Find returned the ranking-time Raw object");
+        assert.ok(row);
+        assert.equal(item.ref, row.ref);
+        assert.deepEqual(item, { ...row, score: ranked[index].score });
+      }
+    });
+  }
   test("find adapter paging gives three contiguous, scoped pages per available layer", testOptions, async t => {
     const fixture = await open(t);
     const { storage, scope, otherOwner, rawNamespaces = true } = fixture;

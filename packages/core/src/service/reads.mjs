@@ -84,13 +84,10 @@ export async function readStateToken(snapshot, tx, scope, positionToken) {
   return token;
 }
 
-/** @param {RawSegment[]} segments @param {RetrievalScope} scope @param {Tx} tx @param {StorageAdapter["fence"]} fence
- * @param {import("../ports/retrieval.d.ts").RawVersionMatch} [matchesVersion] */
-export async function visibleRawSegments(segments, scope, tx, fence, matchesVersion) {
+/** @param {RawSegment[]} segments @param {RetrievalScope} scope @param {Tx} tx @param {StorageAdapter["fence"]} fence */
+export async function visibleRawSegments(segments, scope, tx, fence) {
   const refs = segments.map(({ ref }) => ref);
-  const visible = matchesVersion
-    ? await fence.assertVisible(tx, scope, refs, undefined, matchesVersion)
-    : await fence.assertVisible(tx, scope, refs);
+  const visible = await fence.assertVisible(tx, scope, refs);
   const keys = new Set(visible.map(canonicalKey));
   return segments.filter(({ ref }) => keys.has(canonicalKey(ref)));
 }

@@ -16,7 +16,7 @@ import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, 
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { CaptureKey, CaptureMessage, DocumentCardSourceMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RawSourceTuple, RawVersionMatch, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureKey, CaptureMessage, DocumentCardSourceMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RawSourceTuple, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
@@ -430,9 +430,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return sourceLineageVisible(state, scope, archived);
   }
 
-  /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs
-   * @param {RawVersionMatch} [matchesVersion] */
-  async function visibleRawRefs(state, selection, refs, matchesVersion) {
+  /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
+  async function visibleRawRows(state, selection, refs) {
     /** @type {State["rawRows"]} */
     const rawRows = new Map();
     for (const ref of refs) {
@@ -442,9 +441,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }
     if (!rawRows.size) return [];
     const { facts, rawFences } = state;
-    const rows = await visibleRows({ facts, rawFences, rawRows }, selection);
-    return rows.filter(row => !matchesVersion || matchesVersion({ ...row, ref: { ...row.ref } }))
-      .map(({ ref }) => ({ ...ref }));
+    return visibleRows({ facts, rawFences, rawRows }, selection);
   }
 
   /** @param {RawSourceTuple} row */
@@ -803,7 +800,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, hasRawFence, lineageFenced, sourceWithholding, sourceLineageVisible,
+  return { raw, findVisibleSource, visibleRawRows, captureProofs, hasRawFence, lineageFenced, sourceWithholding, sourceLineageVisible,
     amendmentSource, receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

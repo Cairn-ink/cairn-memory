@@ -8,7 +8,7 @@ import { createSnapshotToken, validateSnapshotToken } from "./retrieval-snapshot
 import { invalidInput, sha256 } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
-/** @import { ItemRef, ListRawMessages, RawCandidates, RawSegment, RawVersionMatch, RetrievalScope, Scope } from "@cairn-ink/core/ports" */
+/** @import { ItemRef, ListRawMessages, RawCandidates, RawSegment, RetrievalScope, Scope } from "@cairn-ink/core/ports" */
 /** @import { RawRow } from "./raw-rows.mjs" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
@@ -140,12 +140,11 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
     },
   };
 
-  /** @param {Connection} db @param {RetrievalScope} selection @param {readonly ItemRef[]} refs
-   * @param {RawVersionMatch} [matchesVersion] */
-  function visibleRawRefs(db, selection, refs, matchesVersion) {
+  /** @param {Connection} db @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
+  function visibleRawRows(db, selection, refs) {
     /** @type {Map<Scope["namespace"], ReturnType<typeof visibility>>} */
     const policies = new Map();
-    /** @type {Map<string, ItemRef>} */
+    /** @type {Map<string, RawSegment>} */
     const found = new Map();
     for (const { type, id, namespace } of refs) {
       if (type !== "raw" || namespace === "" || !selection.namespaces.includes(namespace) || found.has(id)) continue;
@@ -159,12 +158,10 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw, control
         visible = visibility(db, scope, selection);
         policies.set(namespace, visible);
       }
-      if (visible(row) && (!matchesVersion || matchesVersion(rawSegment(scope, row, 0)))) {
-        found.set(id, { type, id, namespace });
-      }
+      if (visible(row)) found.set(id, rawSegment(scope, row, 0));
     }
     return [...found.values()];
   }
 
-  return { reads, visibleRawRefs };
+  return { reads, visibleRawRows };
 }

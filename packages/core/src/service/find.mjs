@@ -8,7 +8,7 @@ import { decodeCursor, RAW_FIND_DEPTH } from "../retrieval/hosted-paging.mjs";
 import { documentCardFindItem, documentCardVisible, visibleDocumentCardRows } from "../routing/index.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { embedRecallQuery, prepareRecallSearch } from "./recall.mjs";
-import { readSet, visibleRawSegments } from "./reads.mjs";
+import { readSet } from "./reads.mjs";
 import { isReadMac, signedReadToken } from "./signed-read-token.mjs";
 
 /** @typedef {import("../ports/host.d.ts").MemoryService} MemoryService */
@@ -300,7 +300,7 @@ export function findMethod(deps) {
         if (searchRaw) {
           const embedding = page ? await rankingEmbedding(page, tokens) : firstEmbedding;
           const offset = Number(page?.position ?? 0);
-          const { segments, versions, layer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+          const { ranked, layer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
             const result = await searchRaw.raw(tx, readScope, query, "search",
               { limit, ...(paging && { offset }), ...(embedding?.vector && { queryVector: embedding.vector }) });
             const state = tokens && result.page
@@ -312,16 +312,29 @@ export function findMethod(deps) {
             /** @type {Layer} */
             const layer = { status: "ok", count: 0, ...(paging && { nextCursor }) };
             if (result.coverage.complete === false) layer.code = "index_unavailable";
-            const versions = new Map(result.segments.map(segment =>
-              [canonicalKey(segment.ref), rawVersion(segment, result.witnesses?.get(segment.ref.id))]));
-            return { segments: result.segments, versions, layer };
+            const ranked = result.segments.map(segment => ({
+              ref: segment.ref, score: segment.score, version: rawVersion(segment, result.witnesses?.get(segment.ref.id)),
+            }));
+            return { ranked, layer };
           });
           rawLayer = {
             layer,
-            deliver: tx => visibleRawSegments(segments, readScope, tx, fence, (current, witness) => {
-              const ranked = versions.get(canonicalKey(current.ref));
-              return ranked !== undefined && rawVersion(current, witness).every((value, i) => value === ranked[i]);
-            }),
+            async deliver(tx) {
+              if (!ranked.length) return [];
+              if (!fence.readVisibleRaw) throw new CoreError("capability_unavailable");
+              const versions = new Map(ranked.map(({ ref, version }) => [canonicalKey(ref), version]));
+              const rows = await fence.readVisibleRaw(tx, readScope, ranked.map(({ ref }) => ref), (current, witness) => {
+                const version = versions.get(canonicalKey(current.ref));
+                return version !== undefined && rawVersion(current, witness).every((value, i) => value === version[i]);
+              });
+              const byRef = new Map(rows.map(row => [canonicalKey(row.ref), row]));
+              const items = [];
+              for (const { ref, score } of ranked) {
+                const row = byRef.get(canonicalKey(ref));
+                if (row) items.push({ ...row, score });
+              }
+              return items;
+            },
           };
         } else if (page) throw new CoreError("cursor_stale");
       } catch (error) {

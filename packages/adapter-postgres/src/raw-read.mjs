@@ -160,9 +160,10 @@ export function createPostgresRawReads(options) {
 export function createRawRefReader(options) {
   const readVisibility = createRawVisibility(options);
   /** @param {Query} query @param {ReadSet} scope @param {string[]} ids @param {RawVersionMatch} [matchesVersion] */
-  return async function visibleRawIds(query, scope, ids, matchesVersion) {
-    const visibleIds = new Set();
-    if (!scope.keys.includes(null) || !ids.length) return visibleIds;
+  return async function visibleRawRows(query, scope, ids, matchesVersion) {
+    /** @type {Map<string, RawSegment>} */
+    const visible = new Map();
+    if (!scope.keys.includes(null) || !ids.length) return visible;
     const visibility = await readVisibility(query, scope.owner, scope.clients);
     const { rows } = await query(`SELECT ${COLUMNS}, r.xmin::text AS witness
       FROM raw_messages r WHERE ${FILTER} AND r.id = ANY($8::text[])`,
@@ -170,8 +171,8 @@ export function createRawRefReader(options) {
     const witnesses = matchesVersion && new Map(rows.map(row => [row.id, row.witness]));
     for (const item of await visibility.visibleBatch(rows.map(segment))) {
       const { id } = item.ref;
-      if (!matchesVersion || matchesVersion(item, witnesses?.get(id))) visibleIds.add(id);
+      if (!matchesVersion || matchesVersion(item, witnesses?.get(id))) visible.set(id, item);
     }
-    return visibleIds;
+    return visible;
   };
 }

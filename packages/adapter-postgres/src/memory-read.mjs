@@ -102,9 +102,13 @@ function sourceDates(receipts) {
  *   (import("./raw-visibility.mjs").RawReadOptions & {allowNonNullNamespace?: boolean})} [options]
  * @returns {{ recent: ListRecent, snapshot: ReadSnapshot, hydrate: HydrateItems, fence: VisibilityFence }} */
 export function createPostgresMemoryReads(options = {}) {
-  const visibleRawIds = "lineageSecret" in options ? createRawRefReader(options) : undefined;
+  const visibleRawRows = "lineageSecret" in options ? createRawRefReader(options) : undefined;
   // Raw delivery accepts mixed scopes and returns only personal raw refs.
-  const { hashSessionKey, allowNonNullNamespace = visibleRawIds !== undefined } = options;
+  const { hashSessionKey, allowNonNullNamespace = visibleRawRows !== undefined } = options;
+
+  /** @param {ReturnType<typeof copyRefs>} references */
+  const rawIds = references => references.flatMap(({ ref }) =>
+    ref.type === "raw" && ref.namespace === null ? [ref.id] : []);
 
   /** @type {ReadSnapshot["stateToken"]} */
   async function memoryStateToken(tx, scope) {
@@ -186,19 +190,28 @@ export function createPostgresMemoryReads(options = {}) {
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs, intent, matchesRawVersion) {
+      async assertVisible(tx, scope, refs, intent) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         const references = copyRefs(refs);
         if (intent !== undefined && intent !== "read") invalid();
         return runOperation(tx, async (query) => {
           const memories = await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey);
-          if (!visibleRawIds) return memories.map(({ ref }) => ref);
-          const rawIds = await visibleRawIds(query, selection, references.flatMap(({ ref }) =>
-            ref.type === "raw" && ref.namespace === null ? [ref.id] : []), matchesRawVersion);
+          if (!visibleRawRows) return memories.map(({ ref }) => ref);
+          const raw = await visibleRawRows(query, selection, rawIds(references));
           const visibleMemoryRefs = new Set(memories.map(({ ref }) => ref));
           return references.flatMap(({ ref }) => visibleMemoryRefs.has(ref) ||
-            (ref.type === "raw" && ref.namespace === null && rawIds.has(ref.id)) ? [ref] : []);
+            (ref.type === "raw" && ref.namespace === null && raw.has(ref.id)) ? [ref] : []);
+        });
+      },
+      async readVisibleRaw(tx, scope, refs, matchesVersion) {
+        guardOwner(tx, scope);
+        const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
+        const ids = rawIds(copyRefs(refs));
+        if (!visibleRawRows) return [];
+        return runOperation(tx, async query => {
+          const rows = await visibleRawRows(query, selection, ids, matchesVersion);
+          return [...rows.values()];
         });
       },
     },

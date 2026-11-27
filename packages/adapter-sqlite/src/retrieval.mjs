@@ -466,12 +466,12 @@ function hydrateRow(db, { row }, lineageHash) {
 }
 
 /** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
- * @param {ReturnType<typeof import("./raw-read.mjs").createRawReads>["visibleRawRefs"]} visibleRawRefs
+ * @param {ReturnType<typeof import("./raw-read.mjs").createRawReads>["visibleRawRows"]} visibleRawRows
  * @param {ReturnType<typeof createVectorCache> | undefined} cache @param {() => number} now
  * @param {(tx: import("@cairn-ink/core/ports").Tx, scope: RetrievalScope, refs: readonly ItemRef[]) => Promise<ItemRef[]>} [visibleCardRefs]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs, cache, now, visibleCardRefs) {
+export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRows, cache, now, visibleCardRefs) {
   const stateToken = createSnapshotToken(storeKey);
   const memoryStateToken = createSnapshotToken(storeKey, true);
 
@@ -673,18 +673,25 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs, intent, matchesRawVersion) {
+      async assertVisible(tx, scope, refs, intent) {
         // Core supplies a new read transaction for the final delivery check.
         const { selection, references, visible, raw } = await port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           const references = copyArray(refs);
           const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
-          return { selection, references, visible, raw: visibleRawRefs(db, selection, references, matchesRawVersion) };
+          const raw = visibleRawRows(db, selection, references).map(({ ref: { type, id, namespace } }) => ({ type, id, namespace }));
+          return { selection, references, visible, raw };
         });
         if (!visibleCardRefs || !references.some(ref => ref.type === "card")) return [...visible, ...raw];
         const cards = await visibleCardRefs(tx, selection, references);
         const qualified = new Set([...visible, ...cards].map(({ type, namespace, id }) => JSON.stringify([type, namespace, id])));
         return [...references.filter(({ type, namespace, id }) => qualified.has(JSON.stringify([type, namespace, id]))), ...raw];
+      },
+      readVisibleRaw(tx, scope, refs, matchesVersion) {
+        return port(tx, scope?.owner, {}, db => {
+          const selection = readSet(tx.owner, scope);
+          return visibleRawRows(db, selection, copyArray(refs)).filter(row => matchesVersion(row));
+        });
       },
     },
     hydrate: {
