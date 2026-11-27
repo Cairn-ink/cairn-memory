@@ -20,6 +20,7 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {NonNullable<DocumentCardStore<StoredDocumentCardRecord>["visibilityInputs"]>} LoadCards */
 /** @typedef {{canonicalRows: number, sidecarRows: number, textRows: number, textUnits: number,
  * transformed: number, removed: number}} Metrics */
+/** @typedef {{ref: ItemRef, revision: number, text: string}} CardDocument */
 
 const MAX_ROWS = 1024;
 const MAX_TEXT_UNITS = 2_000_000;
@@ -135,18 +136,16 @@ function documentWriter(db, key, state) {
       terms.run(key, ns, id, postings);
       return replaced;
     },
-    /** @param {number} limit @param {{ used: number, stopped: () => boolean, allowFirst: boolean }} [budget] */
+    /** @param {number} limit @param {{ used: number, stopped: () => boolean }} [budget] */
     sweep(limit, budget) {
       if (budget) {
-        const next = db.prepare(`SELECT namespace_key, id, token_length
-          FROM cairn_context_documents WHERE projection = ? AND sequence < ? LIMIT 1`);
+        const old = db.prepare(`SELECT namespace_key, id, token_length
+          FROM cairn_context_documents WHERE projection = ? AND sequence < ? LIMIT ?`)
+          .all(key, state.sequence, limit);
         let { used } = budget, removed = 0;
-        for (let i = 0; i < limit; i++) {
-          if ((!budget.allowFirst || i > 0) && budget.stopped()) break;
-          const row = next.get(key, state.sequence);
-          if (!row) break;
+        for (const row of old) {
           const cost = 1 + Number(row.token_length);
-          if (used > 0 && used + cost > MIXED_CARD_TEXT_UNITS) break;
+          if (budget.stopped() || (used > 0 && used + cost > MIXED_CARD_TEXT_UNITS)) break;
           removed += Number(remove.run(key, String(row.namespace_key), String(row.id)).changes);
           used += cost;
         }
@@ -187,7 +186,7 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
   }
 
   /** @param {ReturnType<typeof documentWriter>} documents @param {Generation} state @param {Metrics} metrics
-   * @param {{ used: number, stopped: () => boolean, allowFirst: boolean }} [cardBudget] */
+   * @param {{ used: number, stopped: () => boolean }} [cardBudget] */
   function sweep(documents, state, metrics, cardBudget) {
     const budget = MAX_ROWS - metrics.canonicalRows - metrics.removed;
     const removed = documents.sweep(budget, cardBudget);
@@ -251,71 +250,95 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
   }
 
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {ContextReadSelection} selection
-   * @param {() => boolean} stopped @param {boolean} bounded @param {AbortSignal} [signal] */
-  async function reconcileCards(tx, readSet, selection, stopped, bounded, signal) {
+   * @param {() => boolean} stopped @param {boolean} bounded */
+  async function reconcileCards(tx, readSet, selection, stopped, bounded) {
     const metrics = maintenanceMetrics();
-    if (!loadCards || signal?.aborted || (!bounded && stopped())) return metrics;
+    if (!loadCards || stopped()) return metrics;
     const key = cardProjectionKey(readSet, selection);
     const textLimit = bounded ? MIXED_CARD_TEXT_UNITS : MAX_TEXT_UNITS;
-    const state = await port(tx, readSet.owner, { write: true }, db => {
+    const batch = await port(tx, readSet.owner, {}, db => {
       const captured = cardFence(db, readSet, contextEpochs(db, readSet)), prior = generation(db, key);
       if (published(prior, captured)) return null;
       const state = startGeneration(prior, captured);
-      state.checkpoint++;
-      // A first publication row is required by the posting foreign key.
-      if (!prior) saveGeneration(db, key, state);
-      return state;
-    });
-    if (!state) return metrics;
-
-    let textUnits = 0;
-    const needsFirstUnit = () => bounded && metrics.canonicalRows === 0;
-    while (state.phase < readSet.namespaces.length && metrics.canonicalRows < MAX_ROWS && textUnits < textLimit &&
-        !signal?.aborted && (needsFirstUnit() || !stopped())) {
-      const namespace = readSet.namespaces[state.phase], scope = { owner: readSet.owner, namespace };
-      const coordinates = scopeKey(scope);
-      const row = await port(tx, readSet.owner, {}, db => db.prepare(`SELECT id, revision, title, body
-        FROM cairn_document_cards WHERE ${exactScope} AND state = 'active' AND id > ? ORDER BY id LIMIT 1`)
-        .get(...coordinates, state.last_id));
-      if (!row) {
+      const rows = db.prepare(`SELECT id, revision, title, body FROM cairn_document_cards
+        WHERE ${exactScope} AND state = 'active' AND id > ? ORDER BY id LIMIT ?`);
+      /** @type {{scope: Scope, phase: number, afterId: string, rows: CardDocument[]}[]} */
+      const pages = [];
+      let textUnits = 0;
+      while (state.phase < readSet.namespaces.length && !stopped() && textUnits < textLimit) {
+        const limit = MAX_ROWS - metrics.canonicalRows - metrics.removed;
+        if (limit === 0) break;
+        const namespace = readSet.namespaces[state.phase], scope = { owner: readSet.owner, namespace };
+        const afterId = state.last_id;
+        const candidates = [];
+        let examined = 0, ended = true;
+        for (const row of rows.iterate(...scopeKey(scope), afterId, limit)) {
+          examined++;
+          metrics.canonicalRows++;
+          if (stopped() || textUnits >= textLimit) {
+            ended = false;
+            break;
+          }
+          const id = String(row.id);
+          const text = documentCardSearchText({ title: String(row.title), body: String(row.body) });
+          // A single oversized card can still advance the checkpoint.
+          if (bounded && textUnits > 0 && textUnits + text.length > textLimit) {
+            ended = false;
+            break;
+          }
+          candidates.push({ ref: { type: /** @type {const} */ ("card"), namespace, id },
+            revision: Number(row.revision), text });
+          state.last_id = id;
+          textUnits += text.length;
+        }
+        if (candidates.length) pages.push({ scope, phase: state.phase, afterId, rows: candidates });
+        if (!ended || examined === limit) break;
         state.phase++;
         state.last_id = "";
-        continue;
       }
-      const text = documentCardSearchText({ title: String(row.title), body: String(row.body) });
-      // An oversized card runs alone. Check the allowance between cards so
-      // each admitted row finishes visibility and posting work in this transaction.
-      if (bounded && textUnits > 0 && textUnits + text.length > textLimit) break;
-      const id = String(row.id), revision = Number(row.revision);
-      /** @type {ItemRef} */
-      const ref = { type: "card", namespace, id };
-      const [input] = await loadCards(tx, scope, [ref]);
-      const { rows } = await visibleDocumentCardRows([{ ref }], () => input ?? null);
-      if (rows.length) {
-        await port(tx, readSet.owner, { write: true }, db => {
-          const ns = coordinates[1];
-          // A fresh visibility verdict allows the same revision's postings to carry forward.
-          const carried = bounded ? db.prepare(`UPDATE cairn_context_documents SET sequence = ?
-            WHERE projection = ? AND namespace_key = ? AND id = ? AND revision = ? RETURNING token_length`)
-            .get(state.sequence, key, ns, id, revision) : undefined;
+      return { state, pages, textUnits };
+    });
+    if (!batch) return metrics;
+    const { state, pages, textUnits } = batch;
+    for (const page of pages) {
+      if (stopped()) return metrics;
+      const { scope, rows: candidates } = page;
+      const inputs = await loadCards(tx, scope, candidates.map(({ ref }) => ref));
+      const byId = new Map(candidates.map(({ ref }, i) => [ref.id, inputs[i]]));
+      const { rows } = await visibleDocumentCardRows(candidates, ref => stopped() ? null : byId.get(ref.id) ?? null);
+      page.rows = rows;
+    }
+    if (stopped()) return metrics;
+    // The same write transaction pins both the scan and the visibility inputs.
+    await port(tx, readSet.owner, { write: true }, db => {
+      state.checkpoint++;
+      saveGeneration(db, key, state);
+      const documents = documentWriter(db, key, state);
+      // Visibility has been rechecked in this transaction. The same revision
+      // has the same text, so its postings can be carried into the new generation.
+      const carry = bounded ? db.prepare(`UPDATE cairn_context_documents SET sequence = ?
+        WHERE projection = ? AND namespace_key = ? AND id = ? AND revision = ? RETURNING token_length`) : null;
+      for (const { scope, phase, afterId, rows } of pages) {
+        const [, ns] = scopeKey(scope);
+        let lastId = afterId;
+        for (const { ref, revision, text } of rows) {
+          if (stopped()) {
+            state.phase = phase;
+            state.last_id = lastId;
+            saveGeneration(db, key, state);
+            return;
+          }
+          const carried = carry?.get(state.sequence, key, ns, ref.id, revision);
           if (carried) {
             metrics.sidecarRows++;
             state.eligible++;
             state.total_length += Number(carried.token_length);
-          } else indexText(documentWriter(db, key, state), state, metrics, ns, id, revision, text);
-        });
+          } else indexText(documents, state, metrics, ns, ref.id, revision, text);
+          lastId = ref.id;
+        }
       }
-      metrics.canonicalRows++;
-      textUnits += text.length;
-      state.last_id = id;
-    }
-    // Keep the cursor and the completed posting writes in the same transaction,
-    // including when the last card used the remainder of the allowance.
-    await port(tx, readSet.owner, { write: true }, db => {
-      if (state.phase === readSet.namespaces.length && !signal?.aborted && (bounded || !stopped())) {
-        sweep(documentWriter(db, key, state), state, metrics, bounded ? {
-          used: textUnits, stopped, allowFirst: needsFirstUnit(),
-        } : undefined);
+      if (state.phase === readSet.namespaces.length && !stopped()) {
+        sweep(documents, state, metrics, bounded ? { used: textUnits, stopped } : undefined);
       }
       saveGeneration(db, key, state);
     });
