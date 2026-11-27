@@ -130,18 +130,24 @@ test('confirmation switches both recorded MCP vectors, arms staged capture and r
   }));
   assert.equal((await f.run('prepare-activation')).state, 'verified');
   const { retired, archive } = await paths(f);
+  const legacyBeforeSwitch = await readFile(f.database);
   assert.ok((await readFile(archive)).includes(marker));
-  await assert.rejects(f.run('confirm-activation', stopAt('activation-source-exchanged')), refused('activation-source-exchanged'));
-  assert.deepEqual(await phases(), ['staged', 'staged']);
-  assert.ok((await readFile(retired)).includes(marker));
-  assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
-  const outcome = await f.run('confirm-activation', async state => {
+  await assert.rejects(f.run('confirm-activation', async state => {
     if (state.startsWith('activation-mcp-')) {
+      assert.ok((await readFile(f.database)).equals(legacyBeforeSwitch));
       await absent(retired);
-      await absent(archive);
+      assert.ok((await readFile(archive)).includes(marker));
       assert.deepEqual(await phases(), ['staged', 'staged']);
     }
-  });
+    stopAt('activation-source-exchanged')(state);
+  }), refused('activation-source-exchanged'));
+  assert.deepEqual(await phases(), ['staged', 'staged']);
+  assert.ok((await readFile(retired)).includes(marker));
+  const switched = (await readClaudeServers(f.home))['cairn-local'];
+  const switchedCodex = (await inspectCodexServers({ home: f.env.CODEX_HOME, env: f.env, ...f.inspection })).find(row => row.name === 'cairn-local');
+  assert.notEqual(switched.args[2], f.database);
+  assert.deepEqual(switchedCodex.args, switched.args);
+  const outcome = await f.run('confirm-activation');
   assert.equal(outcome.state, 'active');
   assert.deepEqual(await phases(), ['armed', 'armed']);
   const claude = (await readClaudeServers(f.home))['cairn-local'];
@@ -189,6 +195,7 @@ test('abort after the exchange restores the same legacy file and reclaims both c
     stopAt('activation-source-exchanged')(state);
   }), refused('activation-source-exchanged'));
   assert.equal((await f.run('abort')).state, 'aborted');
+  assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
   assert.deepEqual(await readFile(f.database), f.initial);
   await absent(retired);
   await absent(archive);
@@ -212,16 +219,17 @@ test('a legacy change after verification refuses early, and a late writer blocks
     await assert.rejects(f.run('confirm-activation', state => {
       if (state === 'activation-source-exchanged') handle = new DatabaseSync(late.retired);
     }), refused('cutover_store_busy'));
-    assert.equal((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
+    assert.notEqual((await readClaudeServers(f.home))['cairn-local'].args[2], f.database);
+    assert.ok((await readFile(late.retired)).includes(marker));
   } finally { handle?.close(); }
   await absent(retired);
   assert.equal((await f.run('confirm-activation')).state, 'active');
 });
 
-test('a model-configured install is refused before touching the descriptor or client', linux, async t => {
+test('an explicit request to configure a model is refused before touching the descriptor or client', linux, async t => {
   const f = await fixture(t);
   await assert.rejects(runLocalCutover({ ...f.options, env: { ...f.env, OPENAI_API_KEY: 'synthetic-present' },
-    action: 'prepare-activation' }), refused('cutover_model_configured'));
+    action: 'prepare-activation', requestModel: true }), refused('cutover_model_configured'));
   assert.equal((await readDescriptor(f.root)).version, 'cairn-local-installation-v1');
   assert.deepEqual(await readFile(f.database), f.initial);
 });
@@ -247,7 +255,7 @@ test('confirmation resumes after each publication checkpoint and after installer
   await f.run('prepare-activation');
   const original = await readFile(f.database);
   for (const point of ['activation-staging', 'activation-target-published', 'capture-paused', 'capture-store-staged',
-    'capture-binding-staged', 'capture-native-published', 'activation-retirement-planned']) {
+    'capture-binding-staged', 'capture-native-published', 'activation-mcp-claude', 'activation-retirement-planned']) {
     await assert.rejects(f.run('confirm-activation', stopAt(point)), refused(point));
     assert.deepEqual(await readFile(f.database), original);
   }
@@ -268,19 +276,20 @@ test('confirmation resumes after each publication checkpoint and after installer
   assert.equal(child.signal, 'SIGKILL', child.stderr);
   await assert.rejects(f.run('abort'), refused('cutover_activation_confirmed'));
   for (const point of ['activation-source-removed', 'activation-backup-removed', 'activation-reclaimed',
-    'activation-mcp-claude', 'capture-armed', 'activation-active']) {
+    'capture-armed', 'activation-active']) {
     await assert.rejects(f.run('confirm-activation', stopAt(point)), refused(point));
   }
   assert.equal((await f.run('confirm-activation')).state, 'active');
 });
 
-test('confirmation deletes legacy index files before switching registration', linux, async t => {
+test('confirmation preserves legacy index files until registration switches, then reclaims them', linux, async t => {
   const f = await fixture(t);
   await f.run('prepare-activation');
   const cache = f.database + '.context-read-v1.sqlite';
   await writeFile(cache, marker, { mode: 0o600 });
   const active = await f.run('confirm-activation', async state => {
-    if (state === 'activation-mcp-claude') await absent(cache);
+    if (state === 'activation-mcp-claude') assert.equal(await readFile(cache, 'utf8'), marker);
+    if (state === 'activation-caches-removed') await absent(cache);
   });
   assert.equal(active.state, 'active');
   await absent(cache);

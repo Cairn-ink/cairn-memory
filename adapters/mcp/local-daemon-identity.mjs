@@ -14,9 +14,10 @@ export const IDENTITY_ENV = Object.freeze(['OPENAI_API_KEY', 'CAIRN_CONTEXT_SEMA
   'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS',
   'NODE_USE_SYSTEM_CA', 'NODE_USE_ENV_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
   'SSL_CERT_FILE', 'SSL_CERT_DIR', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH']);
-export function selectedEnvironment(source = process.env) {
+export function selectedEnvironment(source = process.env, { providerKeys = true } = {}) {
   const selected = {};
-  for (const name of IDENTITY_ENV) if (Object.hasOwn(source, name)) {
+  for (const name of IDENTITY_ENV) {
+    if ((!providerKeys && name.endsWith('_API_KEY')) || !Object.hasOwn(source, name)) continue;
     if (typeof source[name] !== 'string' || source[name].includes('\0')) throw refuse('daemon_environment');
     selected[name] = source[name];
   }

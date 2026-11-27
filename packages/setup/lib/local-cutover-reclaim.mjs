@@ -82,7 +82,7 @@ export async function reclaimAttempt(maintenance, { sourcePath, attemptId, targe
 function metadataOnly(directory, names) {
   const records = new Map();
   for (const name of names) {
-    const match = /^(maintenance|stale|claude|codex|capture-claude|capture-codex|activation)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
+    const match = /^(maintenance|stale|claude|codex|capture-claude|capture-codex|activation|provider-consent)\.json(?:\.tmp-\d+-([a-f0-9-]{36}))?$/u.exec(name);
     const info = entry(join(directory, name));
     if (match?.[0] !== name || (match[2] && !cutoverId(match[2])) || !privateFile(info)) return false;
     const key = match[1] + ':' + info.dev + ':' + info.ino;

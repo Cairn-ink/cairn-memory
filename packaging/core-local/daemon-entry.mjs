@@ -13,7 +13,7 @@ import { takeOver } from '../../adapters/mcp/local-daemon-liveness.mjs';
 import { authenticateClient, frameGuard, queuedBytes, requestLedger } from '../../adapters/mcp/local-daemon-wire.mjs';
 import { assertActiveAuthority, managedGeneration } from './daemon-authority.mjs';
 import { serveStdio } from './host.mjs';
-import { documentCardsReady, localModelKey, localProviderProfile } from './provider-config.mjs';
+import { documentCardsReady, localModelKey } from './provider-config.mjs';
 import { truncateWal } from './wal-checkpoint.mjs';
 
 function start(args, environment) {
@@ -104,8 +104,10 @@ async function serveDirect(options, readKey) {
   const generation = managedGeneration();
   const store = await assertActiveAuthority(generation, options);
   const authorize = async () => {
-    const current = await assertActiveAuthority(generation, options);
-    if (current.dev !== store.dev || current.ino !== store.ino) throw refuse('daemon_active_store');
+    const current = await assertActiveAuthority(generation, options, { modelConsent: !!readKey });
+    if (current.dev !== store.dev || current.ino !== store.ino || (readKey && !current.modelConsent)) {
+      throw refuse('daemon_active_store');
+    }
   };
   if (readKey) options.provider = { readKey, owner: options.owner, authorize, request: fetch };
   const controller = new AbortController();
@@ -134,15 +136,13 @@ async function serveDirect(options, readKey) {
 
 export async function serveManaged(args, options) {
   try {
-    const environment = selectedEnvironment();
-    const readKey = () => localModelKey(process.env);
-    const keyed = !!readKey();
-    if (keyed && !documentCardsReady) throw refuse('daemon_configuration');
-    if (process.platform === 'darwin' || keyed) return await serveDirect(options, keyed ? readKey : undefined);
-    delete environment[localProviderProfile.providerApiKeyEnv];
-    delete environment.CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY;
+    const environment = selectedEnvironment(undefined, { providerKeys: false });
     const generation = managedGeneration();
-    await assertActiveAuthority(generation, options);
+    const { modelConsent } = await assertActiveAuthority(generation, options, { modelConsent: true });
+    if (modelConsent && !documentCardsReady) throw refuse('daemon_configuration');
+    const readKey = () => localModelKey(process.env);
+    const keyed = modelConsent && !!readKey();
+    if (process.platform === 'darwin' || keyed) return await serveDirect(options, keyed ? readKey : undefined);
     const result = await forwardStdio(args, () => connect(args, options, generation, environment));
     const code = result?.refused ?? result;
     if (code) throw refuse(code);

@@ -10,7 +10,6 @@ import { daemonMonotonicMs, localProcessIdentity, startAwareAlive } from '../../
 import { authenticateServer, DAEMON_LIVENESS_FRAME, DAEMON_LIVENESS_MS, frameGuard, queuedBytes, QUEUE_BYTES, requestLedger } from '../../adapters/mcp/local-daemon-wire.mjs';
 import { assertActiveAuthority, managedGeneration } from './daemon-authority.mjs';
 import { serveStdio } from './host.mjs';
-import { localModelKey } from './provider-config.mjs';
 
 async function reap(directory, paths, live, predecessor) {
   const text = await readPrivate(directory, paths.ready, { fileClass: 'descriptor', missing: true });
@@ -30,7 +29,6 @@ async function reap(directory, paths, live, predecessor) {
 }
 
 async function run(args) {
-  if (localModelKey(selectedEnvironment())) throw refuse('daemon_configuration');
   const generation = managedGeneration(), vector = daemonVector(args);
   if (!generation || !vector.eligible) throw refuse('daemon_active_store');
   const { path, namespace } = vector.configuration;
@@ -40,6 +38,7 @@ async function run(args) {
   await assertStoreLocation(path, directory);
   const { eligible, record, digest } = await createIdentity(args, {
     key: await identityKey(directory), build: generation.build, root: generation.packageRoot,
+    environment: selectedEnvironment(undefined, { providerKeys: false }),
   });
   if (!eligible || canonical(record.store) !== canonical(store)) throw refuse('daemon_active_store');
   const paths = endpointPaths(directory, digest), owner = localProcessIdentity();

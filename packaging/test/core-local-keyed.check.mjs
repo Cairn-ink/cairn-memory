@@ -103,12 +103,19 @@ test('the shipped Card gate keeps a configured upgrade on the legacy vector', { 
   const fixture = await prepareFixture(t);
   const descriptor = join(fixture.root, 'installation.json'), native = join(fixture.home, '.claude.json');
   const original = [descriptor, native, fixture.database].map(path => readFileSync(path));
-  for (const args of [['setup', '--local'], ['local-cutover', '--activate']]) {
+  const configured = join(fixture.root, 'capture', 'claude');
+  const assertRefused = args => {
     const result = fixture.run([...args, '--lang', 'en']);
     assert.equal(result.code, 2, result.stderr);
     assert.match(result.stdout, /Local cutover is unavailable for model-configured installations\. Legacy service remains active\./u);
     assert.deepEqual([descriptor, native, fixture.database].map(path => readFileSync(path)), original);
-  }
+  };
+  assertRefused(['setup', '--local']);
+  mkdirSync(configured, { recursive: true, mode: 0o700 });
+  writeFileSync(join(configured, 'installation.json'),
+    JSON.stringify({ request: { interpretationConsent: true } }), { mode: 0o600 });
+  delete fixture.env.OPENAI_API_KEY;
+  assertRefused(['local-cutover', '--activate']);
 });
 
 async function buildWithCards(t) {

@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkedPath, privateRead } from '../../integrations/client/private-state.mjs';
 import { captureStoreIdentity } from './capture-binding.mjs';
+import { localProviderConsentFile, localProviderConsentText } from './provider-config.mjs';
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const enginePattern = /^core-local-v1-([a-f0-9]{64})(?:-r(?:[2-9]|[1-9]\d+))?$/u;
@@ -20,7 +21,7 @@ export function managedGeneration(path = packageRoot) {
   return { root: dirname(engine), id, build: match[1], packageRoot: path };
 }
 
-export async function assertActiveAuthority(generation, options) {
+export async function assertActiveAuthority(generation, options, { modelConsent = false } = {}) {
   if (!generation) throw refuse();
   const { root, id, packageRoot } = generation;
   if (await realpath(packageRoot) !== packageRoot) throw refuse();
@@ -45,5 +46,11 @@ export async function assertActiveAuthority(generation, options) {
   if (Object.keys(receipt).length !== 5 || receipt.version !== 1 || receipt.phase !== 'active' ||
       receipt.attempt !== cutover.attemptId || !/^\d+:\d+$/u.test(receipt.source) ||
       receipt.target !== device + ':' + inode) throw refuse();
-  return { path: expected, dev: device, ino: inode };
+  const store = { path: expected, dev: device, ino: inode };
+  if (!modelConsent) return store;
+  const consent = await privateRead(join(maintenance, localProviderConsentFile), { missing: true });
+  if (consent !== undefined && consent !== localProviderConsentText(options.owner, options.project ?? null)) {
+    throw refuse();
+  }
+  return { ...store, modelConsent: consent !== undefined };
 }

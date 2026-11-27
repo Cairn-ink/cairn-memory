@@ -150,7 +150,9 @@ export async function activateCapture({ root, maintenance, descriptor, manifest,
   const { migration } = descriptor, { cutover } = migration;
   const record = await legacyRecord(root, client, cutover, maintenance);
   const { saved, request, paused } = record;
-  if (!documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
+  // The standalone migration command retains its original admission check.
+  // Release confirmation has already checked consent at the installation level.
+  if (env && !documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv)) throw refuse('cutover_capture_changed');
   // Capture can use only the same installed owner and namespace as the client.
   if (!descriptor.clients[client] || request.namespace.ownerId !== descriptor.ownerId ||
       request.namespace.projectId !== descriptor.projectId) throw refuse('cutover_capture_changed');

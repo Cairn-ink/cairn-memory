@@ -37,8 +37,7 @@ async function hook(args, stdin) {
   try {
     const payload = await readHookInput(stdin, controller.signal);
     await runBoundCapture({ directory: args[2], event: args[4], payload, executable: fileURLToPath(import.meta.url),
-      headless: /^sdk-/u.test(process.env.CLAUDE_CODE_ENTRYPOINT ?? ''),
-      hasProviderKey: name => Object.hasOwn(process.env, name) }, controller.signal);
+      headless: /^sdk-/u.test(process.env.CLAUDE_CODE_ENTRYPOINT ?? '') }, controller.signal);
   } catch { /* A native hook supplies no stdout or diagnostic text on refusal. */ }
   finally {
     clearTimeout(timer);

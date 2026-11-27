@@ -166,14 +166,20 @@ export async function routeLocalMode(options, selection, context) {
       (!options.cloud && (descriptor?.migration?.cutover || detection.descriptorError))))
     validateLocalOptions(options, selection, descriptor);
   context.beforeRouting?.();
+  const requestModel = action === 'setup' && options.local && !flags.includes('--dry-run');
+  if (descriptor && !detection.descriptorError && (action === 'status' || action === 'setup' && options.local)) {
+    const { showKeylessProviderNotice } = await import('./local-cutover-command.mjs');
+    await showKeylessProviderNotice(detection.root, descriptor, context);
+  }
   if (descriptor?.migration?.cutover && !detection.descriptorError) {
     if (action === 'raw') return { handled: true, code: await rawLocal(options, selection, detection, context) };
     if (action === 'setup' && options.cloud) return refusal('mode_conflict_local', detection, context);
-    const { activeCutoverTarget, showInstalledCutover } = await import('./local-cutover-command.mjs');
+    const { activeCutoverTarget, checkSetupProvider, showInstalledCutover } = await import('./local-cutover-command.mjs');
     if (action === 'setup' && ['uninstalled', 'pending'].includes(descriptor.state)) {
       if (union === 'mixed' || union === 'cloud') return refusal(union === 'mixed' ? 'mode_mixed' : 'mode_conflict_cloud', detection, context);
       if (union === 'unknown') return refusal('mode_unknown', detection, context);
       if (flags.includes('--dry-run')) return { handled: true, code: await localDryRun(options, selection, detection, context) };
+      if (!await checkSetupProvider(detection.root, descriptor, context, requestModel)) return { handled: true, code: 2 };
       const { reattachActiveLocal } = await import('./local-cutover-reattach.mjs');
       return { handled: true, code: await reattachActiveLocal(options, selection, detection, context) };
     }
@@ -184,6 +190,7 @@ export async function routeLocalMode(options, selection, context) {
         for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context, { client, ...states[client].changedHome });
         if (union === 'unknown') return refusal('mode_unknown', detection, context);
         if (flags.includes('--dry-run')) return { handled: true, code: await localDryRun(options, selection, detection, context) };
+        if (!await checkSetupProvider(detection.root, descriptor, context, requestModel)) return { handled: true, code: 2 };
         const { repairActiveLocal } = await import('./local-cutover-repair.mjs');
         return { handled: true, code: await repairActiveLocal(options, selection, detection, context) };
       }
@@ -197,7 +204,8 @@ export async function routeLocalMode(options, selection, context) {
     if (action === 'status' && descriptor.state === 'uninstalled') return { handled: false, detection, statusCode: 0 };
     if (action === 'status' || action === 'setup') {
       return { handled: true, code: await showInstalledCutover(detection.root, descriptor, context,
-        { retryPrepare: action === 'setup' && !flags.includes('--dry-run') && !selection.client && !options.noCapture }) };
+        { retryPrepare: action === 'setup' && !flags.includes('--dry-run') && !selection.client && !options.noCapture,
+          requestModel }) };
     }
     return refusal('local_recovery_required', detection, context);
   }
@@ -269,7 +277,7 @@ export async function routeLocalMode(options, selection, context) {
       (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform)) {
     if (options.noCapture || selection.client) throw new SetupError('local_option_invalid', 2);
     const { runInstalledCutover } = await import('./local-cutover-command.mjs');
-    return { handled: true, code: await runInstalledCutover('prepare-activation', context) };
+    return { handled: true, code: await runInstalledCutover('prepare-activation', context, { requestModel }) };
   }
   return { handled: true, code: await setupLocal(options, selection, detection, context) };
 }

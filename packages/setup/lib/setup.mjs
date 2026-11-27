@@ -90,10 +90,10 @@ function execute(command, args, { input, timeout = 120000, discard = false, sign
   });
 }
 
-function run(args, input) {
+function runClaude(args, input, options) {
   // Never forward child output: MCP details, configure errors and even plugin
   // lists can contain credentials. Never put a token in argv or the environment.
-  return execute('claude', args, { input });
+  return execute('claude', args, { input, ...options });
 }
 
 function checked(result, args) {
@@ -114,7 +114,7 @@ function json(result, args, isValid) {
   throw new SetupError('claude_state_error', 1, { args: args.join(' ') });
 }
 
-async function supports(args, pattern, runCLI = run) {
+async function supports(args, pattern, runCLI = runClaude) {
   const result = await runCLI([...args, '--help']);
   return !result.error && result.status === 0 && pattern.test(result.stdout);
 }
@@ -133,7 +133,7 @@ function configureInstructions(write, t) {
   write(t('configure_menu'));
 }
 
-async function oldMCP(runCLI = run) {
+async function oldMCP(runCLI = runClaude) {
   const args = ['mcp', 'get', 'cairn'];
   const result = await runCLI(args);
   if (!result.error && result.status === 0) return true;
@@ -146,18 +146,18 @@ async function oldMCP(runCLI = run) {
   return false;
 }
 
-async function configuration(runCLI = run, options) {
+async function configuration(runCLI = runClaude, options) {
   const args = ['plugin', 'configure', plugin, '--json'];
   return json(await runCLI(args, undefined, options), args, value => value &&
     Array.isArray(value.configured) && Array.isArray(value.unconfigured));
 }
 
-async function installed(runCLI = run) {
+async function installed(runCLI = runClaude) {
   const args = ['plugin', 'list', '--json'];
   return json(await runCLI(args), args, Array.isArray).filter(value => value.id === plugin);
 }
 
-async function marketplaces(runCLI = run) {
+async function marketplaces(runCLI = runClaude) {
   const args = ['plugin', 'marketplace', 'list', '--json'];
   return json(await runCLI(args), args, Array.isArray);
 }
@@ -181,7 +181,7 @@ export async function main(argv, {
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
   coordinated = false, pairingConsent, claudeDeclined, inspectCodex, identityPlan, endpointChoice,
   forceReauthorize = false, expectedCodex, hostsStopped, progress = {}, disableLocalMode = false, platform = process.platform,
-  localInstallerVersion = installerVersion, inspection,
+  localInstallerVersion = installerVersion, inspection, clientEnvironment,
 } = {}) {
   const rawWrite = write;
   const rawPrompt = prompt;
@@ -194,7 +194,7 @@ export async function main(argv, {
   const interrupt = () => controller.abort();
   process.on('SIGINT', interrupt);
   const signal = controller.signal;
-  const run = (args, input, options) => execute('claude', args, { input, signal, ...options });
+  const run = (args, input, options) => runClaude(args, input, { signal, env: clientEnvironment, ...options });
   const now = authOptions.now ?? (() => performance.now());
   const save = async (values, timeout) => {
     const args = ['plugin', 'configure', plugin, '--values-stdin'];
@@ -234,11 +234,12 @@ export async function main(argv, {
         write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
     };
     if (!coordinated && !disableLocalMode) {
-      const runLocalClaude = args => run(args, undefined, { env: localClientEnvironment(process.env) });
+      const runLocalClaude = args => run(args, undefined, { env: localClientEnvironment(env) });
       const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
         runClaude: runLocalClaude, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting, inspection });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
+      if (selection.argv[0] === 'status' && localDetection?.descriptor) clientEnvironment = localClientEnvironment(env);
     } else beforeRouting();
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
@@ -246,12 +247,12 @@ export async function main(argv, {
         signal, supportedNode, SetupError, validEndpoint, inspectCodex, inspection,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
-          authOptions, env, locale, progress, inspection, coordinated: true, ...overrides }) }));
+          authOptions, env, locale, progress, inspection, coordinated: true, clientEnvironment, ...overrides }) }));
     }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
       nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap,
       captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
-      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress, inspection });
+      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress, inspection, clientEnvironment });
     if (dispatch.handled) return Math.max(localStatusCode, dispatch.code);
     argv = dispatch.argv;
     const [action, ...flags] = argv;

@@ -14,7 +14,6 @@ import { loadIdentity, bindRoot, readSession, initializeSession } from './captur
 import { markSessionStart, hasSessionStart, readSessionStartAttempt, sessionStartSource, writeSessionStartAttempt } from './capture-start.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, sourceSize, completeBoundary, cursorSource, verifyCursorSource } from './capture-source.mjs';
 import { advanceCapture } from './capture-progress.mjs';
-import { documentCardsReady } from './provider-config.mjs';
 
 async function openBoundAdapter(binding) {
   const { captureAdapter } = await import('./capture-slot.mjs');
@@ -163,12 +162,7 @@ export async function runBoundCapture(input, signal) {
     check() { if (controller.signal.aborted || performance.now() >= end - 2000) fault(signal.aborted ? 'cancelled' : 'work_limit'); } };
   try {
     return await withCaptureBinding(input.directory, input.executable, operation.signal,
-      (binding, legacy, providerKeyName) => {
-        // Stock setup keeps capture Raw-only. A key supplied for MCP
-        // retrieval does not change the recorded capture consent.
-        if (!documentCardsReady && input.hasProviderKey?.(providerKeyName)) fault('authority_changed');
-        return capture(binding, legacy, input, operation);
-      });
+      (binding, legacy) => capture(binding, legacy, input, operation));
   } catch (error) {
     return { status: 'blocked', reason: error.reason ?? error.code ?? 'authority_changed' };
   } finally {

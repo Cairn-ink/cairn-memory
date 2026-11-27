@@ -245,9 +245,10 @@ test('installed local cutover enforces the Card gate, keeps keyed fetch in proce
         const enabled = { ...env, CAIRN_FIXTURE_CARDS: '1', OPENAI_BASE_URL: 'https://unconsented.invalid' };
         const refusal = /Local cutover is unavailable for model-configured installations/u;
         assert.match(operator(f, probe, setup, { env, code: 2 }), refusal);
-        assert.match(operator(f, probe, ['local-cutover', '--activate'], { env, code: 2 }), refusal);
+        assert.match(operator(f, probe, ['local-cutover', '--activate'], { env }), /Local cutover verified/u);
         assert.deepEqual(registration(f), legacy);
         assert.match(operator(f, probe, setup, { env: enabled }), /With OPENAI_API_KEY available to the Cairn MCP server/u);
+        assert.match(operator(f, probe, ['local-cutover', '--activate'], { env, code: 2 }), refusal);
         assert.match(operator(f, probe, ['local-cutover', '--confirm'], { env, code: 2 }), refusal);
         operator(f, probe, ['local-cutover', '--confirm'], { env: enabled });
         assert.notEqual(registration(f).args[0], legacy.args[0]);

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { boundedJSON, localRoot } from './local-descriptor.mjs';
+import { boundedJSON, localRoot, readDescriptor, withLocalLock } from './local-descriptor.mjs';
 import { installEngine, readBundledCoreLocal } from './local-engine.mjs';
 import { captureTargetFor } from './local-cutover-journal.mjs';
 import { SetupError } from './errors.mjs';
@@ -10,6 +10,7 @@ const lines = {
   active: 'Local cutover active. Restart your MCP clients.',
   aborted: 'Local cutover aborted. Legacy service restored.',
   paused: 'Local cutover paused. Close local Cairn sessions, then retry.',
+  cutover_activation_confirmed: 'Local cutover can no longer be aborted. Run local-cutover --confirm to finish.',
   cutover_model_configured: 'Local cutover is unavailable for model-configured installations. Legacy service remains active.',
   cutover_legacy_content_unrepresentable: 'Local cutover cannot migrate all data in this installation. Legacy service remains active.',
 };
@@ -37,7 +38,8 @@ async function installedCutoverState(root, descriptor) {
   }
   return { state: receipt?.phase === 'active' ? 'active'
     : !receipt && migration.state === 'verified' && !cutover.aborting ? 'verified' : 'paused',
-  canResumePrepare: !receipt && migration.state !== 'verified' && !cutover.aborting, maintenance, cutover, target };
+  canResumePrepare: !receipt && migration.state !== 'verified' && !cutover.aborting,
+  canResumeConfirm: (!!receipt || cutover.aborting) && receipt?.phase !== 'active', maintenance, cutover, target };
 }
 
 export async function activeCutoverTarget(root, descriptor) {
@@ -67,7 +69,35 @@ export async function runActiveDaemon(action, root, descriptor) {
   }
 }
 
-export async function showInstalledCutover(root, descriptor, context, { retryPrepare = false } = {}) {
+export async function showKeylessProviderNotice(root, descriptor, { env, write, t }) {
+  if (!Object.hasOwn(env, 'OPENAI_API_KEY')) return;
+  const { hasProviderConsent, hasLegacyProviderConfiguration } = await import('./local-cutover-release.mjs');
+  if (await hasProviderConsent(root, descriptor) || await hasLegacyProviderConfiguration(root)) return;
+  const { documentCardsReady } = await cutoverImport('provider');
+  write.literal(t(documentCardsReady ? 'local_keyless_provider_ready' : 'local_keyless_provider_later'));
+}
+
+export async function checkSetupProvider(root, descriptor, context, requestModel) {
+  const { activationModelConfigured, recordProviderConsent } = await import('./local-cutover-release.mjs');
+  try {
+    const model = await activationModelConfigured(root, descriptor, context.env, requestModel);
+    if (model.recordConsent) {
+      await withLocalLock(root, async () => {
+        const current = await readDescriptor(root, { allowV2: true });
+        if (JSON.stringify(current) !== JSON.stringify(descriptor)) throw new SetupError('local_recovery_required', 2);
+        context.write(context.t('local_privacy'));
+        await recordProviderConsent(root, current);
+      });
+    }
+    return true;
+  } catch (error) {
+    if (error.code !== 'cutover_model_configured') throw error;
+    context.write.literal(lines.cutover_model_configured);
+    return false;
+  }
+}
+
+export async function showInstalledCutover(root, descriptor, context, { retryPrepare = false, requestModel = false } = {}) {
   const { write } = context;
   let current;
   try { current = await installedCutoverState(root, descriptor); }
@@ -76,7 +106,9 @@ export async function showInstalledCutover(root, descriptor, context, { retryPre
     return 2;
   }
   if (!current) return 2;
-  if (retryPrepare && current.canResumePrepare) return runInstalledCutover('prepare-activation', context);
+  if (retryPrepare && current.canResumeConfirm) return runInstalledCutover('confirm-activation', context);
+  if (retryPrepare && current.canResumePrepare) return runInstalledCutover('prepare-activation', context, { requestModel });
+  if (retryPrepare && current.state === 'verified' && !await checkSetupProvider(root, descriptor, context, requestModel)) return 2;
   write.literal(lines[current.state]);
   if (current.state !== 'active') return current.state === 'paused' ? 2 : 0;
   for (const [client, label] of [['claude', 'Claude Code'], ['codex', 'Codex']]) {
@@ -99,7 +131,7 @@ async function optionalJSON(path) {
   }
 }
 
-export async function runInstalledCutover(action, context) {
+export async function runInstalledCutover(action, context, { requestModel = false } = {}) {
   const { env, platform, write } = context;
   if (action !== 'abort' && !['linux', 'darwin'].includes(platform ?? process.platform)) {
     write.literal(lines.paused);
@@ -109,7 +141,7 @@ export async function runInstalledCutover(action, context) {
     const root = await localRoot(env);
     const manifest = action === 'abort' ? undefined : await readBundledCoreLocal();
     const { runLocalCutover } = await import('./local-cutover.mjs');
-    const result = await runLocalCutover({ root, manifest, action, env, platform, context,
+    const result = await runLocalCutover({ root, manifest, action, env, platform, context, requestModel,
       ...(action === 'prepare-activation' && {
         stageCandidate: async ({ descriptor, updateChild }) => {
           try {

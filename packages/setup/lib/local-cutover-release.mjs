@@ -2,30 +2,31 @@ import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { codexHome } from './codex.mjs';
 import { claudeCapabilities, observedVector, readClaudeServers, registerClaude } from './local-claude.mjs';
-import { codexCapabilities, inspectLocalCodexServers, registerCodex } from './local-codex.mjs';
+import { codexCapabilities, inspectLocalCodexServers, recoverCutoverCodexLock, registerCodex } from './local-codex.mjs';
 import { activateCapture, stageStore } from './local-cutover-activation.mjs';
 import { captureTargetFor } from './local-cutover-journal.mjs';
 import { cutoverRefusal as refuse, withColdStoreLease } from './local-cutover-lease.mjs';
-import { removeActivationBackup } from './local-cutover-reclaim.mjs';
+import { maintenanceFor, removeActivationBackup } from './local-cutover-reclaim.mjs';
 import { beginActivation, retireLegacy } from './local-cutover-retirement.mjs';
 import { canonicalPath, parseStrictJSON, sameVector } from './local-descriptor.mjs';
 import { cutoverImport } from './local-cutover-runtime.mjs';
 import { SetupError } from './errors.mjs';
 
-const { privateRead } = await cutoverImport('state');
+const { privateRead, privateWrite } = await cutoverImport('state');
 const { captureStoreIdentity } = await cutoverImport('binding');
 const { pinColdFile } = await cutoverImport('paths');
-const { documentCardsReady, localModelKey } = await cutoverImport('provider');
+const { documentCardsReady, localModelKey, localProviderConsentFile, localProviderConsentText } = await cutoverImport('provider');
 
-export async function checkActivationClients({ root, descriptor, env, context, target, resume = false }) {
+export async function checkActivationClients({ root, descriptor, env, context, target, resume = false, rollback = false }) {
   const { runClaude, inspection, write, t } = context ?? {};
   if (typeof write !== 'function' || typeof t !== 'function') throw refuse('cutover_arguments');
   const clients = [];
   for (const [name, record] of Object.entries(descriptor.clients)) {
     if (!record) continue;
-    const previous = record.vector;
-    const desired = { ...previous, engineId: descriptor.migration?.targetEngineId,
+    const candidate = { ...record.vector, engineId: descriptor.migration?.targetEngineId,
       node: descriptor.node, databasePath: target };
+    const previous = rollback ? candidate : record.vector;
+    const desired = rollback ? record.vector : candidate;
     let entry, register;
     if (name === 'claude') {
       if (record.home !== await canonicalPath(env.HOME || homedir()) || typeof runClaude !== 'function' ||
@@ -36,10 +37,11 @@ export async function checkActivationClients({ root, descriptor, env, context, t
     } else {
       if (dirname(record.configPath) !== await canonicalPath(codexHome(env)) ||
           !await codexCapabilities(env)) throw refuse('cutover_client_unavailable');
+      if (resume) await recoverCutoverCodexLock(dirname(record.configPath), root);
       entry = (await inspectLocalCodexServers({ ...inspection, home: dirname(record.configPath), env,
         includeLaunchOptions: true })).find(item => item.name === 'cairn-local');
       register = () => registerCodex({ root, checkpoint: { previous, desired, destination: record.configPath },
-        env, inspection, capable: true, write, t, allowCoreLocal: true });
+        env, inspection, capable: true, write, t, allowCoreLocal: true, cutover: true });
     }
     if (entry?.customEnvironment) throw refuse('cutover_model_configured');
     if (entry?.enabled === false) throw refuse('cutover_client_changed');
@@ -51,21 +53,46 @@ export async function checkActivationClients({ root, descriptor, env, context, t
   return clients;
 }
 
-export async function activationModelConfigured(root, env) {
-  let keyed;
-  try { keyed = !!localModelKey(env); }
-  catch { throw refuse('cutover_model_configured'); }
-  if (keyed && !documentCardsReady) throw refuse('cutover_model_configured');
+function providerConsentPath(root, descriptor) {
+  const cutover = descriptor.migration?.cutover;
+  return cutover && join(maintenanceFor(root, cutover.id), localProviderConsentFile);
+}
+
+export async function hasProviderConsent(root, descriptor) {
+  const path = providerConsentPath(root, descriptor);
+  if (!path) return false;
+  const text = await privateRead(path, { missing: true });
+  if (text === undefined) return false;
+  if (text !== localProviderConsentText(descriptor.ownerId, descriptor.projectId)) throw refuse('cutover_model_configured');
+  return true;
+}
+
+export async function recordProviderConsent(root, descriptor) {
+  await privateWrite(providerConsentPath(root, descriptor), localProviderConsentText(descriptor.ownerId, descriptor.projectId),
+    { exclusive: true });
+}
+
+export async function hasLegacyProviderConfiguration(root) {
   for (const client of ['claude', 'codex']) {
     const text = await privateRead(join(root, 'capture', client, 'installation.json'), { missing: true });
     if (text === undefined) continue;
     const { request } = parseStrictJSON(text);
-    if (!request || request.interpretationConsent ||
-        (!documentCardsReady && Object.hasOwn(env, request.providerApiKeyEnv))) {
-      throw refuse('cutover_model_configured');
-    }
+    if (!request || request.interpretationConsent) return true;
   }
-  return keyed;
+  return false;
+}
+
+export async function activationModelConfigured(root, descriptor, env, requestModel = false) {
+  let offered = false;
+  if (requestModel) {
+    try { offered = !!localModelKey(env); }
+    catch { throw refuse('cutover_model_configured'); }
+  }
+  const consented = await hasProviderConsent(root, descriptor);
+  if (((consented || offered) && !documentCardsReady) || await hasLegacyProviderConfiguration(root)) {
+    throw refuse('cutover_model_configured');
+  }
+  return { keyed: consented || offered, recordConsent: offered && !consented };
 }
 
 export async function assertSupportedLegacyContents(path, { keyless = true } = {}) {
@@ -108,14 +135,14 @@ export async function confirmActivation({ root, maintenance, descriptor, manifes
   const { cutover } = descriptor.migration;
   const target = captureTargetFor(cutover.sourcePath, cutover.attemptId);
   const clients = await checkActivationClients({ root, descriptor, env, context, target,
-    resume: !!receipt && ['reclaimed', 'active'].includes(receipt.phase) });
+    resume: !!receipt });
   const notify = state => onCheckpoint(state, structuredClone(cutover));
   const captureClients = [];
   for (const { name } of clients) {
     if (await privateRead(join(maintenance, name + '.json'), { missing: true }) !== undefined) captureClients.push(name);
   }
   const handoff = (client, stagedStore, checkSource, stageOnly) => activateCapture({
-    root, maintenance, descriptor, manifest, client, env, reattest: checkSource, stagedStore, stageOnly, onCheckpoint,
+    root, maintenance, descriptor, manifest, client, reattest: checkSource, stagedStore, stageOnly, onCheckpoint,
   });
 
   if (!receipt || receipt.phase === 'staging') {
@@ -133,18 +160,12 @@ export async function confirmActivation({ root, maintenance, descriptor, manifes
     });
   }
 
-  // Before reclamation no registered candidate may write. After reclamation
-  // the inode stays pinned, while legitimate MCP writes may change its bytes.
+  // Probe the verified bytes until retirement and reclamation are complete.
+  // Once activated, legitimate MCP writes can change those bytes.
   const preCommit = receipt.phase === 'staging' || receipt.phase === 'exchanging' ||
     receipt.phase === 'sealed';
   const identity = preCommit ? (await stageStore(cutover)).identity : await captureStoreIdentity(target);
   const targetIdentity = [identity.device, identity.inode].join(':');
-  const advance = await retireLegacy({ maintenance, cutover, receipt, targetIdentity, drain, reattest, proveRetired, onCheckpoint });
-  if (receipt.phase === 'sealed') {
-    await removeActivationBackup(maintenance, cutover.attemptId);
-    await notify('activation-backup-removed');
-    await advance('reclaimed', 'activation-reclaimed');
-  }
   const checkTarget = async () => {
     const current = await captureStoreIdentity(target);
     if (current.device !== identity.device || current.inode !== identity.inode) throw refuse('cutover_target_changed');
@@ -154,6 +175,15 @@ export async function confirmActivation({ root, maintenance, descriptor, manifes
     await checkTarget();
     if (await register() !== 'done') throw refuse('cutover_client_unavailable');
     await notify('activation-mcp-' + name);
+  }
+  // Leave the legacy pathname and backup in place until both native CLIs
+  // verify their new vectors. Keep write authority gated until the cold-store
+  // proof succeeds, so a late legacy write can still be rolled back safely.
+  const advance = await retireLegacy({ maintenance, cutover, receipt, targetIdentity, drain, reattest, proveRetired, onCheckpoint });
+  if (receipt.phase === 'sealed') {
+    await removeActivationBackup(maintenance, cutover.attemptId);
+    await notify('activation-backup-removed');
+    await advance('reclaimed', 'activation-reclaimed');
   }
   for (const client of captureClients) await handoff(client, { target, identity }, checkTarget, false);
   if (receipt.phase !== 'active') await advance('active', 'activation-active');
