@@ -47,16 +47,21 @@ function rankChannel(rows, depth) {
  * @template {ScoredRow} M
  * @param {readonly L[]} lexical
  * @param {readonly S[]} semantic
- * @param {{ preset?: string, limit?: number, semanticState?: string, coverageComplete?: boolean, moc?: readonly M[] }} [opts]
+ * @param {{ preset?: string, depth?: number, limit?: number, semanticState?: string, coverageComplete?: boolean, moc?: readonly M[] }} [opts]
  */
 export function fuseCandidates(lexical, semantic, {
-  preset = "rrf-k60-d12", limit = ENGINE_HORIZON, semanticState = "disabled", coverageComplete = false, moc = [],
+  preset = "rrf-k60-d12", depth, limit = ENGINE_HORIZON, semanticState = "disabled", coverageComplete = false, moc = [],
 } = {}) {
   const config = enginePresets[/** @type {keyof typeof enginePresets} */ (preset)];
   const horizon = Object.hasOwn(COMPACT_RRF_PRESETS, preset) ? config.depth : ENGINE_HORIZON;
   if (!Object.hasOwn(enginePresets, preset) || !Number.isSafeInteger(limit) || limit < 1 || limit > horizon) {
     throw new TypeError("invalid_fusion");
   }
+  const channelDepth = depth ?? config.depth;
+  if (!Number.isSafeInteger(channelDepth) || channelDepth < config.depth || channelDepth > horizon) {
+    throw new TypeError("invalid_fusion");
+  }
+  const unionMaximum = Math.max(config.unionMaximum, 2 * channelDepth);
   const withMoc = preset === "rrf-k60-d12-moc-v1";
   const semanticReady = semanticState === "ready" && coverageComplete;
   if (!withMoc && !semanticReady) {
@@ -66,9 +71,9 @@ export function fuseCandidates(lexical, semantic, {
     })) };
   }
   const channels = [
-    rankChannel(lexical, config.depth),
-    rankChannel(semanticReady ? semantic : [], config.depth),
-    ...(withMoc ? [rankChannel(moc, config.depth)] : []),
+    rankChannel(lexical, channelDepth),
+    rankChannel(semanticReady ? semantic : [], channelDepth),
+    ...(withMoc ? [rankChannel(moc, channelDepth)] : []),
   ];
   /** @type {Map<string, { row: L | S | M, score: number, channels: ChannelRanks }>} */
   const scores = new Map();
@@ -83,7 +88,7 @@ export function fuseCandidates(lexical, semantic, {
     item.channels[channelNames[c]] = { rank: index + 1, rawScore: row.score };
   }));
   const rows = [...scores.values()].map(({ row, score, channels }) => ({ ...row, score, channels, fusionScore: score }));
-  return { mode: /** @type {const} */ ("hybrid"), preset, unionSize: scores.size,
+  return { mode: /** @type {const} */ ("hybrid"), preset, unionSize: Math.min(scores.size, unionMaximum),
     rows: rankScores(rows).slice(0, limit) };
 }
 
