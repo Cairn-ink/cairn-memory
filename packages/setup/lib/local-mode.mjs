@@ -9,6 +9,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
   engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree, localFilesystemError } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities, inspectLocalCodexServers } from './local-codex.mjs';
+import { isLegacyCutoverInstaller } from './local-cutover-eligibility.mjs';
 import { shellArgument } from './output.mjs';
 import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup, engineOperatorEnvironment } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
@@ -170,7 +171,7 @@ export async function routeLocalMode(options, selection, context) {
   if (descriptor && !detection.descriptorError && (action === 'status' || action === 'setup' && options.local)) {
     const { showKeylessProviderNotice, showLegacyCutoverLimit } = await import('./local-cutover-command.mjs');
     await showKeylessProviderNotice(detection.root, descriptor, context);
-    if (action === 'status' && descriptor.state === 'installed' && descriptor.installerVersion === '0.6.11' &&
+    if (action === 'status' && descriptor.state === 'installed' && isLegacyCutoverInstaller(descriptor.installerVersion) &&
         !descriptor.migration?.cutover && ['linux', 'darwin'].includes(context.platform ?? process.platform)) {
       await showLegacyCutoverLimit(detection.root, descriptor, context);
     }
@@ -277,7 +278,7 @@ export async function routeLocalMode(options, selection, context) {
   for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
     { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
-  if (descriptor?.state === 'installed' && descriptor.installerVersion === '0.6.11' &&
+  if (descriptor?.state === 'installed' && isLegacyCutoverInstaller(descriptor.installerVersion) &&
       (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform)) {
     if (options.noCapture || selection.client) throw new SetupError('local_option_invalid', 2);
     const { runInstalledCutover } = await import('./local-cutover-command.mjs');
