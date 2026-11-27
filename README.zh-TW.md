@@ -10,6 +10,7 @@
 <p align="center"><strong>給 Claude Code 和 Codex 用的記憶，你可以查看、修改，也可以叫它忘記。</strong></p>
 
 <p align="center">
+  <a href="https://glama.ai/mcp/servers/Cairn-ink/cairn-memory"><img alt="Cairn-ink/cairn-memory MCP server" src="https://glama.ai/mcp/servers/Cairn-ink/cairn-memory/badges/score.svg"></a>
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.npmjs.com/package/@cairn-ink/memory"><img alt="npm 版本" src="https://img.shields.io/npm/v/%40cairn-ink%2Fmemory"></a>
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
@@ -173,8 +174,8 @@ Codex 的規則，以及外掛的隱私約定。
   30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
   要刪掉特定一段對話請用 `raw delete`。
 - **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
-  資料會留在硬碟上。在 Linux 上，完整解除安裝若會移除引擎，會先請這個資料庫
-  還在執行的共用伺服器停止。
+  資料會留在硬碟上。使用安裝器 0.6.12 在 Linux 上解除安裝時，如果要移除引擎，
+  會先請這個資料庫還在執行的共用伺服器停止。無論伺服器是否停下來，解除安裝都會繼續。
   解除雲端模式，你在 cairn.ink 上的記憶也會留著。
 
 [本機資料、備份與刪除（英文）](docs/local-from-source.md#local-privacy-and-control) ·
@@ -190,11 +191,7 @@ Codex 的規則，以及外掛的隱私約定。
 `/mnt/` 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果
 無法啟動，對話會自動啟動自己的伺服器。
 
-`npx @cairn-ink/memory daemon status --local` 會列出這份安裝的資料庫所用的共用伺服器，
-顯示資料庫短 ID、執行狀態、引擎 build，以及有幾個對話正在使用。`npx @cairn-ink/memory daemon stop --local`
-會請這份安裝的資料庫所用、仍在執行的共用伺服器結束，不會強制終止，並回報還有幾個在執行。
-請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。
-這兩個指令只在 Linux 上運作，其他平台會回報 `daemon_platform`。
+安裝器 0.6.12 支援 `npx @cairn-ink/memory daemon status --local`，可查看這份本機安裝的資料庫所用的共用伺服器。已安裝的引擎需要支援共用伺服器。在 Linux 上，指令會以 JSON 回傳已登記伺服器的資料庫短 ID、執行狀態、引擎 build，以及最近回報的對話數（如果有回報）。還沒有伺服器登記紀錄的端點可能顯示為 `endpoint_uncertain`。`npx @cairn-ink/memory daemon stop --local` 會向這個資料庫已驗證且仍在執行的伺服器送出 SIGTERM，最多等五秒，再針對已送出訊號的伺服器回報 `stopped` 和 `still_running`。請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。在其他平台，如果已安裝的引擎支援這兩個指令，兩個指令都會印出 `daemon_platform`。
 
 不想讓 worker 載入它，可以這樣做：
 

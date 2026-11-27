@@ -168,14 +168,16 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     if (!exhausted) namespaces[ref.namespaceIndex].fetchExhausted = false;
     candidates.push({ ...ref, item: { ...item, receipts } });
   }
+  const rankable = isSourceContext(contextMode) ? candidates.filter(candidate => candidate.item.receipts.length > 0) : candidates;
+  truncation.candidatesOmitted += candidates.length - rankable.length;
   let ranked = [];
-  if (candidates.length) {
+  if (rankable.length) {
     const prompt = contextMode === 'rationale-evidence' ? rationaleRankPrompt
       : contextMode === 'source-evidence' ? sourceRankPrompt : includeQualification ? qualifiedRankPrompt : rankPrompt;
     const recent = recentReceipts && ((candidate, count) => recentReceipts({ namespaceIndex: candidate.namespaceIndex,
       memoryId: candidate.memory.id, revision: candidate.memory.revision }, count));
     const packed = packRank(model, prompt, { query, limit,
-      candidates: candidates.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
+      candidates: rankable.map(({ namespaceIndex, item }) => ({ namespaceIndex, ...item })) },
     isSourceContext(contextMode) ? () => null : rankText(createQueryWindow(query), recent));
     truncation.candidatesOmitted += packed.omitted;
     packed.input.candidates.forEach((sent, position) => {
@@ -183,12 +185,12 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
       if (sent.receiptsOmitted === undefined) return;
       // The final read returns exactly this capped, most-recent-first list.
       truncation.receiptListsCapped++;
-      candidates[packed.included[position]].receiptCap = sent.receipts.length;
+      rankable[packed.included[position]].receiptCap = sent.receipts.length;
     });
-    const shown = packed.included.map((index) => candidates[index]);
+    const shown = packed.included.map((index) => rankable[index]);
     if (shown.length || packed.overflow) {
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
-        { validateFresh: () => validateFresh(candidates),
+        { validateFresh: () => validateFresh(candidates, packed.input.candidates),
           ...(diagnostics ? { onHostWait: ms => { diagnostics.hostWaitMs += ms; } } : {}) });
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }

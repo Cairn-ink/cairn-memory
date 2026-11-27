@@ -28,6 +28,7 @@ export const installedCoreDeadlineFiles = Object.freeze([
   "core/private-card-schema.mjs",
   "core/private-evidence-input.mjs",
   "core/private-organization-input.mjs",
+  "core/query-candidates.mjs",
   "core/raw-lineage-storage.mjs",
   "core/raw-source-input.mjs",
   "core/raw-source-roots.mjs",

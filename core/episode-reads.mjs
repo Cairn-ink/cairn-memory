@@ -1,8 +1,8 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, withheldStoredReceiptIdsInside } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
-import { episodeClient, episodeMetadata, episodeReadRow, instant } from './episode-storage.mjs';
+import { episodeClient, episodeMetadata, episodeReadRow, instant, withheldEpisodeSourcesInside, projectEpisodeWithheldSources } from './episode-storage.mjs';
 import { episodeSourceEvidenceCTE, episodeSourceEvidenceSQL, episodeSourceKeys } from './raw-lineage-storage.mjs';
 import { fail, object, denseArray, identifier } from './validation.mjs';
 
@@ -151,16 +151,32 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
       const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
       const current = projected.epoch;
       if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
+      const query = projected.query;
+      let physical = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
+      let rows = physical;
+      if (operation === 'listMemoriesByTime' && filter.timeBasis === 'receipt') {
+        rows = [];
+        for (;;) {
+          const withheld = withheldStoredReceiptIdsInside(db, ns, physical.map(row => row.receipt_id));
+          rows.push(...physical.filter(row => !withheld.has(row.receipt_id)));
+          if (rows.length > filter.limit || physical.length <= filter.limit) break;
+          const last = physical.at(-1);
+          const next = rangeQuery(ns, operation, filter, { time: last.receipt_time, id: last.receipt_id, memoryId: last.id });
+          physical = db.prepare(next.sql).all(...next.params);
+        }
+        rows = rows.slice(0, filter.limit + 1);
+      }
       if (operation === 'listEpisodes') {
         const event = filter.timeBasis === 'event';
         const visible = [], count = filter.limit + 1;
         let batch = rows, budget = projected.budget;
         while (true) {
+          const withheld = new Set(withheldEpisodeSourcesInside(db, ns, batch.map(row => row.id)).map(row => row.episode_id));
           for (const row of batch) {
             if (assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
-            const item = episodeMetadata(ns, episodeReadRow(row));
+            if (event && withheld.has(row.id)) continue;
+            const item = episodeMetadata(ns, episodeReadRow(withheld.has(row.id) ? projectEpisodeWithheldSources(row) : row));
             visible.push({ item, key: { time: event ? item.eventEnd : item.firstReceivedAt, id: row.id } });
             if (visible.length === count) break;
           }

@@ -14,7 +14,7 @@ export function memoryRefs(input) {
 }
 
 export function fetchMemories({ runtime, model, ns, refs, view = 'current', budget, cursor, binding, encodeCursor,
-  includeQualification = false, contextMode }) {
+  includeQualification = false, contextMode, fetchedWithheldReceipts }) {
   const protectedRead = hasContentPortBoundary();
   if (protectedRead) {
     if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')fail('token_count_unavailable');
@@ -61,6 +61,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
       runtime.assertEpoch(ns, page.epoch);
       const authoritative = runtime.fetchPage(ns, refs[index], offset, page.epoch, view, includeQualification, contextMode, page);
       if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
+      if (page.receiptsWithheld) fetchedWithheldReceipts?.add(page.memory);
       return value;
     }
   }

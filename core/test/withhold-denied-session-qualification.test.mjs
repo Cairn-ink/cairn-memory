@@ -117,9 +117,9 @@ const plainGet = {
 const qualificationRefusal = '{"ok":false,"error":{"code":"revision_conflict","retryable":false}}';
 // Each digest covers SQL text, execution kind, order and ordered bindings.
 const traces = {
-  33: [98, '3708e2b6af6d998fe0ffb76ccd39af16f353ee62d1bdf946e37b6b4d8688061b'],
-  48: [199, '73b7d97db0ea2c8df0f387c6c12ce8425e8887922804aa9abe8e76ac258000d0'],
-  53: [204, 'f02df23421c83084a516ca5874aaab1927123a852af8251c4ca81e2fd1e859bc'],
+  33: [98, '2d678349eb9a218e580b43a5f1dfce54ad76a0a6266f27ef11a11d806c64ca1d'],
+  48: [199, '0b1268db0535d049afcc0d7a065443cccf8da7105495df3c90d2efa374c89e53'],
+  53: [204, '73ea5f327162a7796e8300a7a90ed24713820e43d1ea4cc390184fcf5c41798b'],
 };
 
 for (const [layout, group, kind, otherGroup, otherKind] of [

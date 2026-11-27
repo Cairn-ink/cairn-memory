@@ -1,5 +1,5 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
+import { contentReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside, withheldEvidenceInside } from './content-safety.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
@@ -232,6 +232,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);
     const result = [];
+    const { cards: withheld } = withheldEvidenceInside(db, ns, rows.flatMap(row => row.kind === 'member' ? [row.b] : row.kind === 'unfiled' ? [row.a] : []));
     let scanned = 0, consumed = 0;
     for (const row of rows.slice(0, 256)) {
       if (result.filter(value => value.item).length >= input.limit + 1) break;
@@ -259,6 +260,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
           fail('evidence_unavailable');
         }
       }
+      if (withheld.has(row.kind === 'member' ? row.b : row.kind === 'unfiled' ? row.a : undefined)) continue;
       scanned++;
       if (row.kind === 'topic') {
         const current = topic(ns, row.a);
@@ -273,7 +275,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
         result.push({ item: { type: 'ref', ref: { parentId: p.id, parentRevision: p.revision,
           childType: 'topic', childId: child.id, childRevision: child.revision, relation: 'contains' } }, consumed, scanned });
       } else {
-        const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a,undefined,{safetyMemo});
+        const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a,undefined,{safetyMemo,projectSharedSources:false});
         if (!safeCard(ns, card)) continue;
         if (row.kind === 'unfiled') {
           if (parent || db.prepare('SELECT 1 FROM card_moc_refs WHERE card_id=? AND card_revision=? AND body_revision=? LIMIT 1').get(card.id, card.revision, card.bodyRevision)) continue;

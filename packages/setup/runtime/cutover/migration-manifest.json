@@ -181,7 +181,9 @@
       "core/content-safety-schema.mjs",
       "core/content-suppression-storage.mjs",
       "core/private-card-input.mjs",
+      "core/query-candidates.mjs",
       "core/raw-lineage-storage.mjs",
+      "core/raw-source-roots.mjs",
       "node:crypto"
     ],
     "core/content-suppression-storage.mjs": [
@@ -362,6 +364,9 @@
       "node:crypto"
     ],
     "core/qualified-transition-schema.mjs": [],
+    "core/query-candidates.mjs": [
+      "core/validation.mjs"
+    ],
     "core/rationale-schema.mjs": [],
     "core/raw-deletion-schema.mjs": [],
     "core/raw-input.mjs": [
@@ -1065,7 +1070,7 @@
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
     "core/content-safety-observations.mjs": "33520e67e2af62ae7f8d5623b25c0c2ca5c4abc193ae839ab41a4daa50e36745",
     "core/content-safety-schema.mjs": "edf44e575b0ccc1a04e195cd613b2b8149d9c8a2e851f109c9632d4c0d1576dd",
-    "core/content-safety.mjs": "e71e8c7f4c6f6c8d7ff3f4a453ebfcc9a8b897b0328c5c731ba878ed93e41947",
+    "core/content-safety.mjs": "2fbbbe583f821a2faf4a79368e797431e0ffec5a0aefe9c1d0a37d6750766ff4",
     "core/content-suppression-storage.mjs": "40578fd7fddf012340a07c023cd8f6ed977f7e2964c5a52d503c1655e544e340",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
@@ -1093,6 +1098,7 @@
     "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
     "core/procedural-storage.mjs": "71bdc3eab7ab300ec3758a2d24cc2de2d80b051ad40a99c36ee8ff6cad37e26c",
     "core/qualified-transition-schema.mjs": "acbc489570626d41409c89321f2a48ad600603aa11dab775c3d7e440951b3f58",
+    "core/query-candidates.mjs": "9564d53daea476ac0b83839ea039ca8554a6bc584046023b626a3a38c5f9cf65",
     "core/rationale-schema.mjs": "74641a707327381687ac9a315e5795a3a47273eb7e5907f6fe5b54b2afde7bcc",
     "core/raw-deletion-schema.mjs": "77cf51369ba28c4667acbced4923f46fd532da6c0355fce0523cab8cd4b859e8",
     "core/raw-input.mjs": "7a7588ef778f3c827dae4ba958e8ccd976b3b76757f3e3f8f0f4a2a90eff0dcc",
@@ -1100,7 +1106,7 @@
     "core/raw-lineage-storage.mjs": "338538ff10964f6b6c186dcab30772d0519c4aad9af8207faa00e5b4b2725141",
     "core/raw-schema.mjs": "39976d38343bf9ef1f83e574f9d6a8889c9dd5ba083bc3bd2b8cb966b7399530",
     "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
-    "core/raw-search-input.mjs": "7cdbf0ed482d852be08efd4c59980081741c4e1c6e4340a0568dde5f789fdeae",
+    "core/raw-search-input.mjs": "dbb3cc9273d11c75d4de7461acafe2425a1ef1522b1c8afbbd48fe2ec6013507",
     "core/raw-search-sqlite.mjs": "b51bd300bec030018b67fb52b32ec354057eda11f870f87305b7e34a9a20fc9a",
     "core/raw-source-input.mjs": "e25f414941c0c22d933b1a888f53fefd0dbc4682989e311b08c74c36a2d1f300",
     "core/raw-source-reader.mjs": "57ed279190dfe5432b4016cd76a91c11ba82e2b10cd386a48452c2fd76137ee0",
@@ -1115,8 +1121,8 @@
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "integrations/client/control-state.mjs": "8664a54da21f5168b9168e8a76d902f8d1df59ee7e299e61ca4cfccd811e4be1",
     "integrations/client/file-lock.mjs": "42535bd8d6d96e89819e2669c7c671f1136fb753c3ffd2153919f3eb3c8e46b6",
-    "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
-    "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
+    "integrations/client/hosted-contract.mjs": "f44b7fb2595d367fd61f403a21d3698afa69db75dab0a3edb1e575a21c73168c",
+    "integrations/client/hosted-schemas.mjs": "18613252e07d4ccd2c5341bdb585ae9582d42cb285d43181ba736cafc91a543c",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",

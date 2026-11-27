@@ -5,9 +5,15 @@ import { createHash, randomUUID, scrypt } from "node:crypto";
 import { platform } from "node:os";
 import { dirname, isAbsolute, resolve, join } from "node:path";
 import { promisify } from "node:util";
+
+const action = process.argv[2] ?? "status";
+const captureDisabled = process.env.CAIRN_MEMORY_CAPTURE === "off";
+if (captureDisabled && ["capture", "capture-detached", "start-boundary"].includes(action)) process.exit(0);
+const captureStatusNote = action === "status" && captureDisabled
+  ? "; capture is off for this session (CAIRN_MEMORY_CAPTURE=off)" : "";
+
 // Arm before loading the client graph or resolving a binding. performance.now()
 // counts Node startup too; an exhausted startup budget exits before local work.
-const action = process.argv[2] ?? "status";
 const START_BOUNDARY_BUDGET_MS = 1000;
 function checkStartBoundary() {
   if (action === 'start-boundary' && performance.now() >= START_BOUNDARY_BUDGET_MS) process.exit(0);
@@ -570,6 +576,7 @@ async function writePortableFirstPrompt(path, state, guard) {
 // Match the server copied-history allowance for prompt timestamp/startup latency.
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
 const START_CLOCK_TOLERANCE_MS = 5 * 1000;
+const CAPTURE_PARSER_VERSION = 1;
 // Internal test copies lower this cap while retaining the legacy batch layout.
 const CAPTURE_WINDOW_SLICES = 4096;
 const HOSTED_CAPTURE_REQUEST_MS = 25_000;
@@ -844,6 +851,10 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
           slice: index - group + 1,
           slices: Math.min(CAPTURE_WINDOW_SLICES, sent.length - group),
           initial,
+          start: offset,
+          end: cursor.pendingEnd ?? pendingEnd,
+          final: index === sent.length - 1,
+          parser: CAPTURE_PARSER_VERSION,
         },
         sent_at: new Date().toISOString(),
       },
@@ -920,7 +931,7 @@ async function control() {
     `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}${policyNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${statusEndpoint}; ` +
-    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}.\n`,
+    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}${captureStatusNote}.\n`,
   );
 }
 
@@ -945,7 +956,7 @@ try {
     if (["status", "pause", "resume"].includes(action)) {
       process.stdout.write(
         `Cairn automatic memory: ${binding.status}` +
-        `${binding.detail ? "; " + binding.detail : ""}.\n`,
+        `${binding.detail ? "; " + binding.detail : ""}${captureStatusNote}.\n`,
       );
       if (action !== "status") process.exitCode = 1;
     }
@@ -988,7 +999,7 @@ try {
       else if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") {
         recallMarkerInput = hookInput;
-        if (hostedConfig && !hostedPauseMode(hostedConfig).barrier) {
+        if (!captureDisabled && hostedConfig && !hostedPauseMode(hostedConfig).barrier) {
           // One metadata-only read at prompt entry; no transcript read or write
           // precedes recall. A failed stat leaves first-turn capture conservative.
           try { recallPromptOffset = (await stat(hookInput.transcript_path)).size; }
@@ -1014,7 +1025,7 @@ try {
   // Hooks are deliberately fail-open. Never emit an error or non-zero status
   // that could block a prompt or make normal Claude Code work noisy.
   if (["status", "pause", "resume"].includes(action)) {
-    process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"}).\n`);
+    process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"})${captureStatusNote}.\n`);
     process.exitCode = 1;
   }
 } finally {
@@ -1025,7 +1036,7 @@ try {
   // Two diagnostic publications can wait on slow fsyncs. Start this optional
   // cleanup only with its own 250 ms headroom; it never reserves fetch/output
   // time. Near the cap, leave diagnostics for the next hook instead.
-  if (recallMarkerInput && performance.now() < recallEnd - 250)
+  if (!captureDisabled && recallMarkerInput && performance.now() < recallEnd - 250)
     await recordFirstPrompt(recallMarkerInput).catch(() => {});
   if (!recallController || performance.now() < recallEnd - 250) {
     await recallAuthPending?.();

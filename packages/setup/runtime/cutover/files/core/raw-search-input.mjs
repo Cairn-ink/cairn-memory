@@ -56,11 +56,11 @@ export function rawSearchOptions(value) {
   return { ...options, readSet: immutable(readSet), quotaBytes, embedder, policy:policy && Object.freeze(policy) };
 }
 export function searchInput(value) {
-  const input = ownData(value, ['query','intent','queryVector']);
+  const input = ownData(value, ['query','intent','queryVector','semantic']);
   if (typeof input.query !== 'string' || !input.query.isWellFormed() || input.query.includes('\0') ||
       input.query.length < 1 || input.query.length > 4000) fail('invalid_query');
   const intent = input.intent ?? 'current';
-  if (!['current','history'].includes(intent)) fail('invalid_input');
+  if (!['current','history'].includes(intent) || input.semantic !== undefined && typeof input.semantic !== 'boolean') fail('invalid_input');
   if(input.queryVector!==undefined){
     const query=ownData(input.queryVector,['input','embedder','vector']);
     const embedder=validateEmbedderMetadata(query.embedder);

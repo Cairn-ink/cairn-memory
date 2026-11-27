@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-639ae003da975f7fed9ab4eae27bde92196b8b8c4162c37279f8afcbc18fab9b",
+  "engineId": "core-local-v1-9efc1fafc3e437c068624e89caa7813862756d5c655c7646c90bee2ae239bf05",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2918603,
-    "sha256": "20d341ba06524bd4b61daab8b4f9b516da3bd3773292d804ce0ec7a8e3d71f4b"
+    "bytes": 2918698,
+    "sha256": "05e218bc256b083567fda229407603fb62d3f1f92aa8883a6f46eddb351587cd"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -22,8 +22,8 @@
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "integrations/client/common-profile.mjs": "8c9fab55e95e0eaf92f963155433ef357bc8d9bae1843c2c149182f363644ad5",
     "integrations/client/file-lock.mjs": "42535bd8d6d96e89819e2669c7c671f1136fb753c3ffd2153919f3eb3c8e46b6",
-    "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
-    "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
+    "integrations/client/hosted-contract.mjs": "f44b7fb2595d367fd61f403a21d3698afa69db75dab0a3edb1e575a21c73168c",
+    "integrations/client/hosted-schemas.mjs": "18613252e07d4ccd2c5341bdb585ae9582d42cb285d43181ba736cafc91a543c",
     "integrations/client/private-state.mjs": "14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
     "integrations/client/raw/claude.mjs": "5c298d4e7e15cbfb8b62f40c98ab7538b6e14281349ccc45fa5e8b6cbcc3d258",
