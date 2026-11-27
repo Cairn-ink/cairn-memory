@@ -441,6 +441,8 @@ export interface ContextAssemblyDiagnostics {
   counter: { id: "tiktoken-o200k_base" };
   items: readonly {
     ref: ContextReadRef;
+    /** Candidate rank when the compact reader opts in to item ranks. */
+    rank?: number;
     metadata: ContextMemoryMetadata | ContextReadFields;
     body?: { tokens: number };
     sourceAccess?: "available" | "unavailable-for-noncurrent-memory" | "unsupported";
