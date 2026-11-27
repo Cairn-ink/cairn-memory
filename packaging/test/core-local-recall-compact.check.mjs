@@ -14,7 +14,8 @@ import { callTool } from '../core-local/wire-tools.mjs';
 const syntheticKey = 'synthetic-recall-provider';
 const retained = 'Albatross albatross albatross hides a teal lantern.';
 const earlier = 'Albatross albatross carries a brass compass.';
-const weaker = ['oak desk', 'blue ribbon', 'glass cup', 'iron bell', 'paper map', 'wooden box', 'silver spoon'];
+const weaker = ['oak desk', 'blue ribbon', 'glass cup', 'iron bell', 'paper map', 'wooden box', 'silver spoon',
+  'stone bowl', 'cotton scarf', 'copper whistle'];
 const semanticOnly = ['otter', 'fox', 'owl', 'ibis', 'salmon', 'eagle', 'crane', 'duck', 'tern', 'heron', 'puffin'];
 const removed = 'The synthetic albatross keeps a violet telescope.';
 const query = 'albatross';
@@ -116,7 +117,7 @@ test('consented keyed recall packs compact memories and restores rank order', { 
             mapExhausted: false, fetchExhausted: true }]);
 
           const defaults = await recall();
-          assert.equal(defaults.memories.length, 6);
+          assert.equal(defaults.memories.length, 24);
           assert.deepEqual(defaults.memories.slice(0, 3), limited.memories);
         });
 
