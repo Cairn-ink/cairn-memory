@@ -169,6 +169,8 @@ export interface ContextReadMaintenance {
   buildState: "ready" | "rebuilt" | "rebuilding";
   reason: "missing" | "corrupt" | "wrong-store" | "incompatible" | null;
   progress: { phase: number; checkpoint: number; sequence: number; baseSequence: number } | null;
+  /** Remaining namespace scans plus publication for a pending card index. */
+  cardPendingUnits?: number;
 }
 
 export interface ContextReadCoverage {

@@ -361,6 +361,10 @@ export function createContextLexical(port, hashSession, storeKey, monotonicMs, l
       const maintenance = { available: true, state: "rebuilding", buildState: "rebuilding", reason: null, progress: null };
       if (current) maintenance.progress = { phase: current.phase, checkpoint: current.checkpoint,
         sequence: current.sequence, baseSequence: current.base_sequence };
+      if (cardPending) {
+        const scanned = card && card.fence === capturedCardFence ? card.phase : 0;
+        maintenance.cardPendingUnits = readSet.namespaces.length - scanned + 1;
+      }
       if (!memoryReady) return { ready: false, indexState: "", byType: {}, maintenance };
       if (!cardPending && current) {
         maintenance.state = "ready";
