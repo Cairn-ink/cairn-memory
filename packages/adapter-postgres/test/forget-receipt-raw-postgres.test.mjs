@@ -84,13 +84,12 @@ async function fixture(t, keyed, overrides) {
   const reads = createPostgresMemoryReads({ ...readOptions, ...rawOptions });
   const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate: false });
   const quantityLedger = createPostgresQuantityLedgerStore(readOptions);
-  const hostWriteHookPort = overrides && createPostgresHostWriteHookPort({
-    context: new AsyncLocalStorage(), rawVisibility: rawOptions,
-  });
+  const context = new AsyncLocalStorage();
   let extraction = [];
   const createService = ({ rawEnabled = true, sessionLineageEnabled = rawEnabled } = {}) => createMemoryService({
     storage: {
-      name: "postgres", uow, keys, memories, quantityLedger, hostWriteHookPort, raw, sessionLineage,
+      name: "postgres", uow, keys, memories, quantityLedger, raw, sessionLineage,
+      hostWriteHookPort: overrides && createPostgresHostWriteHookPort({ context, rawVisibility: rawOptions }),
       ...reads,
       capture: createPostgresCapturePorts({ ...readOptions, lineageSecret: rawOptions.lineageSecret,
         nearDuplicate: false, now: () => now }),

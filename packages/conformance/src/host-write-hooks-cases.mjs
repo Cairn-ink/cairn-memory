@@ -51,6 +51,24 @@ function service(f, overrides) {
 }
 
 /** @param {HostWriteFixture} f */
+function switchableHooks(f) {
+  let hooks = syntheticHooks();
+  const api = f.createService({ ...f.deps, hostWriteHooks: {
+    beforeSave: (...args) => hooks.beforeSave(...args),
+    beforeCorrect: (...args) => hooks.beforeCorrect(...args),
+    onSave: (...args) => hooks.onSave(...args),
+    onCorrect: (...args) => hooks.onCorrect(...args),
+    onForget: (...args) => hooks.onForget(...args),
+    onCaptureFinish: (...args) => hooks.onCaptureFinish(...args),
+  } });
+  return {
+    api,
+    /** @param {Partial<HostWriteHooks>} overrides */
+    setHooks(overrides) { hooks = syntheticHooks(overrides); },
+  };
+}
+
+/** @param {HostWriteFixture} f */
 async function seed(f) {
   const api = f.createService(f.deps);
   const saved = await api.save(f.scope, initialText, source, "fact", { receipt });
@@ -125,36 +143,38 @@ export const HOST_WRITE_HOOK_CASES = [
     async run(f) {
       const { scope, table } = f;
       const start = await f.snapshot();
+      const { api: { save }, setHooks } = switchableHooks(f);
       for (const [keyed, final] of [[false, false], [false, true], [true, false], [true, true]]) {
         const request = keyed ? requested : null;
         let calls = 0;
-        const save = service(f, {
+        setHooks({
           async beforeSave(_tx, ctx) {
             equal(ctx, { scope, source, request }, "Admission metadata without body");
             return { status: ++calls === (final ? 2 : 1) ? "refuse" : "proceed" };
           },
           async onSave() { throw new Error("Refusal reached onSave"); },
-        }).save;
+        });
         equal(await save(scope, initialText, source, "fact", { receipt, ...(request && { hostRequest: request }) }),
           { status: "suppressed", indexRevision: start.indexRevision }, "Hosted refusal must suppress");
         equal(calls, final ? 2 : 1, "Both explicit admission calls");
       }
       for (const fail of ["throw", "decision", "write"]) {
         let calls = 0;
-        const save = service(f, {
+        setHooks({
           async beforeSave(tx, ctx) {
             if (++calls === 1) return { status: "proceed" };
             if (fail === "throw") throw new CoreError("storage_busy");
             if (fail === "write") await table.put(tx, ctx.scope, "illegal", "beforeSave");
             return { status: "conflict" };
           },
-        }).save;
+        });
         await rejects(() => save(scope, initialText, source, "fact", { receipt }), "host_write_hook_failed");
         equal(calls, 2, "Invalid final admission reached");
       }
-      await rejects(() => service(f, {
+      setHooks({
         async beforeSave() { return { status: "conflict" }; },
-      }).save(scope, initialText, source, "fact", { hostRequest: requested }), "event_payload_conflict");
+      });
+      await rejects(() => save(scope, initialText, source, "fact", { hostRequest: requested }), "event_payload_conflict");
       equal(await f.snapshot(), start, "Refusals and failures wrote no memory, receipt, fact, Raw, or index");
       equal(await table.inspect(scope, "illegal"), undefined, "Admission cannot mutate the host table");
       equal(await table.inspect(scope, "envelope"), undefined, "Refusals wrote no envelope");
@@ -167,10 +187,9 @@ export const HOST_WRITE_HOOK_CASES = [
       const { scope, table } = f;
       const seeded = await seed(f);
       const start = await f.snapshot();
-      const duplicate = (/** @type {Partial<HostWriteHooks>} */ hooks) =>
-        service(f, hooks).save(scope, initialText, source, "fact", { receipt });
+      const { api, setHooks } = switchableHooks(f);
       let observed = false;
-      const result = await duplicate({
+      setHooks({
         async onSave(tx, ctx) {
           observed = true;
           equal(ctx.status, "duplicate", "Duplicate invokes onSave");
@@ -180,16 +199,18 @@ export const HOST_WRITE_HOOK_CASES = [
           await table.put(tx, ctx.scope, "duplicate", ctx.status);
         },
       });
+      const result = await api.save(scope, initialText, source, "fact", { receipt });
       check(observed && result.status === "duplicate", "Duplicate effect was invoked");
       const beforeFailure = await f.snapshot();
       check(beforeFailure.memoryCount === start.memoryCount, "Duplicate retained one row");
-      await rejects(() => service(f, {
+      setHooks({
         async onSave(tx, ctx) {
           await table.put(tx, ctx.scope, "rolled-back", ctx.memory, true);
           await table.stageSave(tx, ctx.scope, "rolled-back-envelope", ctx.memory);
           throw new Error("synthetic failure after insert");
         },
-      }).save(scope, replacementText, source, "fact", { receipt, hostRequest: requested }), "host_write_hook_failed");
+      });
+      await rejects(() => api.save(scope, replacementText, source, "fact", { receipt, hostRequest: requested }), "host_write_hook_failed");
       equal(await f.snapshot(), beforeFailure, "Failed save rolls back core and index");
       equal(await table.inspect(scope, "rolled-back"), undefined, "Failed save rolls back host write");
       equal(await table.inspect(scope, "rolled-back-envelope"), undefined, "Failed save rolls back envelope");
@@ -203,9 +224,10 @@ export const HOST_WRITE_HOOK_CASES = [
       const seeded = await seed(f);
       const start = await f.snapshot();
       const predecessor = { id: seeded.id, revision: seeded.revision, source, createdAtMs: seeded.createdAtMs };
+      const { api, setHooks } = switchableHooks(f);
       for (const action of ["refuse", "throw", "mutate", "invalid"]) {
         let called = false;
-        const api = service(f, {
+        setHooks({
           async beforeCorrect(tx, ctx) {
             called = true;
             frozen(ctx);
@@ -236,8 +258,9 @@ export const HOST_WRITE_HOOK_CASES = [
       const seeded = await seed(f);
       const start = await f.snapshot();
       const predecessor = { id: seeded.id, revision: seeded.revision, source, createdAtMs: seeded.createdAtMs };
+      const { api, setHooks } = switchableHooks(f);
       for (const fail of [true, false]) {
-        const api = service(f, {
+        setHooks({
           async onCorrect(tx, ctx) {
             frozen(ctx);
             equal(ctx.predecessor, predecessor, "Guarded correction predecessor");
@@ -264,7 +287,7 @@ export const HOST_WRITE_HOOK_CASES = [
       }
       const corrected = await f.snapshot();
       for (const fail of [true, false]) {
-        const api = service(f, {
+        setHooks({
           async onForget(tx, ctx) {
             frozen(ctx);
             equal(ctx.scope, scope, "Exact forget scope");
@@ -486,10 +509,11 @@ export const HOST_WRITE_HOOK_CASES = [
       const port = deps.storage.hostWriteHookPort;
       check(port, "Expected a host write hook port");
       const before = await f.snapshot();
+      const { api, setHooks } = switchableHooks(f);
       for (const field of /** @type {const} */ (["scope", "phase", "tx", "keyedSave"])) {
         /** @type {{run?: object}} */
         const observed = {};
-        const api = service(f, {
+        setHooks({
           async onSave(tx, ctx) {
             const run = port.context.getStore();
             check(run, "Expected a live callback context");

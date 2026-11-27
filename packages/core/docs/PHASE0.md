@@ -1525,9 +1525,45 @@ evidence order and item dates.
 Packing uses the delivered shape for ranking cost and budget checks.
 `representation-v2` retains its existing Raw wire bytes.
 
+## Addendum 35 — Find layer cursors
+
+Find without `cursors` keeps the original response and omits `nextCursor` throughout.
+An empty `cursors` map requests the first page of every requested kind. A nonempty map searches only the layers with supplied cursors.
+In paging mode each searched layer returns `nextCursor`, which is null when there is no further page or the layer is unavailable.
+Find signs cursors under its own purpose with the store's read-token identity, so they work across service instances and restarts with the same store.
+A store without a read-token identity reports `capability_unavailable` on layers that require paging.
+The MAC binds owner, namespace, prepared query, layer, clients, time bounds and limit, and binds the embedding model for hybrid memory ranking.
+The card binding reserves a versioned scope field for future use. Malformed, oversized, forged or mismatched tokens return `invalid_cursor`.
+The signed payload carries the memory continuation or the layer's offset and index state, with an 8,192-character token limit.
+Plain and paged Find check delivery visibility for all selected items in one fresh read after every layer has ranked.
+Delivered items are built from the rows that fresh read returns, never from the ranking reads.
+A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
+Pages follow one deterministic order per layer, with a stable ID tie-break.
+The page size remains at most 20. Hybrid memory uses fixed lexical and vector pools, lexical memory can page through all matches, cards use the existing hosted fusion pool, and Raw pages through up to 100 segments.
+
 ## Addendum 36 — Context Read fusion depth
 
 For `representation-v2` and `representation-v2-dated`, a `maxItems` above the configured preset depth raises the fusion depth to `maxItems`, capped by the retrieval horizon.
 Fusion retains the preset's `k` and channel weights and uses a union maximum of at least twice the resulting depth.
 Semantic coverage reports the depth used and the resulting semantic omissions.
 Candidate searches and reads at or below the preset depth retain preset ranking, and evidence snapshots replay the exact delivered refs.
+
+## Addendum 37 — Hook authority hardening
+
+Only trusted host code runs as a hook callback. User input never supplies callbacks.
+The guards prevent accidental misuse. A malicious host, or a host that calls adapter
+internals or uses its own async context directly, is outside this contract.
+
+Each hook port instance is meant to serve exactly one service. The port accepts one
+authority reader for its lifetime. A second registration throws `invalid_input`.
+
+While a hook is active, the port context refuses to run without a hook record. It throws
+`host_write_hook_failed` before calling the supplied callback.
+
+Core binds the authority reader while it builds the service. If service construction fails
+after that bind, the slot stays used and the port can serve no service. This fails closed:
+build a new port and a new service.
+
+The context guard throws synchronously from `run`. A detached continuation, such as a timer
+or an unawaited promise, that calls `run` without a hook record while a hook is active throws
+there, not as a hook failure. Hook callbacks must await all of their work.

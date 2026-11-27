@@ -437,9 +437,10 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, amendme
             if (!entry && newCard?.card.id === ref.id && newCard.card.scope.owner === requestedScope.owner &&
                 newCard.card.scope.namespace === requestedScope.namespace) return structuredClone(newCard);
             const card = entry?.card;
-            if (!card || card.scope.owner !== requestedScope.owner ||
+            if (!entry || !card || card.scope.owner !== requestedScope.owner ||
                 card.scope.namespace !== requestedScope.namespace) return null;
-            return structuredClone(await buildVisibilityInput(tx, state, requestedScope, card, requireRaw));
+            const input = await buildVisibilityInput(tx, state, requestedScope, card, requireRaw);
+            return input && structuredClone({ ...input, version: { revision: entry.revision, bodyRevision: entry.bodyRevision } });
           } catch {
             return null;
           }

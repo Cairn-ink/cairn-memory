@@ -1,6 +1,6 @@
 import { hostCaptureEffects } from "./host-write-context.mjs";
 import { CoreError } from "../../core/src/index.mjs";
-import { assertOutsideHostWriteHook, createHookAuthorizer, hostOperation, hostReceipt, registerHostWriteContext } from "../../core/src/service/entry.mjs";
+import { assertOutsideHostWriteHook, createHookAuthorizer, guardHostWriteContext, hostOperation, hostReceipt, registerHostWriteContext } from "../../core/src/service/entry.mjs";
 import { requireHostFinish } from "./capture-finish.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex, decodeReceipts, memoryReceiptsSql } from "./memory-rows.mjs";
@@ -46,7 +46,8 @@ function copyOperation({ sql, mode }) {
 export function createPostgresHostWriteHookPort({ context, operations = {}, rawVisibility }) {
   const statements = new Map(Object.entries(operations).map(([name, operation]) => [name, copyOperation(operation)]));
   const raw = rawVisibility && createRawVisibility(rawVisibility);
-  registerHostWriteContext(context);
+  const guardedContext = guardHostWriteContext(context);
+  registerHostWriteContext(guardedContext);
   const authority = createHookAuthorizer();
   /** @type {WeakMap<Tx, {sql: string, values: unknown[]}[]>} */
   const staged = new WeakMap();
@@ -89,7 +90,7 @@ export function createPostgresHostWriteHookPort({ context, operations = {}, rawV
       });
     },
 
-    context,
+    context: guardedContext,
     bindHookAuthority: authority.bind,
     priorReceipts: readHostReceipts,
 

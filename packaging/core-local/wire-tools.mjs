@@ -60,7 +60,7 @@ function inspectResult(result) {
 }
 
 async function recallResult(recall, readSet, scope,
-  { query, limit = 6, contextMode, includeQualification, selectionMode }) {
+  { query, limit = 24, contextMode, includeQualification, selectionMode }) {
   const { diagnostics } = await recall.readContext(readSet, { query, types: ['memory'], intent: 'current',
     semantic: true, raw: false, representation: 'memory-compact-v1', budget: { maxItems: limit } });
   const { candidates, items: selected, omitted } = diagnostics;
