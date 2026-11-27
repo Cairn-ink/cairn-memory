@@ -1040,7 +1040,7 @@
   },
   "files": {
     "adapters/local/configuration.mjs": "d4ba512a295bf0ddc267a6ee3eb5bf0f407d6835372e68cfb94a7f94e526a93a",
-    "adapters/mcp/local-daemon-identity.mjs": "bf1e35cb3480f394803421417d2477a0e311b016763c0d2b864b04581c24da73",
+    "adapters/mcp/local-daemon-identity.mjs": "6dad217779df9004da166cecf91ff4eb84ffc81ef860ff88eb770cd77bf9e963",
     "adapters/mcp/local-daemon-liveness.mjs": "c3d69b1875215476d8ddc20f02f2b691028ed9f7b0ab53aef540659c245e9dfa",
     "adapters/mcp/local-daemon-state.mjs": "d9825bc4ea7932b0b35564f16654e137d7442a9130a325366267f604107abc4a",
     "adapters/mcp/local-daemon-wire.mjs": "c11f78b561651d2eaf9546d172f5ff53ba08bdda6a620723e4847260e537e7ec",
@@ -1221,7 +1221,7 @@
     "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
     "packaging/core-local/capture-input.mjs": "25ba8e79874da395a8cd2dadaa19939359adb9aebd226a0988c137f2a29308d7",
     "packaging/core-local/capture-lock.mjs": "3bb798d7cf56f49792a510136f982df675e7251fccbb24829125a6403386cba3",
-    "packaging/core-local/provider-config.mjs": "6fbd49bf0721d9bc8204793792544de3ee858fd2fc8eb4ba3a99dd2e1b1b1077",
+    "packaging/core-local/provider-config.mjs": "0bebb61a67a85638bc165412cf364d3fa7fef46b18586749536fdf82a16317c4",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5"
   }
 }

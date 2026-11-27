@@ -7,8 +7,13 @@ export const localProviderProfile = Object.freeze({
   endpoint: 'https://api.openai.com/v1/',
 });
 
-// The installed MCP engine reads only the process environment supplied to it
-// by the client. Supplying that variable opts the MCP server into processing.
+export const localProviderConsentFile = 'provider-consent.json';
+
+export function localProviderConsentText(owner, project) {
+  return JSON.stringify({ version: 1, owner, project, profile: 'openai-baseline-v1' }) + '\n';
+}
+
+// Managed serving calls this only after checking the installation's consent.
 export function localModelKey(environment) {
   const key = environment[localProviderProfile.providerApiKeyEnv];
   if (!key) return null;
