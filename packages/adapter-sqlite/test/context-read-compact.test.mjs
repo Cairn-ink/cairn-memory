@@ -80,7 +80,7 @@ test("SQLite and memory adapters return the same 64 compact items in lexical and
         const request = { ...input, semantic, representation };
         counts.length = 0;
         const result = await read(request);
-        assert.deepEqual(result.diagnostics.candidates.coverage.depths, { lexical: 24, semantic: semantic ? 12 : 0 });
+        assert.deepEqual(result.diagnostics.candidates.coverage.depths, { lexical: 24, semantic: semantic ? 24 : 0 });
         assert.equal(result.diagnostics.candidates.trace.effective, semantic ? "hybrid" : "lexical");
         assert.ok(result.assembly.items.length >= (semantic ? 12 : 24) && result.assembly.items.length <= 24);
         legacy.push({ request, wire: JSON.stringify(result), counted: [...counts] });
