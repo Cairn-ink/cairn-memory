@@ -1525,6 +1525,22 @@ evidence order and item dates.
 Packing uses the delivered shape for ranking cost and budget checks.
 `representation-v2` retains its existing Raw wire bytes.
 
+## Addendum 35 — Find layer cursors
+
+Find without `cursors` keeps the original response and omits `nextCursor` throughout.
+An empty `cursors` map requests the first page of every requested kind. A nonempty map searches only the layers with supplied cursors.
+In paging mode each searched layer returns `nextCursor`, which is null when there is no further page or the layer is unavailable.
+Find signs cursors under its own purpose with the store's read-token identity, so they work across service instances and restarts with the same store.
+A store without a read-token identity reports `capability_unavailable` on layers that require paging.
+The MAC binds owner, namespace, prepared query, layer, clients, time bounds and limit, and binds the embedding model for hybrid memory ranking.
+The card binding reserves a versioned scope field for future use. Malformed, oversized, forged or mismatched tokens return `invalid_cursor`.
+The signed payload carries the memory continuation or the layer's offset and index state, with an 8,192-character token limit.
+Plain and paged Find check delivery visibility for all selected items in one fresh read after every layer has ranked.
+Delivered items are built from the rows that fresh read returns, never from the ranking reads.
+A changed index returns `cursor_stale` on the affected layer while the other layers can continue.
+Pages follow one deterministic order per layer, with a stable ID tie-break.
+The page size remains at most 20. Hybrid memory uses fixed lexical and vector pools, lexical memory can page through all matches, cards use the existing hosted fusion pool, and Raw pages through up to 100 segments.
+
 ## Addendum 36 — Context Read fusion depth
 
 For `representation-v2` and `representation-v2-dated`, a `maxItems` above the configured preset depth raises the fusion depth to `maxItems`, capped by the retrieval horizon.

@@ -123,12 +123,18 @@ test("both raw routes check the capability and port before calling dependencies"
   }
 });
 
-test("raw find forwards filters and fences in the same snapshot without reordering store results", async () => {
+test("raw find forwards filters and fences in a later snapshot without reordering store results", async () => {
   const { service, storage, hooks, transactions, calls } = fixture();
   const first = segment("first", 3);
   const hidden = segment("hidden", 2);
   const last = segment("last", 1);
   hooks.hideAtFence = ref => ref.id === hidden.ref.id;
+  hooks.rawRows = [first, hidden, last];
+  const { readVisibleRaw } = storage.fence;
+  storage.fence.readVisibleRaw = async (tx, selection, refs, matchesVersion, intent) => {
+    transactions.push({ tx, selection, refs, intent });
+    return (await readVisibleRaw(tx, selection, refs, matchesVersion)).reverse();
+  };
   let candidateCall;
   storage.raw.raw = async (...args) => {
     candidateCall = args;
@@ -143,13 +149,15 @@ test("raw find forwards filters and fences in the same snapshot without reorderi
   });
   assert.equal(transactions.length, 1);
   const [tx, selection, text, intent, options] = candidateCall;
-  assert.equal(transactions[0].tx, tx, "raw search and fence must use the same transaction");
   assert.equal(transactions[0].selection, selection);
   assert.equal(transactions[0].intent, undefined);
   assert.deepEqual(transactions[0].refs, [first.ref, hidden.ref, last.ref]);
   assert.deepEqual(selection, { ...readScope, clients: ["client", "other"], window: { sinceMs: 10, untilMs: 20 } });
   assert.deepEqual([text, intent, options], [query, "search", { limit: 3 }]);
-  assert.deepEqual(calls.filter(([name]) => name === "run"), [["run", scope.owner, { readOnly: true }]]);
+  assert.deepEqual({
+    fenceRun: transactions[0].tx.runId,
+    runs: calls.filter(([name]) => name === "run"),
+  }, { fenceRun: tx.runId + 1, runs: Array(2).fill(["run", scope.owner, { readOnly: true }]) });
 });
 
 test("raw find skips null and blank queries", async () => {
@@ -186,7 +194,7 @@ test("raw failures are content-free and isolate the raw layer", async () => {
   hooks.lexicalScore = () => 1;
   const item = segment("private-raw-id");
   const fail = () => { throw new Error(`${query} ${item.ref.id} ${item.content}`); };
-  const fence = storage.fence.assertVisible;
+  const fence = storage.fence.readVisibleRaw;
   const options = { kinds: ["memory", "card", "raw"] };
   const expected = { memories: [row], cards: [], raw: [], layers: {
     memory: { status: "ok", count: 1 }, card: unwired, raw: { status: "unavailable", count: 0, code: "internal_error" },
@@ -194,14 +202,14 @@ test("raw failures are content-free and isolate the raw layer", async () => {
   storage.raw.raw = fail;
   assert.deepEqual(await service.find(scope, query, options), expected);
   storage.raw.raw = async () => ({ segments: [item], coverage: { complete: true } });
-  storage.fence.assertVisible = (...args) => args[2].some(({ type }) => type === "raw") ? fail() : fence(...args);
+  storage.fence.readVisibleRaw = fail;
   assert.deepEqual(await service.find(scope, query, options), expected);
   storage.raw.listRaw = fail;
   await assert.rejects(service.listRawMessages(scope, { limit: 1, cursor: null }), code("internal_error"));
   assert.ok(diagnostics.length > 0, "memory search emits its normal diagnostics");
   assert.doesNotMatch(JSON.stringify(diagnostics), /private search passage|private-raw-id|archived passage/);
 
-  storage.fence.assertVisible = fence;
+  storage.fence.readVisibleRaw = fence;
   storage.raw.listRaw = async () => ({ items: [item], nextCursor: "opaque-position" });
   const { nextCursor } = await service.listRawMessages(scope, { limit: 1, cursor: null });
   assert.doesNotMatch(JSON.stringify(decodeCursor(nextCursor)), /private search passage|private-raw-id|archived passage/);

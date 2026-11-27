@@ -1,11 +1,12 @@
-import { CoreError, tokenizeT1 } from "../../core/src/index.mjs";
+import { CoreError, RAW_FIND_DEPTH, tokenizeT1 } from "../../core/src/index.mjs";
+import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { copyReadScope, guardOwner, inputText, invalid, pgText } from "./memory-input.mjs";
 import { timestampUs } from "./memory-rows.mjs";
 import { createRawVisibility } from "./raw-visibility.mjs";
 import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
 import { runOperation } from "./uow.mjs";
 
-/** @import { ListRawMessages, RawCandidates, RawSegment } from "../../core/src/ports/index.d.ts" */
+/** @import { ListRawMessages, RawCandidates, RawSegment, RawVersionMatch } from "../../core/src/ports/index.d.ts" */
 /** @import { RawReadOptions } from "./raw-visibility.mjs" */
 /** @import { Query } from "./memory-rows.mjs" */
 /** @typedef {ReturnType<typeof copyReadScope>} ReadSet */
@@ -13,11 +14,12 @@ import { runOperation } from "./uow.mjs";
 const BATCH_SIZE = 128;
 const OCCURRED_US = "(EXTRACT(EPOCH FROM r.occurred_at) * 1000000)::bigint";
 const COLUMNS = `r.id, r.client, r.session_id, r.message_id, r.role, r.content, ${OCCURRED_US}::text AS occurred_us`;
-// Tuple membership lets Postgres hash the withheld set as a filter on the timeline index scan.
-const FILTER = `r.user_id = $1 AND ($2::text[] IS NULL OR r.client = ANY($2))
+const SELECTED = `r.user_id = $1 AND ($2::text[] IS NULL OR r.client = ANY($2))
   AND (NOT $3::boolean OR r.occurred_at IS NOT NULL)
   AND ($4::bigint IS NULL OR r.occurred_at >= ${timestampUs("($4::bigint * 1000)")})
-  AND ($5::bigint IS NULL OR r.occurred_at < ${timestampUs("($5::bigint * 1000)")})
+  AND ($5::bigint IS NULL OR r.occurred_at < ${timestampUs("($5::bigint * 1000)")})`;
+// Tuple membership lets Postgres hash the withheld set as a filter on the timeline index scan.
+const FILTER = `${SELECTED}
   AND r.client <> ALL($6::text[])
   AND (r.client, r.session_id) NOT IN (
     SELECT f.client, f.session_id FROM jsonb_to_recordset($7::jsonb) AS f(client text, session_id text))
@@ -59,22 +61,45 @@ export function createPostgresRawReads(options) {
     const selection = copyReadScope(tx.owner, scope, true);
     const text = inputText(queryText);
     const limit = options?.limit;
+    const start = options?.offset;
     if (intent !== "search" && intent !== "context" || !Number.isSafeInteger(limit) || limit < 1) invalid();
+    if (start !== undefined && (!Number.isSafeInteger(start) || start < 0)) invalid();
     const coverage = { complete: true };
-    if (!selection.keys.includes(null) || !tokenizeT1(text).length) return { segments: [], coverage };
-    return runOperation(tx, async (query) => {
+    /** @param {RawSegment[]} pool @param {string} [version] */
+    async function page(pool, version) {
+      if (start === undefined) return { segments: pool, coverage };
+      const state = await sha256Hex(JSON.stringify([version, pool]));
+      return { segments: pool.slice(start, start + limit), coverage, page: { state, hasMore: start + limit < pool.length } };
+    }
+    if (!selection.keys.includes(null) || !tokenizeT1(text).length) return page([]);
+    return runOperation(tx, async query => {
       const visibility = await readVisibility(query, selection.owner, selection.clients);
       const segments = [];
+      /** @type {Map<string, string>} */
+      const witnesses = new Map();
+      const depth = start === undefined ? limit : RAW_FIND_DEPTH;
       const batchSize = Math.min(BATCH_SIZE, limit);
-      for (let offset = 0; segments.length < limit; offset += batchSize) {
-        const { rows } = await query(`SELECT ${COLUMNS}, pgroonga_score(r.tableoid, r.ctid) AS score
+      for (let offset = 0; segments.length < depth; offset += batchSize) {
+        const { rows } = await query(`SELECT ${COLUMNS}, r.xmin::text AS witness, pgroonga_score(r.tableoid, r.ctid) AS score
           FROM raw_messages r WHERE ${FILTER} AND r.content &@~ pgroonga_query_escape($8)
           ORDER BY score DESC, r.occurred_at DESC NULLS LAST, r.id COLLATE "C" DESC LIMIT $9 OFFSET $10`,
         [...params(selection, visibility), text, batchSize, offset]);
-        segments.push(...(await visibility.visibleBatch(rows.map(segment))).slice(0, limit - segments.length));
+        const batch = new Map(rows.map(row => [segment(row), row.witness]));
+        const visible = (await visibility.visibleBatch([...batch.keys()])).slice(0, depth - segments.length);
+        for (const item of visible) witnesses.set(item.ref.id, batch.get(item));
+        segments.push(...visible);
         if (rows.length < batchSize) break;
       }
-      return { segments, coverage };
+      let version;
+      if (start !== undefined && (start > 0 || segments.length > limit)) {
+        // Include rows outside the top 100 without sorting or materializing
+        // the owner's Raw index. The ranked pool also tracks visibility changes.
+        const { rows: [row] } = await query(`SELECT count(*)::text || ':' ||
+          COALESCE(bit_xor(hashtextextended(r.id || ':' || r.xmin::text, 0)), 0)::text AS version
+          FROM raw_messages r WHERE ${SELECTED}`, params(selection, visibility).slice(0, 5));
+        version = row.version;
+      }
+      return { ...await page(segments, version), witnesses };
     });
   }
 
@@ -134,14 +159,20 @@ export function createPostgresRawReads(options) {
 /** @param {RawReadOptions} options */
 export function createRawRefReader(options) {
   const readVisibility = createRawVisibility(options);
-  /** @param {Query} query @param {ReadSet} scope @param {string[]} ids */
-  return async function visibleRawIds(query, scope, ids) {
-    const visibleIds = new Set();
-    if (!scope.keys.includes(null) || !ids.length) return visibleIds;
+  /** @param {Query} query @param {ReadSet} scope @param {string[]} ids @param {RawVersionMatch} [matchesVersion] */
+  return async function visibleRawRows(query, scope, ids, matchesVersion) {
+    /** @type {Map<string, RawSegment>} */
+    const visible = new Map();
+    if (!scope.keys.includes(null) || !ids.length) return visible;
     const visibility = await readVisibility(query, scope.owner, scope.clients);
-    const { rows } = await query(`SELECT ${COLUMNS} FROM raw_messages r WHERE ${FILTER} AND r.id = ANY($8::text[])`,
+    const { rows } = await query(`SELECT ${COLUMNS}, r.xmin::text AS witness
+      FROM raw_messages r WHERE ${FILTER} AND r.id = ANY($8::text[])`,
       [...params(scope, visibility), ids]);
-    for (const item of await visibility.visibleBatch(rows.map(segment))) visibleIds.add(item.ref.id);
-    return visibleIds;
+    const witnesses = matchesVersion && new Map(rows.map(row => [row.id, row.witness]));
+    for (const item of await visibility.visibleBatch(rows.map(segment))) {
+      const { id } = item.ref;
+      if (!matchesVersion || matchesVersion(item, witnesses?.get(id))) visible.set(id, item);
+    }
+    return visible;
   };
 }

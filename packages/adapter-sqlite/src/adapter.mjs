@@ -80,7 +80,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
   const conflicts = flags.conflictEdges ? handleWriteRejections(relations.conflicts, ["insert", "invalidate"]) : undefined;
   const { raw, counters } = createRawStore(port, hashSessionKey, lineage, index, migratedRaw, captureControls, scrubTitles,
     cards.purgeSources, flags.documentCards);
-  const { reads, visibleRawRefs } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
+  const { reads, visibleRawRows } = createRawReads(port, hashSessionKey, sessionHashKey, migratedRaw, captureControls);
   // Keep migrated evidence readable by inspect even for hosts that have not
   // enabled the optional placement and relation mutation ports.
   const inspectFlags = legacyInspectPlacements || controls?.evidence.placementConversion === true
@@ -120,7 +120,7 @@ export function createSqliteAdapter({ uow, port, close, sessionHashKey, legacyRa
           reconcileRawInventory(db, readSet, contextEpochs(db, readSet), sessionHashKey, contextDeadline(options, monotonicMs), true)));
       },
     }),
-    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRefs, vectorCache, vectorClock,
+    ...createRetrievalPorts(port, hashSessionKey, sessionHashKey, visibleRawRows, vectorCache, vectorClock,
       loadCards && ((tx, selection, refs) => visibleCardRefs(loadCards, tx, selection, refs))),
     raw: { ...raw, ...reads },
     spanLineage: createSpanLineage(port, hashSessionKey),
