@@ -1515,3 +1515,10 @@ Compact follows Addendum 25. Omitting `semantic` selects semantic retrieval when
 Pack whole `{ date, body }` items in ascending date order with undated items last, and meter the formatted block without source excerpts or ledger digests.
 Diagnostics carry the qualified refs, evidence fences and source access, and the signed snapshot binds the compact representation and replays through the usual delivery checks.
 Pack bodies within the response, token and item limits. Return `snapshot: null` when the signed token exceeds its size limit or would exceed either the read response cap or the qualified evidence replay cap.
+
+## Addendum 36 — Context Read fusion depth
+
+For `representation-v2` and `representation-v2-dated`, a `maxItems` above the configured preset depth raises the fusion depth to `maxItems`, capped by the retrieval horizon.
+Fusion retains the preset's `k` and channel weights and uses a union maximum of at least twice the resulting depth.
+Semantic coverage reports the depth used and the resulting semantic omissions.
+Candidate searches and reads at or below the preset depth retain preset ranking, and evidence snapshots replay the exact delivered refs.

@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-930f4d588c584d1999c92ac4a772f9902984f4d0d4fada7988a771a21f22bfb2",
+  "engineId": "core-local-v1-639ae003da975f7fed9ab4eae27bde92196b8b8c4162c37279f8afcbc18fab9b",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2918094,
-    "sha256": "a2bb3178e48a50c91f830e6c20181daa61ec93b1909b212745c187aca10d8b16"
+    "bytes": 2918603,
+    "sha256": "20d341ba06524bd4b61daab8b4f9b516da3bd3773292d804ce0ec7a8e3d71f4b"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -156,11 +156,11 @@
     "packages/core/src/service/context-read-fetch.mjs": "b6c8e6777da1f1f393664df2c1a451e93a3dea4bbf479ce688c725c25cd618d0",
     "packages/core/src/service/context-read-find.mjs": "bc568379b8df4eaaa7ed40e8dbc35f7f999471e9d9902aeed44298278c62827c",
     "packages/core/src/service/context-read-input.mjs": "8481d871bb4bcc31c95bae2d81e8f2260c06a6dcdc0b12ffb45d3759f38b6523",
-    "packages/core/src/service/context-read-pack.mjs": "ac10b5e88eee122fc9db793f486988dbda2e3457f561e258392ed376a9d28e5b",
+    "packages/core/src/service/context-read-pack.mjs": "cb985e94d2ca3641e90fc503ddbef21a5218dada00a1dcf24757dac3ad93772d",
     "packages/core/src/service/context-read-projection.mjs": "b520cc13e2e6bbd48b84c38e08e9ef952ec9a7fef2d230c3519c2b2faf3012c3",
     "packages/core/src/service/context-read-raw.mjs": "e3cd6bd7c5d17e5c9a43b44ce3bc20c0f1108fb53d86f7a3bcfceff12103e9ee",
     "packages/core/src/service/context-read-tokens.mjs": "0ec21f4889e5f93e40fd59a4dd493edfdb02e4c85595307eec7106605472662e",
-    "packages/core/src/service/context-read.mjs": "3a665e42dde9a42922f49b7e0dd565dffce8b02c4b4961b463507f34f6b32060",
+    "packages/core/src/service/context-read.mjs": "ba980117b44d603e18cc3b1bf88af96c6177b13c9bf906000cab085d62d0055d",
     "packages/core/src/service/entry.mjs": "4d9304ceaf8dc712cc36c6531670a18bc468e31003221950bb739bc99fd5f961",
     "packages/core/src/service/find.mjs": "e56c723cf26504bb90e78473d07d5e01984a9ebf0902a6bcce1435a9e515b6de",
     "packages/core/src/service/forget.mjs": "ec4c84d7eeb75990a091484d8771f1eef7149aa79b748a6aa2e953bb0952b987",
@@ -186,7 +186,7 @@
     "packages/core/src/topics/proposal.mjs": "493c7a9a26143b5ac8b006957f5f39d1f097bf67a3336d4084d526df0aa42bda",
     "packages/core/src/topics/wire.mjs": "cb39361bd3319927225a5bd31c030f7c4f4d2ae17951616728a00677c5fc0d7a",
     "packages/core/src/utf8.mjs": "fa464162e80801ea62e83dda9ebd60132cedec86004c8e7d2ee28d51c9e6e4e4",
-    "packaging/core-local/adapter-slot.mjs": "e34ca929cf1f10545eb66cfe678d24844ff5ac43ffe893fb3b1e6364e9194a86",
+    "packaging/core-local/adapter-slot.mjs": "eaeef96cae4fa637adaf1311a412cd03b68dcd05c8dd6675179cfef643ba5cfc",
     "packaging/core-local/capture-binding.mjs": "7685bbde41405b87280cfcb08f3405a2b242d2e18dab14a90e52fca79291df72",
     "packaging/core-local/capture-cli.mjs": "064c25459424ae2f046a93315363209fdf1fa8be7462462bcd68ada88d07ec1b",
     "packaging/core-local/capture-codex-qualification.mjs": "4b1c6f4400a5be51f21ec5bad10a52346b5e4118eb2f698a3aacfe5ad8215799",
@@ -216,7 +216,7 @@
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.cjs": "85b2bfcc1cab757b81b3ebfd200a188175c20ce9c9f7ccd340dfa479813d1205",
     "packaging/core-local/vendor/tiktoken/tiktoken_bg.wasm": "dedd9a7b5d8d98b44448bedb371ade1c5327f7bb5dd9effe159da816473a415f",
     "packaging/core-local/wal-checkpoint.mjs": "a1eb0edccded85c4a383b17c897e0d653711c0210ba4a9b8b3746c88efb403db",
-    "packaging/core-local/wire-tools.mjs": "8f9772f84d750d43c95214e0ab18fef7ebd6c2e4a89bc32f71b8973458564c5b",
+    "packaging/core-local/wire-tools.mjs": "6fea2c9972a144933945285df4b35fb3ce770a3196d7d41741db9bae600d52d9",
     "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5",
     "plugins/cairn-memory/lib/source-time.mjs": "b1c0b9ccf03ff76103ed759840b60effdfdc4b31e93f3dfd107ae876aa5dcb27",
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75"
