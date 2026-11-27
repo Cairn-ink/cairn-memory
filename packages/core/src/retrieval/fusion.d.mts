@@ -20,7 +20,7 @@ export const COMPACT_RRF_PRESETS: Readonly<
 export function fuseCandidates<L extends ScoredRow, S extends ScoredRow, M extends ScoredRow = never>(
   lexical: readonly L[],
   semantic: readonly S[],
-  opts?: { preset?: string; limit?: number; semanticState?: string; coverageComplete?: boolean; moc?: readonly M[] },
+  opts?: { preset?: string; depth?: number; limit?: number; semanticState?: string; coverageComplete?: boolean; moc?: readonly M[] },
 ): {
   mode: "lexical";
   preset: string;

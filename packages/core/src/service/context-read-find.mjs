@@ -232,7 +232,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
   }
   const run = entry(async (/** @type {ContextReadSet} */ value, /** @type {FindCandidatesInput} */ args,
     /** @type {CallOptions} */ options, /** @type {boolean} */ forAssembly, /** @type {QueryEmbedding} */ memo,
-    /** @type {boolean} */ compact) => {
+    /** @type {boolean} */ compact, /** @type {number | undefined} */ maxItems) => {
     const readSet = contextReadSet(value);
     const input = findCandidatesInput(args);
     if (!store || storage.capabilities.contextRead !== true) throw new CoreError("capability_unavailable");
@@ -243,6 +243,8 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     const stopped = () => options.signal?.aborted || clock.monotonicMs() >= deadlineAtMs;
     const horizon = compact ? COMPACT_MEMORY_MAX_ITEMS : CONTEXT_HORIZON;
     const preset = compact ? compactPreset : config.preset;
+    const presetDepth = compact ? COMPACT_RRF_PRESETS[compactPreset].depth : RRF_PRESETS[config.preset].depth;
+    const fusionDepth = Math.max(presetDepth, Math.min(horizon, maxItems ?? presetDepth));
     const diagnostics = preflight(types, semanticRequested, store.maintenanceAvailable, preset);
     const unavailable = () => {
       if (stopped()) {
@@ -375,7 +377,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
         ))).filter(row => row !== null) : lexicalRows;
       const semanticState = diagnostics.channels.semantic.state;
       const fused = fuseCandidates(accepted, semanticResult?.rows ?? [], {
-        preset, limit: horizon, semanticState, coverageComplete: semanticState === "ready",
+        preset, depth: fusionDepth, limit: horizon, semanticState, coverageComplete: semanticState === "ready",
       });
       diagnostics.trace.effective = fused.mode;
       const items = fused.rows.map(({ qualified: ref, fusionScore, channels }, i) => ({ ref, rank: i + 1, fusionScore, channels }));
@@ -387,8 +389,7 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
       const memoryCoverage = diagnostics.coverage.byType.memory;
       if (semanticResult && memoryCoverage) {
         const { eligible, embedded } = semanticResult.coverage;
-        const presetDepth = compact ? COMPACT_RRF_PRESETS[compactPreset].depth : RRF_PRESETS[config.preset].depth;
-        const depth = semanticState === "ready" ? Math.min(semanticResult.rows.length, presetDepth) : 0;
+        const depth = semanticState === "ready" ? Math.min(semanticResult.rows.length, fusionDepth) : 0;
         diagnostics.coverage.depths.semantic = depth;
         diagnostics.coverage.omitted.semantic = Math.max(0, embedded - depth);
         Object.assign(memoryCoverage, { embedded, scanned: eligible, embeddedFraction: eligible ? embedded / eligible : 1, scannedFraction: 1 });
@@ -425,16 +426,16 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     const continued = await rank();
     if ("embed" in continued) throw new CoreError("internal_error");
     return continued;
-  }, undefined, ([readSet, input, options, forAssembly, memo, compact]) => {
+  }, undefined, ([readSet, input, options, forAssembly, memo, compact, maxItems]) => {
     const [set, request, call] = snapshotContextCall([readSet, input, options]);
-    return /** @type {[ContextReadSet, FindCandidatesInput, CallOptions, boolean, QueryEmbedding, boolean]} */ (
-      [set, request, call, forAssembly, memo, compact]);
+    return /** @type {[ContextReadSet, FindCandidatesInput, CallOptions, boolean, QueryEmbedding, boolean, number | undefined]} */ (
+      [set, request, call, forAssembly, memo, compact, maxItems]);
   });
 
   /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options
-   * @param {boolean} forAssembly @param {QueryEmbedding} [memo] @param {boolean} [compact] */
-  async function search(readSet, input, options, forAssembly, memo = {}, compact = false) {
-    const result = await run(readSet, input, options, forAssembly, memo, compact);
+   * @param {boolean} forAssembly @param {QueryEmbedding} [memo] @param {boolean} [compact] @param {number} [maxItems] */
+  async function search(readSet, input, options, forAssembly, memo = {}, compact = false, maxItems) {
+    const result = await run(readSet, input, options, forAssembly, memo, compact, maxItems);
     if ("code" in result) throw Object.assign(new CoreError(result.code), { diagnostics: result.diagnostics });
     return result;
   }
@@ -443,9 +444,9 @@ export function findCandidatesMethod({ storage, clock, embedQuery, gate }) {
     /** @type {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
     findCandidates: async (readSet, input, options = {}) => (await search(readSet, input, options, false)).result,
     /** @param {ContextReadSet} readSet @param {FindCandidatesInput} input @param {CallOptions} options
-     * @param {QueryEmbedding} memo @param {boolean} [compact] */
-    async findForAssembly(readSet, input, options, memo, compact) {
-      const { result, generations } = await search(readSet, input, options, true, memo, compact);
+     * @param {QueryEmbedding} memo @param {boolean} [compact] @param {number} [maxItems] */
+    async findForAssembly(readSet, input, options, memo, compact, maxItems) {
+      const { result, generations } = await search(readSet, input, options, true, memo, compact, maxItems);
       if (generations === undefined) throw new CoreError("internal_error");
       return { result, generations };
     },
