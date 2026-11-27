@@ -695,6 +695,12 @@ export interface MemoryService {
   importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | ({ status: "paused" } & ImportResult)>;
   /** Raw import goes through the full capture suppression (session, window, lineage, text) and pause. */
   importRawMessages(scope: Scope, sessions: readonly ImportRawSession[]): Promise<ImportResult | { status: "paused" }>;
+  /** Judge relations for a committed memory revision. The host schedules this after save. */
+  judgeRelations?(scope: Scope, memory: { id: string; revision: Revision }, options?: CallOptions): Promise<
+    { status: "judged"; superseded: string[]; contradicts: string[]; skipped: number; indexRevision?: number } |
+    { status: "skipped"; reason: "stale" | "no_candidates" | "incomplete_coverage" } |
+    { status: "paused" }
+  >;
 }
 
 export interface StoreMigrator {

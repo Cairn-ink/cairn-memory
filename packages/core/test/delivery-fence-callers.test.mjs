@@ -15,6 +15,8 @@ const allowlist = {
   "rationale/store-plan.mjs: store.degree(tx, scope, id)": "The incident count is internal to the insertion limit check.",
   "service/writes.mjs: conflicts.degree(tx, scope, targetId)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
   "service/writes.mjs: conflicts.degree(tx, scope, id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/relations-judge.mjs: conflicts.degree(tx, scope, id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
+  "service/relations-judge.mjs: conflicts.degree(tx, scope, candidate.id)": "The degree count is internal to the conflict insertion limit check; no edge content is delivered.",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'supports-decision', page)":
     "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'challenges-premise', page)":
