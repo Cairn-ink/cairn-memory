@@ -195,8 +195,8 @@ export async function runCandidate(fixture, prepare = binary => migrateFixture(f
       const keyed = child(argv[0], argv.slice(1), input, root, { ...env,
         [client.request.providerApiKeyEnv]: 'synthetic-provider-value' });
       assert.deepEqual(keyed, { exit: expected.exit, stdout: expected.stdout, stderr: expected.stderr });
-      assert.deepEqual(calls().slice(prior), [{ kind: 'hook', outcome: { status: 'blocked', reason: 'authority_changed' } }]);
-      assert.equal(cursor(client.request.installationDirectory), null);
+      assert.deepEqual(calls().slice(prior), [{ kind: 'hook', outcome: { status: 'ready' } }], 'keyed hook is ready with zero fetches');
+      assert.deepEqual(cursor(client.request.installationDirectory), expected.cursor, 'keyed hook advances the same cursor');
     }
     const before = calls().length;
     const cardsBefore = cardIds(target);
