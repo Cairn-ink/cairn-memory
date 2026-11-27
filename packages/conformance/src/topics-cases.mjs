@@ -523,4 +523,37 @@ export const topicCases = [
     await ctx.harness.advanceClock(3_600_000);
     equal(await store.pending(), [sixth], "The deterministic failure and its four batchmates must leave the queue at the cap");
   }),
+
+  topicCase(21, "placement reads the full 150-topic catalog across cursor pages with a limit of 200", async (ctx) => {
+    const store = setup(ctx);
+    for (let offset = 0; offset < 75; offset += 5) {
+      const guards = [];
+      const items = [];
+      for (let i = offset; i < offset + 5; i++) {
+        const guard = await store.seed(`Catalog source ${i}`);
+        guards.push(guard);
+        items.push(item(guard, [], topic(`Child ${i}`, [], `Parent ${i}`)));
+      }
+      await store.apply(guards, items);
+    }
+
+    const first = await store.catalog();
+    check(first.nextCursor, "Expected a second catalog page");
+    const second = await store.catalog({ ...firstPage, cursor: first.nextCursor });
+    equal([first.items.length, second.items.length, second.exhausted], [100, 50, true], "Expected 150 catalog topics");
+    const pending = await store.seed("Awaiting placement across catalog pages");
+    const result = await store.placePendingBatch({
+      uow: ctx.adapter.uow, memories: ctx.adapter.memories, scope: store.scope, placement: store.placement,
+      catalogLimit: 200,
+      async classify({ memories }, { map, mapExhausted }, { validateFresh }) {
+        equal(memories.map(({ id }) => id), [pending.memoryId], "Expected the pending memory");
+        equal(map.map(({ moc }) => moc.id), [...first.items, ...second.items].map(({ id }) => id),
+          "Classification must receive both catalog pages in order");
+        equal(mapExhausted, true, "The catalog must be exhausted");
+        await validateFresh();
+        return { items: [item(pending)] };
+      },
+    });
+    equal(result.status, "applied", "Expected placement to succeed");
+  }),
 ];

@@ -1,6 +1,6 @@
 import { CoreError, isCoreError } from '../errors.mjs';
 import { visibleDocumentCardRows } from '../routing/visibility.mjs';
-import { readClassificationCatalog } from './catalog.mjs';
+import { CLASSIFICATION_CATALOG_LIMIT, isClassificationCatalogLimit, readClassificationCatalog } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
 /** @import { ErrorCode } from '../errors.mjs' */
@@ -33,7 +33,10 @@ export async function placePendingCards({ model, gate, deadline, signal, onDiagn
  *   ReturnType<PlacePendingCardsBatchOptions['classify']>} classify
  * @returns {Promise<PlacePendingCardsResult>}
  */
-async function runPendingCards({ uow, scope: { owner, namespace }, placement, documentCards, fence }, classify) {
+async function runPendingCards({
+  uow, scope: { owner, namespace }, placement, documentCards, fence, catalogLimit = CLASSIFICATION_CATALOG_LIMIT,
+}, classify) {
+  if (!isClassificationCatalogLimit(catalogLimit)) throw new CoreError('invalid_input');
   const scope = { owner, namespace };
   /** @param {Tx} tx @param {readonly TopicCardGuard[]} guards */
   async function readCards(tx, guards) {
@@ -74,7 +77,7 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
   const batch = await uow.run(owner, { readOnly: true }, async (tx) => {
     const pending = await placement.pendingCards(tx, scope, { limit: 5 });
     if (!pending.length) return null;
-    const { indexRevision, catalogView } = await readClassificationCatalog(placement, tx, scope);
+    const { indexRevision, catalogView } = await readClassificationCatalog(placement, tx, scope, catalogLimit);
     const cards = await readCards(tx, pending);
     const visible = await visibleIds(tx, cards);
     /** @type {Parameters<PlacePendingCardsBatchOptions['classify']>[0]} */
