@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-44449325df9475a34092c073e12961ff403e1846bda8b5d3b4c348be98d13f4b",
+  "engineId": "core-local-v1-6a4c75404823894368be08f3690ebbeafdf7f30312a198b16ffd4a1f8211dada",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2928722,
-    "sha256": "075fae07e1c05259b33fb79f942d6d69dd15a6454a19a0340e2d6db6a0cee05d"
+    "bytes": 2928789,
+    "sha256": "da4ad39945788f08bbf878eddbbc18c75bc4bc662936c1b61e4d3d39eace446e"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -178,9 +178,9 @@
     "packages/core/src/service/signed-read-token.mjs": "33f3085097ffec7aa2795bef53fab2531e299da70980ff6f68fff65d61dcc075",
     "packages/core/src/service/writes.mjs": "d012e87481b3d7fc914cbead4bfe22424a41d55a2c732a2b993bf24208ea0e18",
     "packages/core/src/suppression-fact.mjs": "d45b707ba0430a37c016792a915d90962b337827b13694b0bb396003f77beb13",
-    "packages/core/src/topics/batch.mjs": "ebf003671d070fd7e58bb4264d80cbf8f7e0bf627587f248e9b3875869012de8",
-    "packages/core/src/topics/cards.mjs": "e421a0abeef0e63c663632433a0c81f1857882102f02c1c4db93c005ea51bf67",
-    "packages/core/src/topics/catalog.mjs": "048eab001bdf85e779d5760c4f6c6c61b53a7007a8c47f84834bf50bea11c7d5",
+    "packages/core/src/topics/batch.mjs": "40ce06fe09e3011c6900fbb67b0de73f25a9a85683c5a82e62dfc2d8ac4973a5",
+    "packages/core/src/topics/cards.mjs": "23d9c201aaaa44a1516aecf880fcf2b4934d4b23fe3aba7f2935309f4f278ae5",
+    "packages/core/src/topics/catalog.mjs": "17c6ae6be8b575fee1efbc3df38ef34da1c8daccf249640a8a6a8ab8efc7c586",
     "packages/core/src/topics/classify.mjs": "32de2f62d5e593aee9fcf01aa4576046ed31fbc8f148078eeff7ff9ff94e37c0",
     "packages/core/src/topics/generated/prompt.mjs": "ffbddf98b4d1f600eff1a48faa5ff5c088c4b025267793de73cacf17c2b616cf",
     "packages/core/src/topics/index.mjs": "299da09cd17153652768e530dfbd505af02d864ce1d4b2259ebf2604df366a81",

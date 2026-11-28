@@ -10,6 +10,8 @@ export interface PlacePendingCardsBatchOptions {
   placement: TopicStore;
   documentCards: Pick<DocumentCardStore<StoredDocumentCardRecord>, 'get' | 'visibilityInputs'>;
   fence: VisibilityFence;
+  /** Maximum catalog topics before model packing. Integer from 1 to 200, default 100. */
+  catalogLimit?: number;
   classify(snapshot: { cards: Array<TopicCardGuard & { content: string }> }, catalog: ClassificationCatalog,
     options: { validateFresh(): Promise<void> }): Promise<CardPlacementProposal>;
 }
