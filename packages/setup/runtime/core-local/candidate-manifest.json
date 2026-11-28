@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-df232e6716f4021522157195a8660fff71032513ca969ba7956c26857873ce88",
+  "engineId": "core-local-v1-c6d74b4b0fbfe74941f9c497f588a46179956ec608065807e315ce4d1ead5666",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2928998,
-    "sha256": "d71474ee4e6eae4beb67c3d0681f975e87b8797b8d1bfdfb285a9da3ee8e942a"
+    "bytes": 2929006,
+    "sha256": "8eac41558d09b047994a5b7d0a91da1279e105233d8fd385d075dba1ed6eac81"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -176,7 +176,7 @@
     "packages/core/src/service/relations-judge.mjs": "dab8961c5fc7b3bd456303e8b4c04a2f3459a83bff0e66208b948ad807da1d16",
     "packages/core/src/service/session-wire.mjs": "10713363562a3f4f34953f34aaea407eac9edf7ce50be6210e5e5a67342eb38f",
     "packages/core/src/service/signed-read-token.mjs": "33f3085097ffec7aa2795bef53fab2531e299da70980ff6f68fff65d61dcc075",
-    "packages/core/src/service/writes.mjs": "d012e87481b3d7fc914cbead4bfe22424a41d55a2c732a2b993bf24208ea0e18",
+    "packages/core/src/service/writes.mjs": "3252abaa0b612aed7888ad309ba1759cabd844b3e74d463c3939f27c60398053",
     "packages/core/src/suppression-fact.mjs": "d45b707ba0430a37c016792a915d90962b337827b13694b0bb396003f77beb13",
     "packages/core/src/topics/batch.mjs": "40ce06fe09e3011c6900fbb67b0de73f25a9a85683c5a82e62dfc2d8ac4973a5",
     "packages/core/src/topics/cards.mjs": "23d9c201aaaa44a1516aecf880fcf2b4934d4b23fe3aba7f2935309f4f278ae5",
