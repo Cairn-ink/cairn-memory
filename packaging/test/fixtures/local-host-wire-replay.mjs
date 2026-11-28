@@ -66,7 +66,7 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     return seen.get(value);
   }
 
-  function visit(value, key, path = []) {
+  function visit(value, key, path = [], parent) {
     if (key === 'maintenance' && path.at(-1) === 'trace') {
       assert.ok(value && typeof value === 'object' && !Array.isArray(value), 'invalid trace.maintenance object');
       for (const [name, measure] of Object.entries(value)) {
@@ -82,7 +82,7 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     }
     if (Array.isArray(value)) return value.map(item => visit(item, '', [...path, key]));
     if (value && typeof value === 'object') {
-      return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, visit(item, name, [...path, key])]));
+      return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, visit(item, name, [...path, key], value)]));
     }
     if (path.at(-1) === 'timings' && path.at(-2) === 'trace' && typeof value === 'number') {
       assert.ok(Number.isFinite(value), 'invalid timing');
@@ -101,8 +101,8 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     const snapshotField = key === 'snapshot' || key === snapshotKey;
     const contentIdentityField = key === 'contentIdentity';
     const itemDiagnostic = path.at(-2) === 'items' && path.at(-3) === diagnosticsKey;
-    const refFenceField = key === 'f' && (path.at(-1) === 'ref' || itemDiagnostic);
-    const itemFenceField = key === 'fence' && itemDiagnostic;
+    const refFenceField = key === 'f' && path.at(-1) === 'ref';
+    const itemFenceField = itemDiagnostic && (key === 'fence' || key === 'f');
     if (!allowPlaceholders && (uuidField || timestampField || snapshotField || contentIdentityField || refFenceField || itemFenceField)) {
       assert.ok(!reservedPlaceholder.test(value), 'reserved normalization placeholder in ' + key);
     }
@@ -116,7 +116,15 @@ function normalizer({ legacy = false, allowPlaceholders = false } = {}) {
     if (snapshotField && bound.test(value)) return handle('snapshot', value);
     if (contentIdentityField && bound.test(value)) return handle('content-identity', value);
     if (refFenceField && /^[A-Za-z0-9_-]{8}$/u.test(value)) return handle('ref-fence', value);
-    if (itemFenceField && bound.test(value)) return handle('item-fence', value);
+    if (itemFenceField) {
+      const { fence, f } = parent;
+      if (typeof fence === 'string' && bound.test(fence) && f === fence.slice(0, 8)) {
+        const bytes = Buffer.from(fence, 'base64url');
+        if (bytes.length === 32 && bytes.toString('base64url') === fence) {
+          return handle(key === 'fence' ? 'item-fence' : 'ref-fence', value);
+        }
+      }
+    }
     return value;
   }
   return visit;
@@ -197,7 +205,9 @@ export async function withStdio(entry, args, directory, work) {
 // reports phase 4. The golden records the candidate's phase 1 (cards on).
 // Only these two legacy replies expect the 0.6.11 value.
 const legacyCardPhase = 4;
-function legacyResponse(label, response) {
+export function legacyResponse(label, item) {
+  if (label === 'tools/list') return { result: { tools: golden.legacyToolsList } };
+  const response = item.legacyResponse ?? item.response;
   if (label === 'find cards disabled') {
     const reply = structuredClone(response);
     const content = reply.result.content[0];
@@ -229,8 +239,9 @@ export async function compareWire(request, notify, count, { legacy = false } = {
       const reply = await request(item.method, params, label);
       replies.set(label, reply);
       if (label === 'initialize') notify('notifications/initialized');
-      const expectedIndex = item.response.result?.content?.[0]?.text?.startsWith('{') ?
-        value(item.response)?.indexRevision : undefined;
+      const expectedResponse = legacy ? legacyResponse(label, item) : item.response;
+      const expectedIndex = expectedResponse.result?.content?.[0]?.text?.startsWith('{') ?
+        value(expectedResponse)?.indexRevision : undefined;
       if (expectedIndex !== undefined) {
         const index = value(reply)?.indexRevision;
         assert.ok(Number.isSafeInteger(index) && index > 0, 'missing committed index revision');
@@ -242,7 +253,7 @@ export async function compareWire(request, notify, count, { legacy = false } = {
       }
       const normalizedReply = normaliseResponse(actual, reply, count, label);
       const errors = [...diff(expected(item.params, ''), actual(params, ''), 'request'),
-        ...diff(expected(legacy ? legacyResponse(label, item.response) : item.response, ''), normalizedReply)];
+        ...diff(expected(expectedResponse, ''), normalizedReply)];
       if (errors.length) differences.push(...errors.map(error => label + ' ' + error));
       else matched++;
     } catch (error) {
