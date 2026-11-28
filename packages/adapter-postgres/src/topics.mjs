@@ -47,6 +47,7 @@ const unfiledMemory = `EXISTS (
     SELECT 1 FROM memory_topics mt JOIN topics t ON (t.user_id, t.id) = (mt.user_id, mt.topic_id)
     WHERE (mt.user_id, mt.memory_id, mt.memory_revision) = (m.user_id, m.id, m.revision) AND t.level = 1
   )`;
+const unfiledCreatedAtUs = `COALESCE(m.core_created_at_ms::numeric * 1000, ${CREATED_AT_US})`;
 const hostedTopicFactCtes = `identity_facts AS (
     SELECT id COLLATE "C" AS id, through_revision FROM jsonb_to_recordset($3::jsonb) AS f(id text, through_revision bigint)
   ), plain_sessions AS (
@@ -459,19 +460,19 @@ export function createPostgresTopicStore({
         const facts = await hostedTopicFactParams(query, owner, visibility, true);
         // Compact JSON has the same bytes as JSON.stringify on UTF-8 [id, revision] pairs.
         const { rows } = await query(`WITH ${hostedTopicFactCtes}, visible AS MATERIALIZED (
-            SELECT m.id, m.revision, m.created_at FROM memories m ${hostedTopicReceiptJoin}
+            SELECT m.id, m.revision, ${unfiledCreatedAtUs} AS created_at_us FROM memories m ${hostedTopicReceiptJoin}
             WHERE m.user_id = $1 AND ${currentMemory("m")} AND ${unfiledMemory} AND ${passesHostedTopicFacts}
           ), totals AS (
             SELECT count(*) AS count, encode(sha256(convert_to(COALESCE('[' ||
               string_agg('[' || to_json(id)::text || ',' || revision::text || ']', ',' ORDER BY id COLLATE "C")
               || ']', '[]'), 'UTF8')), 'hex') AS digest FROM visible
           )
-          SELECT totals.*, page.id, page.revision, ${CREATED_AT_US}::text AS created_at_us
+          SELECT totals.*, page.id, page.revision, page.created_at_us::text AS created_at_us
           FROM totals LEFT JOIN LATERAL (
-            SELECT id, revision, created_at FROM visible
-            WHERE $5::numeric IS NULL OR (${CREATED_AT_US}, id COLLATE "C") < ($5, $6::text)
-            ORDER BY created_at DESC, id COLLATE "C" DESC LIMIT $7
-          ) page ON true ORDER BY page.created_at DESC, page.id COLLATE "C" DESC`,
+            SELECT id, revision, created_at_us FROM visible
+            WHERE $5::numeric IS NULL OR (created_at_us, id COLLATE "C") < ($5, $6::text)
+            ORDER BY created_at_us DESC, id COLLATE "C" DESC LIMIT $7
+          ) page ON true ORDER BY page.created_at_us DESC, page.id COLLATE "C" DESC`,
         [...facts, position?.createdAtUs.toString() ?? null, position?.id ?? null, limit + 1]);
         const [{ count, digest }] = rows;
         const page = rows.flatMap(row => row.id === null ? [] : [

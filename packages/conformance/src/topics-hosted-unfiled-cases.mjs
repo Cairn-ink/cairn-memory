@@ -28,6 +28,12 @@ function setup(ctx, scope = ctx.scope(null)) {
       const { id, revision } = await write(tx => memories.insert(tx, scope, input, receipts, atMs));
       return { memoryId: id, revision };
     },
+    /** @param {string} text @param {number} createdAtMs */
+    async seedImport(text, createdAtMs) {
+      const input = { ...await row(ctx, text), createdAtMs };
+      const { id, revision } = await write(tx => memories.insert(tx, scope, input, [], 1));
+      return { memoryId: id, revision };
+    },
     /** @param {Guard} guard @param {string} text */
     async edit({ memoryId, revision }, text) {
       const input = await row(ctx, text);
@@ -108,6 +114,7 @@ export const TOPIC_HOSTED_UNFILED_CASES = [
     const capped = await store.seed("Failure kept at the attempt cap");
     const receipt = evidence("suppressed-unfiled", 1);
     const suppressed = await store.seed("Suppressed by its receipt session", 1, [receipt]);
+    await store.seed("Suppressed before placement", 1, [evidence("suppressed-pending", 1)]);
     const forgotten = await store.seed("Forgotten before topic cleanup");
     const historical = await store.seed("Historical copy");
     const { createdTopics: [topic] } = await store.apply([filed], [{
@@ -196,5 +203,28 @@ export const TOPIC_HOSTED_UNFILED_CASES = [
     await rejects(() => store.page(sameClockEdit, 1), "cursor_stale");
     equal(await store.page(), { count: 2, items: [item(newer, 3000n), item(edited, 2000n)], nextCursor: null },
       "The same ids and count can contain a different memory revision");
+  }),
+
+  hostedCase(4, "unfiled seeks across exact out-of-range import times", async ctx => {
+    const store = setup(ctx);
+    const oldestMs = Number.MIN_SAFE_INTEGER;
+    const nextOldestMs = oldestMs + 1;
+    const oldest = await store.seedImport("Imported at the minimum safe time", oldestMs);
+    const nextOldest = await store.seedImport("Imported one millisecond later", nextOldestMs);
+    const older = await store.seed("An ordinary earlier memory", 2);
+    const newer = await store.seed("An ordinary later memory", 3);
+    await store.apply([oldest, nextOldest, older, newer]);
+    equal(await store.counts(), { memoryCount: 4, pending: 0 }, "Imported rows count as finished memories");
+
+    const expected = [item(newer, 3000n), item(older, 2000n),
+      item(nextOldest, BigInt(nextOldestMs) * 1000n), item(oldest, BigInt(oldestMs) * 1000n)];
+    let cursor = /** @type {string | null} */ (null);
+    for (const [index, expectedItem] of expected.entries()) {
+      const page = await store.page(cursor, 1);
+      equal({ count: page.count, items: page.items }, { count: expected.length, items: [expectedItem] },
+        "Each page returns the next exact timestamp and the full count");
+      equal(page.nextCursor !== null, index < expected.length - 1, "Only the final page has no cursor");
+      cursor = page.nextCursor;
+    }
   }),
 ];
