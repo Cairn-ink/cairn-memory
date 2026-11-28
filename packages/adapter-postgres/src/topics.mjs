@@ -2,18 +2,20 @@ import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, hostedTopicListPage, hostedTopicMemberPage,
   isErrorCode, memoryGuards, placementProposal, titleKey, validHostedTopicId,
 } from "../../core/src/index.mjs";
-import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
+import { decodeCursor, encodeCursor, readUnfiledCursor, unfiledPage } from "../../core/src/retrieval/hosted-paging.mjs";
 import { LIVE_CARD, nonempty, PERSONAL_CARD } from "./document-card-rows.mjs";
-import { advanceIndex, readCandidate, timestampUs } from "./memory-rows.mjs";
+import { advanceIndex, CREATED_AT_US, readCandidate, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
-/** @import { CardPlacementProposal, HostedTopicMemberPage, HostedTopicPage, Scope, Topic, TopicMemberPage, TopicPage, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
+/** @import { CardPlacementProposal, HostedTopicMemberPage, HostedTopicPage, HostedTopicReads, Scope, Topic, TopicMemberPage, TopicPage, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
+/** @import { FactMatchPolicy, StoredFact } from "../../core/src/index.mjs" */
 /** @import { Run } from "./uow.mjs" */
 /** @typedef {import("./driver.mjs").Connection["query"]} Query */
 /** @typedef {Pick<Required<TopicStore>, "pending" | "catalog" | "applyPlacement" | "markFailed" |
- * "list" | "members" | "forMemory" | "forMemories" | "dropMemory">} MemoryPlacement */
+ * "list" | "members" | "forMemory" | "forMemories" | "dropMemory"> & HostedTopicReads} MemoryPlacement */
+/** @typedef {TopicStore & MemoryPlacement} Placement */
 
 const BATCH_LIMIT = 5;
 const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
@@ -37,6 +39,40 @@ const currentCardMemberJoin = `JOIN card_placements p ON
 /** @param {string} alias */
 const currentMemory = (alias) => `${alias}.currentness = 'current' AND ${alias}.core_namespace IS NULL
   AND NOT EXISTS (SELECT 1 FROM memory_forget_log f WHERE f.user_id = ${alias}.user_id AND f.memory_id = ${alias}.id)`;
+
+const unfiledMemory = `EXISTS (
+    SELECT 1 FROM memory_placements p
+    WHERE (p.user_id, p.memory_id, p.memory_revision) = (m.user_id, m.id, m.revision)
+      AND p.status IN ('unfiled', 'filed')
+  ) AND NOT EXISTS (
+    SELECT 1 FROM memory_topics mt JOIN topics t ON (t.user_id, t.id) = (mt.user_id, mt.topic_id)
+    WHERE (mt.user_id, mt.memory_id, mt.memory_revision) = (m.user_id, m.id, m.revision) AND t.level = 1
+  )`;
+const unfiledCreatedAtUs = `COALESCE(m.core_created_at_ms::numeric * 1000, ${CREATED_AT_US})`;
+const hostedTopicFactCtes = `identity_facts AS (
+    SELECT id COLLATE "C" AS id, through_revision FROM jsonb_to_recordset($3::jsonb) AS f(id text, through_revision bigint)
+  ), plain_sessions AS (
+    SELECT DISTINCT client COLLATE "C" AS client, session_id COLLATE "C" AS session_id
+    FROM jsonb_to_recordset($4::jsonb) AS f(client text, session_id text)
+  ), receipt_suppression AS MATERIALIZED (
+    SELECT r.memory_id, bool_or(r.client = '' OR s.client IS NOT NULL OR
+      (r.session_id = '' AND r.client IN (SELECT client FROM plain_sessions))) AS hidden
+    FROM core_memory_receipts r LEFT JOIN plain_sessions s ON (s.client, s.session_id) = (r.client, r.session_id)
+    WHERE r.user_id = $1 AND r.forgotten_at IS NULL AND EXISTS (SELECT 1 FROM plain_sessions)
+    GROUP BY r.memory_id
+  )`;
+const hostedTopicReceiptJoin = "LEFT JOIN receipt_suppression rs ON rs.memory_id = m.id";
+// Receipt sources replace the memory's source when present. Empty source values
+// that the core matcher deems ineligible also hide the memory.
+const passesHostedTopicFacts = `(m.id <> '' OR NOT EXISTS (SELECT 1 FROM identity_facts)) AND NOT EXISTS (
+    SELECT 1 FROM identity_facts f WHERE f.id = m.id AND (f.through_revision IS NULL OR m.revision <= f.through_revision)
+  ) AND NOT COALESCE(rs.hidden,
+    m.source_client IS NOT NULL AND m.source_session_id IS NOT NULL AND (
+      (m.source_client, m.source_session_id) IN (SELECT client, session_id FROM plain_sessions)
+      OR (m.source_session_id = '' AND m.source_client IN (SELECT client FROM plain_sessions))
+      OR (m.source_client = '' AND EXISTS (SELECT 1 FROM plain_sessions))
+    )
+  ) AND NOT EXISTS (SELECT 1 FROM unnest($2::text[]) AS hidden(id) WHERE hidden.id = m.id)`;
 
 /** @param {string} visibleSources */
 const visibleTopicTitle = (visibleSources) => `CASE WHEN EXISTS (
@@ -65,6 +101,51 @@ const mixedNewestFirst = `placed_at DESC, member_id COLLATE "C" DESC, member_kin
 async function visibleRows(visibility, owner, rows) {
   const checked = await visibility.check(rows.map((row) => readCandidate(row, owner)));
   return rows.filter((_, index) => !checked[index].hidden);
+}
+
+/** @param {Query} query @param {string} owner @param {Pick<Visibility, "candidateColumns" | "check">} visibility
+ * @param {boolean} unfiledOnly */
+async function hiddenPersonalMemories(query, owner, visibility, unfiledOnly) {
+  const columns = visibility.candidateColumns([null]);
+  const hidden = [];
+  const batchSize = 2048;
+  const outcomeFilter = unfiledOnly ? "AND " + unfiledMemory : "";
+  let after = null;
+  // The shared matcher handles keyed digests, vectors and host session hash policies.
+  // Only evidence required by the live facts leaves SQL, with receipt reads batched too.
+  while (true) {
+    const { rows } = await query(`SELECT ${columns} FROM memories m
+      WHERE m.user_id = $1 AND ${currentMemory("m")} ${outcomeFilter}
+        AND ($2::text IS NULL OR m.id COLLATE "C" > $2)
+      ORDER BY m.id COLLATE "C" LIMIT $3`, [owner, after, batchSize]);
+    const checked = await visibility.check(rows.map(row => readCandidate(row, owner)));
+    for (const [i, entry] of checked.entries()) {
+      if (entry.hidden) hidden.push(rows[i].id);
+    }
+    if (rows.length < batchSize) return hidden;
+    after = rows.at(-1).id;
+  }
+}
+
+/** @param {Query} query @param {string} owner @param {Visibility} visibility @param {boolean} unfiledOnly */
+async function hostedTopicFactParams(query, owner, visibility, unfiledOnly) {
+  const identities = [];
+  const sessions = [];
+  /** @type {Set<StoredFact>} */
+  const residual = new Set();
+  // readVisibility has validated the stored owner facts, including live legacy rows.
+  for (const stored of visibility.selectedFacts([null])) {
+    const { fact } = stored;
+    if (fact.kind === "identity") {
+      identities.push({ id: fact.memoryId, through_revision: fact.throughRevision ?? null });
+    } else if (fact.kind === "session" && "sessionId" in fact.session) {
+      sessions.push({ client: fact.session.client, session_id: fact.session.sessionId });
+    } else {
+      residual.add(stored);
+    }
+  }
+  const hidden = residual.size ? await hiddenPersonalMemories(query, owner, visibility.restrictTo(residual), unfiledOnly) : [];
+  return [owner, hidden, JSON.stringify(identities), JSON.stringify(sessions)];
 }
 
 /**
@@ -337,7 +418,7 @@ class WithoutDocumentCards {
 
 /**
  * @param {import("./topics.d.mts").PostgresTopicOptions} [options]
- * @returns {TopicStore & MemoryPlacement}
+ * @returns {Placement}
  */
 export function createPostgresTopicStore({
   now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3, hashSessionKey, documentCards
@@ -452,6 +533,52 @@ export function createPostgresTopicStore({
 
   /** @type {MemoryPlacement} */
   const placement = {
+    async memoryCounts(tx, scope) {
+      const owner = personalOwner(tx, scope);
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const facts = await hostedTopicFactParams(query, owner, visibility, false);
+        const { rows: [row] } = await query(`WITH ${hostedTopicFactCtes}
+          SELECT count(*) AS memory_count,
+            count(*) FILTER (WHERE p.memory_id IS NULL OR (p.status = 'failed' AND p.attempts < $5)) AS pending
+            FROM memories m ${hostedTopicReceiptJoin} ${currentPlacementJoin}
+            WHERE m.user_id = $1 AND ${currentMemory("m")} AND ${passesHostedTopicFacts}`, [...facts, topicMaxAttempts]);
+        return { memoryCount: Number(row.memory_count), pending: Number(row.pending) };
+      });
+    },
+
+    async unfiled(tx, scope, { cursor, limit }) {
+      const owner = personalOwner(tx, scope);
+      const position = readUnfiledCursor(owner, cursor, limit);
+      return runOperation(tx, async (query, run) => {
+        const revision = await readIndexRevision(query, owner, run);
+        if (position && position.revision !== revision) throw new CoreError("cursor_stale");
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const facts = await hostedTopicFactParams(query, owner, visibility, true);
+        // Compact JSON has the same bytes as JSON.stringify on UTF-8 [id, revision] pairs.
+        const { rows } = await query(`WITH ${hostedTopicFactCtes}, visible AS MATERIALIZED (
+            SELECT m.id, m.revision, ${unfiledCreatedAtUs} AS created_at_us FROM memories m ${hostedTopicReceiptJoin}
+            WHERE m.user_id = $1 AND ${currentMemory("m")} AND ${unfiledMemory} AND ${passesHostedTopicFacts}
+          ), totals AS (
+            SELECT count(*) AS count, encode(sha256(convert_to(COALESCE('[' ||
+              string_agg('[' || to_json(id)::text || ',' || revision::text || ']', ',' ORDER BY id COLLATE "C")
+              || ']', '[]'), 'UTF8')), 'hex') AS digest FROM visible
+          )
+          SELECT totals.*, page.id, page.revision, page.created_at_us::text AS created_at_us
+          FROM totals LEFT JOIN LATERAL (
+            SELECT id, revision, created_at_us FROM visible
+            WHERE $5::numeric IS NULL OR (created_at_us, id COLLATE "C") < ($5, $6::text)
+            ORDER BY created_at_us DESC, id COLLATE "C" DESC LIMIT $7
+          ) page ON true ORDER BY page.created_at_us DESC, page.id COLLATE "C" DESC`,
+        [...facts, position?.createdAtUs.toString() ?? null, position?.id ?? null, limit + 1]);
+        const [{ count, digest }] = rows;
+        const page = rows.flatMap(row => row.id === null ? [] : [
+          { id: row.id, revision: Number(row.revision), createdAtUs: BigInt(row.created_at_us) },
+        ]);
+        return unfiledPage(owner, revision, digest, Number(count), page, limit, position);
+      });
+    },
+
     async pending(tx, scope, options) {
       const owner = personalOwner(tx, scope);
       const { limit } = options;

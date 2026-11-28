@@ -456,5 +456,15 @@ function visibilityForFacts(byNamespace, loadReceipts, hashSessionKey) {
       sessionBlocksIncoming(stored, scope, { client, sessionId }, capture)) ?? false;
   }
 
-  return { check, blocks, blocksSession, candidateColumns, selectedFacts };
+  /** @param {ReadonlySet<StoredFact>} facts @returns {{ candidateColumns: typeof candidateColumns, check: typeof check }} */
+  function restrictTo(facts) {
+    const selected = new Map([...byNamespace].map(([namespace, group]) => [namespace, {
+      ...group,
+      facts: group.facts.filter(fact => facts.has(fact)),
+      prepared: group.prepared.filter((_, index) => facts.has(group.facts[index])),
+    }]));
+    return visibilityForFacts(selected, loadReceipts, hashSessionKey);
+  }
+
+  return { check, blocks, blocksSession, candidateColumns, selectedFacts, restrictTo };
 }

@@ -1,4 +1,4 @@
-import type { Scope, TopicStore } from "@cairn-ink/core/ports";
+import type { HostedTopicReads, Scope, TopicStore } from "@cairn-ink/core/ports";
 import type { createIndexRevisions } from "./index-revisions.mjs";
 import type { PlacementVisibility, ScopedVisibility } from "./placement-visibility.mjs";
 import type { Connection, Port } from "./storage-values.mjs";
@@ -8,7 +8,7 @@ export type TopicOptions = { topicRetryAfterMs?: number; topicMaxAttempts?: numb
 
 export function createTopicStore(port: Port, index: ReturnType<typeof createIndexRevisions>,
   visibility: PlacementVisibility, now: () => number, options: TopicOptions, legacyFiling: boolean,
-  cardVisibility?: Parameters<typeof createTopicCardPlacement>[2]): TopicStore;
+  cardVisibility?: Parameters<typeof createTopicCardPlacement>[2]): TopicStore & HostedTopicReads;
 export function topicMembershipReader(db: Connection, scope: Scope, visible: ScopedVisibility):
   (id: string) => string[] | null;
 export function inspectTopics(db: Connection, scope: Scope, visible: ScopedVisibility, ids: string[]):

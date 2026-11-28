@@ -52,6 +52,14 @@ export interface HostedTopicMemberPage extends TopicMemberPage {
 
 /** Optional under the placement capability. Every operation is scoped to a live transaction. */
 export interface TopicStore {
+  /** Personal scope (namespace null). Counts visible current memories. Pending includes a missing
+   * current-revision outcome or a failure below the attempt cap, regardless of code and backoff. */
+  memoryCounts?(tx: Tx, scope: Scope): Promise<TopicMemoryCounts>;
+  /** Personal scope (namespace null). Counts visible current memories with a finished outcome at
+   * their revision and no current-revision L1 membership. Limit 1–50. Seeks newest creation first,
+   * then descending UTF-8 id. A change to the index revision or visible set throws cursor_stale.
+   * Malformed cursors or cursors for another owner or view throw invalid_cursor. */
+  unfiled?(tx: Tx, scope: Scope, query: TopicPage): Promise<UnfiledTopicPage>;
   /** Oldest current memories at their revision with no placement outcome and either no failure or a retryable failure eligible under host config. The memory store defaults to a 1-hour retry window and 3 failed attempts. Limit 1–5. */
   pending(tx: Tx, scope: Scope, query: { limit: number }): Promise<MemoryGuard[]>;
   /** Includes empty topics. A change to the owner's index revision invalidates earlier cursors. */
@@ -143,3 +151,17 @@ export interface TopicStore {
    */
   dropMemory(tx: Tx, scope: Scope, memoryId: string): Promise<{ dropped: number }>;
 }
+
+export interface TopicMemoryCounts {
+  memoryCount: number;
+  pending: number;
+}
+
+export interface UnfiledTopicPage {
+  count: number;
+  items: Array<{ id: string; revision: Revision; createdAtUs: bigint }>;
+  nextCursor: string | null;
+}
+
+/** Hosted personal-memory reads implemented by the first-party topic stores. */
+export type HostedTopicReads = Required<Pick<TopicStore, "memoryCounts" | "unfiled">>;

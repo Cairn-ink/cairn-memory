@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode } from "@cairn-ink/core";
-import type { Revision, Topic, TopicStore } from "@cairn-ink/core/ports";
+import type { HostedTopicReads, Revision, Topic, TopicStore } from "@cairn-ink/core/ports";
 import type { createFactMatcher } from "./fact-match.mjs";
 import type { MemoryAdapterOptions } from "./index.d.mts";
 import type { State, createUnitOfWork } from "./unit-of-work.mjs";
@@ -25,4 +25,4 @@ export function dropCardPlacement(state: State, namespace: import("@cairn-ink/co
 export function createTopicStore(port: ReturnType<typeof createUnitOfWork>["port"],
   flags: Capabilities, newId: () => string, now: () => number, matchFacts: ReturnType<typeof createFactMatcher>,
   options: Pick<MemoryAdapterOptions, "topicRetryAfterMs" | "topicMaxAttempts">,
-  cardVisible: ReturnType<typeof import("./retrieval.mjs").createCardVisibility>): TopicStore;
+  cardVisible: ReturnType<typeof import("./retrieval.mjs").createCardVisibility>): TopicStore & HostedTopicReads;

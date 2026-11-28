@@ -1,7 +1,7 @@
 import type { CoreError, FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type {
-  ConflictEdgeStore, HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore,
+  ConflictEdgeStore, HostedTopicReads, HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore,
   PauseStore, RawCandidates, ReadSnapshot, SupersessionStore, SuppressionStore, VectorCandidates, VisibilityFence,
 } from "../../core/src/ports/index.d.ts";
 import type { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs";
@@ -104,7 +104,9 @@ export function createPostgresPauseStore(): PauseStore;
 export function createPostgresSupersessionStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): SupersessionStore;
 export function createPostgresConflictEdgeStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): ConflictEdgeStore;
 export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
-export { createPostgresTopicStore } from "./topics.mjs";
+declare const postgresTopicStore: typeof import("./topics.mjs").createPostgresTopicStore;
+export function createPostgresTopicStore(...options: Parameters<typeof postgresTopicStore>):
+  ReturnType<typeof postgresTopicStore> & HostedTopicReads;
 export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";
 export type { PostgresHostOperation } from "./host-write-hooks.mjs";
 export { createPostgresDocumentCardStore } from "./document-cards.mjs";

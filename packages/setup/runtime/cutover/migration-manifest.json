@@ -936,7 +936,8 @@
       "packages/core/src/utf8.mjs"
     ],
     "packages/core/src/retrieval/hosted-paging.mjs": [
-      "packages/core/src/errors.mjs"
+      "packages/core/src/errors.mjs",
+      "packages/core/src/utf8.mjs"
     ],
     "packages/core/src/retrieval/session-start.mjs": [
       "packages/core/src/errors.mjs"
@@ -1199,7 +1200,7 @@
     "packages/core/src/rationale/store-plan.mjs": "164b7e14b2694244d72ae1cd14f5dcf83bf62b5b5a6588e34d838a057bb8ebd3",
     "packages/core/src/retrieval/bm25.mjs": "5f59680dafd3b7e6bdf4abd53239915fed7a9a5213b647680a49c8030d520e40",
     "packages/core/src/retrieval/fusion.mjs": "5013b1fabb3aca7ae81f995548db1e203435ffda8701039fa033f26bade71da1",
-    "packages/core/src/retrieval/hosted-paging.mjs": "fd95f5e3ff51e81e5ac6aad15c212f8f27d489de56da6d070661fdd97053822f",
+    "packages/core/src/retrieval/hosted-paging.mjs": "b835276c5ef9b1045a1fc31a4e8c2f3414036c324a40caa66eee101457bb7d26",
     "packages/core/src/retrieval/session-start.mjs": "78160fc6a4d4ebba7414a3ac3f8f824812c435dc9b1d93ee78e4b0fb3549abb9",
     "packages/core/src/retrieval/tokenize.mjs": "e656d7eada5513921afbebb5d098237b6b0c89117cbce1e02c7368f47ef56d2b",
     "packages/core/src/routing/card.mjs": "71d45d8629dfd3ff9ee4af0f4bb99786864e14605c38021787e36b1ad1f6e8b2",
