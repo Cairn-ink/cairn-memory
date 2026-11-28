@@ -72,7 +72,7 @@ function hostedCase(number, title, run, needs = ["placement"]) {
 }
 
 export const HOSTED_TOPIC_CASES = [
-  // Cloud tests/w4/topics-api.test.ts and tests/topics-store.test.ts: count order, preview IDs,
+  // Hosted reference fixtures: count order, preview IDs,
   // one-row pages, the L2 header, rejected cursor scopes, and restart after a write.
   hostedCase(1, "matches hosted list and member pages and binds cursors to the owner, view and revision", async ctx => {
     const store = setup(ctx);
@@ -201,8 +201,7 @@ export const HOSTED_TOPIC_CASES = [
     }, "The older child placement must not reappear after the seek");
   }),
 
-  // Cloud tests/topics-revision.test.ts, tests/topics-store.test.ts and
-  // tests/w4/topics-api.test.ts: surviving witness, retired title and empty topic header.
+  // Hosted reference fixtures: surviving witness, retired title and empty topic header.
   hostedCase(4, "excludes forgotten, text-suppressed and stale memories before counting, previewing and paging", async ctx => {
     const store = setup(ctx);
     const stale = await store.memory("stale", "Quantum optics lab");
