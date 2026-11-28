@@ -1,7 +1,7 @@
 import { compareUtf8, RELATION_LIMIT } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { assemblyClock } from "./context-assembly-cases.mjs";
-import { check, equal, fixtureEmbedding, readDump, rejects, source } from "./support.mjs";
+import { check, DEFAULT_EMBEDDING_DIMENSIONS, equal, evidence, fixtureEmbedding, readDump, rejects, source } from "./support.mjs";
 
 /** @import { ItemRef, MemoryRow, SaveOptions, Scope } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
@@ -69,6 +69,32 @@ async function unchanged(ctx, scope, rows, act) {
   const before = await state(ctx, scope, ids);
   await act();
   equal(await state(ctx, scope, ids), before, "Refused save changed the stored state");
+}
+
+/**
+ * @param {CaseContext} ctx @param {Scope} scope @param {string} text
+ * @param {MemoryRow} current @param {MemoryRow} target @param {ReturnType<typeof service>} api
+ * @param {NonNullable<SaveOptions["relations"]>[]} hints
+ */
+async function refuseDuplicateText(ctx, scope, text, current, target, api, hints) {
+  const { raw, uow } = ctx.adapter;
+  check(raw && !target.historical, "Expected a Raw port and a current relation target");
+  const receipt = { ...evidence("different-duplicate-text", 100), role: /** @type {const} */ ("user") };
+  const { client, sessionId, messageId, role } = receipt;
+  const capture = { scope, client, sessionId, eventId: messageId, payloadDigest: "0".repeat(64) };
+  equal(await uow.run(scope.owner, { pauseLock: true }, tx =>
+    raw.archive(tx, capture, [{ id: messageId, occurredAtMs: 100, role, content: text }])),
+  { archived: 1 }, "Expected a Raw source for the proposed receipt");
+
+  const ids = [current.id, target.id];
+  const before = await state(ctx, scope, ids);
+  equal(before.links, ids.map(() => ({
+    supersession: emptySupersession, incoming: 0, conflicts: [], degree: 0,
+  })), "Expected both relation stores to be empty");
+  for (const relations of hints) {
+    await rejects(() => api.save(scope, text, source, "fact", { relations, receipt }), "invalid_input");
+    equal(await state(ctx, scope, ids), before, "Refusal changed the rows, revisions, timestamps, receipts, or relations");
+  }
 }
 
 /** @type {readonly ConformanceCase[]} */
@@ -377,6 +403,46 @@ export const relationHintCases = [
           relations: { replaces: hint(target) },
         }), "capability_unavailable"));
       },
+    },
+  },
+  {
+    id: "K-RELH-11", title: "refuses relation hints on a case-variant exact duplicate",
+    needs: ["supersession", "conflictEdges", "rawArchive"],
+    async run(ctx) {
+      const api = service(ctx);
+      const scope = ctx.scope(null);
+      const target = await seed(api, scope, "The meter used to report kilowatts.");
+      const current = await seed(api, scope, "The meter reports MW.");
+      const variant = "The meter reports mW.";
+      const replacement = { replaces: hint(target) };
+      const conflict = { contradicts: [hint(target)] };
+      await refuseDuplicateText(ctx, scope, variant, current, target, api, [replacement, conflict]);
+      const plain = await api.save(scope, variant, source);
+      check(plain.status === "duplicate" && plain.item.id === current.id, "Expected a case-variant exact duplicate without hints");
+      const linked = await api.save(scope, current.text, source, "fact", { relations: replacement });
+      check(linked.status === "duplicate" && linked.item.id === current.id, "Expected the equal text to reuse the existing row");
+      equal(linked.relations, { replaced: target.id, contradicts: [] }, "Equal text did not attach the replacement");
+    },
+  },
+  {
+    id: "K-RELH-12", title: "refuses relation hints on a near duplicate with different text",
+    needs: ["supersession", "conflictEdges", "rawArchive", "nearDuplicate", "embeddingRequiredOnInsert"],
+    async run(ctx) {
+      const embeddingDimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
+      const api = service({ ...ctx, embeddingDimensions });
+      const scope = ctx.scope(null);
+      const target = await seed(api, scope, "The meter used to report kilowatts.");
+      const current = await seed(api, scope, "The meter reports megawatts.");
+      const variant = "The reading is given in MW.";
+      const nearService = () => {
+        const fixture = { ...ctx, embeddingDimensions };
+        // Advance past the target's vector so the next save gets the duplicate's vector.
+        fixtureEmbedding(fixture);
+        return service(fixture);
+      };
+      await refuseDuplicateText(ctx, scope, variant, current, target, nearService(), [{ replaces: hint(target) }]);
+      const plain = await nearService().save(scope, variant, source);
+      check(plain.status === "duplicate" && plain.item.id === current.id, "Expected a near duplicate without hints");
     },
   },
 ];
