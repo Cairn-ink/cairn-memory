@@ -44,7 +44,7 @@ test('installed core-local candidate runs the 50-exchange SQLite round trip', as
       assert.match(snapshot, /^[A-Za-z0-9_-]{43}$/u);
       assert.equal((await call(request, 'fetch_memory_candidate_evidence', { snapshot })).value.items[0].content, content);
       assert.equal((await call(request, 'fetch_memory_candidate_evidence',
-        { refs: [read.value.items[0].ref], intent: 'current' })).value.items[0].content, content);
+        { refs: [found.items[0].ref], intent: 'current' })).value.items[0].content, content);
       const forgotten = (await call(request, 'forget_memory',
         { memoryId: saved.memory.id, expectedRevision: saved.memory.revision })).value;
       assert.deepEqual(forgotten, { forgotten: true, indexRevision: saved.indexRevision + 1 });

@@ -191,7 +191,7 @@ async function qualifyMigratedExplicit(baseline, candidate) {
     assert.equal(f.run(candidate, args, 2), f.run(baseline, args, 2));
   }
   console.log('Published 0.6.11 and the active installer reject Raw export/index with identical messages and exit 2. Its existing Raw conversation IDs are absent from the migrated file.');
-  const search = { query: 'zephyrite', types: ['memory'], intent: 'current' };
+  const search = { query: 'zephyrite', types: ['memory'], intent: 'current', representation: 'representation-v2-dated' };
   const assertVisibility = async (call, visible) => {
     const items = (await call('read_memory_context', search)).items;
     assert.equal(JSON.stringify(items).includes(raw), visible, JSON.stringify(items));
