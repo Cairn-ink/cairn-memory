@@ -20,7 +20,6 @@ import { migrationDatabase } from "./migration-database.mjs";
 const databaseUrl = process.env.CORE_PG_TEST_URL;
 
 const notApplicable = new Map([
-  ...kit.TOPIC_CARD_CASES.map(({ id }) => [id, "Requires topic-card placement and card membership views"]),
   ...kit.TOPICS_FOR_CARDS_CASES.map(({ id }) => [id, "Requires filing cards and reading batch topic annotations via forCards"]),
   ...kit.DELIVERY_VISIBILITY_CASES.map(({ id }) => [id, "Asserts batch topic annotations after filing and withholding a card"]),
   ["T-CONTEXT-DOCUMENT-CARD-1", "Requires qualified Context Read card refs, evidence and amendment assembly"],
@@ -41,7 +40,9 @@ const requiresCards = entry => entry.needs?.some(cardCapability) ||
   entry.followUp?.needs?.some(cardCapability);
 const allCases = [...Object.values(kit).flatMap(value => Array.isArray(value) ? value : []),
   kit.DOCUMENT_CARD_CORRECTION_PRIVACY_CASE, ...DOCUMENT_CARD_CORRECT_CASES, ...DOCUMENT_CARD_VISIBILITY_INPUT_CASES,
-  ...CONTEXT_READ_DOCUMENT_CARD_CASES].filter(requiresCards);
+  ...CONTEXT_READ_DOCUMENT_CARD_CASES]
+  // conformance-postgres.test.mjs runs the topic-card cases with a controllable retry clock.
+  .filter(entry => requiresCards(entry) && !kit.TOPIC_CARD_CASES.includes(entry));
 assert.equal(new Set(allCases.map(({ id }) => id)).size, allCases.length);
 for (const id of notApplicable.keys()) assert.ok(allCases.some(entry => entry.id === id), id);
 
@@ -108,7 +109,7 @@ function postgresFactory(t) {
           pause: createPostgresPauseStore(),
           supersession: createPostgresSupersessionStore(readOptions),
           conflicts: createPostgresConflictEdgeStore(readOptions),
-          ...(exposePlacement && { placement: createPostgresTopicStore(readOptions) }),
+          ...(exposePlacement && { placement: createPostgresTopicStore({ ...readOptions, documentCards }) }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) },
             ...(sessionLineage && { sessionLineage: rawPorts.sessionLineage }) }),
           ...(quantityLedger && { quantityLedger }),

@@ -1,6 +1,6 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
-import { DOCUMENT_CARD_SEARCH_TEXT_VERSION } from "../../core/src/routing/index.mjs";
+import { DOCUMENT_CARD_SEARCH_TEXT_VERSION, documentCardStaleness, documentCardVisible } from "../../core/src/routing/index.mjs";
 import { CARD_COLUMNS, LIVE_CARD, PERSONAL_CARD, cardRow, copyCard, copyMessage, copySelector, copyStale,
   decodeCard, nonempty, personalOwner, readCard, sourceMessage, unionLinks } from "./document-card-rows.mjs";
 import { createCardVisibility } from "./document-card-visibility.mjs";
@@ -176,9 +176,27 @@ async function readAmendments(query, owner, ids, purge) {
   return rows;
 }
 
-/** @param {DocumentCardOptions} [options] @returns {Store & {purgeCards: CardPurge}} */
+/** @param {DocumentCardOptions} [options] */
 export function createPostgresDocumentCardStore(options = {}) {
   const visibility = createCardVisibility(options);
+
+  /** @param {Query} query @param {string} owner @param {Iterable<string>} ids */
+  async function visibilityRows(query, owner, ids) {
+    const { rows } = await query(`SELECT ${CARD_COLUMNS} FROM document_cards c
+      WHERE ${PERSONAL_CARD} AND c.id = ANY($2::text[])`, [owner, [...new Set(ids)]]);
+    return new Map(rows.map(row => [row.id, row]));
+  }
+
+  /** @param {Reader} reader @param {CardWrite} card @param {boolean} requireRaw */
+  async function visibilityInput(reader, card, requireRaw) {
+    try {
+      const input = await reader.input(card, requireRaw);
+      if (input.sourceWithheld === null || (!card.sourceMessage && input.sourceWithheld)) return null;
+      return input;
+    } catch {
+      return null;
+    }
+  }
 
   /** @param {Tx} tx @param {Scope} scope @param {string} reason @param {DocumentCardHideOptions & {id?: string}} options
    * @param {Selector[]} [selectors] */
@@ -217,7 +235,8 @@ export function createPostgresDocumentCardStore(options = {}) {
     });
   }
 
-  return {
+  return /** @satisfies {Store & {purgeCards: CardPurge, readFileableCards: typeof readFileableCards}} */ ({
+    readFileableCards,
     async purgeCards(query, run, scope, sources, memoryId) {
       if (!sources.length && memoryId === undefined) return;
       const { owner } = scope;
@@ -409,9 +428,7 @@ export function createPostgresDocumentCardStore(options = {}) {
         }
       });
       return runOperation(tx, async query => {
-        const { rows } = await query(`SELECT ${CARD_COLUMNS} FROM document_cards c
-          WHERE ${PERSONAL_CARD} AND c.id = ANY($2::text[])`, [owner, [...new Set(ids.filter(id => id !== null))]]);
-        const byId = new Map(rows.map(row => [row.id, row]));
+        const byId = await visibilityRows(query, owner, ids.filter(id => id !== null));
         const reader = visibility(query, requestedScope);
         return Promise.all(ids.map(async id => {
           if (id === null) return null;
@@ -422,16 +439,32 @@ export function createPostgresDocumentCardStore(options = {}) {
             if (hidden(row)) return null;
             const card = readCard(row, owner);
             if (!card) return null;
-            const input = await reader.input(card, requireRaw);
-            if (input.sourceWithheld === null || (!card.sourceMessage && input.sourceWithheld)) return null;
-            return input;
+            return visibilityInput(reader, card, requireRaw);
           } catch {
             return null;
           }
         }));
       });
     },
-  };
+  });
+
+  // Called on the topic operation's connection so candidate reads, visibility,
+  // and any subsequent placement write stay in the same serialized operation.
+  /** @param {Query} query @param {string} owner @param {readonly string[]} ids */
+  async function readFileableCards(query, owner, ids) {
+    const hashes = new Map();
+    if (!ids.length) return hashes;
+    const rows = await visibilityRows(query, owner, ids);
+    const reader = visibility(query, { owner, namespace: null });
+    for (const [id, row] of rows) {
+      const card = !hidden(row) && readCard(row, owner);
+      if (!card) continue;
+      const input = await visibilityInput(reader, card, false);
+      if (input && !documentCardStaleness({ card, memoryStates: input.memoryStates }) &&
+          (await documentCardVisible(input)).visible) hashes.set(id, card.contentHash);
+    }
+    return hashes;
+  }
 }
 
 /** @param {import("../../core/src/routing/index.mjs").DocumentVector} vector */
