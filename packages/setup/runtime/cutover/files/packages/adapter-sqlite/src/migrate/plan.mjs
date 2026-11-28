@@ -1,6 +1,6 @@
 import { normalizeForHash, prepareCoreText, receiptExcerpt } from "../../../core/src/index.mjs";
 import { legacyIdentifier, refuse } from "../legacy/migration-input.mjs";
-import { receiptIdentityKey } from "../receipt-identity.mjs";
+import { receiptAddressDenial, receiptIdentityKey } from "../receipt-identity.mjs";
 import { encodeContent, scopeKey, sha256 } from "../storage-values.mjs";
 import { createRawLineage } from "../raw-lineage.mjs";
 import { sessionHasher } from "../suppressions.mjs";
@@ -137,6 +137,8 @@ export function planMigration(source) {
   const withheldReceipts = source.withheldReceipts;
   /** @type {SQLInputValue[][]} */
   const receiptRows = [];
+  /** @type {Map<string, string[]>} */
+  const receiptDenials = new Map();
   for (const row of receipts) {
     const memory = byId.get(row.memory_id);
     if (!memory || memory.deleted === 1n) return refuse("legacy_incomplete");
@@ -153,6 +155,12 @@ export function planMigration(source) {
     receiptOrder.set(row.memory_id, state);
     const excerpt = receiptExcerpt(row.excerpt);
     const address = { client, sessionId, messageId, role: row.role };
+    if (source.retiredReceiptIds.has(id)) {
+      // Legacy digests remain durable even when no receipt survived. A
+      // retained match supplies an additional role-free denial for delivery.
+      const denial = [...keys, receiptAddressDenial(address)];
+      receiptDenials.set(JSON.stringify(denial), denial);
+    }
     const eventTime = row.occurred_at;
     const occurredAtMs = eventTime == null ? null : Date.parse(eventTime);
     if (occurredAtMs !== null && (typeof eventTime !== "string" || !Number.isSafeInteger(occurredAtMs) ||
@@ -187,7 +195,7 @@ export function planMigration(source) {
     else ledger.invalidated++;
   }
   return {
-    memoryRows, receiptRows, markers, epochs: ownerEpochs, pause, revisions, withheldReceipts,
+    memoryRows, receiptRows, markers: [...markers, ...receiptDenials.values()], epochs: ownerEpochs, pause, revisions, withheldReceipts,
     anchors, closed: [...closed.values()], ledger, safety,
     evidence: encodeEvidence({ history: [], namespaceEpochs, episodeControls, consent, rawControls, scopedCaptureControls: true, withheldReceipts,
       ...(source.placement.topics.length || source.placement.conflicts.length || source.placement.completed.length ||

@@ -68,7 +68,11 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
       if (legacyKey && ((!attested && !migratedRaw.receiptAncestryEmpty(db, stored?.legacyRawAncestryEmpty)) ||
           migratedRaw.blocksSpan(db, scope, receipt, messageId) ||
           migratedRaw.blocksEvent(db, { scope, client, eventId: messageId }))) return false;
-      if ((legacyKey || !archived) && migratedRaw.blocks(db, scope, receipt, [{ id: messageId, occurredAtMs }])) return false;
+      // The cold snapshot already proved that this retained receipt had no
+      // Raw ancestry. Legacy Raw time windows never applied to that excerpt.
+      const independent = attested && stored?.legacyRawAncestryEmpty === true && !archived;
+      if ((legacyKey || !archived) &&
+          migratedRaw.blocks(db, scope, receipt, [{ id: messageId, occurredAtMs }], !independent)) return false;
     }
     if (!archived) return attested || !lineage.hasPossibleReceiptSource(db, scope, receipt, addressOnly);
 

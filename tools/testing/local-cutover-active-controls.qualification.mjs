@@ -8,6 +8,8 @@ import { golden, withStdio } from '../../packaging/test/fixtures/local-host-wire
 import { rawRequest, splitRaw } from '../../core/testing/raw-fixtures.mjs';
 import { rationaleModel } from '../../core/testing/rationale-model.mjs';
 import { SERDE_MARKERS } from '../../integrations/codex/schema-evidence.mjs';
+import { message } from '../../packages/setup/lib/messages.mjs';
+import { wrapLine } from '../../packages/setup/lib/output.mjs';
 import { withUpgradeInstallers } from './local-cutover-upgrade.qualification.mjs';
 
 const ownerId = 'synthetic-operator', projectId = 'synthetic-project';
@@ -27,6 +29,16 @@ const retainedMemory = 'A synthetic enamel lamp should survive detachment.';
 const nativeSettings = (f, client) => client === 'claude'
   ? join(f.home, '.claude/settings.json') : join(f.codexHome, 'hooks.json');
 const clients = ['claude', 'codex'];
+
+// English local_privacy from the published 0.6.11 installer.
+const published0611Disclosure = [
+  'Memory stays on this computer. Setup sends no user data.',
+  'With OPENAI_API_KEY available to the Cairn MCP server, memories and search text go to OpenAI for semantic search, ' +
+    'up to an estimated US$1 per day per running Cairn server. Saved conversations are sent only if you opt in with ' +
+    "--raw-semantic (or explicitly configure --context-embedder). To keep everything on this computer, don't give the " +
+    'server a key. --no-context-semantic only turns off embeddings; with a key, recall and other model features still ' +
+    'send memory text to OpenAI.',
+].join('\n');
 
 function userHook(f, event, sessionId, transcript) {
   const hook = json(nativeSettings(f, 'claude')).hooks[event].at(-1).hooks[0];
@@ -330,7 +342,19 @@ async function qualifyArmedRepairAndReattach(baseline, candidate, testClients) {
     } finally { if (descriptor(f).state === 'installed') daemonStop(f, pkg); }
     results.push(output);
   }
-  assert.deepEqual(results[1], results[0]);
+  const header = 'Cairn.ink Memory setup <version>\n';
+  const withoutDisclosure = (outputs, disclosure, version) => {
+    assert.equal(outputs.length, 8, `${version} transcript length`);
+    const prefix = header + disclosure.split('\n').flatMap(wrapLine).join('\n') + '\n';
+    return outputs.map((output, index) => {
+      const row = index + 1;
+      if (![2, 3, 4, 5, 6, 8].includes(row)) return output;
+      assert.equal(output.slice(0, prefix.length), prefix, `${version} setup disclosure (row ${row})`);
+      return header + output.slice(prefix.length);
+    });
+  };
+  assert.deepEqual(withoutDisclosure(results[1], message('en', 'local_privacy'), 'candidate'),
+    withoutDisclosure(results[0], published0611Disclosure, 'published 0.6.11'));
   console.log('Published and upgraded armed repair match output and exits for dry run, healthy repair, Codex format change, missing hooks and a damaged generation. Native commands, unrelated settings, and bindings were verified for both clients.');
   console.log('After complete detach, installed setup reattached both clients to the same inode and activation receipt. Capture archived a new turn and the daemon served the retained Memory. The retired source stayed a tombstone.');
 }

@@ -16,7 +16,7 @@ npx @cairn-ink/memory setup
 ```
 
 This checkout prepares installer **0.5.3**; publication is a separate step.
-Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.9.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.11.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or
 memory IDs present a choice; non-interactive conflicts change nothing.
@@ -169,6 +169,23 @@ file. The worker environment adds `CAIRN_MEMORY_STATE_DIR` and, when supplied by
 pairing-record option; it does not carry conversation text. See the repository security policy
 before reporting a possible privacy issue. Unpaired hooks ignore that state-directory value; only
 paired launcher handoffs validate it.
+
+### Turn off capture for a session
+
+Run `export CAIRN_MEMORY_CAPTURE=off` in your shell before starting Claude Code.
+For a per-project opt-out, put the following `env` setting in the project's `.claude/settings.local.json`.
+
+```json
+{"env": {"CAIRN_MEMORY_CAPTURE": "off"}}
+```
+
+The project setting reaches hooks only when Claude Code loads the project's settings in a trusted
+folder. A shell export always reaches the hooks.
+
+Cairn sends no turns for capture while the setting is in effect. Recall still works. Keep the setting
+in place for the whole session, including when you resume it. If you resume without it, Cairn can
+capture turns written while it was off.
+Only the exact value `off` turns capture off, and `/cairn-memory:status` shows when it is off.
 
 ## Explicit pairing (0.1.2)
 

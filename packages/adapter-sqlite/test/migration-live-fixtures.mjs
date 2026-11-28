@@ -49,7 +49,7 @@ export async function seedLiveMigration(directory, layout) {
     const forgotten = admit(engine, "Deleted synthetic memory", project, [shared]);
     const surviving = admit(engine, "Surviving synthetic memory", project, [shared]);
     ok(await engine.forget({ namespace: project, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
-    assert.equal(ok(engine.get({ namespace: project, memoryId: surviving.id })).receipts.length, 1);
+    assert.equal(ok(engine.get({ namespace: project, memoryId: surviving.id })).receipts.length, 0);
     const control = ok(engine.getCaptureControl({ namespace: project }));
     ok(engine.setCapturePaused({ namespace: project, expectedGeneration: control.generation, paused: true }));
     assert.equal(ok(engine.getCaptureControl({ namespace: personal })).paused, false);
@@ -78,7 +78,7 @@ export async function qualifyLiveMigration(directory, layout) {
   const expected = await legacyVisible(input.path);
   const rawExpected = await legacyRawVisible(input.path);
   assert.deepEqual(rawExpected.map(row => row.content), [live.raw]);
-  assert.equal(expected.find(row => row.text === "Surviving synthetic memory").receipts.length, 1);
+  assert.equal(expected.find(row => row.text === "Surviving synthetic memory").receipts.length, 0);
   await createLegacyBackup(input);
   const digest = fileDigest(input.path);
   const migrated = await migrateLegacyStore(input);

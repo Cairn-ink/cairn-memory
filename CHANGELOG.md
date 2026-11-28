@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.7.0
+
+## 0.6.12 — 2026-11-24
+
+- **Local recall, memory details and related views hide evidence that shares a forgotten source.** Evidence from independent sources can still appear.
+- In cloud mode, the bundled client's capture-request schema accepts optional transcript boundaries, a final-part marker and a parser version, and its validator rejects a range whose end is not after its start.
+- Engine features that local setup does not turn on by default also changed:
+  - Forgetting a memory can finish when a topic title came from an earlier source you already forgot.
+  - Pausing stops new model requests from background Card updates. Saved conversation searches that match only on words skip the embedding service.
+  - Session Start Next Steps withdraws an item whose sources share a message with something you forgot, whose text exactly matches a forgotten memory, or whose text exactly matches a forgotten message among its Episode's sources.
+  - Episode Keep, including reopening a saved Episode or retrying a Keep, leaves out sources that share a forgotten message's identity or address.
+  - Known limits: Keep does not detect the same text saved under a different message; a forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet; and a Keep saved before 0.6.12 can still list a forgotten source's ID if that source had already been removed from its draft.
+
+## 0.3.11 — 2026-11-23: turn off capture for one session or project
+
+- Setting `CAIRN_MEMORY_CAPTURE=off` stops the plugin from capturing that
+  session: the Stop and PreCompact hooks and the session-start boundary exit
+  before reading the transcript, writing capture state or sending anything.
+  Set it with a shell export, or per project in `.claude/settings.local.json`
+  under `env`. Only the exact value `off` counts.
+- Recall still works and writes no capture state; the optional start telemetry
+  is unchanged. `/cairn-memory:status` says when capture is off for the
+  session; otherwise its output is unchanged.
+
+## 0.6.11 — 2026-11-23
+
+- **On Linux, `daemon status --local` and `daemon stop --local` show and stop the store’s shared background servers.** The stop command can report that a server is still running. Setup records a capture identity for each connected tool, even with `--no-capture`, and uninstall keeps the engine while one is retained. A shared server normally exits about 30 seconds after its last session closes. To request an earlier stop, run `daemon stop --local` after closing the sessions and before uninstalling. When uninstall does remove the engine, it first asks these servers to stop, best effort. Uninstall keeps memory data.
+- **The bundled local engine records interrupted Claude Code session starts separately and preserves completed starts during recovery.** When this engine runs the capture hooks, a later save can recover an eligible start attempt recorded by installer 0.6.10. When capture stays enabled, rerunning setup keeps the existing hooks on their pinned engine.
+
+## 0.3.10 — 2026-11-23: capture windows say where they start and end
+
+- Each capture request now also carries the byte range of the transcript window
+  it belongs to, whether it is the window's last slice, and the transcript
+  parser version. The range and parser are the same on every slice of a window
+  and on retries, so the service can check that a window arrived whole before
+  it uses it.
+- The shared capture schema accepts the four new keys as optional, so other
+  clients keep sending the same requests. Recall and the settings are unchanged.
+
 ## 0.3.9 — 2026-11-22: compact recall when the service offers it
 
 - When the Cairn service says it supports context-read, recall first asks it

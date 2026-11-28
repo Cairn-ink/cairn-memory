@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync,readFileSync,readdirSync } from 'node:fs';
 import { join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withoutDeliveryLookups } from '../testing/card-lineage-off-wide-compare.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 test('unmigrated authored reads/writes/capture have exact bytes, SQL and population against the engine baseline',t=>{
@@ -30,7 +31,8 @@ test('unmigrated authored reads/writes/capture have exact bytes, SQL and populat
   }
   const current=run(root,'current');
   assert.equal(JSON.stringify(current.calls),JSON.stringify(old.calls),'serialized output bytes');
-  assert.deepEqual(current.statements,old.statements,'exact executed SQL and BEGIN/COMMIT sequence');
+  const lookupLedger=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-delivery-lookups.json',import.meta.url),'utf8'));
+  assert.deepEqual(withoutDeliveryLookups(current,lookupLedger.narrow).statements,old.statements,'exact executed SQL and BEGIN/COMMIT sequence');
   assert.deepEqual(current.dump,old.dump,'complete canonical population bytes');
   assert.equal(current.statements.some(([sql])=>/card_body_|card_lineage_revision/.test(sql)),false,'no lineage probes or migration');
   t.diagnostic(JSON.stringify({node:process.version,baseline:fixture.revision,directBaseline:available,calls:current.calls.length,statements:current.statements.length,tables:current.dump.length}));

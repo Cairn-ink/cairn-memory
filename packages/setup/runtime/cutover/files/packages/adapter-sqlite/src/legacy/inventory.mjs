@@ -92,11 +92,12 @@ function readPrivacy(db, layout, localRawPrivacy) {
     identityReservations: layout.suppressionRevision ? count(db, 'content_identity_reservations') : null,
   });
   const memoryTombstones = count(db, 'memories', 'deleted = 1');
+  if (db.prepare(`SELECT 1 FROM suppressed WHERE fingerprint GLOB 'rs1:*' AND NOT (
+    substr(fingerprint,1,6) IN ('rs1:i:', 'rs1:a:') AND ${digestColumn('substr(fingerprint,7)')})
+    LIMIT 1`).get()) throw new LegacyRefusal('legacy_receipt_marker_unrepresentable');
   const invalidFingerprint = db.prepare(`SELECT 1 FROM memories WHERE NOT (${digestColumn('fingerprint')})
-    UNION ALL SELECT 1 FROM suppressed WHERE NOT (
-      (${digestColumn('fingerprint')}) OR
-      (substr(fingerprint,1,6) IN ('rs1:i:', 'rs1:a:') AND ${digestColumn('substr(fingerprint,7)')})
-    ) LIMIT 1`).get();
+    UNION ALL SELECT 1 FROM suppressed WHERE fingerprint NOT GLOB 'rs1:*' AND NOT (${digestColumn('fingerprint')})
+    LIMIT 1`).get();
   if (invalidFingerprint) throw new LegacyRefusal('legacy_incomplete');
   if (db.prepare(`SELECT 1 FROM memories m WHERE deleted = 1 AND (
     NOT EXISTS (SELECT 1 FROM suppressed s WHERE (s.owner_id,s.scope,s.project_id,s.fingerprint) =

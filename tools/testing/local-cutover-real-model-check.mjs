@@ -14,6 +14,7 @@ const embeddingName = 'text-embedding-3-small';
 const limits = { costNanodollars: 40_000_000, modelCalls: 20 };
 const rates = { input: 400, cached: 100, output: 1600, embedding: 20 };
 const requiredResponses = 2;
+const expectedAcceptedEmbeddings = 5;
 const correction = 'Correction: The Amaranth inventory now lives in the red cabinet beside the door.';
 
 function emptyMetrics() {
@@ -389,13 +390,14 @@ async function run(repo, scratch, report) {
         f.run(installers.candidate, ['daemon', 'stop', '--local']);
       }
       phase = 'telemetry';
-      const { fetchCount, endpoints } = keyed.read();
+      const { fetchCount, endpoints, requestsByEndpoint } = keyed.read();
       if (control.read().fetchCount !== 0 || capture.read().fetchCount !== 0 || fetchCount === 0) {
         throw new Error('unexpected_fetch_count');
       }
       report.workflowCompleted = true;
       phase = 'recall_model_coverage';
-      if (endpoints.responses.accepted < requiredResponses) throw new Error('recall_model_coverage');
+      if (!(endpoints.responses.accepted === 0 && requestsByEndpoint['responses/input_tokens'] === 0 &&
+          endpoints.embeddings.accepted === expectedAcceptedEmbeddings)) throw new Error('recall_model_coverage');
     });
     report.completed = true;
   } catch {

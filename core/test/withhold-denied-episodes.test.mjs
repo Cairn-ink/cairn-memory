@@ -226,18 +226,18 @@ function trace(t, label, read, expected, expectedBytes) {
 
 const statementTrace = {
   false: {
-    'list initial': [4, '65974c2156fa14020e01db10c747480bdfc7d7fd4ab479c6be5c0771541092b0'],
-    'list continued': [4, '34d7dae2989a403a6c807acc320498393643faff3a69a74a0a9adeb7c9c10cd9'],
-    'get initial': [13, '2993aea35769c4e65b88101254bcba352317dc0c87386d62f965c35103dc9d84'],
-    'get continued': [13, 'ea2597f5386810cf607e84922307f04a573fe5864df2c81e687cf9e5ac3a36b8'],
-    'next step': [14, 'ab250d966ee37ee809e06d7f0045f91c1204e1be84006d31c58d1b30d8fbf229'],
+    'list initial': [5, '33294f2869776c50399889ffc250b701b549cf49d6c8e09437a4bbf07fab8418'],
+    'list continued': [5, '3c2bce40d8738300f9b4437cf19fa07096c470c63e97b56c09c3a348563cc1b4'],
+    'get initial': [14, 'd3b86807335d1c0cf07650b11f0ad000b9e8344b760c52dbf6b7e62e35736446'],
+    'get continued': [14, '7fd215950e96762663c2498a547d325432caf2ffadc5a2687bf7953f346ddc14'],
+    'next step': [14, 'ed7519ce19db48f094f3e152cfeb85b86bf0025590fb4a136fb7288749518138'],
   },
   true: {
-    'list initial': [13, 'ffaa3b50581445c88e6f063577023bc8ba3665361135a694a1938a859f7bb3ef'],
-    'list continued': [13, '28e66dacd42003ca478e0ff04799270c9612c20109108ced45497f8ff086c182'],
-    'get initial': [22, 'a62358ff9c359a24a1be04bf21f55c585119e0bca691f3c13622bfff31cfc4a3'],
-    'get continued': [22, '1092b4734d8726b86cae3ce31e079d0643acf420959af0d11461cd2162d2e3ba'],
-    'next step': [27, '8d4b94ad44ab9f18298d5e464569fae04368702bf53985137ac6fb9afddcd394'],
+    'list initial': [14, '2841da168741725130b61ec825badc08dd339e01d5055d77dd02e0bbc98b41e9'],
+    'list continued': [14, '46c198f5f166759e2d36b2a5db9df4d15eee6e5536a5c4020cb5dbddc0988c28'],
+    'get initial': [23, '6dbda12aae707aa5262cbb1bd1f73c3fe4b8a84b969b29d1bf475d228a8d6604'],
+    'get continued': [23, '050904875cc9ac141fe7de925c535f1c57484094e9f1146afefcf607cbd89015'],
+    'next step': [27, 'd3b19493c6b2304bd53b5e67dc04782641c993b7a99ee31c5acbf71c766c49b5'],
   },
 };
 
@@ -394,12 +394,12 @@ for (const safety of [false, true]) {
 
 const detailTrace = {
   false: {
-    'initial': [19, '8769e8dd831013ae741dcc91ef638e64e99f1ed836ad028034756d5cbabecbb2'],
-    'continued': [19, '4f5c4a792de0a2c66c66e872afb6c21ca18c306e9eb8dec1b7697b4ea7de7874']
+    'initial': [20, '24a276b56f00421f41cb8fdf389e679ffdba3954fdf156bdf729e5297c4ec424'],
+    'continued': [20, 'bab9839a99369b27612491a4c41e6d105d955668e6bf3d7375aeeaebd4be9086']
   },
   true: {
-    'initial': [32, 'df9345c426e0ba86a38691cc49e643d569800154c4c81c9242f12ddc5867c12c'],
-    'continued': [32, '2d6abbb031b652601595178acb70eadfe912026b4c94a0087291c78d2fcf54f8']
+    'initial': [33, 'ed39634c679aecce48ff3150bb811506e4eafba69e0702e37a35f53a287bb56e'],
+    'continued': [33, 'e7f2e4c064dbf49dbf5cd91b14da650bdc5505ea4fc42e34f1ab7e12c273ecf5']
   }
 };
 

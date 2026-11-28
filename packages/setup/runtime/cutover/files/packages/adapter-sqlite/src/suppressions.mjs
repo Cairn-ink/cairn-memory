@@ -223,10 +223,14 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
   const texts = facts.filter(isText);
   const sessions = facts.filter(({ fact }) => fact.kind === "session");
   const windows = facts.filter(({ fact }) => fact.kind === "window");
-  const hasSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
+  const memoryForgets = new Set(facts.flatMap(({ fact }) => fact.origin === "forget" &&
+    (fact.kind === "identity" || (fact.kind === "text" && fact.sourceMemory)) ? [fact.actionId] : []));
+  /** @param {RawSpanFact} fact */
+  const hidesAttributedMemories = fact => fact.origin !== "forget" || !memoryForgets.has(fact.actionId);
+  const hasMemorySpans = facts.some(({ fact }) => fact.kind === "rawSpan" && hidesAttributedMemories(fact));
   const legacy = forgetFactIds ? new Set() : readLegacyDenials(db, scope);
   const hasLegacyReceipts = [...legacy].some(key => key.startsWith("rs1:"));
-  const needsReceipts = sessions.length > 0 || hasSpans || hasLegacyReceipts;
+  const needsReceipts = sessions.length > 0 || hasMemorySpans || hasLegacyReceipts;
 
   /** @param {readonly TextDigest[]} digests @param {string} [historyHash] */
   const legacyText = (digests, historyHash) => digests.some(digest =>
@@ -247,7 +251,8 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
   function hasReceiptDenial(receipt, key, legacyKey) {
     return legacy.has(receiptAddressDenial(receipt)) ||
       (key !== undefined && (legacy.has(receiptIdentityDenial(key)) || legacy.has("rs1:i:" + key))) ||
-      blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]);
+      blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey },
+        { ...receipt, role: receipt.role === "user" ? "assistant" : "user" }]);
   }
 
   /** @param {Entry} entry @param {boolean} [definiteOnly] */
@@ -263,7 +268,8 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
       return definiteOnly ? result === true : result !== false;
     };
     const applicable = facts.filter(stored => {
-      switch (stored.fact.kind) {
+      const { fact } = stored;
+      switch (fact.kind) {
         case "identity":
         case "text":
           return matches(stored, candidate);
@@ -273,7 +279,10 @@ export function scopedSuppression(db, scope, hashSession, forgetFactIds) {
               client, sessionKeyHash: hashSession(scope, client, sessionId), occurredAtMs,
             } }));
         case "rawSpan": {
-          const { sessionKeyHash, messageKey } = stored.fact;
+          // A span written by Memory forget closes the receipt's source. An
+          // independent passage suppression still hides attributed Memories.
+          if (!hidesAttributedMemories(fact)) return false;
+          const { sessionKeyHash, messageKey } = fact;
           // A capture receipt attributes the full message to the memory.
           return receipts.some(receipt => receipt.messageId === messageKey &&
             hashSession(scope, receipt.client, receipt.sessionId) === sessionKeyHash);

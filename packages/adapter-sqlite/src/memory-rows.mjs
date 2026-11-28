@@ -8,7 +8,7 @@ import { invalidInput, ownerKey, scopeKey, writeTime } from "./storage-values.mj
 /** @import { Connection } from "./storage-values.mjs" */
 /** @typedef {{ revision: number, factEpoch: string }} TextVersion */
 /** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[], textVersions: TextVersion[] }} Entry */
-/** @typedef {Receipt & {legacyReceiptKey?: string, legacy?: {
+/** @typedef {Receipt & {receiptKey?: string, legacyReceiptKey?: string, legacy?: {
  * canonicalRead?: boolean,
  * spans?: Array<{sessionId: string, start: number, end: number, precision: string}>
  * }}} StoredReceipt */

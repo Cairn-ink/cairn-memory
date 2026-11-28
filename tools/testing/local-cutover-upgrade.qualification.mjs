@@ -17,6 +17,8 @@ import { canonical, physicalStore } from '../../adapters/mcp/local-daemon-identi
 import { daemonStoreKey, runDaemonCommand } from '../../adapters/mcp/local-daemon-liveness.mjs';
 import { endpointPaths, runtimeDirectory, writePrivate, removePrivate } from '../../adapters/mcp/local-daemon-state.mjs';
 import { createHash } from 'node:crypto';
+import { message } from '../../packages/setup/lib/messages.mjs';
+import { wrapLine } from '../../packages/setup/lib/output.mjs';
 import { qualifyExplicitCorrection } from './local-cutover-correct.qualification.mjs';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
@@ -293,6 +295,30 @@ async function sharedDaemon(f, pkg, vectors) {
   } finally { command('stop'); }
 }
 
+const published0611Disclosure = [
+  'Memory stays on this computer. Setup sends no user data.',
+  'With OPENAI_API_KEY available to the Cairn MCP server, memories and search text go to OpenAI for semantic search, ' +
+    'up to an estimated US$1 per day per running Cairn server. Saved conversations are sent only if you opt in with ' +
+    "--raw-semantic (or explicitly configure --context-embedder). To keep everything on this computer, don't give the " +
+    'server a key. --no-context-semantic only turns off embeddings; with a key, recall and other model features still ' +
+    'send memory text to OpenAI.',
+].join('\n');
+
+function assertRepairAndUninstallMessages(legacy, candidate) {
+  const header = 'Cairn.ink Memory setup <version>\n';
+  const compare = (outputs, disclosure, version) => {
+    const prefix = header + disclosure.split('\n').flatMap(wrapLine).join('\n') + '\n';
+    return outputs.map((output, index) => {
+      // Only the three actual setup runs print the disclosure.
+      if (index < 1 || index > 3) return output;
+      assert.equal(output.slice(0, prefix.length), prefix, `${version} setup disclosure (${index})`);
+      return header + output.slice(prefix.length);
+    });
+  };
+  assert.deepEqual(compare(candidate, message('en', 'local_privacy'), 'candidate'),
+    compare(legacy, published0611Disclosure, 'published 0.6.11'));
+}
+
 async function qualifyRepairAndUninstall(cells) {
   const setup = ['setup', '--local', '--no-capture'];
   const uninstall = ['uninstall', '--local'];
@@ -354,8 +380,8 @@ async function qualifyRepairAndUninstall(cells) {
     if (active) assert.equal(readFileSync(descriptor.database.path, 'utf8'), tombstone);
     result.push(output);
   }
-  assert.deepEqual(result[1], result[0]);
-  console.log('Published and active repair and detach messages agree after normalizing the package version and store paths. Healthy reuse, missing registration, damaged generation, confirmation, client detach and final data retention passed. Final active detach stopped the daemon with its engine retained.');
+  assertRepairAndUninstallMessages(...result);
+  console.log('Published and active setup disclosures match their respective installer text. The remaining repair and detach messages agree after normalizing the package version and store paths. Healthy reuse, missing registration, damaged generation, confirmation, client detach and final data retention passed. Final active detach stopped the daemon with its engine retained.');
 }
 
 async function qualifySharedDaemon(baseline, candidate) {

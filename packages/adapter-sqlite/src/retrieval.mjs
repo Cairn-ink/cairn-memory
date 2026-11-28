@@ -443,18 +443,11 @@ function keepBest(heap, item, depth, order) {
   }
 }
 
-/** @param {Connection} db @param {Entry} entry @param {SessionHasher} [lineageHash] @returns {HydratedItem} */
-function hydrateRow(db, { row }, lineageHash) {
-  const receipts = readReceipts(db, row.scope, row.id).flatMap(receipt => {
-    const { client, sessionId, messageId, role, occurredAtMs, legacyReceiptKey, legacy } = receipt;
-    const address = { client, sessionId, messageId, role, occurredAtMs };
-    if (!lineageHash) return [address];
-    // Forget joins opaque span keys to the retained clear source selectors.
-    const sessions = legacyReceiptKey !== undefined && legacy?.spans?.length
-      ? new Set(legacy.spans.map(span => span.sessionId)) : [sessionId];
-    return Array.from(sessions, spanSession => ({ ...address, messageKey: messageId,
-      sessionKeyHash: lineageHash(row.scope, client, spanSession) }));
-  });
+/** @param {Connection} db @param {Entry} entry @param {ReturnType<typeof scopedSuppression>} policy @returns {HydratedItem} */
+function hydrateRow(db, { row }, policy) {
+  const receipts = readReceipts(db, row.scope, row.id)
+    .filter(receipt => !policy.hasReceiptDenial(receipt, receipt.receiptKey ?? receipt.legacyReceiptKey, receipt.legacyReceiptKey))
+    .map(({ client, sessionId, messageId, role, occurredAtMs }) => ({ client, sessionId, messageId, role, occurredAtMs }));
   let firstMs = null;
   let lastMs = null;
   for (const { occurredAtMs } of receipts) {
@@ -524,7 +517,7 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
         policy = scopedSuppression(db, scope, hashSession);
         policies.set(namespace, policy);
       }
-      if (!policy.hides(entry)) yield entry;
+      if (!policy.hides(entry)) yield { entry, policy };
     }
   }
 
@@ -677,7 +670,7 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
         const { selection, references, visible, raw } = await port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           const references = copyArray(refs);
-          const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ row }) => memoryRef(row));
+          const visible = Array.from(visibleRefs(db, selection, references, intent === "read"), ({ entry }) => memoryRef(entry.row));
           return { selection, references, visible, raw: visibleRawRefs(db, selection, references) };
         });
         if (!visibleCardRefs || !references.some(ref => ref.type === "card")) return [...visible, ...raw];
@@ -691,9 +684,17 @@ export function createRetrievalPorts(port, hashSession, storeKey, visibleRawRefs
         return port(tx, scope?.owner, {}, db => {
           const selection = readSet(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") invalidInput();
-          const lineageHash = visibleCardRefs && intent === "read" && !tx.readOnly ? hashSession : undefined;
-          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), entry => hydrateRow(db, entry, lineageHash));
+          return Array.from(visibleRefs(db, selection, refs, intent !== "recall"), ({ entry, policy }) => hydrateRow(db, entry, policy));
         });
+      },
+      receiptsForForget(tx, scope, id) {
+        return port(tx, scope?.owner, { write: true, pauseLock: true }, db =>
+          readReceipts(db, scope, id).flatMap(({ client, sessionId, messageId, role, occurredAtMs, legacy }) => {
+            // Forget joins opaque span keys to the retained source selectors.
+            const sessions = legacy?.spans?.length ? new Set(legacy.spans.map(span => span.sessionId)) : [sessionId];
+            return Array.from(sessions, spanSession => ({ client, sessionId, messageId, role, occurredAtMs,
+              messageKey: messageId, sessionKeyHash: hashSession(scope, client, spanSession) }));
+          }));
       },
     },
     recent: {

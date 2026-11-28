@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { golden, scopeArgs, withStdio } from './local-host-wire-replay.mjs';
+import { golden, legacyResponse, scopeArgs, withStdio } from './local-host-wire-replay.mjs';
 
 const namespace = { ownerId: 'synthetic-owner', scope: 'project', projectId: 'synthetic-project' };
 const scope = { owner: namespace.ownerId, namespace: 'project\0' + namespace.projectId };
@@ -103,11 +103,12 @@ export async function seedFreshFiled(path) {
   }
 }
 
-export function recordFiledWire(bin, path, directory, ids) {
+export function recordFiledWire(bin, path, directory, ids, { legacy = false } = {}) {
   return withStdio(bin, ['--db', path, ...scopeArgs], directory, async (request, notify) => {
     assert.deepEqual(await request('initialize', golden.exchanges.initialize.params), golden.exchanges.initialize.response);
     notify('notifications/initialized');
-    assert.deepEqual(await request('tools/list'), { result: { tools: golden.toolsList } });
+    const tools = legacy ? legacyResponse('tools/list') : { result: { tools: golden.toolsList } };
+    assert.deepEqual(await request('tools/list'), tools);
     const identities = new Map();
     const uuid = value => {
       assert.match(value, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
@@ -140,8 +141,8 @@ export function recordFiledWire(bin, path, directory, ids) {
   });
 }
 
-export async function compareFiledWire(bin, path, directory, ids) {
-  const observed = await recordFiledWire(bin, path, directory, ids);
+export async function compareFiledWire(bin, path, directory, ids, { legacy = false } = {}) {
+  const observed = await recordFiledWire(bin, path, directory, ids, { legacy });
   const differences = [];
   let matched = 0;
   for (const [name, expected] of Object.entries(filedWire)) {

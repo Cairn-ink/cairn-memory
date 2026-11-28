@@ -84,9 +84,11 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
     return { keys, min, max, unknown };
   }
 
-  /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions */
-  function blocksSession(db, scope, session, positions) {
+  /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions
+   * @param {boolean} [includeWindows] */
+  function blocksSession(db, scope, session, positions, includeWindows = true) {
     if (fenceHashes(scope, session).some(hash => fenced(db, scope, hash))) return true;
+    if (!includeWindows) return false;
     const [owner, namespace] = scopeKey(scope);
     /** @type {Array<[number, number]>} */
     const windows = db.prepare(`SELECT body FROM cairn_migrated_raw_privacy
@@ -197,9 +199,10 @@ export function createMigratedRawPolicy(key, hashSession, localPrivacy) {
         WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND kind = 'event' AND selector = ?`)
         .get(...scopeKey(scope), JSON.stringify(client), eventId));
     },
-    /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions */
-    blocks(db, scope, session, positions) {
-      return blocksSession(db, scope, session, positions) ||
+    /** @param {Connection} db @param {Scope} scope @param {Session} session @param {readonly Position[]} positions
+     * @param {boolean} [includeWindows] */
+    blocks(db, scope, session, positions, includeWindows = true) {
+      return blocksSession(db, scope, session, positions, includeWindows) ||
         positions.some(({ id }) => blocksUuid(db, scope, session, id));
     },
   };

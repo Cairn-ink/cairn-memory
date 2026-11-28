@@ -15,7 +15,7 @@ import { cutoverImport } from './local-cutover-runtime.mjs';
 const { processStart } = await cutoverImport('liveness');
 const { privateDirectory, privateRead, privateRemove, privateWrite, syncDirectory } = await cutoverImport('state');
 const { stateLock } = await cutoverImport('lock');
-const { entry } = await cutoverImport('paths');
+const { entry, privateFile, privateLocation } = await cutoverImport('paths');
 
 const quiescence = Object.freeze({ admissionsClosed: true, writersStopped: true, readersDrained: true, oldHandlesClosed: true });
 const rejectedLegacyContents = error =>
@@ -357,6 +357,11 @@ export async function runLocalCutover({ root, manifest, action = 'prepare', capt
       await reclaimPastAttempts(root, path, migration?.cutover, onCheckpoint);
       if (!entry(executable) || !entry(path) || await canonicalPath(executable) !== executable || await canonicalPath(path) !== path ||
           basename(path).startsWith('.cairn-cutover-')) throw refuse('cutover_unsafe_path');
+      if (!migration) {
+        const location = privateLocation(path);
+        if (location.path !== path) throw refuse('cutover_unsafe_path');
+        privateFile(path);
+      }
       const targetEngineId = manifest?.engineId;
       if (migration && migration.targetEngineId !== targetEngineId) throw refuse('cutover_candidate_changed');
       await stageCandidate?.({ descriptor, updateChild });
