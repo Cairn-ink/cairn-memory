@@ -1,19 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, CoreError, ERROR_CODES, isErrorCode, titleKey } from "@cairn-ink/core";
+import {
+  coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUnfiled, compareUtf8, CoreError, ERROR_CODES,
+  isErrorCode, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage,
+} from "@cairn-ink/core";
 import { decodeJson } from "./memory-rows.mjs";
 import { placementArray, placementBatchLimit, placementInput, topicPage, validateLimit } from "./placement-input.mjs";
 import { exactScope, placementPort } from "./placement-visibility.mjs";
 import { invalidInput, scopeKey, sha256, writeTime } from "./storage-values.mjs";
 import { cardTopicMembers, createTopicCardPlacement, visibleCardTopicMembers } from "./topic-card-placement.mjs";
 
-/** @import { Scope, Topic, TopicStore } from "@cairn-ink/core/ports" */
-/** @import { Connection, Port } from "./storage-values.mjs" */
-/** @import { PlacementVisibility, ScopedVisibility } from "./placement-visibility.mjs" */
-/** @typedef {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} IndexRevisions */
-/** @typedef {{ topicRetryAfterMs?: number, topicMaxAttempts?: number }} TopicOptions */
+/** @import { Scope, Topic } from "@cairn-ink/core/ports" */
+/** @import { Connection } from "./storage-values.mjs" */
+/** @import { ScopedVisibility } from "./placement-visibility.mjs" */
 /** @typedef {{ id: string, placedAtUs: bigint }} Member */
 
 const write = { write: true };
+const currentPersonalMemory = "m.owner_id = ? AND m.namespace_key = ? AND m.deleted = 0 AND m.historical = 0";
+const currentOutcome = `(o.owner_id, o.namespace_key, o.memory_id, o.revision) =
+  (m.owner_id, m.namespace_key, m.id, m.revision)`;
 
 /** @param {ScopedVisibility} visible @param {string} id */
 function current(visible, id) {
@@ -110,14 +114,55 @@ function retireSource(db, scope, id) {
     WHERE ${exactScope} AND memory_id = ? AND revision != 0`).run(...keys, id).changes;
 }
 
-/** @param {Port} port @param {IndexRevisions} index @param {PlacementVisibility} visibility
- * @param {() => number} now @param {TopicOptions} options @param {boolean} legacyFiling
- * @param {Parameters<typeof createTopicCardPlacement>[2]} [cardVisibility] @returns {TopicStore}
- */
+/** @type {typeof import("./topics.d.mts").createTopicStore} */
 export function createTopicStore(port, index, visibility, now, options, legacyFiling, cardVisibility) {
   const { topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 } = options;
   const access = placementPort(port);
   return {
+    memoryCounts(tx, callerScope) {
+      return access(tx, callerScope, {}, (db, scope) => {
+        if (scope.namespace !== null) throw new CoreError("capability_unavailable");
+        const visible = visibility(db, scope);
+        const rows = db.prepare(`SELECT m.id, o.revision AS outcome_revision, f.attempts
+          FROM cairn_memories m
+          LEFT JOIN cairn_topic_outcomes o ON ${currentOutcome}
+          LEFT JOIN cairn_topic_failures f ON (f.owner_id, f.namespace_key, f.memory_id, f.revision) =
+            (m.owner_id, m.namespace_key, m.id, m.revision)
+          WHERE ${currentPersonalMemory}`).iterate(...scopeKey(scope));
+        let memoryCount = 0;
+        let pending = 0;
+        for (const { id, outcome_revision, attempts } of rows) {
+          if (!current(visible, String(id))) continue;
+          memoryCount++;
+          if (outcome_revision === null && (attempts === null || Number(attempts) < topicMaxAttempts)) pending++;
+        }
+        return { memoryCount, pending };
+      });
+    },
+
+    unfiled(tx, callerScope, { cursor, limit }) {
+      return access(tx, callerScope, {}, (db, scope) => {
+        if (scope.namespace !== null) throw new CoreError("capability_unavailable");
+        const position = readUnfiledCursor(scope.owner, cursor, limit);
+        const revision = index.start(db, tx);
+        if (position && position.revision !== revision) throw new CoreError("cursor_stale");
+        const visible = visibility(db, scope);
+        const rows = db.prepare(`SELECT m.id, m.revision, m.created_at_ms
+          FROM cairn_memories m JOIN cairn_topic_outcomes o ON ${currentOutcome}
+          WHERE ${currentPersonalMemory} AND NOT EXISTS (
+            SELECT 1 FROM cairn_topic_memberships mt JOIN cairn_topics t
+              ON (t.owner_id, t.namespace_key, t.id) = (mt.owner_id, mt.namespace_key, mt.topic_id)
+            WHERE (mt.owner_id, mt.namespace_key, mt.memory_id) = (o.owner_id, o.namespace_key, o.memory_id)
+              AND t.level = 'L1'
+          )`).all(...scopeKey(scope)).flatMap(({ id, revision, created_at_ms }) =>
+          current(visible, String(id)) ? [{ id: String(id), revision: Number(revision),
+            createdAtUs: BigInt(String(created_at_ms)) * 1000n }] : []);
+        const digest = sha256(unfiledDigestInput(rows));
+        const page = rows.filter(row => !position || compareUnfiled(row, position) > 0).sort(compareUnfiled);
+        return unfiledPage(scope.owner, revision, digest, rows.length, page, limit, position);
+      });
+    },
+
     pending(tx, callerScope, { limit }) {
       return access(tx, callerScope, {}, (db, scope) => {
         validateLimit(limit, placementBatchLimit);
