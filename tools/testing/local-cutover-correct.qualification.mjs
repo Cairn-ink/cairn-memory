@@ -23,8 +23,8 @@ await serveStdio(process.stdin, process.stdout, options);
 `, { mode: 0o600 });
   const original = 'The synthetic feldspar marker is red.';
   const corrected = 'The synthetic feldspar marker is blue.';
-  const context = { query: 'feldspar', types: ['memory'], intent: 'current', representation: 'representation-v2-dated' };
-  const rawContext = { ...context, query: 'zirconium' };
+  const context = { query: 'feldspar', types: ['memory'], intent: 'current' };
+  const rawContext = { ...context, query: 'zirconium', representation: 'representation-v2-dated' };
   const checkRaw = (items, fenced) => {
     const result = JSON.stringify(items);
     for (const turn of turns) {
@@ -75,7 +75,7 @@ await serveStdio(process.stdin, process.stdout, options);
     });
     found('MCP find evidence', evidence.find(({ ref }) => ref.memoryId === id),
       item => item.ref.memoryId, item => item.ref.revision, item => item.content);
-    const { items: assembled } = await call('read_memory_context', context);
+    const { items: assembled } = await call('read_memory_context', { ...context, representation: 'representation-v2-dated' });
     found('MCP Context Read', assembled.find(({ ref }) => ref.id === id),
       item => item.ref.id, item => item.ref.rev, item => item.body);
     const inspected = await call('inspect_memory', { memoryId: id });
