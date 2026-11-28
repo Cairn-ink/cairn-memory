@@ -3,14 +3,13 @@ import {
 } from "../../core/src/index.mjs";
 import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
 import { LIVE_CARD, nonempty, PERSONAL_CARD } from "./document-card-rows.mjs";
-import { createPostgresDocumentCardStore } from "./document-cards.mjs";
 import { advanceIndex, readCandidate, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
 /** @import { CardPlacementProposal, Scope, Topic, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
-/** @import { DocumentCardOptions } from "./document-card-visibility.mjs" */
+/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
 /** @import { Run } from "./uow.mjs" */
 /** @typedef {import("./driver.mjs").Connection["query"]} Query */
 /** @typedef {Pick<Required<TopicStore>, "pending" | "catalog" | "applyPlacement" | "markFailed" |
@@ -56,6 +55,7 @@ const topicColumns = (visibleSources) => `t.id, t.level, ${visibleTopicTitle(vis
     WHERE e.user_id = t.user_id AND e.child_id = t.id AND t.level = 1
     ORDER BY e.parent_id COLLATE "C") AS parent_ids`;
 const topicOrder = `level, coalesce(title, '') COLLATE "C", id COLLATE "C"`;
+const newestFirst = `placed_at DESC, memory_id COLLATE "C" DESC`;
 const mixedNewestFirst = `placed_at DESC, member_id COLLATE "C" DESC, member_kind COLLATE "C" DESC`;
 
 /** @typedef {Awaited<ReturnType<typeof readVisibility>>} Visibility */
@@ -301,26 +301,62 @@ function snapshotCardProposal(basedOn, proposal) {
   return { indexRevision, items, hashes };
 }
 
+// Document cards are a separate capability. Keep the memory port's own methods
+// while satisfying the card hooks that core-next added to TopicStore.
+class WithoutDocumentCards {
+  /** @param {Tx} tx @param {Scope} scope */
+  async pendingCards(tx, scope) {
+    personalOwner(tx, scope);
+    return [];
+  }
+
+  /** @param {Tx} tx @param {Scope} scope @returns {Promise<never>} */
+  async applyCardPlacement(tx, scope) {
+    personalOwner(tx, scope, true);
+    throw new CoreError("capability_unavailable");
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async markCardsFailed(tx, scope) {
+    personalOwner(tx, scope, true);
+    throw new CoreError("capability_unavailable");
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async forCard(tx, scope) {
+    personalOwner(tx, scope);
+    return [];
+  }
+
+  /** @param {Tx} tx @param {Scope} scope */
+  async dropCard(tx, scope) {
+    personalOwner(tx, scope, true);
+    return { dropped: 0 };
+  }
+}
+
 /**
- * @param {DocumentCardOptions & {now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number,
- * documentCards?: ReturnType<typeof createPostgresDocumentCardStore>}} [options]
+ * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number,
+ * hashSessionKey?: FactMatchPolicy["hashSessionKey"],
+ * documentCards?: Pick<ReturnType<typeof import("./document-cards.mjs").createPostgresDocumentCardStore>, "readFileableCards">}} [options]
  * @returns {Placement}
  */
 export function createPostgresTopicStore({
-  now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3, documentCards, ...cardOptions
+  now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3, hashSessionKey, documentCards
 } = {}) {
   validateLimit(topicMaxAttempts, 3);
   if (!Number.isSafeInteger(topicRetryAfterMs) || topicRetryAfterMs < 0) throw new CoreError("invalid_input");
-  const { hashSessionKey } = cardOptions;
-  const { readFileableCards } = documentCards ?? createPostgresDocumentCardStore(cardOptions);
+  const readFileableCards = documentCards?.readFileableCards;
 
   /** @param {Query} query @param {string} owner @param {any[]} rows @param {string} [idField] */
   async function visibleCardRows(query, owner, rows, idField = "id") {
+    if (!readFileableCards || !rows.length) return [];
     const hashes = await readFileableCards(query, owner, rows.map(row => row[idField]));
     return rows.filter(row => hashes.get(row[idField]) === row.content_hash);
   }
 
-  return {
+  /** @type {MemoryPlacement} */
+  const placement = {
     async pending(tx, scope, options) {
       const owner = personalOwner(tx, scope);
       const { limit } = options;
@@ -449,6 +485,249 @@ export function createPostgresTopicStore({
       });
     },
 
+    async list(tx, scope, options) {
+      const owner = personalOwner(tx, scope);
+      const { level, cursor, limit } = options;
+      validateLimit(limit);
+      if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
+      return runOperation(tx, async (query, run) => {
+        const page = await readPage(query, owner, "list", level ?? null, limit, cursor, run);
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const columns = visibility.candidateColumns([null]);
+        const members = await visiblePage(visibility, owner, (after, size) => query(`
+          SELECT ${columns} FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status = 'filed'
+            AND ($2::text IS NULL OR m.id COLLATE "C" > $2)
+            AND EXISTS (SELECT 1 FROM memory_topics mt WHERE mt.user_id = m.user_id
+              AND mt.memory_id = m.id AND mt.memory_revision = m.revision)
+          ORDER BY m.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]));
+        if (!readFileableCards) {
+          if (!members.length) return { items: [], nextCursor: null };
+          const sources = await visibleTitleSources(query, owner, visibility);
+          const { rows } = await query(`
+            WITH direct AS (
+              SELECT mt.topic_id, mt.memory_id, mt.placed_at FROM memory_topics mt
+              ${currentMemberJoin}
+              WHERE mt.user_id = $1 AND m.id = ANY($5::text[]) AND ${currentMemory("m")}
+            ), effective AS (
+              SELECT topic_id, memory_id, placed_at FROM direct WHERE $2::smallint IS DISTINCT FROM 2
+              UNION ALL
+              SELECT e.parent_id, d.memory_id, max(d.placed_at) FROM direct d
+              JOIN topic_edges e ON e.user_id = $1 AND e.child_id = d.topic_id
+              WHERE $2::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.memory_id
+            ), ranked AS (
+              SELECT topic_id, memory_id, row_number() OVER (
+                PARTITION BY topic_id ORDER BY ${newestFirst}
+              ) AS member_rank FROM effective
+            ), summary AS (
+              SELECT topic_id, count(*) AS member_count,
+                array_agg(memory_id ORDER BY member_rank) FILTER (WHERE member_rank <= 3) AS newest_member_ids
+              FROM ranked GROUP BY topic_id
+            )
+            SELECT * FROM (
+              SELECT ${topicColumns("$6")}, s.member_count, s.newest_member_ids
+              FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
+              WHERE $2::smallint IS NULL OR t.level = $2
+            ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
+          [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset, members.map(({ id }) => id), sources]);
+          const { items, nextCursor } = page.slice(rows);
+          return { items: items.map((row) => ({
+            ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
+          })), nextCursor };
+        }
+        const cards = await filteredPage((after, size) => query(`
+          SELECT c.id, c.content_hash FROM document_cards c
+          WHERE ${PERSONAL_CARD} AND ${LIVE_CARD} AND ($2::text IS NULL OR c.id COLLATE "C" > $2)
+            AND EXISTS (SELECT 1 FROM card_topics ct JOIN card_placements p ON
+              (p.user_id, p.card_id, p.content_hash) = (ct.user_id, ct.card_id, ct.content_hash)
+              WHERE (ct.user_id, ct.card_id, ct.content_hash) = (c.user_id, c.id, c.content_hash) AND p.status = 'filed')
+          ORDER BY c.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]),
+        rows => visibleCardRows(query, owner, rows));
+        if (!members.length && !cards.length) return { items: [], nextCursor: null };
+        const sources = await visibleTitleSources(query, owner, visibility);
+        const { rows } = await query(`
+          WITH direct AS (
+            SELECT mt.topic_id, mt.memory_id AS member_id, mt.placed_at, 'memory' AS member_kind FROM memory_topics mt
+            ${currentMemberJoin}
+            WHERE mt.user_id = $1 AND m.id = ANY($5::text[]) AND ${currentMemory("m")}
+            UNION ALL
+            SELECT ct.topic_id, ct.card_id, ct.placed_at, 'card' FROM card_topics ct ${currentCardMemberJoin}
+            WHERE ct.user_id = $1 AND ct.card_id = ANY($7::text[])
+          ), effective AS (
+            SELECT topic_id, member_id, placed_at, member_kind FROM direct WHERE $2::smallint IS DISTINCT FROM 2
+            UNION ALL
+            SELECT e.parent_id, d.member_id, max(d.placed_at), d.member_kind FROM direct d
+            JOIN topic_edges e ON e.user_id = $1 AND e.child_id = d.topic_id
+            WHERE $2::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.member_id, d.member_kind
+          ), ranked AS (
+            SELECT topic_id, member_id, member_kind, row_number() OVER (
+              PARTITION BY topic_id, member_kind ORDER BY ${mixedNewestFirst}
+            ) AS member_rank FROM effective
+          ), summary AS (
+            SELECT topic_id, count(*) FILTER (WHERE member_kind = 'memory') AS member_count,
+              count(*) FILTER (WHERE member_kind = 'card') AS card_count,
+              COALESCE(array_agg(member_id ORDER BY member_rank) FILTER (WHERE member_kind = 'memory' AND member_rank <= 3),
+                ARRAY[]::text[]) AS newest_member_ids
+            FROM ranked GROUP BY topic_id
+          )
+          SELECT * FROM (
+            SELECT ${topicColumns("$6")}, s.member_count, s.newest_member_ids, s.card_count
+            FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
+            WHERE $2::smallint IS NULL OR t.level = $2
+          ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
+        [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset,
+          members.map(({ id }) => id), sources, cards.map(({ id }) => id)]);
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map((row) => ({
+          ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
+          cardCount: Number(row.card_count),
+        })), nextCursor };
+      });
+    },
+
+    async members(tx, scope, topicId, options) {
+      const owner = personalOwner(tx, scope);
+      const { cursor, limit } = options;
+      validateLimit(limit);
+      return runOperation(tx, async (query, run) => {
+        const page = await readPage(query, owner, "members", topicId, limit, cursor, run);
+        if (!sqlText(topicId)) return { items: [], nextCursor: null };
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const columns = visibility.candidateColumns([null]);
+        if (!readFileableCards) {
+          const rows = await visiblePage(visibility, owner, (after, size) => query(`
+            WITH child_topics AS (
+              SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
+              UNION ALL
+              SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
+              WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
+            ), current_members AS (
+              SELECT mt.memory_id, max(mt.placed_at) AS placed_at
+              FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
+              WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
+            )
+            SELECT ${columns}, memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+            FROM current_members c JOIN memories m ON m.user_id = $1 AND m.id = c.memory_id
+            WHERE ($3::bigint IS NULL OR (c.placed_at, c.memory_id COLLATE "C") < (${timestampUs("$3")}, $4::text))
+            ORDER BY ${newestFirst} LIMIT $5`,
+          [owner, topicId, after?.placed_at_us ?? null, after?.memory_id ?? null, size]), limit + 1, page.offset);
+          const { items, nextCursor } = page.slice(rows);
+          return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
+        }
+        const rows = await filteredPage((after, size) => query(`
+          WITH child_topics AS (
+            SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
+            UNION ALL
+            SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
+            WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
+          ), current_members AS (
+            SELECT mt.memory_id AS member_id, max(mt.placed_at) AS placed_at, 'memory' AS member_kind, NULL::text AS content_hash
+            FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
+            WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
+            UNION ALL
+            SELECT ct.card_id, max(ct.placed_at), 'card', ct.content_hash
+            FROM child_topics child JOIN card_topics ct ON ct.topic_id = child.id ${currentCardMemberJoin}
+            WHERE ct.user_id = $1 GROUP BY ct.card_id, ct.content_hash
+          )
+          SELECT ${columns}, c.member_id, c.member_kind, c.content_hash,
+            (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+          FROM current_members c LEFT JOIN memories m ON c.member_kind = 'memory' AND m.user_id = $1 AND m.id = c.member_id
+          WHERE ($3::bigint IS NULL OR (c.placed_at, c.member_id COLLATE "C", c.member_kind COLLATE "C") <
+            (${timestampUs("$3")}, $4::text, $5::text))
+          ORDER BY ${mixedNewestFirst} LIMIT $6`,
+        [owner, topicId, after?.placed_at_us ?? null, after?.member_id ?? null, after?.member_kind ?? null, size]), async rows => {
+          const memories = await visibleRows(visibility, owner, rows.filter(row => row.member_kind === "memory"));
+          const cards = await visibleCardRows(query, owner, rows.filter(row => row.member_kind === "card"), "member_id");
+          const visible = new Set([...memories, ...cards]);
+          return rows.filter(row => visible.has(row));
+        }, limit + 1, page.offset);
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map(row => ({ kind: row.member_kind, id: row.member_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
+      });
+    },
+
+    async forMemory(tx, scope, memoryId) {
+      const owner = personalOwner(tx, scope);
+      if (!sqlText(memoryId)) return [];
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const columns = visibility.candidateColumns([null]);
+        const { rows } = await query(`
+          SELECT ${columns}, ARRAY(
+            SELECT mt.topic_id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+            WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
+            ORDER BY mt.topic_id COLLATE "C"
+          ) AS topic_ids FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND m.id = $2 AND p.status = 'filed' AND ${currentMemory("m")}`, [owner, memoryId]);
+        const [row] = await visibleRows(visibility, owner, rows);
+        return row?.topic_ids ?? [];
+      });
+    },
+
+    async forMemories(tx, scope, memoryIds) {
+      const owner = personalOwner(tx, scope);
+      const ids = snapshotArray(memoryIds, 100);
+      validateLimit(ids.length);
+      if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
+      return runOperation(tx, async (query, run) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+        const columns = visibility.candidateColumns([null]);
+        const { rows } = await query(`
+          WITH requested AS (
+            SELECT memory_id, min(position) AS position
+            FROM unnest($2::text[]) WITH ORDINALITY AS input(memory_id, position) GROUP BY memory_id
+          )
+          SELECT ${columns}, ARRAY(
+            SELECT t.id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+            WHERE mt.user_id = m.user_id AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
+              AND p.status = 'filed'
+            ORDER BY t.id COLLATE "C"
+          ) AS topic_ids
+          FROM requested r JOIN memories m ON m.id = r.memory_id ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status IN ('filed', 'unfiled')
+          ORDER BY r.position`, [owner, ids.filter(sqlText)]);
+        const visible = await visibleRows(visibility, owner, rows);
+        const topicIds = [...new Set(visible.flatMap(({ topic_ids }) => topic_ids))];
+        const titles = new Map();
+        if (topicIds.length) {
+          const sources = await visibleTitleSources(query, owner, visibility, topicIds);
+          const { rows: topics } = await query(`
+            SELECT t.id, ${visibleTopicTitle("$3")} AS title FROM topics t
+            WHERE t.user_id = $1 AND t.id = ANY($2::text[])`, [owner, topicIds, sources]);
+          for (const { id, title } of topics) titles.set(id, title);
+        }
+        return visible.map(({ id, topic_ids }) => ({
+          memoryId: id,
+          topics: topic_ids.map((/** @type {string} */ id) => ({ id, title: titles.get(id) ?? null })),
+        }));
+      });
+    },
+
+    async dropMemory(tx, scope, memoryId) {
+      const owner = personalOwner(tx, scope, true);
+      if (!sqlText(memoryId)) return { dropped: 0 };
+      return runOperation(tx, async (query, run) => {
+        // A drop keeps the outcome. Memory erase owns removal of outcomes and
+        // retires the same sources as part of its owner index advance.
+        const { rows: [result] } = await query(`
+          WITH refs AS (
+            DELETE FROM memory_topics
+            WHERE user_id = $1 AND memory_id = $2 RETURNING 1
+          ), sources AS (
+            UPDATE topic_title_sources SET memory_revision = 0
+            WHERE user_id = $1 AND memory_id = $2 AND memory_revision <> 0 RETURNING 1
+          )
+          SELECT (SELECT count(*) FROM refs) AS dropped, EXISTS (SELECT 1 FROM sources) AS retired`,
+        [owner, memoryId]);
+        const dropped = Number(result.dropped);
+        if (dropped || result.retired) await advanceIndex(query, owner, run);
+        return { dropped };
+      });
+    },
+  };
+  if (!readFileableCards) return Object.assign(new WithoutDocumentCards(), placement);
+  /** @type {Pick<TopicStore, "pendingCards" | "applyCardPlacement" | "markCardsFailed" | "forCard" | "dropCard">} */
+  const cardPlacement = {
     async pendingCards(tx, scope, { limit }) {
       const owner = personalOwner(tx, scope);
       validateLimit(limit, BATCH_LIMIT);
@@ -565,191 +844,6 @@ export function createPostgresTopicStore({
         return { dropped: rows.length };
       });
     },
-
-    async list(tx, scope, options) {
-      const owner = personalOwner(tx, scope);
-      const { level, cursor, limit } = options;
-      validateLimit(limit);
-      if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
-      return runOperation(tx, async (query, run) => {
-        const page = await readPage(query, owner, "list", level ?? null, limit, cursor, run);
-        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
-        const columns = visibility.candidateColumns([null]);
-        const members = await visiblePage(visibility, owner, (after, size) => query(`
-          SELECT ${columns} FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status = 'filed'
-            AND ($2::text IS NULL OR m.id COLLATE "C" > $2)
-            AND EXISTS (SELECT 1 FROM memory_topics mt WHERE mt.user_id = m.user_id
-              AND mt.memory_id = m.id AND mt.memory_revision = m.revision)
-          ORDER BY m.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]));
-        const cards = await filteredPage((after, size) => query(`
-          SELECT c.id, c.content_hash FROM document_cards c
-          WHERE ${PERSONAL_CARD} AND ${LIVE_CARD} AND ($2::text IS NULL OR c.id COLLATE "C" > $2)
-            AND EXISTS (SELECT 1 FROM card_topics ct JOIN card_placements p ON
-              (p.user_id, p.card_id, p.content_hash) = (ct.user_id, ct.card_id, ct.content_hash)
-              WHERE (ct.user_id, ct.card_id, ct.content_hash) = (c.user_id, c.id, c.content_hash) AND p.status = 'filed')
-          ORDER BY c.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]),
-        rows => visibleCardRows(query, owner, rows));
-        if (!members.length && !cards.length) return { items: [], nextCursor: null };
-        const sources = await visibleTitleSources(query, owner, visibility);
-        const { rows } = await query(`
-          WITH direct AS (
-            SELECT mt.topic_id, mt.memory_id AS member_id, mt.placed_at, 'memory' AS member_kind FROM memory_topics mt
-            ${currentMemberJoin}
-            WHERE mt.user_id = $1 AND m.id = ANY($5::text[]) AND ${currentMemory("m")}
-            UNION ALL
-            SELECT ct.topic_id, ct.card_id, ct.placed_at, 'card' FROM card_topics ct ${currentCardMemberJoin}
-            WHERE ct.user_id = $1 AND ct.card_id = ANY($7::text[])
-          ), effective AS (
-            SELECT topic_id, member_id, placed_at, member_kind FROM direct WHERE $2::smallint IS DISTINCT FROM 2
-            UNION ALL
-            SELECT e.parent_id, d.member_id, max(d.placed_at), d.member_kind FROM direct d
-            JOIN topic_edges e ON e.user_id = $1 AND e.child_id = d.topic_id
-            WHERE $2::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.member_id, d.member_kind
-          ), ranked AS (
-            SELECT topic_id, member_id, member_kind, row_number() OVER (
-              PARTITION BY topic_id, member_kind ORDER BY ${mixedNewestFirst}
-            ) AS member_rank FROM effective
-          ), summary AS (
-            SELECT topic_id, count(*) FILTER (WHERE member_kind = 'memory') AS member_count,
-              count(*) FILTER (WHERE member_kind = 'card') AS card_count,
-              COALESCE(array_agg(member_id ORDER BY member_rank) FILTER (WHERE member_kind = 'memory' AND member_rank <= 3),
-                ARRAY[]::text[]) AS newest_member_ids
-            FROM ranked GROUP BY topic_id
-          )
-          SELECT * FROM (
-            SELECT ${topicColumns("$6")}, s.member_count, s.newest_member_ids, s.card_count
-            FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
-            WHERE $2::smallint IS NULL OR t.level = $2
-          ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
-        [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset,
-          members.map(({ id }) => id), sources, cards.map(({ id }) => id)]);
-        const { items, nextCursor } = page.slice(rows);
-        return { items: items.map((row) => ({
-          ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
-          cardCount: Number(row.card_count),
-        })), nextCursor };
-      });
-    },
-
-    async members(tx, scope, topicId, options) {
-      const owner = personalOwner(tx, scope);
-      const { cursor, limit } = options;
-      validateLimit(limit);
-      return runOperation(tx, async (query, run) => {
-        const page = await readPage(query, owner, "members", topicId, limit, cursor, run);
-        if (!sqlText(topicId)) return { items: [], nextCursor: null };
-        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
-        const columns = visibility.candidateColumns([null]);
-        const rows = await filteredPage((after, size) => query(`
-          WITH child_topics AS (
-            SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
-            UNION ALL
-            SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
-            WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
-          ), current_members AS (
-            SELECT mt.memory_id AS member_id, max(mt.placed_at) AS placed_at, 'memory' AS member_kind, NULL::text AS content_hash
-            FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
-            WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
-            UNION ALL
-            SELECT ct.card_id, max(ct.placed_at), 'card', ct.content_hash
-            FROM child_topics child JOIN card_topics ct ON ct.topic_id = child.id ${currentCardMemberJoin}
-            WHERE ct.user_id = $1 GROUP BY ct.card_id, ct.content_hash
-          )
-          SELECT ${columns}, c.member_id, c.member_kind, c.content_hash,
-            (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
-          FROM current_members c LEFT JOIN memories m ON c.member_kind = 'memory' AND m.user_id = $1 AND m.id = c.member_id
-          WHERE ($3::bigint IS NULL OR (c.placed_at, c.member_id COLLATE "C", c.member_kind COLLATE "C") <
-            (${timestampUs("$3")}, $4::text, $5::text))
-          ORDER BY ${mixedNewestFirst} LIMIT $6`,
-        [owner, topicId, after?.placed_at_us ?? null, after?.member_id ?? null, after?.member_kind ?? null, size]), async rows => {
-          const memories = await visibleRows(visibility, owner, rows.filter(row => row.member_kind === "memory"));
-          const cards = await visibleCardRows(query, owner, rows.filter(row => row.member_kind === "card"), "member_id");
-          const visible = new Set([...memories, ...cards]);
-          return rows.filter(row => visible.has(row));
-        }, limit + 1, page.offset);
-        const { items, nextCursor } = page.slice(rows);
-        return { items: items.map(row => ({ kind: row.member_kind, id: row.member_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
-      });
-    },
-
-    async forMemory(tx, scope, memoryId) {
-      const owner = personalOwner(tx, scope);
-      if (!sqlText(memoryId)) return [];
-      return runOperation(tx, async (query, run) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
-        const columns = visibility.candidateColumns([null]);
-        const { rows } = await query(`
-          SELECT ${columns}, ARRAY(
-            SELECT mt.topic_id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
-            WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
-            ORDER BY mt.topic_id COLLATE "C"
-          ) AS topic_ids FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND m.id = $2 AND p.status = 'filed' AND ${currentMemory("m")}`, [owner, memoryId]);
-        const [row] = await visibleRows(visibility, owner, rows);
-        return row?.topic_ids ?? [];
-      });
-    },
-
-    async forMemories(tx, scope, memoryIds) {
-      const owner = personalOwner(tx, scope);
-      const ids = snapshotArray(memoryIds, 100);
-      validateLimit(ids.length);
-      if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
-      return runOperation(tx, async (query, run) => {
-        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
-        const columns = visibility.candidateColumns([null]);
-        const { rows } = await query(`
-          WITH requested AS (
-            SELECT memory_id, min(position) AS position
-            FROM unnest($2::text[]) WITH ORDINALITY AS input(memory_id, position) GROUP BY memory_id
-          )
-          SELECT ${columns}, ARRAY(
-            SELECT t.id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
-            WHERE mt.user_id = m.user_id AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
-              AND p.status = 'filed'
-            ORDER BY t.id COLLATE "C"
-          ) AS topic_ids
-          FROM requested r JOIN memories m ON m.id = r.memory_id ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status IN ('filed', 'unfiled')
-          ORDER BY r.position`, [owner, ids.filter(sqlText)]);
-        const visible = await visibleRows(visibility, owner, rows);
-        const topicIds = [...new Set(visible.flatMap(({ topic_ids }) => topic_ids))];
-        const titles = new Map();
-        if (topicIds.length) {
-          const sources = await visibleTitleSources(query, owner, visibility, topicIds);
-          const { rows: topics } = await query(`
-            SELECT t.id, ${visibleTopicTitle("$3")} AS title FROM topics t
-            WHERE t.user_id = $1 AND t.id = ANY($2::text[])`, [owner, topicIds, sources]);
-          for (const { id, title } of topics) titles.set(id, title);
-        }
-        return visible.map(({ id, topic_ids }) => ({
-          memoryId: id,
-          topics: topic_ids.map((/** @type {string} */ id) => ({ id, title: titles.get(id) ?? null })),
-        }));
-      });
-    },
-
-    async dropMemory(tx, scope, memoryId) {
-      const owner = personalOwner(tx, scope, true);
-      if (!sqlText(memoryId)) return { dropped: 0 };
-      return runOperation(tx, async (query, run) => {
-        // A drop keeps the outcome. Memory erase owns removal of outcomes and
-        // retires the same sources as part of its owner index advance.
-        const { rows: [result] } = await query(`
-          WITH refs AS (
-            DELETE FROM memory_topics
-            WHERE user_id = $1 AND memory_id = $2 RETURNING 1
-          ), sources AS (
-            UPDATE topic_title_sources SET memory_revision = 0
-            WHERE user_id = $1 AND memory_id = $2 AND memory_revision <> 0 RETURNING 1
-          )
-          SELECT (SELECT count(*) FROM refs) AS dropped, EXISTS (SELECT 1 FROM sources) AS retired`,
-        [owner, memoryId]);
-        const dropped = Number(result.dropped);
-        if (dropped || result.retired) await advanceIndex(query, owner, run);
-        return { dropped };
-      });
-    },
   };
+  return Object.assign(placement, cardPlacement);
 }

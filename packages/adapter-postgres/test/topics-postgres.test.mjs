@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { assertAdapterCapabilities, capabilities } from "../../core/src/index.mjs";
-import { createPostgresSuppressionStore, createPostgresTopicStore, createPostgresUnitOfWork } from "../src/index.mjs";
+import {
+  createPostgresDocumentCardStore, createPostgresSuppressionStore, createPostgresTopicStore, createPostgresUnitOfWork,
+} from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const firstPage = { cursor: null, limit: 100 };
@@ -228,6 +230,7 @@ test("Postgres topic placement isolates owners", migrationDbTest, async (t) => {
 
 test("every Postgres TopicStore method rejects a non-null namespace", migrationDbTest, async (t) => {
   const { uow, placement } = await setup(t);
+  const withCards = createPostgresTopicStore({ documentCards: createPostgresDocumentCardStore() });
   const reads = {
     pending: [{ limit: 5 }],
     pendingCards: [{ limit: 5 }],
@@ -252,13 +255,17 @@ test("every Postgres TopicStore method rejects a non-null namespace", migrationD
     dropMemory: ["memory"],
     dropCard: ["card"],
   };
-  assert.deepEqual(Object.keys(placement).sort(), [...Object.keys(reads), ...Object.keys(writes)].sort());
-  for (const [readOnly, methods] of [[true, reads], [false, writes]]) {
-    for (const [method, args] of Object.entries(methods)) {
-      for (const namespace of ["project\0notes", ""]) {
-        const scope = { owner: "owner", namespace };
-        await assert.rejects(uow.run(scope.owner, { readOnly }, (tx) => placement[method](tx, scope, ...args)),
-          { code: "capability_unavailable" }, method);
+  const names = [...Object.keys(reads), ...Object.keys(writes)].sort();
+  assert.deepEqual(Object.keys(withCards).sort(), names);
+  assert.deepEqual(Object.keys(placement).sort(), names.filter(name => !name.includes("Card")));
+  for (const store of [placement, withCards]) {
+    for (const [readOnly, methods] of [[true, reads], [false, writes]]) {
+      for (const [method, args] of Object.entries(methods)) {
+        for (const namespace of ["project\0notes", ""]) {
+          const scope = { owner: "owner", namespace };
+          await assert.rejects(uow.run(scope.owner, { readOnly }, (tx) => store[method](tx, scope, ...args)),
+            { code: "capability_unavailable" }, method);
+        }
       }
     }
   }
