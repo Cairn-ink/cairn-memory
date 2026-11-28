@@ -475,7 +475,7 @@ export const HOST_WRITE_HOOK_CASES = [
       let issued;
       const plain = f.createService(deps);
       let resume = () => {};
-      const deferred = new Promise(resolve => { resume = () => resolve(undefined); });
+      const resumeGate = new Promise(resolve => { resume = () => resolve(undefined); });
       /** @type {Promise<void> | undefined} */
       let continuation;
       const api = service(f, {
@@ -485,7 +485,7 @@ export const HOST_WRITE_HOOK_CASES = [
           await rejects(() => table.get(tx, { ...scope, namespace: "foreign" }, "x"), "host_write_hook_failed");
           await rejects(() => plain.pauseState(scope.owner), "storage_transaction_active");
           await rejects(() => deps.storage.uow.run("other-owner", {}, async () => {}), "storage_transaction_active");
-          continuation = deferred.then(() => rejects(() => plain.pauseState(scope.owner), "storage_transaction_active"));
+          continuation = resumeGate.then(() => rejects(() => plain.pauseState(scope.owner), "storage_transaction_active"));
           // The next two operations are queued before returning. The hook must await them.
           void table.put(tx, ctx.scope, "pending", true);
           void table.get(tx, ctx.scope, "pending");
