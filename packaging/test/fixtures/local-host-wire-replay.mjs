@@ -194,7 +194,9 @@ export async function withStdio(entry, args, directory, work) {
 // reports phase 4. The golden records the candidate's phase 1 (cards on).
 // Only these two legacy replies expect the 0.6.11 value.
 const legacyCardPhase = 4;
-function legacyResponse(label, response, actual) {
+export function legacyResponse(label, item) {
+  if (label === 'tools/list') return { result: { tools: golden.legacyToolsList } };
+  const response = item.legacyResponse ?? item.response;
   if (label === 'find cards disabled') {
     const reply = structuredClone(response);
     const content = reply.result.content[0];
@@ -204,22 +206,11 @@ function legacyResponse(label, response, actual) {
     content.text = JSON.stringify(text);
     return reply;
   }
-  const cardsDisabled = label === 'read context cards disabled';
-  // The installed daemon can finish Raw upkeep before either of these reads.
-  const rawIncluded = (cardsDisabled || label === 'read context populated') &&
-    actual.result?._meta?.[diagnosticsKey]?.coverage?.raw === 'included';
-  if (cardsDisabled || rawIncluded) {
+  if (label === 'read context cards disabled') {
     const reply = structuredClone(response);
-    const diagnostics = reply.result._meta[diagnosticsKey];
-    if (cardsDisabled) {
-      const progress = diagnostics.candidates.coverage.maintenance.progress;
-      assert.equal(progress.phase, 1, 'golden card phase');
-      progress.phase = legacyCardPhase;
-    }
-    if (rawIncluded) {
-      assert.equal(diagnostics.coverage.raw, 'partial', 'golden Raw coverage');
-      diagnostics.coverage.raw = 'included';
-    }
+    const progress = reply.result._meta[diagnosticsKey].candidates.coverage.maintenance.progress;
+    assert.equal(progress.phase, 1, 'golden card phase');
+    progress.phase = legacyCardPhase;
     return reply;
   }
   return response;
@@ -249,8 +240,16 @@ export async function compareWire(request, notify, count, { legacy = false } = {
         lastIndex = index;
       }
       const normalizedReply = normaliseResponse(actual, reply, count, label);
+      const expectedReply = expected(legacy ? legacyResponse(label, item) : item.response, '');
+      // The installed daemon can finish Raw upkeep before either of these reads.
+      if (legacy && ['read context cards disabled', 'read context populated'].includes(label) &&
+          reply.result?._meta?.[diagnosticsKey]?.coverage?.raw === 'included') {
+        const coverage = expectedReply.result._meta[diagnosticsKey].coverage;
+        assert.equal(coverage.raw, 'partial', 'golden Raw coverage');
+        coverage.raw = 'included';
+      }
       const errors = [...diff(expected(item.params, ''), actual(params, ''), 'request'),
-        ...diff(expected(legacy ? legacyResponse(label, item.response, reply) : item.response, ''), normalizedReply)];
+        ...diff(expectedReply, normalizedReply)];
       if (errors.length) differences.push(...errors.map(error => label + ' ' + error));
       else matched++;
     } catch (error) {

@@ -161,7 +161,7 @@ try {
   assert.equal((await migrateLegacyStore(filedInput)).sourceLayout, golden.sourceLayout);
   let installedFiled;
   try {
-    installedFiled = await compareFiledWire(legacy.bin, filedReplay, scratch, filedIds);
+    installedFiled = await compareFiledWire(legacy.bin, filedReplay, scratch, filedIds, { legacy: true });
   } finally {
     const stop = spawnSync(process.execPath, [legacy.bin, 'daemon', 'stop', '--db', filedReplay],
       { cwd: scratch, env: isolatedEnv(scratch), encoding: 'utf8', timeout: 15_000 });
