@@ -1,23 +1,22 @@
 import { CoreError, isCoreError } from '../errors.mjs';
-import { CLASSIFICATION_CATALOG_LIMIT } from './catalog.mjs';
+import { CLASSIFICATION_CATALOG_LIMIT, isClassificationCatalogLimit, readClassificationCatalog } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
 /** @import { PlacePendingBatchOptions, PlacePendingBatchResult, PlacePendingOptions } from './batch.mjs' */
 /** @import { Tx } from '../ports/index.d.ts' */
-/** @import { ClassificationCatalogItem } from './catalog.mjs' */
 /** @import { ClassificationCatalog, ClassificationSnapshot } from './classify.mjs' */
 /** @import { PlacementProposal } from './proposal.mjs' */
 
 /** @param {PlacePendingBatchOptions} options @returns {Promise<PlacePendingBatchResult>} */
-export async function placePendingBatch({ uow, scope, placement, memories, classify }) {
-  return runPendingBatch({ uow, scope, placement, memories }, (snapshot, catalog, validateFresh) =>
+export async function placePendingBatch({ uow, scope, placement, memories, catalogLimit, classify }) {
+  return runPendingBatch({ uow, scope, placement, memories, catalogLimit }, (snapshot, catalog, validateFresh) =>
     classify({ memories: snapshot.memories }, catalog, { validateFresh }));
 }
 
 /** @param {PlacePendingOptions} options @returns {Promise<PlacePendingBatchResult>} */
-export async function placePending({ uow, scope, placement, memories, model, gate, deadline, signal, onDiagnostic }) {
+export async function placePending({ uow, scope, placement, memories, catalogLimit, model, gate, deadline, signal, onDiagnostic }) {
   if (typeof gate?.assertOpen !== 'function') throw new CoreError('invalid_input');
-  return runPendingBatch({ uow, scope, placement, memories }, async (snapshot, catalog, validateFresh) => {
+  return runPendingBatch({ uow, scope, placement, memories, catalogLimit }, async (snapshot, catalog, validateFresh) => {
     const { proposal } = await classifyPlacement({
       model, snapshot, catalog, validateFresh, gate, deadline, owner: scope.owner, signal, onDiagnostic,
     });
@@ -31,20 +30,13 @@ export async function placePending({ uow, scope, placement, memories, model, gat
  *   Promise<PlacementProposal>} classify
  * @returns {Promise<PlacePendingBatchResult>}
  */
-async function runPendingBatch({ uow, scope, placement, memories }, classify) {
+async function runPendingBatch({ uow, scope, placement, memories, catalogLimit = CLASSIFICATION_CATALOG_LIMIT }, classify) {
+  if (!isClassificationCatalogLimit(catalogLimit)) throw new CoreError('invalid_input');
   const batch = await uow.run(scope.owner, { readOnly: true }, async (tx) => {
     const pending = await placement.pending(tx, scope, { limit: 5 });
     if (!pending.length) return null;
 
-    /** @type {ClassificationCatalogItem[]} */
-    const map = [];
-    let page = await placement.catalog(tx, scope, { cursor: null, limit: CLASSIFICATION_CATALOG_LIMIT });
-    const { indexRevision } = page;
-    while (true) {
-      for (const { id, level, title } of page.items) map.push({ type: 'moc', moc: { id, level, title } });
-      if (page.exhausted || map.length === CLASSIFICATION_CATALOG_LIMIT) break;
-      page = await placement.catalog(tx, scope, { cursor: page.nextCursor, limit: CLASSIFICATION_CATALOG_LIMIT - map.length });
-    }
+    const { indexRevision, catalogView } = await readClassificationCatalog(placement, tx, scope, catalogLimit);
 
     const snapshot = [];
     for (const { memoryId, revision } of pending) {
@@ -54,7 +46,7 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
       }
     }
     if (!snapshot.length) return null;
-    return { snapshot: { memories: snapshot, indexRevision }, catalogView: { map, mapExhausted: page.exhausted },
+    return { snapshot: { memories: snapshot, indexRevision }, catalogView,
       basedOn: { indexRevision, memoryRevisions: snapshot.map(({ id, revision }) => ({ memoryId: id, revision })) } };
   });
   if (!batch) return { status: 'idle' };

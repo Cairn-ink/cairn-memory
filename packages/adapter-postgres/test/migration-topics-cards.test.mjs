@@ -101,7 +101,7 @@ const hostedDDL = `
   ALTER TABLE "memories" ADD CONSTRAINT "memories_revision_check" CHECK ("memories"."revision" >= 1);
 
   CREATE TABLE "document_cards" (
-    "user_id" text NOT NULL,
+    "user_id" text,
     "id" text NOT NULL,
     "content_hash" text NOT NULL,
     "title" text NOT NULL,
@@ -118,14 +118,54 @@ const hostedDDL = `
     "tombstoned" boolean DEFAULT false NOT NULL,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT "document_cards_user_id_id_pk" PRIMARY KEY ("user_id", "id"),
+    "scope_id" text NOT NULL,
+    "embedding" vector(1536),
+    "embedding_model" text,
+    "embedding_text_version" smallint,
+    "embedding_content_hash" text,
+    CONSTRAINT "document_cards_scope_id_id_pk" PRIMARY KEY ("scope_id", "id"),
+    CONSTRAINT "document_cards_user_id_id_pk" UNIQUE ("user_id", "id"),
+    CONSTRAINT "document_cards_team_author_check" CHECK (user_id IS NOT NULL OR scope_id LIKE 'team:%'),
+    CONSTRAINT "document_cards_embedding_check"
+      CHECK (num_nonnulls(embedding, embedding_model, embedding_text_version, embedding_content_hash) IN (0, 4)),
     CONSTRAINT "document_cards_origin_check" CHECK ("document_cards"."origin" IN ('router', 'import', 'manual')),
     CONSTRAINT "document_cards_router_source_check" CHECK ("document_cards"."origin" <> 'router' OR
       ("document_cards"."source_client" IS NOT NULL AND "document_cards"."source_session_id" IS NOT NULL AND
        "document_cards"."source_message_id" IS NOT NULL))
   );
+  ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_scope_id_id_unique" UNIQUE ("scope_id", "id");
   ALTER TABLE "document_cards" ADD CONSTRAINT "document_cards_user_id_users_id_fk"
-    FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+  CREATE FUNCTION public.delete_personal_document_cards() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public AS $personal$
+  BEGIN
+    DELETE FROM public.document_cards WHERE user_id = OLD.id AND scope_id NOT LIKE 'team:%';
+    RETURN OLD;
+  END;
+  $personal$;
+  CREATE TRIGGER document_cards_delete_personal BEFORE DELETE ON public.users
+    FOR EACH ROW EXECUTE FUNCTION public.delete_personal_document_cards();
+  -- The engine schema has no scopes table, so this fixture omits its foreign key.
+  CREATE FUNCTION public.default_document_card_scope() RETURNS trigger LANGUAGE plpgsql AS $scope$
+  BEGIN
+    IF NEW.scope_id IS NULL THEN
+      NEW.scope_id := NEW.user_id;
+    END IF;
+    RETURN NEW;
+  END;
+  $scope$;
+  CREATE TRIGGER document_cards_default_scope BEFORE INSERT ON public.document_cards
+    FOR EACH ROW EXECUTE FUNCTION public.default_document_card_scope();
+  CREATE INDEX document_cards_scope_created_idx ON public.document_cards (scope_id, created_at DESC NULLS LAST, id);
+  CREATE FUNCTION public.document_card_search_text(title text, body text) RETURNS text
+  LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $search$
+    SELECT CASE WHEN title IS NULL OR title = '' THEN body ELSE title || E'\\n\\n' || body END;
+  $search$;
+  CREATE INDEX document_cards_search_text_idx ON public.document_cards
+    USING pgroonga (public.document_card_search_text(title, body)) WHERE hidden_reason IS NULL AND NOT tombstoned;
+  CREATE INDEX document_cards_live_source_idx ON public.document_cards
+    USING btree (user_id, source_client, source_session_id, source_message_id)
+    WHERE hidden_reason IS NULL AND NOT tombstoned;
   CREATE INDEX "document_cards_user_created_idx" ON "document_cards" USING btree ("user_id", "created_at" DESC NULLS LAST, "id");
   CREATE INDEX "document_cards_source_memories_idx" ON "document_cards" USING gin ("source_memories" jsonb_path_ops)
     WHERE "document_cards"."hidden_reason" IS NULL AND NOT "document_cards"."tombstoned";

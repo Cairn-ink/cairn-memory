@@ -78,7 +78,8 @@ export { createPostgresRawPorts } from "./raw.mjs";
 export type { RawOptions } from "./raw-options.mjs";
 
 export function createPostgresMemoryStore(
-  options?: SessionHashOptions & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
+  options?: SessionHashOptions & Pick<import("./raw-options.mjs").RawOptions, "purgeCards">
+    & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
 ): MemoryStore;
 export function createPostgresDigestGate(uow: UnitOfWork,
   keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>,
@@ -106,3 +107,6 @@ export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
 export { createPostgresTopicStore } from "./topics.mjs";
 export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";
 export type { PostgresHostOperation } from "./host-write-hooks.mjs";
+export { createPostgresDocumentCardStore } from "./document-cards.mjs";
+export { createPostgresDocumentCardCandidates } from "./document-card-candidates.mjs";
+export type { DocumentCardOptions } from "./document-card-visibility.mjs";
