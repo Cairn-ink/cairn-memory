@@ -529,7 +529,8 @@ export function writeMethods(deps) {
           const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === duplicateId &&
             match.revision === current?.revision);
           if (current === null || !matched) return suppressed(tx);
-          if (targets.length && (current.historical || targets.some(target => target.id === duplicateId))) throw new InvalidRelation();
+          if (targets.length && (current.text !== text || current.historical ||
+            targets.some(target => target.id === duplicateId))) throw new InvalidRelation();
           if (!await visible(scope, duplicateId, tx)) return suppressed(tx);
           textHash = current.textHash;
           const { merge } = planDuplicateMerge(current, current);

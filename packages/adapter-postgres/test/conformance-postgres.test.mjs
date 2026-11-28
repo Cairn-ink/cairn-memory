@@ -457,6 +457,7 @@ const selected = new Set([
   "CAPTURE-LEDGER-1", "CAPTURE-FORGET-3",
   "K-LEG-PASS-1", "K-LEG-PASS-2", "K-LEG-PASS-3", "K-LEG-PASS-4", "K-LEG-PASS-5", "K-LEG-PASS-6",
   "K-LEG-PASS-7", "K-LEG-PASS-7-raw-import", "K-LEG-PASS-8", "K-LEG-PASS-9", "K-LEG-PASS-10", "K-LEG-PASS-N1", "K-LEG-PASS-N2",
+  "K-RELH-11", "K-RELH-12",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
