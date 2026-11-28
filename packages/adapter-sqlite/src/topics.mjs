@@ -137,8 +137,9 @@ export function createTopicStore(port, index, visibility, now, options, legacyFi
   /** @param {Tx} tx @param {Scope} callerScope @param {string} topicId
    * @param {TopicPage & {projection?: "hosted"}} query */
   async function members(tx, callerScope, topicId, query) {
-    if (query.projection === "hosted") {
-      return access(tx, callerScope, {}, (db, scope) => {
+    const snapshot = await access(tx, callerScope, {}, (db, scope) => {
+      if (query.projection === "hosted") {
+        if (scope.namespace !== null) throw new CoreError("capability_unavailable");
         if (!validHostedTopicId(topicId) || !db.prepare(`SELECT 1 FROM cairn_topics WHERE ${exactScope} AND id = ?`)
           .get(...scopeKey(scope), topicId)) throw new CoreError("not_found");
         const page = hostedTopicMemberPage(query, scope, topicId, index.start(db, tx));
@@ -149,10 +150,10 @@ export function createTopicStore(port, index, visibility, now, options, legacyFi
         const { id, level, title } = topic;
         const rows = topicMembers(topic, catalog, membersByTopic(db, scope, visible), true);
         const { items, nextCursor } = page.seek(rows);
-        return { topic: { id, level, title }, items: items.map(member => ({ kind: "memory", ...member })), nextCursor };
-      });
-    }
-    const { catalog, topic, memories, cards, scope, revision } = await access(tx, callerScope, {}, (db, scope) => {
+        return { hostedPage: { topic: { id, level, title }, items: items.map(member => ({
+          kind: /** @type {const} */ ("memory"), ...member,
+        })), nextCursor } };
+      }
       const visible = visibility(db, scope);
       const catalog = catalogTopics(db, scope, visible);
       const topic = catalog.find(({ id }) => id === topicId);
@@ -160,6 +161,8 @@ export function createTopicStore(port, index, visibility, now, options, legacyFi
       return { catalog, topic, memories, cards: topic && cardVisibility && cardTopicMembers(db, scope, cardVisibility),
         scope, revision: index.start(db, tx) };
     });
+    if (snapshot.hostedPage) return snapshot.hostedPage;
+    const { catalog, topic, memories, cards, scope, revision } = snapshot;
     const cardMembers = cards && topic && cardVisibility
       ? topicMembers(topic, catalog, await visibleCardTopicMembers(cards, cardVisibility)) : [];
     const members = [...memories.map(member => ({ kind: /** @type {const} */ ("memory"), ...member })),
@@ -342,6 +345,7 @@ export function createTopicStore(port, index, visibility, now, options, legacyFi
     async list(tx, callerScope, query) {
       const { catalog, groups, cards, scope, revision, level, seek } = await access(tx, callerScope, {}, (db, scope) => {
         const { level, projection } = query;
+        if (projection === "hosted" && scope.namespace !== null) throw new CoreError("capability_unavailable");
         if (level !== undefined && level !== "L1" && level !== "L2") invalidInput();
         const visible = visibility(db, scope);
         const seek = projection === "hosted" ? hostedTopicListPage(query, scope, level ?? null, index.start(db, tx)) : null;

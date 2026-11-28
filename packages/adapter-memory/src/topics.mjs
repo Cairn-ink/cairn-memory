@@ -218,10 +218,12 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   async function members(tx, scope, topicId, query) {
     return port.read(tx, scope, async (getState) => {
       const namespace = writeNamespace(scope);
+      const hosted = query.projection === "hosted";
+      if (hosted && namespace !== null) throw new CoreError("capability_unavailable");
       const state = getState();
       const scoped = state.topics.get(namespace);
       const topic = scoped?.topics.get(topicId);
-      if (query.projection === "hosted") {
+      if (hosted) {
         if (!validHostedTopicId(topicId) || !scoped || !topic) throw new CoreError("not_found");
         const page = hostedTopicMemberPage(query, { owner: tx.owner, namespace }, topicId, state.indexRevision);
         const { current, topic: visibleTopic } = view(state, tx.owner, namespace);
@@ -528,11 +530,12 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       return port.read(tx, scope, async (getState) => {
         const namespace = writeNamespace(scope);
         const { level, projection } = query;
+        const hosted = projection === "hosted";
+        if (hosted && namespace !== null) throw new CoreError("capability_unavailable");
         if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
         const state = getState();
         const scoped = state.topics.get(namespace);
         const { current, topic } = view(state, tx.owner, namespace);
-        const hosted = projection === "hosted";
         const selection = { owner: tx.owner, namespace };
         const seek = hosted ? hostedTopicListPage(query, selection, level ?? null, state.indexRevision) : null;
         const cards = !hosted && flags.documentCards && scoped ? await visibleFiledCards(tx, state, selection, scoped) : null;

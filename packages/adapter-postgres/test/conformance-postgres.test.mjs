@@ -334,6 +334,7 @@ function postgresFactory(wrapSuppressions = (store) => store, {
       const harnessOwners = [];
       /** @type {Omit<TestHarness, "counters"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
+        personalTopicsOnly: true,
         personalDocumentCardsOnly: true,
         placePendingCardsBatch,
         placePendingBatch,
@@ -672,6 +673,51 @@ test("Postgres T-TOP-HL-PG seeks between adjacent microseconds and fences both t
   await write(tx => placement.dropMemory(tx, scope, "z-older"));
   await assert.rejects(list(secondList.nextCursor), { code: "cursor_stale" });
   await assert.rejects(members(secondMember.nextCursor), { code: "cursor_stale" });
+});
+
+test("Postgres T-TOP-HL-PG-refill pages across a whole batch of hidden members", options, async t => {
+  const { pool, owner, scope, topicId, write, read } = await openTopicCardFixture(t);
+  const placement = createPostgresTopicStore();
+  const vector = JSON.stringify([1, ...Array(1535).fill(0)]);
+  const ids = ["a-newest", ...Array.from({ length: 17 }, (_, i) => `hidden-${i + 1}`), "y-middle", "z-oldest"];
+  await pool.query(`
+    INSERT INTO memories (user_id, id, text, text_hash, kind, embedding, embedding_model,
+      source_kind, source_client, source_session_id)
+    SELECT $1, id, id, md5(id), 'fact', $3, 'fixture', 'plugin', 'fixture-client',
+      CASE WHEN id LIKE 'hidden-%' THEN 'hidden-session' END
+    FROM unnest($2::text[]) AS members(id)`, [owner, ids, vector]);
+  await pool.query(`INSERT INTO memory_placements (user_id, memory_id, memory_revision, status)
+    SELECT user_id, id, revision, 'filed' FROM memories WHERE user_id = $1`, [owner]);
+  await pool.query(`INSERT INTO memory_topics (user_id, memory_id, memory_revision, topic_id, placed_at)
+    SELECT m.user_id, m.id, m.revision, $2, to_timestamp(21 - members.ordinality)
+    FROM unnest($3::text[]) WITH ORDINALITY AS members(id, ordinality)
+    JOIN memories m ON m.user_id = $1 AND m.id = members.id`, [owner, topicId, ids]);
+  const page = { projection: "hosted", cursor: null, limit: 1 };
+  const before = await read(tx => placement.list(tx, scope, page));
+  assert.deepEqual(before.items.map(({ id, memberCount, newestMemberIds }) => ({ id, memberCount, newestMemberIds })),
+    [{ id: topicId, memberCount: 20, newestMemberIds: ["a-newest", "hidden-1", "hidden-2"] }]);
+  await write(tx => createPostgresSuppressionStore().writeFact(tx, {
+    ...scope, kind: "session", session: { client: "fixture-client", sessionId: "hidden-session" },
+    origin: "forget", actionId: "hide-hosted-refill-batch",
+  }, createHash("sha256").update("hide-hosted-refill-batch").digest("hex")));
+
+  await read(async tx => {
+    const list = await placement.list(tx, scope, page);
+    assert.deepEqual(list.items.map(({ id, memberCount, newestMemberIds }) => ({ id, memberCount, newestMemberIds })),
+      [{ id: topicId, memberCount: 3, newestMemberIds: ["a-newest", "y-middle", "z-oldest"] }]);
+    assert.equal(list.nextCursor, null);
+
+    const first = await placement.members(tx, scope, topicId, page);
+    assert.deepEqual(first.items, [{ kind: "memory", id: "a-newest", placedAtUs: 20_000_000n }]);
+    assert.ok(first.nextCursor);
+    // The seek starts with 17 hidden candidates ahead of the next visible member.
+    const second = await placement.members(tx, scope, topicId, { ...page, cursor: first.nextCursor });
+    assert.deepEqual(second.items, [{ kind: "memory", id: "y-middle", placedAtUs: 2_000_000n }]);
+    assert.ok(second.nextCursor);
+    const last = await placement.members(tx, scope, topicId, { ...page, cursor: second.nextCursor });
+    assert.deepEqual(last.items, [{ kind: "memory", id: "z-oldest", placedAtUs: 1_000_000n }]);
+    assert.equal(last.nextCursor, null);
+  });
 });
 
 test("Postgres keyed topic cards withhold an HMAC-only forgotten source without Raw", options, async t => {

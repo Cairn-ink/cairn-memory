@@ -1,5 +1,5 @@
 import { coreDigest, encodeCursor } from "@cairn-ink/core";
-import { check, equal, rejects, row } from "./support.mjs";
+import { check, equal, isCoreErrorShape, rejects, row } from "./support.mjs";
 
 /** @import { PlacementItem } from "@cairn-ink/core" */
 /** @import { Scope, SourceLessDocumentCardRecord, Topic, TopicPage, Tx } from "@cairn-ink/core/ports" */
@@ -277,4 +277,28 @@ export const HOSTED_TOPIC_CASES = [
     equal((await store.membersDefault("mixed")).items.map(({ kind }) => kind).sort(), ["card", "memory"],
       "The card must actually be visible through the default projection");
   }, ["placement", "documentCards"]),
+
+  hostedCase(6, "rejects namespaced hosted reads and preserves default namespace behavior", async ctx => {
+    const store = setup(ctx, ctx.scope("team"));
+    const topicId = "team-topic";
+    if (ctx.harness.personalTopicsOnly) {
+      await rejects(() => store.listDefault(), "capability_unavailable");
+      await rejects(() => store.membersDefault(topicId), "capability_unavailable");
+    } else {
+      const seed = await store.memory("team-member");
+      await store.place([seed], [item(seed, [], { title: "Team", parentL2Ids: [] })], [topicId]);
+      equal(await store.listDefault(), {
+        items: [{ id: topicId, level: "L1", title: "Team", parentIds: [], memberCount: 1,
+          newestMemberIds: ["team-member"], ...(ctx.adapter.capabilities.documentCards && { cardCount: 0 }) }],
+        nextCursor: null,
+      }, "The default list must return the namespaced topic");
+      equal(await store.membersDefault(topicId), {
+        items: [{ kind: "memory", id: "team-member", placedAtUs: 1000n }], nextCursor: null,
+      }, "The default member page must return the namespaced member");
+    }
+    const results = await Promise.allSettled([store.list({ limit: 1 }), store.members(topicId)]);
+    equal(results.map(result => result.status === "rejected" && isCoreErrorShape(result.reason)
+      ? result.reason.code : result.status),
+      ["capability_unavailable", "capability_unavailable"], "Hosted list and members must both reject a named namespace");
+  }),
 ];
