@@ -5,6 +5,7 @@ import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
+import { HOSTED_TOPIC_CASES } from "@cairn-ink/conformance/topics-hosted";
 import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { buildDocumentCard, documentCardVisible } from "@cairn-ink/core/routing";
 import { placePendingBatch, placePendingCardsBatch } from "../../core/src/index.mjs";
@@ -479,7 +480,7 @@ const selected = new Set([
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15", "T-TOP-16", "T-TOP-17",
   "T-TOP-18", "T-TOP-19", "T-TOP-20", "T-TOP-21",
   ...kit.TOPIC_CARD_CASES.map(({ id }) => id),
-  ...kit.HOSTED_TOPIC_CASES.map(({ id }) => id),
+  ...HOSTED_TOPIC_CASES.map(({ id }) => id),
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
@@ -542,7 +543,7 @@ function discoverCases(exports) {
   return cases;
 }
 
-const allCases = discoverCases(kit);
+const allCases = [...discoverCases(kit), ...HOSTED_TOPIC_CASES];
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),
   allCases.map(({ id }) => id).sort(),

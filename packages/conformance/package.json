@@ -7,6 +7,10 @@
   "exports": {
     ".": { "types": "./src/index.d.mts", "default": "./src/index.mjs" },
     "./factory": { "types": "./src/factory.d.ts" },
+    "./topics-hosted": {
+      "types": "./src/topics-hosted-cases.d.mts",
+      "default": "./src/topics-hosted-cases.mjs"
+    },
     "./inspect": { "types": "./src/inspect-cases.d.mts", "default": "./src/inspect-cases.mjs" },
     "./context-read": { "default": "./src/context-read-cases.mjs" },
     "./context-read-semantic": {

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  HOSTED_TOPIC_CASES, RELATION_CASES, TOPIC_CARD_CASES, TOPIC_CASES, TOPIC_FOR_MEMORIES_CASES, TOPICS_FOR_CARDS_CASES, runCase,
+  RELATION_CASES, TOPIC_CARD_CASES, TOPIC_CASES, TOPIC_FOR_MEMORIES_CASES, TOPICS_FOR_CARDS_CASES, runCase,
 } from "@cairn-ink/conformance";
+import { HOSTED_TOPIC_CASES } from "@cairn-ink/conformance/topics-hosted";
 import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { PLACEMENT_RELATION_TABLES } from "../src/schema/placement-relations.mjs";

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { HOSTED_TOPIC_CASES, runCase } from "@cairn-ink/conformance";
+import { runCase } from "@cairn-ink/conformance";
+import { HOSTED_TOPIC_CASES } from "@cairn-ink/conformance/topics-hosted";
 import { withHostedTopicIds } from "../../conformance/test/hosted-topic-fixture.mjs";
 
 const factory = {
