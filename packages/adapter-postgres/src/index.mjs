@@ -19,3 +19,5 @@ export { createPostgresSupersessionStore } from "./supersession-store.mjs";
 export { createPostgresConflictEdgeStore } from "./conflict-edge-store.mjs";
 export { createPostgresQuantityLedgerStore } from "./quantity-ledger.mjs";
 export { createPostgresHostWriteHookPort } from "./host-write-hooks.mjs";
+export { createPostgresDocumentCardStore } from "./document-cards.mjs";
+export { createPostgresDocumentCardCandidates } from "./document-card-candidates.mjs";
