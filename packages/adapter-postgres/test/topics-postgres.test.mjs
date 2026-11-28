@@ -230,19 +230,27 @@ test("every Postgres TopicStore method rejects a non-null namespace", migrationD
   const { uow, placement } = await setup(t);
   const reads = {
     pending: [{ limit: 5 }],
+    pendingCards: [{ limit: 5 }],
     catalog: [firstPage],
     list: [firstPage],
     members: ["topic", firstPage],
     forMemory: ["memory"],
     forMemories: [["memory"]],
+    forCard: ["card"],
   };
   const writes = {
     applyPlacement: [
       { indexRevision: 0, memoryRevisions: [{ memoryId: "memory", revision: 1 }] },
       { items: [{ memoryId: "memory", parentIds: [] }] },
     ],
+    applyCardPlacement: [
+      { indexRevision: 0, cards: [{ cardId: "card", contentHash: "hash" }] },
+      { items: [{ cardId: "card", parentIds: [] }] },
+    ],
     markFailed: [["memory"], "storage_busy"],
+    markCardsFailed: [["card"], "storage_busy"],
     dropMemory: ["memory"],
+    dropCard: ["card"],
   };
   assert.deepEqual(Object.keys(placement).sort(), [...Object.keys(reads), ...Object.keys(writes)].sort());
   for (const [readOnly, methods] of [[true, reads], [false, writes]]) {
