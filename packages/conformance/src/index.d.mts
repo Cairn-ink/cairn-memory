@@ -49,6 +49,7 @@ export declare const RATIONALE_CASES: readonly ConformanceCase[];
 export declare const RETRIEVAL_WINDOW_CASES: readonly ConformanceCase[];
 export declare const FENCE_INTENT_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CASES: readonly ConformanceCase[];
+export declare const HOSTED_TOPIC_CASES: readonly ConformanceCase[];
 export declare const TOPIC_FOR_MEMORIES_CASES: readonly ConformanceCase[];
 export declare const RAW_CASES: readonly ConformanceCase[];
 export declare const SPAN_LINEAGE_CASES: readonly ConformanceCase[];

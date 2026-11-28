@@ -1,5 +1,6 @@
 import {
-  CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, isErrorCode, memoryGuards, placementProposal, titleKey,
+  CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, hostedTopicListPage, hostedTopicMemberPage,
+  isErrorCode, memoryGuards, placementProposal, titleKey, validHostedTopicId,
 } from "../../core/src/index.mjs";
 import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
 import { LIVE_CARD, nonempty, PERSONAL_CARD } from "./document-card-rows.mjs";
@@ -8,13 +9,11 @@ import { readVisibility } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
-/** @import { CardPlacementProposal, Scope, Topic, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
-/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
+/** @import { CardPlacementProposal, HostedTopicMemberPage, HostedTopicPage, Scope, Topic, TopicMemberPage, TopicPage, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
 /** @import { Run } from "./uow.mjs" */
 /** @typedef {import("./driver.mjs").Connection["query"]} Query */
 /** @typedef {Pick<Required<TopicStore>, "pending" | "catalog" | "applyPlacement" | "markFailed" |
  * "list" | "members" | "forMemory" | "forMemories" | "dropMemory">} MemoryPlacement */
-/** @typedef {TopicStore & MemoryPlacement} Placement */
 
 const BATCH_LIMIT = 5;
 const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
@@ -48,14 +47,16 @@ const visibleTopicTitle = (visibleSources) => `CASE WHEN EXISTS (
       AND source.revision = s.memory_revision AND ${currentMemory("source")} AND source.id = ANY(${visibleSources}::text[])
     WHERE s.user_id = t.user_id AND s.topic_id = t.id AND source.id IS NULL
   ) THEN t.title END`;
-/** @param {string} visibleSources */
-const topicColumns = (visibleSources) => `t.id, t.level, ${visibleTopicTitle(visibleSources)} AS title,
+/** @param {string} visibleSources @param {boolean} [hosted] */
+const topicColumns = (visibleSources, hosted = false) => `t.id, t.level, ${visibleTopicTitle(visibleSources)} AS title,
   ARRAY(SELECT e.parent_id FROM topic_edges e
     JOIN topics parent ON parent.user_id = e.user_id AND parent.id = e.parent_id AND parent.level = 2
     WHERE e.user_id = t.user_id AND e.child_id = t.id AND t.level = 1
-    ORDER BY e.parent_id COLLATE "C") AS parent_ids`;
+    ORDER BY e.parent_id${hosted ? "" : ' COLLATE "C"'}) AS parent_ids`;
 const topicOrder = `level, coalesce(title, '') COLLATE "C", id COLLATE "C"`;
 const newestFirst = `placed_at DESC, memory_id COLLATE "C" DESC`;
+// The hosted SELECT, window and seek predicate all use the column's default collation.
+const hostedNewestFirst = "placed_at DESC, memory_id DESC";
 const mixedNewestFirst = `placed_at DESC, member_id COLLATE "C" DESC, member_kind COLLATE "C" DESC`;
 
 /** @typedef {Awaited<ReturnType<typeof readVisibility>>} Visibility */
@@ -71,11 +72,10 @@ async function visibleRows(visibility, owner, rows) {
  * Public member offsets count only visible rows.
  * @param {(after: any, size: number) => Promise<{rows: any[]}>} load
  * @param {(rows: any[]) => Promise<any[]>} filter
- * @param {number} [limit] @param {number} [skip]
+ * @param {number} [limit] @param {number} [skip] @param {any} [after]
  */
-async function filteredPage(load, filter, limit = Infinity, skip = 0) {
+async function filteredPage(load, filter, limit = Infinity, skip = 0, after = null) {
   const items = [];
-  let after = null;
   while (items.length < limit) {
     const size = Math.min(128, Math.max(16, skip + limit - items.length));
     const { rows } = await load(after, size);
@@ -89,9 +89,9 @@ async function filteredPage(load, filter, limit = Infinity, skip = 0) {
 }
 
 /** @param {Visibility} visibility @param {string} owner @param {Parameters<typeof filteredPage>[0]} load
- * @param {number} [limit] @param {number} [skip] */
-function visiblePage(visibility, owner, load, limit, skip) {
-  return filteredPage(load, rows => visibleRows(visibility, owner, rows), limit, skip);
+ * @param {number} [limit] @param {number} [skip] @param {any} [after] */
+function visiblePage(visibility, owner, load, limit, skip, after) {
+  return filteredPage(load, rows => visibleRows(visibility, owner, rows), limit, skip, after);
 }
 
 /** @param {Query} query @param {string} owner @param {Visibility} visibility @param {string[] | null} [topicIds] */
@@ -336,10 +336,8 @@ class WithoutDocumentCards {
 }
 
 /**
- * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number,
- * hashSessionKey?: FactMatchPolicy["hashSessionKey"],
- * documentCards?: Pick<ReturnType<typeof import("./document-cards.mjs").createPostgresDocumentCardStore>, "readFileableCards">}} [options]
- * @returns {Placement}
+ * @param {import("./topics.d.mts").PostgresTopicOptions} [options]
+ * @returns {TopicStore & MemoryPlacement}
  */
 export function createPostgresTopicStore({
   now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3, hashSessionKey, documentCards
@@ -353,6 +351,103 @@ export function createPostgresTopicStore({
     if (!readFileableCards || !rows.length) return [];
     const hashes = await readFileableCards(query, owner, rows.map(row => row[idField]));
     return rows.filter(row => hashes.get(row[idField]) === row.content_hash);
+  }
+
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} scope @param {string} topicId @param {HostedTopicPage} options
+   * @returns {Promise<HostedTopicMemberPage>}
+   */
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} scope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} options @returns {Promise<TopicMemberPage>}
+   */
+  /** @param {Tx} tx @param {Scope} scope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} options */
+  async function members(tx, scope, topicId, options) {
+    const owner = personalOwner(tx, scope);
+    const { cursor, limit, projection } = options;
+    validateLimit(limit);
+    return runOperation(tx, async (query, run) => {
+      const hosted = projection === "hosted";
+      if (hosted) {
+        if (!validHostedTopicId(topicId)) throw new CoreError("not_found");
+        const { rows: [found] } = await query("SELECT level FROM topics WHERE user_id = $1 AND id = $2", [owner, topicId]);
+        if (!found) throw new CoreError("not_found");
+      }
+      const page = hosted
+        ? hostedTopicMemberPage({ cursor, limit }, { owner, namespace: null }, topicId, await readIndexRevision(query, owner, run))
+        : await readPage(query, owner, "members", topicId, limit, cursor, run);
+      const after = "after" in page ? page.after : null;
+      if (!sqlText(topicId)) return { items: [], nextCursor: null };
+      const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
+      const columns = visibility.candidateColumns([null]);
+      if ("finish" in page || !readFileableCards) {
+        const rows = await visiblePage(visibility, owner, (after, size) => query(`
+          WITH child_topics AS (
+            SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
+            UNION ALL
+            SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
+            WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
+          ), current_members AS (
+            SELECT mt.memory_id, max(mt.placed_at) AS placed_at
+            FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
+            WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
+          )
+          SELECT ${columns}, memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+          FROM current_members c JOIN memories m ON m.user_id = $1 AND m.id = c.memory_id
+          WHERE ($3::bigint IS NULL OR ${hosted
+            ? "(extract(epoch FROM c.placed_at) * 1000000, c.memory_id) < ($3::bigint, $4::text)"
+            : `(c.placed_at, c.memory_id COLLATE "C") < (${timestampUs("$3")}, $4::text)`})
+          ORDER BY ${hosted ? hostedNewestFirst : newestFirst} LIMIT $5`,
+        [owner, topicId, after?.placed_at_us ?? null, after?.memory_id ?? null, size]), limit + 1, "offset" in page ? page.offset : 0,
+        after && { placed_at_us: after.placedAtUs.toString(), memory_id: after.id });
+        if ("finish" in page) {
+          const sources = await visibleTitleSources(query, owner, visibility, [topicId]);
+          const { rows: [header] } = await query(`
+            SELECT t.id, t.level, ${visibleTopicTitle("$3")} AS title FROM topics t
+            WHERE t.user_id = $1 AND t.id = $2`, [owner, topicId, sources]);
+          /** @type {HostedTopicMemberPage["topic"]} */
+          const topic = { id: header.id, level: header.level === 1 ? "L1" : "L2", title: header.title };
+          const { items, nextCursor } = page.finish(rows.map(row => ({
+            id: row.memory_id, placedAtUs: BigInt(row.placed_at_us),
+          })));
+          return { topic, items: items.map(member => ({ kind: "memory", ...member })), nextCursor };
+        }
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
+      }
+      const rows = await filteredPage((after, size) => query(`
+        WITH child_topics AS (
+          SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
+          UNION ALL
+          SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
+          WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
+        ), current_members AS (
+          SELECT mt.memory_id AS member_id, max(mt.placed_at) AS placed_at, 'memory' AS member_kind, NULL::text AS content_hash
+          FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
+          WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
+          UNION ALL
+          SELECT ct.card_id, max(ct.placed_at), 'card', ct.content_hash
+          FROM child_topics child JOIN card_topics ct ON ct.topic_id = child.id ${currentCardMemberJoin}
+          WHERE ct.user_id = $1 GROUP BY ct.card_id, ct.content_hash
+        )
+        SELECT ${columns}, c.member_id, c.member_kind, c.content_hash,
+          (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+        FROM current_members c LEFT JOIN memories m ON c.member_kind = 'memory' AND m.user_id = $1 AND m.id = c.member_id
+        WHERE ($3::bigint IS NULL OR (c.placed_at, c.member_id COLLATE "C", c.member_kind COLLATE "C") <
+          (${timestampUs("$3")}, $4::text, $5::text))
+        ORDER BY ${mixedNewestFirst} LIMIT $6`,
+      [owner, topicId, after?.placed_at_us ?? null, after?.member_id ?? null, after?.member_kind ?? null, size]), async rows => {
+        const memories = await visibleRows(visibility, owner, rows.filter(row => row.member_kind === "memory"));
+        const cards = await visibleCardRows(query, owner, rows.filter(row => row.member_kind === "card"), "member_id");
+        const visible = new Set([...memories, ...cards]);
+        return rows.filter(row => visible.has(row));
+      }, limit + 1, page.offset);
+      const { items, nextCursor } = page.slice(rows);
+      return { items: items.map(row => ({ kind: row.member_kind, id: row.member_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
+    });
   }
 
   /** @type {MemoryPlacement} */
@@ -487,11 +582,15 @@ export function createPostgresTopicStore({
 
     async list(tx, scope, options) {
       const owner = personalOwner(tx, scope);
-      const { level, cursor, limit } = options;
+      const { level, cursor, limit, projection } = options;
       validateLimit(limit);
       if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
       return runOperation(tx, async (query, run) => {
-        const page = await readPage(query, owner, "list", level ?? null, limit, cursor, run);
+        const hosted = projection === "hosted";
+        const page = hosted
+          ? hostedTopicListPage({ cursor, limit }, { owner, namespace: null }, level ?? null, await readIndexRevision(query, owner, run))
+          : await readPage(query, owner, "list", level ?? null, limit, cursor, run);
+        const after = "after" in page ? page.after : null;
         const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
         const columns = visibility.candidateColumns([null]);
         const members = await visiblePage(visibility, owner, (after, size) => query(`
@@ -501,7 +600,7 @@ export function createPostgresTopicStore({
             AND EXISTS (SELECT 1 FROM memory_topics mt WHERE mt.user_id = m.user_id
               AND mt.memory_id = m.id AND mt.memory_revision = m.revision)
           ORDER BY m.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]));
-        if (!readFileableCards) {
+        if ("finish" in page || !readFileableCards) {
           if (!members.length) return { items: [], nextCursor: null };
           const sources = await visibleTitleSources(query, owner, visibility);
           const { rows } = await query(`
@@ -517,7 +616,7 @@ export function createPostgresTopicStore({
               WHERE $2::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.memory_id
             ), ranked AS (
               SELECT topic_id, memory_id, row_number() OVER (
-                PARTITION BY topic_id ORDER BY ${newestFirst}
+                PARTITION BY topic_id ORDER BY ${hosted ? hostedNewestFirst : newestFirst}
               ) AS member_rank FROM effective
             ), summary AS (
               SELECT topic_id, count(*) AS member_count,
@@ -525,13 +624,19 @@ export function createPostgresTopicStore({
               FROM ranked GROUP BY topic_id
             )
             SELECT * FROM (
-              SELECT ${topicColumns("$6")}, s.member_count, s.newest_member_ids
+              SELECT ${topicColumns("$6", hosted)}, s.member_count, s.newest_member_ids
               FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
-              WHERE $2::smallint IS NULL OR t.level = $2
-            ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
-          [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset, members.map(({ id }) => id), sources]);
+              WHERE ($2::smallint IS NULL OR t.level = $2) ${hosted ? `AND
+                ($4::bigint IS NULL OR s.member_count < $4 OR (s.member_count = $4 AND t.id > $7::text))` : ""}
+            ) listed ORDER BY ${hosted ? "member_count DESC, id LIMIT $3" : `${topicOrder} LIMIT $3 OFFSET $4`}`,
+          [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1,
+            "offset" in page ? page.offset : after?.memberCount ?? null, members.map(({ id }) => id), sources,
+            ...(hosted ? [after?.id ?? null] : [])]);
+          if ("finish" in page) return page.finish(rows.map(row => ({
+            ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
+          })));
           const { items, nextCursor } = page.slice(rows);
-          return { items: items.map((row) => ({
+          return { items: items.map(row => ({
             ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
           })), nextCursor };
         }
@@ -585,66 +690,7 @@ export function createPostgresTopicStore({
       });
     },
 
-    async members(tx, scope, topicId, options) {
-      const owner = personalOwner(tx, scope);
-      const { cursor, limit } = options;
-      validateLimit(limit);
-      return runOperation(tx, async (query, run) => {
-        const page = await readPage(query, owner, "members", topicId, limit, cursor, run);
-        if (!sqlText(topicId)) return { items: [], nextCursor: null };
-        const visibility = await readVisibility(query, owner, hashSessionKey, run.visibilityFacts);
-        const columns = visibility.candidateColumns([null]);
-        if (!readFileableCards) {
-          const rows = await visiblePage(visibility, owner, (after, size) => query(`
-            WITH child_topics AS (
-              SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
-              UNION ALL
-              SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
-              WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
-            ), current_members AS (
-              SELECT mt.memory_id, max(mt.placed_at) AS placed_at
-              FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
-              WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
-            )
-            SELECT ${columns}, memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
-            FROM current_members c JOIN memories m ON m.user_id = $1 AND m.id = c.memory_id
-            WHERE ($3::bigint IS NULL OR (c.placed_at, c.memory_id COLLATE "C") < (${timestampUs("$3")}, $4::text))
-            ORDER BY ${newestFirst} LIMIT $5`,
-          [owner, topicId, after?.placed_at_us ?? null, after?.memory_id ?? null, size]), limit + 1, page.offset);
-          const { items, nextCursor } = page.slice(rows);
-          return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
-        }
-        const rows = await filteredPage((after, size) => query(`
-          WITH child_topics AS (
-            SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
-            UNION ALL
-            SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
-            WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
-          ), current_members AS (
-            SELECT mt.memory_id AS member_id, max(mt.placed_at) AS placed_at, 'memory' AS member_kind, NULL::text AS content_hash
-            FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
-            WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
-            UNION ALL
-            SELECT ct.card_id, max(ct.placed_at), 'card', ct.content_hash
-            FROM child_topics child JOIN card_topics ct ON ct.topic_id = child.id ${currentCardMemberJoin}
-            WHERE ct.user_id = $1 GROUP BY ct.card_id, ct.content_hash
-          )
-          SELECT ${columns}, c.member_id, c.member_kind, c.content_hash,
-            (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
-          FROM current_members c LEFT JOIN memories m ON c.member_kind = 'memory' AND m.user_id = $1 AND m.id = c.member_id
-          WHERE ($3::bigint IS NULL OR (c.placed_at, c.member_id COLLATE "C", c.member_kind COLLATE "C") <
-            (${timestampUs("$3")}, $4::text, $5::text))
-          ORDER BY ${mixedNewestFirst} LIMIT $6`,
-        [owner, topicId, after?.placed_at_us ?? null, after?.member_id ?? null, after?.member_kind ?? null, size]), async rows => {
-          const memories = await visibleRows(visibility, owner, rows.filter(row => row.member_kind === "memory"));
-          const cards = await visibleCardRows(query, owner, rows.filter(row => row.member_kind === "card"), "member_id");
-          const visible = new Set([...memories, ...cards]);
-          return rows.filter(row => visible.has(row));
-        }, limit + 1, page.offset);
-        const { items, nextCursor } = page.slice(rows);
-        return { items: items.map(row => ({ kind: row.member_kind, id: row.member_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
-      });
-    },
+    members,
 
     async forMemory(tx, scope, memoryId) {
       const owner = personalOwner(tx, scope);

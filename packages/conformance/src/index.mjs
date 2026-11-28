@@ -22,6 +22,7 @@ export { RATIONALE_CASES } from "./rationale-cases.mjs";
 export { RETRIEVAL_WINDOW_CASES } from "./retrieval-window-cases.mjs";
 export { FENCE_INTENT_CASES } from "./fence-intent-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
+export { HOSTED_TOPIC_CASES } from "./topics-hosted-cases.mjs";
 export { TOPIC_FOR_MEMORIES_CASES } from "./topics-for-memories-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
 export { SPAN_LINEAGE_CASES } from "./span-lineage-cases.mjs";

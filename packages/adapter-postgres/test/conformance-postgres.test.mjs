@@ -19,6 +19,7 @@ import {
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 import { requireLiveRun } from "../src/uow.mjs";
 import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
+import { withHostedTopicIds } from "../../conformance/test/hosted-topic-fixture.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 /** @import { RetainedDigestFixture } from "@cairn-ink/conformance/factory" */
@@ -245,7 +246,9 @@ async function openDatabase() {
   }
 }
 
-function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedState = false, enableCardPlacement = false } = {}) {
+function postgresFactory(wrapSuppressions = (store) => store, {
+  seedRetainedState = false, enableCardPlacement = false, hostedTopicFixtures = false,
+} = {}) {
   return {
     name: "Postgres",
     async open({ capabilities: requested }) {
@@ -260,7 +263,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const lineageSecret = randomUUID();
       const nearDuplicate = requested.nearDuplicate !== false;
       let elapsed = 0;
-      const now = () => Date.now() + elapsed;
+      const now = () => (hostedTopicFixtures ? 1 : Date.now()) + elapsed;
       const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey, nearDuplicate,
         allowNonNullNamespace: true, now });
       const semanticRetrieval = requested.semanticRetrieval !== false;
@@ -335,6 +338,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
         placePendingBatch,
         hashSessionKey,
         async advanceClock(ms) { elapsed += ms; },
+        withHostedTopicIds,
         async rowsMissingKeyedDigest(owner) {
           return (await digestCoverage(owner)).missingPairs;
         },
@@ -475,6 +479,7 @@ const selected = new Set([
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15", "T-TOP-16", "T-TOP-17",
   "T-TOP-18", "T-TOP-19", "T-TOP-20", "T-TOP-21",
   ...kit.TOPIC_CARD_CASES.map(({ id }) => id),
+  ...kit.HOSTED_TOPIC_CASES.map(({ id }) => id),
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
@@ -575,6 +580,7 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
 const factory = postgresFactory();
 const retainedStateFactory = postgresFactory(undefined, { seedRetainedState: true });
 const cardPlacementFactory = postgresFactory(undefined, { enableCardPlacement: true });
+const hostedTopicFactory = postgresFactory(undefined, { enableCardPlacement: true, hostedTopicFixtures: true });
 for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   const name = `${factory.name} conformance ${testCase.id} ${testCase.title}`;
   // K-HYD-2 contains assertions even though the kit marks the supersession suite pending.
@@ -582,10 +588,12 @@ for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   // The primary cases cover the memory ports. Their semantic follow-ups belong to the vector lane.
   const memoryOnly = ["K-HIDE-2", "K-HIDE-3", "K-WRITE-1"].includes(testCase.id);
   const caseFactory = testCase.id === "K-KD-5" ? retainedStateFactory :
-    testCase.id.startsWith("T-TCARD-") ? cardPlacementFactory : factory;
+    testCase.id.startsWith("T-TCARD-") ? cardPlacementFactory :
+      testCase.id.startsWith("T-TOP-HL-") ? hostedTopicFactory : factory;
   test(name, options, async t => {
     const reason = await runPreparedCase(caseFactory, memoryOnly ? { ...prepared, followUp: undefined } : prepared, t);
     if (caseFactory === cardPlacementFactory) assert.equal(reason, null, "Card placement cases must run on Postgres");
+    if (caseFactory === hostedTopicFactory) assert.equal(reason, null, "Hosted topic cases must run on Postgres");
   });
 }
 
@@ -623,6 +631,47 @@ async function applyFixtureCard(placement, tx, scope, card, topicId) {
   return placement.applyCardPlacement(tx, scope, { indexRevision, cards: [cardGuard(card)] },
     { items: [{ cardId: card.id, parentIds: [topicId] }] });
 }
+
+test("Postgres T-TOP-HL-PG seeks between adjacent microseconds and fences both topic clocks", options, async t => {
+  const { pool, owner, scope, topicId, cardOnlyTopic, write, read } = await openTopicCardFixture(t);
+  const placement = createPostgresTopicStore({ now: () => 1 });
+  const guards = ["a-newer", "z-older"].map(memoryId => ({ memoryId, revision: 1 }));
+  const vector = JSON.stringify([1, ...Array(1535).fill(0)]);
+  await pool.query(`INSERT INTO memories (user_id, id, text, text_hash, kind, embedding, embedding_model, source_kind)
+    SELECT $1, id, id, md5(id), 'fact', $3, 'fixture', 'plugin' FROM unnest($2::text[]) AS rows(id)`,
+  [owner, guards.map(({ memoryId }) => memoryId), vector]);
+  await write(async tx => {
+    const { indexRevision } = await placement.catalog(tx, scope, firstTopicPage);
+    await placement.applyPlacement(tx, scope, { indexRevision, memoryRevisions: guards }, {
+      items: [{ memoryId: "a-newer", parentIds: [topicId, cardOnlyTopic] },
+        { memoryId: "z-older", parentIds: [topicId] }],
+    });
+  });
+  await pool.query(`UPDATE memory_topics SET placed_at = ${timestampUs("$3")}
+    WHERE user_id = $1 AND memory_id = $2`, [owner, "a-newer", "1001"]);
+
+  const page = { projection: "hosted", cursor: null, limit: 1 };
+  const list = cursor => read(tx => placement.list(tx, scope, { ...page, cursor }));
+  const members = cursor => read(tx => placement.members(tx, scope, topicId, { ...page, cursor }));
+  const [firstList, firstMember] = [await list(null), await members(null)];
+  assert.ok(firstList.nextCursor && firstMember.nextCursor);
+  assert.deepEqual(firstMember.items, [{ kind: "memory", id: "a-newer", placedAtUs: 1001n }]);
+  assert.deepEqual(await members(firstMember.nextCursor), {
+    topic: { id: topicId, level: "L1", title: null },
+    items: [{ kind: "memory", id: "z-older", placedAtUs: 1000n }], nextCursor: null,
+  });
+
+  await pool.query(`INSERT INTO topic_index_state (user_id, revision) VALUES ($1, 1)
+    ON CONFLICT (user_id) DO UPDATE SET revision = topic_index_state.revision + 1`, [owner]);
+  await assert.rejects(list(firstList.nextCursor), { code: "cursor_stale" });
+  await assert.rejects(members(firstMember.nextCursor), { code: "cursor_stale" });
+
+  const [secondList, secondMember] = [await list(null), await members(null)];
+  assert.ok(secondList.nextCursor && secondMember.nextCursor);
+  await write(tx => placement.dropMemory(tx, scope, "z-older"));
+  await assert.rejects(list(secondList.nextCursor), { code: "cursor_stale" });
+  await assert.rejects(members(secondMember.nextCursor), { code: "cursor_stale" });
+});
 
 test("Postgres keyed topic cards withhold an HMAC-only forgotten source without Raw", options, async t => {
   const { pool, owner, scope, topicId, cardOnlyTopic, write, read, importCard, seedMemberships } =
