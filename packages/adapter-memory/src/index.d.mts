@@ -1,5 +1,5 @@
 import type { Capability, ErrorCode, FactMatchPolicy, FingerprintLabels } from "@cairn-ink/core";
-import type { StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
+import type { HostedTopicReads, StorageAdapter, StoredDocumentCardRecord, TopicStore } from "@cairn-ink/core/ports";
 import type { TestHarness } from "@cairn-ink/conformance/factory";
 
 export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResult, FinishItem, FinishResult,
@@ -24,10 +24,11 @@ export interface MemoryAdapterOptions {
 type CapturePorts = StorageAdapter["capture"];
 
 export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" |
-  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "raw" |
   "supersession" | "conflicts" | "documentCards" | "documentCardCandidates" | "rationale" | "rationaleSourceText" | "inspect" |
   "proceduralTags" | "hostWriteHookPort"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
+  readonly placement?: TopicStore & HostedTopicReads;
   readonly contextRead?: import("@cairn-ink/core/ports").ContextReadStore;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-c6d74b4b0fbfe74941f9c497f588a46179956ec608065807e315ce4d1ead5666",
+  "engineId": "core-local-v1-95176f7968bdb4c66581f320c500a335dcb15d8d5885ce96da333e5d92cffc9d",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2929006,
-    "sha256": "8eac41558d09b047994a5b7d0a91da1279e105233d8fd385d075dba1ed6eac81"
+    "bytes": 2930117,
+    "sha256": "f6ed16f939e90b6097e7969eddc8aed90442d6f1832ec89f44a0048036b0a9cb"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -88,7 +88,7 @@
     "packages/adapter-sqlite/src/storage-values.mjs": "c9f6f628e737ad6456b97bce1fbf2d5937963193f8b76112cca2aacfda307a2a",
     "packages/adapter-sqlite/src/suppressions.mjs": "d80cf55a4f64de42a8b8225dbc5fc7af2406c1e197a4bcee55b4de035c4e29cf",
     "packages/adapter-sqlite/src/topic-card-placement.mjs": "9991f83c23649e140c619cd8e27ce8c154f245a1e2623d428a5755e24dac4a3d",
-    "packages/adapter-sqlite/src/topics.mjs": "f5fe062699f2adcaf4802f909005c162aa45415f98f17a9b75a3f0783065e6f0",
+    "packages/adapter-sqlite/src/topics.mjs": "7e27947744ca0e21b65b8394cb551fb7585c41d7107a3ab52ec9d105aa806a47",
     "packages/adapter-sqlite/src/uow.mjs": "6b27a2247f6c8ac020fc03d840e57ec2121e5f810bbebe19fa85a9d31002782a",
     "packages/core/package.json": "6c4003fb89631be2c61b2dfe26699ca9f653116ab59c1d062dd1979b914741b1",
     "packages/core/src/capabilities.mjs": "44837ac9b939d44f44bc4aeca7a8bb5c37a0bbeac52e4261625803c3015c52c6",
@@ -136,7 +136,7 @@
     "packages/core/src/relations/judge.mjs": "55d00b14b61c39aa4b180af727fbb38c4b786ffb8a766cd484f8ba80b426b712",
     "packages/core/src/retrieval/bm25.mjs": "5f59680dafd3b7e6bdf4abd53239915fed7a9a5213b647680a49c8030d520e40",
     "packages/core/src/retrieval/fusion.mjs": "5013b1fabb3aca7ae81f995548db1e203435ffda8701039fa033f26bade71da1",
-    "packages/core/src/retrieval/hosted-paging.mjs": "fd95f5e3ff51e81e5ac6aad15c212f8f27d489de56da6d070661fdd97053822f",
+    "packages/core/src/retrieval/hosted-paging.mjs": "b835276c5ef9b1045a1fc31a4e8c2f3414036c324a40caa66eee101457bb7d26",
     "packages/core/src/retrieval/session-start.mjs": "78160fc6a4d4ebba7414a3ac3f8f824812c435dc9b1d93ee78e4b0fb3549abb9",
     "packages/core/src/retrieval/tokenize.mjs": "e656d7eada5513921afbebb5d098237b6b0c89117cbce1e02c7368f47ef56d2b",
     "packages/core/src/routing/amendment-prompts.mjs": "3de9ccf8febd688bf947ebd61c012b92e387be3354e673d5c835577cca1e96ee",

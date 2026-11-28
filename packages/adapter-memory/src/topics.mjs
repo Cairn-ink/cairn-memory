@@ -1,7 +1,8 @@
 import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
-  memoryGuards, placementProposal, titleKey, uniqueIds,
+  compareUnfiled, memoryGuards, placementProposal, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage, uniqueIds,
 } from "@cairn-ink/core";
+import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { documentCardStaleness } from "@cairn-ink/core/routing";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
@@ -196,6 +197,49 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   }
 
   return {
+    async memoryCounts(tx, scope) {
+      return port.read(tx, scope, (getState) => {
+        if (writeNamespace(scope) !== null) throw new CoreError("capability_unavailable");
+        const state = getState();
+        const scoped = state.topics.get(null);
+        const { current } = view(state, tx.owner, null);
+        let memoryCount = 0;
+        let pending = 0;
+        for (const id of state.rows.get(null)?.keys() ?? []) {
+          const row = current(id);
+          if (!row) continue;
+          memoryCount++;
+          if (scoped?.outcomes.get(id)?.revision === row.revision) continue;
+          const failure = scoped?.failures.get(id);
+          if (failure?.revision !== row.revision || failure.attempts < topicMaxAttempts) pending++;
+        }
+        return { memoryCount, pending };
+      });
+    },
+
+    async unfiled(tx, scope, { cursor, limit }) {
+      return port.read(tx, scope, async (getState) => {
+        if (writeNamespace(scope) !== null) throw new CoreError("capability_unavailable");
+        const position = readUnfiledCursor(tx.owner, cursor, limit);
+        const state = getState();
+        const revision = state.indexRevision;
+        if (position && position.revision !== revision) throw new CoreError("cursor_stale");
+        const scoped = state.topics.get(null);
+        const { current } = view(state, tx.owner, null);
+        const rows = [];
+        for (const [id, outcome] of scoped?.outcomes ?? []) {
+          if ([...outcome.memberships.keys()].some(topicId => scoped?.topics.get(topicId)?.level === "L1")) continue;
+          const row = current(id);
+          if (row?.revision === outcome.revision) {
+            rows.push({ id, revision: row.revision, createdAtUs: BigInt(row.createdAtMs) * 1000n });
+          }
+        }
+        const digest = await sha256Hex(unfiledDigestInput(rows));
+        const page = rows.filter(row => !position || compareUnfiled(row, position) > 0).sort(compareUnfiled);
+        return unfiledPage(tx.owner, revision, digest, rows.length, page, limit, position);
+      });
+    },
+
     async pending(tx, scope, { limit }) {
       return port.read(tx, scope, (getState) => {
         const namespace = writeNamespace(scope);
