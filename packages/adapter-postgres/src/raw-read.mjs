@@ -176,3 +176,5 @@ export function createRawRefReader(options) {
     return visible;
   };
 }
+
+export { COLUMNS as RAW_READ_COLUMNS, FILTER as RAW_READ_FILTER, segment as decodeRawSegment };

@@ -80,8 +80,8 @@ async function changeSessions(query, scope, sessions, statement, deletedSources)
 }
 
 /** @param {Query} query @param {Run} run @param {Scope} scope @param {readonly Session[]} sessions
- * @param {boolean} [includeDeletedSources] */
-async function erase(query, run, scope, sessions, includeDeletedSources) {
+ * @param {boolean} [includeDeletedSources] @param {RawOptions["purgeCards"]} [purgeCards] */
+async function erase(query, run, scope, sessions, includeDeletedSources, purgeCards) {
   const fenced = await changeSessions(query, scope, sessions, FENCE);
   const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
   /** @type {RawSourceTuple[] | undefined} */
@@ -90,12 +90,14 @@ async function erase(query, run, scope, sessions, includeDeletedSources) {
   const quantitiesDeleted = await dropSourceQuantities(query, scope, sessions);
   const { ledgerBlanked, ledgerChanged } = sessions.length ? await scrubLedger(query, scope, sessions) :
     { ledgerBlanked: 0, ledgerChanged: false };
+  if (purgeCards) await purgeCards(query, run, scope, sessions);
   if (fenced || suppressed || rawDeleted || quantitiesDeleted || ledgerChanged) await advanceIndex(query, scope.owner, run);
   return { rawDeleted, ledgerBlanked, ...(deletedSources && { deletedSources }) };
 }
 
-/** @param {Query} query @param {Run} run @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
-async function record(query, run, scope, { client, sessionId }, proofs) {
+/** @param {Query} query @param {Run} run @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs
+ * @param {RawOptions["purgeCards"]} [purgeCards] */
+async function record(query, run, scope, { client, sessionId }, proofs, purgeCards) {
   if (!proofs.length) return;
   await query(RECORD, [scope.owner, client, sessionId, JSON.stringify(proofs)]);
   if (!proofs.some(({ content_mac }) => content_mac !== null)) return;
@@ -103,7 +105,8 @@ async function record(query, run, scope, { client, sessionId }, proofs) {
   const { rows: [closure] } = await query(LATE_PROVEN_CLOSURE, [scope.owner, client, [sessionId]]);
   if (closure.exceeded) throw new CoreError("lineage_closure_limit");
   if (closure.session_ids) {
-    await erase(query, run, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })));
+    await erase(query, run, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })),
+      undefined, purgeCards);
   }
 }
 
@@ -139,7 +142,7 @@ async function archiveRecords(tx, query, run, { scope, client, sessionId }, reco
 
 /** @param {RawOptions} options @returns {{ raw: PostgresRaw, sessionLineage: SessionLineageStore }} */
 export function createPostgresRawPorts(options) {
-  const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
+  const { lineageSecret, hashSessionKey, fingerprintKeys, purgeCards } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
   /** @type {WeakMap<ProvenClosure, {tx: Tx, sessions: readonly Session[]}>} */
   const proven = new WeakMap();
@@ -178,7 +181,7 @@ export function createPostgresRawPorts(options) {
           if (matches && outbox.raw_lineage_key_id !== stamp) {
             await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, [...params, stamp]);
           }
-          await record(query, run, scope, capture, proofs);
+          await record(query, run, scope, capture, proofs, purgeCards);
         };
       });
     },
@@ -247,7 +250,7 @@ export function createPostgresRawPorts(options) {
           [...params, eligible.map(({ row }) => row.message_id)]);
           const contents = new Map(stored.map(({ message_id, content }) => [message_id, content]));
           await record(query, run, source.scope, source, eligible.flatMap(({ row, proof }) =>
-            contents.get(row.message_id) === row.content ? [proof] : []));
+            contents.get(row.message_id) === row.content ? [proof] : []), purgeCards);
           return { archived, existing: eligible.length - archived, withheld: batch.length - eligible.length };
         };
       });
@@ -270,7 +273,7 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const proof = proven.get(closure);
         if (proof?.tx !== tx) throw new CoreError("raw_lineage_unavailable");
-        return (query, run) => erase(query, run, target, proof.sessions, includeDeletedSources);
+        return (query, run) => erase(query, run, target, proof.sessions, includeDeletedSources, purgeCards);
       });
     },
 
@@ -286,10 +289,16 @@ export function createPostgresRawPorts(options) {
         });
         return async (query, run) => {
           /** @type {RawSourceTuple[] | undefined} */
-          const deletedSources = includeDeletedSources ? [] : undefined;
-          const { rawDeleted, ledgerBlanked, ledgerChanged } = await purgeRawText(query, target, selected, fingerprintKeys, deletedSources);
+          const deletedSources = includeDeletedSources || purgeCards ? [] : undefined;
+          /** @type {import("./raw-purge.mjs").MessageAddress[] | undefined} */
+          const ledgerSources = purgeCards ? [] : undefined;
+          const { rawDeleted, ledgerBlanked, ledgerChanged } = await purgeRawText(query, target, selected, fingerprintKeys,
+            deletedSources, ledgerSources);
+          if (purgeCards && deletedSources && ledgerSources) {
+            await purgeCards(query, run, target, [...deletedSources, ...ledgerSources]);
+          }
           if (rawDeleted || ledgerChanged) await advanceIndex(query, target.owner, run);
-          return { rawDeleted, ledgerBlanked, ...(deletedSources && { deletedSources }) };
+          return { rawDeleted, ledgerBlanked, ...(includeDeletedSources && { deletedSources }) };
         };
       });
     },
@@ -308,6 +317,7 @@ export function createPostgresRawPorts(options) {
           const rawDeleted = await changeSessions(query, target, sessions, DELETE);
           const quantitiesDeleted = await dropSourceQuantities(query, target, sessions);
           const { ledgerChanged } = await scrubLedger(query, target, sessions);
+          if (purgeCards) await purgeCards(query, run, target, sessions);
           if (fenced || claimsTerminated || rawDeleted || quantitiesDeleted || ledgerChanged) {
             await advanceIndex(query, target.owner, run);
           }
@@ -331,7 +341,7 @@ export function createPostgresRawPorts(options) {
           }
           return { message_mac: messageMac, content_mac: contentMac };
         });
-        return (query, run) => record(query, run, target, ref, proofs);
+        return (query, run) => record(query, run, target, ref, proofs, purgeCards);
       });
     },
 
