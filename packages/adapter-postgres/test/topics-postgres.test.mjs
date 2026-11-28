@@ -232,6 +232,8 @@ test("every Postgres TopicStore method rejects a non-null namespace", migrationD
   const { uow, placement } = await setup(t);
   const withCards = createPostgresTopicStore({ documentCards: createPostgresDocumentCardStore() });
   const reads = {
+    memoryCounts: [],
+    unfiled: [firstPage],
     pending: [{ limit: 5 }],
     pendingCards: [{ limit: 5 }],
     catalog: [firstPage],
