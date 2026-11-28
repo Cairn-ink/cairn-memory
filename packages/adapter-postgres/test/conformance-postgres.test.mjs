@@ -6,11 +6,12 @@ import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
-import { placePendingBatch } from "../../core/src/index.mjs";
+import { documentCardVisible } from "@cairn-ink/core/routing";
+import { placePendingBatch, placePendingCardsBatch } from "../../core/src/index.mjs";
 import { publishFingerprintKey, readFingerprintKeyId } from "../src/digest-gate.mjs";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
+  applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate, createPostgresDocumentCardStore,
   createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
   createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
   createPostgresQuantityLedgerStore, createPostgresTopicStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
@@ -42,6 +43,8 @@ const dumpSql = `SELECT jsonb_build_object(
     SELECT to_jsonb(m) || jsonb_build_object('embedding', m.embedding::text) FROM memories m ORDER BY m.user_id, m.id
   ),
   'memoryPlacements', ARRAY(SELECT to_jsonb(p) FROM memory_placements p ORDER BY p.user_id, p.memory_id),
+  'cardPlacements', ARRAY(SELECT to_jsonb(p) FROM card_placements p ORDER BY p.user_id, p.card_id),
+  'cardTopics', ARRAY(SELECT to_jsonb(t) FROM card_topics t ORDER BY t.user_id, t.card_id, t.topic_id),
   'receipts', ARRAY(
     SELECT to_jsonb(r) FROM core_memory_receipts r ORDER BY r.user_id, r.memory_id, r.client, r.session_id, r.message_id
   ),
@@ -242,7 +245,7 @@ async function openDatabase() {
   }
 }
 
-function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedState = false } = {}) {
+function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedState = false, enableCardPlacement = false } = {}) {
   return {
     name: "Postgres",
     async open({ capabilities: requested }) {
@@ -269,7 +272,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
         conflictEdges: true, semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
         sessionLineage: rawArchive, rawSpans: true, fingerprintKey, shingleSuppression: rawArchive && fingerprintKey,
-        placement: true, quantityLedger: quantityLedger !== undefined,
+        placement: true, quantityLedger: quantityLedger !== undefined, documentCards: enableCardPlacement,
       });
       const fixtureSecrets = new Map(["test-secret-a", "test-secret-rotation", "test-secret-later"]
         .map(secret => [secret, randomUUID()]));
@@ -298,17 +301,37 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
           return key ? [key] : [];
         },
       };
-      const rawPorts = rawArchive ? createPostgresRawPorts({ ...rawOptions,
+      const documentCards = enableCardPlacement ? createPostgresDocumentCardStore({
+        ...(rawArchive ? rawOptions : { hashSessionKey }), sessionKey: hashSessionKey, fingerprintKey: keys.userKey,
+      }) : undefined;
+      const rawPorts = rawArchive ? createPostgresRawPorts({ ...rawOptions, purgeCards: documentCards?.purgeCards,
         fingerprintKeys: async (owner) => (await rawOptions.fingerprintKeys(owner)).map((key) => ({ key, pipeline: "core" })),
       }) : null;
       const readOptions = { hashSessionKey, allowNonNullNamespace: true };
       const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
+      /** @type {typeof memoryReads.fence} */
+      const fence = {
+        async assertVisible(tx, selection, refs, intent) {
+          if (!documentCards) return memoryReads.fence.assertVisible(tx, selection, refs, intent);
+          const visible = await memoryReads.fence.assertVisible(tx, selection, refs.filter(ref => ref.type !== "card"), intent);
+          if (!selection.namespaces.includes(null)) return visible;
+          const cards = refs.filter(ref => ref.type === "card" && ref.namespace === null);
+          const inputs = await documentCards.visibilityInputs(tx, { owner: selection.owner, namespace: null }, cards,
+            { requireRaw: rawArchive });
+          for (const [i, input] of inputs.entries()) {
+            if (input && (await documentCardVisible(input)).visible) visible.push(cards[i]);
+          }
+          return visible;
+        },
+      };
       const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
-      const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate });
+      const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate, purgeCards: documentCards?.purgeCards });
       /** @type {string[]} */
       const harnessOwners = [];
       /** @type {Omit<TestHarness, "counters"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
+        personalDocumentCardsOnly: true,
+        placePendingCardsBatch,
         placePendingBatch,
         hashSessionKey,
         async advanceClock(ms) { elapsed += ms; },
@@ -385,7 +408,8 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
-          placement: createPostgresTopicStore({ hashSessionKey, now }),
+          placement: createPostgresTopicStore({ hashSessionKey, now, documentCards }),
+          ...(documentCards && { documentCards, fence }),
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
@@ -450,6 +474,7 @@ const selected = new Set([
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15", "T-TOP-16", "T-TOP-17",
   "T-TOP-18", "T-TOP-19", "T-TOP-20",
+  ...kit.TOPIC_CARD_CASES.map(({ id }) => id),
   "K-CAP-DEL-1", "K-CAP-DEL-2", "K-CAP-DEL-3",
   "K-FIN-BIND-1", "K-FIN-BIND-2", "K-FIN-BIND-3", "K-FIN-BIND-4",
   "K-IDX-COMMIT-1", "K-IDX-COMMIT-2", "K-IDX-COMMIT-3", "K-IDX-COMMIT-4",
@@ -480,7 +505,6 @@ const notApplicable = {
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session", "CAPTURE-CARD-1", "CAPTURE-AMEND-1",
     "CAPTURE-AMEND-2", "CAPTURE-FORGET-1", "CAPTURE-FORGET-2", "T-CARD-PURGE-1", "T-CARD-PURGE-2", "CAPTURE-LEDGER-2",
     "K-LEG-PASS-7-router"],
-  "topics.cards": ["T-TCARD-1", "T-TCARD-2", "T-TCARD-3", "T-TCARD-4", "T-TCARD-5", "T-TCARD-6", "T-TCARD-7", "T-TCARD-8", "T-TCARD-9", "T-TCARD-10", "T-TCARD-11", "T-TCARD-12", "T-TCARD-13", "T-TCARD-14", "T-TCARD-15"],
   "topics.forCards": ["T-FOR-CARDS-1", "T-FOR-CARDS-2", "T-FOR-CARDS-3", "T-FOR-CARDS-4", "T-FOR-CARDS-5", "T-FOR-CARDS-6", "T-FOR-CARDS-7", "T-FOR-CARDS-8", "T-FOR-CARDS-9"],
   rationaleEdges: ["T-RAT-content", "T-RAT-correct", "T-RAT-currentness", "T-RAT-degree", "T-RAT-duplicate", "T-RAT-forget",
     "T-RAT-hidden", "T-RAT-index", "T-RAT-insert", "T-RAT-namespace", "T-RAT-raw-deleted", "T-RAT-receipt-add",
@@ -549,15 +573,110 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
 
 const factory = postgresFactory();
 const retainedStateFactory = postgresFactory(undefined, { seedRetainedState: true });
+const cardPlacementFactory = postgresFactory(undefined, { enableCardPlacement: true });
 for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   const name = `${factory.name} conformance ${testCase.id} ${testCase.title}`;
   // K-HYD-2 contains assertions even though the kit marks the supersession suite pending.
   const prepared = testCase.id === "K-HYD-2" ? { ...testCase, pending: undefined } : testCase;
   // The primary cases cover the memory ports. Their semantic follow-ups belong to the vector lane.
   const memoryOnly = ["K-HIDE-2", "K-HIDE-3", "K-WRITE-1"].includes(testCase.id);
-  test(name, options, (t) => runPreparedCase(testCase.id === "K-KD-5" ? retainedStateFactory : factory,
-    memoryOnly ? { ...prepared, followUp: undefined } : prepared, t));
+  const caseFactory = testCase.id === "K-KD-5" ? retainedStateFactory :
+    testCase.id.startsWith("T-TCARD-") ? cardPlacementFactory : factory;
+  test(name, options, async t => {
+    const reason = await runPreparedCase(caseFactory, memoryOnly ? { ...prepared, followUp: undefined } : prepared, t);
+    if (caseFactory === cardPlacementFactory) assert.equal(reason, null, "Card placement cases must run on Postgres");
+  });
 }
+
+test("Postgres topic cards exchange current placement rows with the hosted product store", options, async t => {
+  const { pool, source, close } = await openDatabase();
+  t.after(close);
+  const owner = randomUUID();
+  const scope = { owner, namespace: null };
+  const topicId = "existing-topic";
+  await pool.query("INSERT INTO users (id) VALUES ($1)", [owner]);
+  await pool.query("INSERT INTO topics (user_id, id, level, title, title_key) VALUES ($1, $2, 1, 'Topic', 'topic')",
+    [owner, topicId]);
+
+  const uow = createPostgresUnitOfWork(source);
+  const documentCards = createPostgresDocumentCardStore();
+  const placement = createPostgresTopicStore({ documentCards });
+  const [adapterCard, hostedCard] = ["adapter-card", "hosted-card"].map(id =>
+    ({ id, contentHash: createHash("sha256").update(id).digest("hex") }));
+  await uow.run(owner, {}, async tx => {
+    for (const card of [adapterCard, hostedCard]) {
+      assert.equal((await documentCards.put(tx, scope, {
+        ...card, scope, origin: "import", body: card.id, title: card.id, date: null, sourceMessage: null,
+        sourceMemories: [], sentences: [], stale: [],
+      })).status, "inserted");
+    }
+  });
+  await uow.run(owner, {}, async tx => {
+    const { indexRevision } = await placement.catalog(tx, scope, { cursor: null, limit: 1 });
+    const { id: cardId, contentHash } = adapterCard;
+    await placement.applyCardPlacement(tx, scope, { indexRevision, cards: [{ cardId, contentHash }] },
+      { items: [{ cardId, parentIds: [topicId] }] });
+  });
+  const { rows } = await pool.query(`
+    SELECT ct.content_hash, ct.topic_id, p.status, p.code, p.attempts FROM card_topics ct
+    JOIN card_placements p ON (p.user_id, p.card_id, p.content_hash) = (ct.user_id, ct.card_id, ct.content_hash)
+      AND p.status = 'filed'
+    JOIN document_cards c ON (c.user_id, c.id, c.content_hash) = (p.user_id, p.card_id, p.content_hash)
+      AND c.scope_id = c.user_id AND c.hidden_reason IS NULL AND NOT c.tombstoned
+    WHERE ct.user_id = $1 AND ct.card_id = $2`, [owner, adapterCard.id]);
+  assert.deepEqual(rows, [{ content_hash: adapterCard.contentHash, topic_id: topicId, status: "filed", code: null, attempts: 0 }]);
+
+  await uow.run(owner, {}, async tx => {
+    await query(tx, "INSERT INTO card_placements (user_id, card_id, content_hash, status) VALUES ($1, $2, $3, 'filed')",
+      [owner, hostedCard.id, hostedCard.contentHash]);
+    await query(tx, "INSERT INTO card_topics (user_id, card_id, content_hash, topic_id) VALUES ($1, $2, $3, $4)",
+      [owner, hostedCard.id, hostedCard.contentHash, topicId]);
+  });
+  await uow.run(owner, { readOnly: true }, async tx => {
+    assert.deepEqual(await placement.forCard(tx, scope, hostedCard.id), [topicId]);
+    assert.deepEqual(await placement.pendingCards(tx, scope, { limit: 5 }), []);
+    const first = await placement.members(tx, scope, topicId, { cursor: null, limit: 1 });
+    assert.ok(first.nextCursor);
+    const second = await placement.members(tx, scope, topicId, { cursor: first.nextCursor, limit: 1 });
+    assert.equal(second.nextCursor, null);
+    assert.deepEqual([...first.items, ...second.items].map(({ kind, id }) => [kind, id]).sort(),
+      [["card", adapterCard.id], ["card", hostedCard.id]]);
+  });
+
+  // Fill the first SQL batch with hidden rows and a memory tied with a card.
+  await uow.run(owner, {}, async tx => {
+    await query(tx, `UPDATE card_topics SET placed_at = to_timestamp(CASE WHEN card_id = $2 THEN 2 ELSE 1 END)
+      WHERE user_id = $1`, [owner, adapterCard.id]);
+    const vector = JSON.stringify([1, ...Array(1535).fill(0)]);
+    await query(tx, `
+      INSERT INTO memories (user_id, id, text, text_hash, kind, embedding, embedding_model,
+        source_kind, source_client, source_session_id)
+      SELECT $1, id, id, md5(id), 'fact', $3, 'fixture', 'plugin', 'fixture-client', session_id FROM (
+        SELECT $2::text AS id, NULL::text AS session_id
+        UNION ALL SELECT 'hidden-' || i, 'hidden-session' FROM generate_series(1, 15) AS i
+      ) fixtures`, [owner, adapterCard.id, vector]);
+    await query(tx, `INSERT INTO memory_placements (user_id, memory_id, memory_revision, status)
+      SELECT user_id, id, revision, 'filed' FROM memories WHERE user_id = $1`, [owner]);
+    await query(tx, `INSERT INTO memory_topics (user_id, memory_id, memory_revision, topic_id, placed_at)
+      SELECT user_id, id, revision, $2, to_timestamp(CASE WHEN id = $3 THEN 2 ELSE 3 END)
+      FROM memories WHERE user_id = $1`, [owner, topicId, adapterCard.id]);
+    await createPostgresSuppressionStore().writeFact(tx, {
+      ...scope, kind: "session", session: { client: "fixture-client", sessionId: "hidden-session" },
+      origin: "forget", actionId: "hide-member-fixtures",
+    }, createHash("sha256").update("hide-member-fixtures").digest("hex"));
+  });
+  await uow.run(owner, { readOnly: true }, async tx => {
+    const first = await placement.members(tx, scope, topicId, { cursor: null, limit: 1 });
+    assert.deepEqual(first.items.map(({ kind, id }) => [kind, id]), [["memory", adapterCard.id]]);
+    assert.ok(first.nextCursor);
+    const second = await placement.members(tx, scope, topicId, { cursor: first.nextCursor, limit: 1 });
+    assert.deepEqual(second.items.map(({ kind, id }) => [kind, id]), [["card", adapterCard.id]]);
+    assert.ok(second.nextCursor);
+    const third = await placement.members(tx, scope, topicId, { cursor: second.nextCursor, limit: 1 });
+    assert.deepEqual(third.items.map(({ kind, id }) => [kind, id]), [["card", hostedCard.id]]);
+    assert.equal(third.nextCursor, null);
+  });
+});
 
 test("Postgres conformance K-FACT-6 detects a bypassed foreign-owner guard", options, async (t) => {
   const testCase = PRIVACY_CASES.find(({ id }) => id === "K-FACT-6");

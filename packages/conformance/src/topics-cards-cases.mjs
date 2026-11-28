@@ -1,4 +1,4 @@
-import { compareUtf8, CoreError, placePendingCardsBatch } from "@cairn-ink/core";
+import { compareUtf8, placePendingCardsBatch } from "@cairn-ink/core";
 import { buildDocumentCard } from "@cairn-ink/core/routing";
 import { check, equal, readDump, rejects, row } from "./support.mjs";
 
@@ -82,6 +82,11 @@ async function conflicts(ctx, attempt) {
   equal(await readDump(ctx.harness), before, "A rejected placement must leave the store unchanged");
 }
 
+/** @param {CaseContext} ctx @param {Parameters<typeof placePendingCardsBatch>[0]} options */
+function placeCards(ctx, options) {
+  return (ctx.harness.placePendingCardsBatch ?? placePendingCardsBatch)(options);
+}
+
 /** @param {number} number @param {string} title @param {ConformanceCase["run"]} run
  * @param {...ConformanceCase["needs"][number]} extraNeeds @returns {ConformanceCase} */
 const topicCardCase = (number, title, run, ...extraNeeds) =>
@@ -114,7 +119,16 @@ export const TOPIC_CARD_CASES = [
     const { child } = await store.topics(source, "Child");
     const direct = await store.card("direct");
     const linked = await store.card("linked", [source]);
-    await store.apply([{ card: direct, parentIds: [child] }, { card: linked, parentIds: [child] }]);
+    const dropped = await store.card("dropped");
+    await store.apply([direct, linked, dropped].map(card => ({ card, parentIds: [child] })));
+    const { indexRevision } = await store.catalog();
+    await store.write(async tx => {
+      equal(await store.placement.dropCard(tx, store.scope, dropped.id), { dropped: 1 }, "Drop must remove a live membership");
+      equal(await store.placement.dropCard(tx, store.scope, dropped.id), { dropped: 0 }, "Repeating a drop changes nothing");
+    });
+    equal((await store.catalog()).indexRevision, indexRevision + 1, "Dropping a live membership must advance the index");
+    equal(await store.forCard(dropped.id), [], "Dropped memberships must be absent");
+    equal(await store.pending(), [], "Dropping membership must keep the outcome");
     await store.write(async (tx) => {
       const { placement, scope, documentCards } = store;
       await documentCards.hide(tx, scope, direct.id, "forget");
@@ -152,7 +166,19 @@ export const TOPIC_CARD_CASES = [
     const external = setup(ctx, { ...store.scope, owner: ctx.otherOwner });
     const { child } = await store.topics(await store.memory("Personal parent source"), "Child");
     const personal = await store.card("personal");
-    for (const foreign of [await team.card("team"), await external.card("external")]) {
+    const foreignCards = [await external.card("external")];
+    if (ctx.harness.personalDocumentCardsOnly) {
+      await rejects(() => team.pending(), "capability_unavailable");
+      await rejects(() => team.forCard(personal.id), "capability_unavailable");
+      await rejects(async () => team.apply([{ card: personal, parentIds: [child] }], (await store.catalog()).indexRevision),
+        "capability_unavailable");
+      await rejects(() => team.write(tx => team.placement.markCardsFailed(tx, team.scope, [personal.id], "provider_error")),
+        "capability_unavailable");
+      await rejects(() => team.write(tx => team.placement.dropCard(tx, team.scope, personal.id)), "capability_unavailable");
+    } else {
+      foreignCards.push(await team.card("team"));
+    }
+    for (const foreign of foreignCards) {
       equal(await store.pending(), [guard(personal)], "Pending cards must belong to this owner and namespace");
       await conflicts(ctx, () => store.apply([{ card: foreign, parentIds: [child] }]));
     }
@@ -176,9 +202,11 @@ export const TOPIC_CARD_CASES = [
     const { child, parent } = await store.topics(await store.memory("Independent topic source"), "Child");
     const dependent = await store.card("dependent", [source]);
     const independent = await store.card("independent");
+    await store.card("pending-dependent", [source]);
     await store.apply([{ card: dependent, parentIds: [child] }, { card: independent, parentIds: [child] }]);
     await ctx.harness.seedFact(ctx.owner, { ...store.scope, kind: "identity", origin: "forget",
       actionId: "forget-card-source", memoryId: source.id });
+    equal(await store.pending(), [], "A forgotten source must keep its card out of the pending queue");
     equal(await store.forCard(dependent.id), [], "A forgotten source must hide its card from forCard");
     for (const topic of [child, parent]) {
       equal((await store.list()).items.find(({ id }) => id === topic)?.cardCount, 1, "Only the independent card may count");
@@ -250,7 +278,7 @@ export const TOPIC_CARD_CASES = [
     const { uow, fence } = ctx.adapter;
     const { scope, placement, documentCards } = store;
     const options = { uow, fence, scope, placement, documentCards };
-    const stale = await placePendingCardsBatch({
+    const stale = await placeCards(ctx, {
       ...options,
       async classify({ cards }, _catalog, { validateFresh }) {
         equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(original), guard(unchanged)],
@@ -265,7 +293,7 @@ export const TOPIC_CARD_CASES = [
     const expected = [{ cardId: original.id, contentHash: replacementHash }, guard(unchanged)];
     equal(await store.pending(), expected, "The replacement and its unchanged batchmate must both remain pending");
 
-    const next = await placePendingCardsBatch({
+    const next = await placeCards(ctx, {
       ...options,
       async classify({ cards }, _catalog, { validateFresh }) {
         equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), expected,
@@ -289,7 +317,7 @@ export const TOPIC_CARD_CASES = [
     const batches = [];
     const { uow, fence } = ctx.adapter;
     const { scope, placement, documentCards } = store;
-    const run = () => placePendingCardsBatch({
+    const run = () => placeCards(ctx, {
       uow, fence, scope, placement, documentCards,
       async classify({ cards }, _catalog, { validateFresh }) {
         await validateFresh();
@@ -314,7 +342,7 @@ export const TOPIC_CARD_CASES = [
     const { uow, fence } = ctx.adapter;
     const { scope, placement, documentCards } = store;
     const options = { uow, fence, scope, placement, documentCards };
-    const stale = await placePendingCardsBatch({
+    const stale = await placeCards(ctx, {
       ...options,
       async classify({ cards }, { map }, { validateFresh }) {
         equal(cards.map(({ cardId }) => cardId), [card.id], "Expected the original pending card");
@@ -329,7 +357,7 @@ export const TOPIC_CARD_CASES = [
     await ctx.harness.advanceClock(3_600_000);
     equal(await store.pending(), [guard(card)], "The unchanged hash must become eligible after cooldown");
 
-    const next = await placePendingCardsBatch({
+    const next = await placeCards(ctx, {
       ...options,
       async classify({ cards }, { map }, { validateFresh }) {
         equal(cards.map(({ cardId }) => cardId), [card.id], "Expected to classify the same card again");
@@ -372,7 +400,7 @@ export const TOPIC_CARD_CASES = [
       },
     };
     const { indexRevision } = await store.catalog();
-    const aborted = await placePendingCardsBatch({
+    const aborted = await placeCards(ctx, {
       ...options,
       async classify({ cards }, _catalog, { validateFresh }) {
         equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(excluded), guard(healthy)],
@@ -386,7 +414,7 @@ export const TOPIC_CARD_CASES = [
     equal((await store.catalog()).indexRevision, indexRevision, "The index must remain unchanged");
     equal(await store.pending(), [guard(healthy)], "The healthy batchmate must remain pending");
     equal(receipts, [{ ids: [excluded.id], code: "source_excluded" }], "Only the newly excluded card may receive a receipt");
-    const next = await placePendingCardsBatch({
+    const next = await placeCards(ctx, {
       ...options,
       async classify({ cards }, _catalog, { validateFresh }) {
         equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })), [guard(healthy)],
@@ -442,8 +470,10 @@ export const TOPIC_CARD_CASES = [
         ...placement,
         /** @type {typeof placement.applyCardPlacement} */
         async applyCardPlacement(tx, scope, basedOn, proposal) {
-          if (excludedByFence && basedOn.cards.some(({ cardId }) => cardId === excluded.id)) {
-            throw new CoreError("revision_conflict");
+          if (excludedByFence) {
+            // Simulate the apply-time conflict through the adapter's own error boundary.
+            basedOn = { ...basedOn, cards: basedOn.cards.map(card => card.cardId === excluded.id
+              ? { ...card, contentHash: card.contentHash + "-excluded" } : card) };
           }
           return placement.applyCardPlacement(tx, scope, basedOn, proposal);
         },
@@ -454,7 +484,7 @@ export const TOPIC_CARD_CASES = [
         },
       },
     };
-    const run = (/** @type {TopicCardGuard[]} */ expected, /** @type {boolean} */ excludeAfterFresh) => placePendingCardsBatch({
+    const run = (/** @type {TopicCardGuard[]} */ expected, /** @type {boolean} */ excludeAfterFresh) => placeCards(ctx, {
       ...options,
       async classify({ cards }, _catalog, { validateFresh }) {
         equal(cards.map(({ cardId, contentHash }) => ({ cardId, contentHash })).sort((a, b) => compareUtf8(a.cardId, b.cardId)),

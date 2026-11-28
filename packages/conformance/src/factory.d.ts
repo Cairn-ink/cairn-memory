@@ -33,6 +33,7 @@ export type RetainedDigestFixture = { keyId: string; label: string; secret: stri
 export type TestHarness = {
   /** Use the core instance that supplies the adapter's CoreError when it differs from the kit's. */
   placePendingBatch?: typeof import("@cairn-ink/core").placePendingBatch;
+  placePendingCardsBatch?: typeof import("@cairn-ink/core").placePendingCardsBatch;
   /** Seed inspect data on adapters without a public metadata mutation route. */
   markInspectHistorical?(scope: Scope, id: string): Promise<void>;
   seedInspectEvidence?(scope: Scope, id: string, evidence: Pick<InspectItemEvidence, "procedural" | "qualification">): Promise<void>;
@@ -50,6 +51,8 @@ export type TestHarness = {
   /** Counts missing (row, live signing domain) pairs, including the enabled current domain. */
   rowsMissingKeyedDigest?(owner: string): Promise<number>;
   advanceClock?(ms: number): Promise<void>;
+  /** The adapter rejects namespaced document-card operations. */
+  personalDocumentCardsOnly?: boolean;
   /** Required for privacy matching cases under the hashed session profile. */
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];
   /** Seeds a legacy raw message whose client provenance is missing. */
