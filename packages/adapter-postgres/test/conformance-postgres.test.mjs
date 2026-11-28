@@ -6,7 +6,7 @@ import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, coreDigest, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
-import { documentCardVisible } from "@cairn-ink/core/routing";
+import { buildDocumentCard, documentCardVisible } from "@cairn-ink/core/routing";
 import { placePendingBatch, placePendingCardsBatch } from "../../core/src/index.mjs";
 import { publishFingerprintKey, readFingerprintKeyId } from "../src/digest-gate.mjs";
 import { toPostgresError } from "../src/errors.mjs";
@@ -587,6 +587,177 @@ for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
     if (caseFactory === cardPlacementFactory) assert.equal(reason, null, "Card placement cases must run on Postgres");
   });
 }
+
+async function openTopicCardFixture(t) {
+  const { pool, source, close } = await openDatabase();
+  t.after(close);
+  const owner = randomUUID();
+  const scope = { owner, namespace: null };
+  const topicId = "fixture-topic";
+  const cardOnlyTopic = "card-only-topic";
+  await pool.query("INSERT INTO users (id) VALUES ($1)", [owner]);
+  await pool.query(`INSERT INTO topics (user_id, id, level, title, title_key)
+    VALUES ($1, $2, 1, 'Topic', 'topic'), ($1, $3, 1, 'Card only', 'card only')`, [owner, topicId, cardOnlyTopic]);
+  const { run } = createPostgresUnitOfWork(source);
+  const write = work => run(owner, {}, work);
+  const read = work => run(owner, { readOnly: true }, work);
+  const importCard = id => ({
+    id, contentHash: createHash("sha256").update(id).digest("hex"), scope, origin: "import",
+    body: id, title: id, date: null, sourceMessage: null, sourceMemories: [], sentences: [], stale: [],
+  });
+  const seedMemberships = (card, topics) => write(async tx => {
+    await query(tx, `INSERT INTO card_placements (user_id, card_id, content_hash, status)
+      VALUES ($1, $2, $3, 'filed')`, [owner, card.id, card.contentHash]);
+    await query(tx, `INSERT INTO card_topics (user_id, card_id, content_hash, topic_id)
+      SELECT $1, $2, $3, unnest($4::text[])`, [owner, card.id, card.contentHash, topics]);
+  });
+  return { pool, owner, scope, topicId, cardOnlyTopic, write, read, importCard, seedMemberships };
+}
+
+const firstTopicPage = { cursor: null, limit: 10 };
+const noTopicItems = { items: [], nextCursor: null };
+const cardGuard = ({ id, contentHash }) => ({ cardId: id, contentHash });
+async function applyFixtureCard(placement, tx, scope, card, topicId) {
+  const { indexRevision } = await placement.catalog(tx, scope, firstTopicPage);
+  return placement.applyCardPlacement(tx, scope, { indexRevision, cards: [cardGuard(card)] },
+    { items: [{ cardId: card.id, parentIds: [topicId] }] });
+}
+
+test("Postgres keyed topic cards withhold an HMAC-only forgotten source without Raw", options, async t => {
+  const { pool, owner, scope, topicId, cardOnlyTopic, write, read, importCard, seedMemberships } =
+    await openTopicCardFixture(t);
+  const key = await userFingerprintKey(randomUUID(), owner, HOSTED_FINGERPRINT_LABELS);
+  const documentCards = createPostgresDocumentCardStore({
+    fingerprintKey: requestedOwner => requestedOwner === owner ? key : null,
+  });
+  const placement = createPostgresTopicStore({ documentCards });
+  const sourceMessage = { client: "fixture-client", sessionId: "fixture-session", messageId: "forgotten" };
+  const { card: built } = await buildDocumentCard({
+    id: sourceMessage.messageId, role: "user", content: "Private inventory of brass fasteners.",
+  }, { scope, client: sourceMessage.client, canonicalSessionKey: JSON.stringify([sourceMessage.client, sourceMessage.sessionId]) });
+  assert.ok(built);
+  const forgotten = { ...importCard(built.id), origin: "router", title: built.title, body: built.body, sourceMessage };
+  const visible = importCard("visible");
+  await write(async tx => {
+    for (const card of [forgotten, visible]) {
+      assert.equal((await documentCards.put(tx, scope, card)).status, "inserted");
+    }
+    await applyFixtureCard(placement, tx, scope, visible, topicId);
+  });
+  const pending = () => read(tx => placement.pendingCards(tx, scope, { limit: 5 }));
+  assert.deepEqual(await pending(), [cardGuard(forgotten)], "The routed card is fileable before the forget");
+
+  const digest = await coreDigest(forgotten.body, key);
+  assert.equal(digest.alg, "hmac");
+  const fact = { ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "forget-card-body",
+    text: { digests: [digest], keyId: key.id } };
+  const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
+  const facts = createPostgresSuppressionStore();
+  assert.equal((await write(tx => facts.writeFact(tx, fact, incarnation))).created, true);
+  await read(async tx => {
+    const [input] = await documentCards.visibilityInputs(tx, scope,
+      [{ type: "card", id: forgotten.id, namespace: null }], { requireRaw: false });
+    assert.ok(input);
+    assert.deepEqual(await documentCardVisible(input), { visible: false, reason: "source_withheld" });
+  });
+  assert.deepEqual(await pending(), [], "The keyed store must withhold the card from the pending queue");
+  await assert.rejects(write(tx => applyFixtureCard(placement, tx, scope, forgotten, topicId)),
+    { code: "revision_conflict" });
+  assert.equal((await pool.query("SELECT 1 FROM card_placements WHERE user_id = $1 AND card_id = $2",
+    [owner, forgotten.id])).rowCount, 0);
+  assert.equal((await pool.query("SELECT 1 FROM card_topics WHERE user_id = $1 AND card_id = $2",
+    [owner, forgotten.id])).rowCount, 0);
+
+  // Stored hosted memberships still need the configured visibility check at read time.
+  await seedMemberships(forgotten, [topicId, cardOnlyTopic]);
+  await read(async tx => {
+    const { items, nextCursor } = await placement.list(tx, scope, firstTopicPage);
+    assert.equal(nextCursor, null);
+    assert.deepEqual(items.map(({ id, memberCount, cardCount }) => ({ id, memberCount, cardCount })),
+      [{ id: topicId, memberCount: 0, cardCount: 1 }]);
+    assert.deepEqual(await placement.forCard(tx, scope, forgotten.id), []);
+    assert.deepEqual(await placement.forCard(tx, scope, visible.id), [topicId]);
+    assert.deepEqual(await placement.members(tx, scope, cardOnlyTopic, firstTopicPage), noTopicItems);
+    const members = await placement.members(tx, scope, topicId, firstTopicPage);
+    assert.deepEqual(members.items.map(({ kind, id }) => ({ kind, id })), [{ kind: "card", id: visible.id }]);
+    assert.equal(members.nextCursor, null);
+  });
+});
+
+test("Postgres memory-only topic placement ignores stored cards", options, async t => {
+  const { pool, owner, scope, topicId, cardOnlyTopic, write, read, importCard, seedMemberships } =
+    await openTopicCardFixture(t);
+  const placement = createPostgresTopicStore({ now: () => 1_000 });
+  const documentCards = createPostgresDocumentCardStore();
+  const pending = importCard("pending-card");
+  const filed = importCard("filed-card");
+  await write(async tx => {
+    for (const card of [pending, filed]) {
+      assert.equal((await documentCards.put(tx, scope, card)).status, "inserted");
+    }
+  });
+  await seedMemberships(filed, [topicId, cardOnlyTopic]);
+  const memory = { memoryId: "memory", revision: 1 };
+  const vector = JSON.stringify([1, ...Array(1535).fill(0)]);
+  await pool.query(`INSERT INTO memories (user_id, id, text, text_hash, kind, embedding, embedding_model, source_kind)
+    VALUES ($1, $2, 'Personal memory', md5('Personal memory'), 'fact', $3, 'fixture', 'plugin')`,
+  [owner, memory.memoryId, vector]);
+
+  await read(async tx => {
+    assert.deepEqual(await placement.pendingCards(tx, scope, { limit: 5 }), [], "Omitting the card store disables the queue");
+    assert.deepEqual(await placement.pending(tx, scope, { limit: 5 }), [memory]);
+  });
+  await assert.rejects(write(tx => applyFixtureCard(placement, tx, scope, pending, topicId)),
+    { code: "capability_unavailable" });
+  await assert.rejects(write(tx => placement.markCardsFailed(tx, scope, [pending.id], "provider_error")),
+    { code: "capability_unavailable" });
+  assert.deepEqual(await write(tx => placement.dropCard(tx, scope, filed.id)), { dropped: 0 });
+  await write(async tx => {
+    const { indexRevision } = await placement.catalog(tx, scope, firstTopicPage);
+    await placement.applyPlacement(tx, scope, { indexRevision, memoryRevisions: [memory] },
+      { items: [{ memoryId: memory.memoryId, parentIds: [topicId] }] });
+  });
+  await read(async tx => {
+    assert.deepEqual(await placement.forCard(tx, scope, filed.id), []);
+    assert.deepEqual(await placement.forMemory(tx, scope, memory.memoryId), [topicId]);
+    assert.deepEqual(await placement.pending(tx, scope, { limit: 5 }), []);
+    assert.deepEqual(await placement.list(tx, scope, firstTopicPage), { items: [{
+      id: topicId, level: "L1", title: null, parentIds: [], memberCount: 1, newestMemberIds: [memory.memoryId],
+    }], nextCursor: null });
+    assert.deepEqual(await placement.members(tx, scope, cardOnlyTopic, firstTopicPage), noTopicItems);
+    assert.deepEqual(await placement.members(tx, scope, topicId, firstTopicPage), {
+      items: [{ kind: "memory", id: memory.memoryId, placedAtUs: 1_000_000n }], nextCursor: null,
+    });
+  });
+  assert.equal((await pool.query("SELECT 1 FROM card_placements WHERE user_id = $1 AND card_id = $2",
+    [owner, pending.id])).rowCount, 0);
+  assert.equal((await pool.query("SELECT 1 FROM card_topics WHERE user_id = $1 AND card_id = $2",
+    [owner, filed.id])).rowCount, 2);
+});
+
+test("Postgres personal topic card methods exclude same-owner team rows", options, async t => {
+  const { pool, owner, scope, topicId, write, read, importCard, seedMemberships } = await openTopicCardFixture(t);
+  const placement = createPostgresTopicStore({ documentCards: createPostgresDocumentCardStore() });
+  const card = importCard("team-card");
+  await pool.query(`INSERT INTO document_cards (user_id, scope_id, id, content_hash, title, body, origin,
+      source_memories, sentences, stale)
+    VALUES ($1, 'team:fixture', $2, $3, 'Team', 'Team', 'import', '[]', '[]', '[]')`, [owner, card.id, card.contentHash]);
+  assert.deepEqual(await read(tx => placement.pendingCards(tx, scope, { limit: 5 })), []);
+  await assert.rejects(write(tx => applyFixtureCard(placement, tx, scope, card, topicId)), { code: "revision_conflict" });
+  await write(tx => placement.markCardsFailed(tx, scope, [card.id], "provider_error"));
+  assert.equal((await pool.query("SELECT 1 FROM card_placements WHERE user_id = $1 AND card_id = $2",
+    [owner, card.id])).rowCount, 0);
+
+  await seedMemberships(card, [topicId]);
+  await read(async tx => {
+    assert.deepEqual(await placement.forCard(tx, scope, card.id), []);
+    assert.deepEqual(await placement.list(tx, scope, firstTopicPage), noTopicItems);
+    assert.deepEqual(await placement.members(tx, scope, topicId, firstTopicPage), noTopicItems);
+  });
+  assert.deepEqual(await write(tx => placement.dropCard(tx, scope, card.id)), { dropped: 0 });
+  assert.equal((await pool.query("SELECT 1 FROM card_topics WHERE user_id = $1 AND card_id = $2",
+    [owner, card.id])).rowCount, 1);
+});
 
 test("Postgres topic cards exchange current placement rows with the hosted product store", options, async t => {
   const { pool, source, close } = await openDatabase();
