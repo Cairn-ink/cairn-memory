@@ -10,6 +10,8 @@ export interface PlacePendingBatchOptions {
   scope: Scope;
   placement: TopicStore;
   memories: Pick<MemoryStore, 'get' | 'readRevision'>;
+  /** Maximum catalog topics before model packing. Integer from 1 to 200, default 100. */
+  catalogLimit?: number;
   classify(snapshot: BatchSnapshot, catalogView: ClassificationCatalog, options: {
     validateFresh(): Promise<void>;
   }): Promise<PlacementProposal>;
