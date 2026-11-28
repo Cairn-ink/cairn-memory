@@ -51,6 +51,10 @@ export type TestHarness = {
   /** Counts missing (row, live signing domain) pairs, including the enabled current domain. */
   rowsMissingKeyedDigest?(owner: string): Promise<number>;
   advanceClock?(ms: number): Promise<void>;
+  /** Supply deterministic memory/topic IDs during a hosted projection fixture write. */
+  withHostedTopicIds?<T>(ids: string[], work: () => Promise<T>): Promise<T>;
+  /** The adapter rejects namespaced topic reads even with the default projection. */
+  personalTopicsOnly?: boolean;
   /** The adapter rejects namespaced document-card operations. */
   personalDocumentCardsOnly?: boolean;
   /** Required for privacy matching cases under the hashed session profile. */

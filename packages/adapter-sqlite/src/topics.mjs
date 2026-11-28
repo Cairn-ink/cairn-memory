@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
-  coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUnfiled, compareUtf8, CoreError, ERROR_CODES,
-  isErrorCode, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage,
+  coalesceNewTopics, compareCatalogTopics, compareHostedTopicIds, compareHostedTopicMembers, compareHostedTopics,
+  compareSortKey, compareUnfiled, compareUtf8, CoreError, ERROR_CODES, hostedTopicListPage, hostedTopicMemberPage,
+  isErrorCode, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage, validHostedTopicId,
 } from "@cairn-ink/core";
 import { decodeJson } from "./memory-rows.mjs";
 import { placementArray, placementBatchLimit, placementInput, topicPage, validateLimit } from "./placement-input.mjs";
@@ -9,9 +10,11 @@ import { exactScope, placementPort } from "./placement-visibility.mjs";
 import { invalidInput, scopeKey, sha256, writeTime } from "./storage-values.mjs";
 import { cardTopicMembers, createTopicCardPlacement, visibleCardTopicMembers } from "./topic-card-placement.mjs";
 
-/** @import { Scope, Topic } from "@cairn-ink/core/ports" */
-/** @import { Connection } from "./storage-values.mjs" */
-/** @import { ScopedVisibility } from "./placement-visibility.mjs" */
+/** @import { HostedTopicMemberPage, HostedTopicPage, Scope, Topic, TopicMemberPage, TopicPage, TopicStore, Tx } from "@cairn-ink/core/ports" */
+/** @import { Connection, Port } from "./storage-values.mjs" */
+/** @import { PlacementVisibility, ScopedVisibility } from "./placement-visibility.mjs" */
+/** @typedef {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} IndexRevisions */
+/** @import { TopicOptions } from "./topics.d.mts" */
 /** @typedef {{ id: string, placedAtUs: bigint }} Member */
 
 const write = { write: true };
@@ -83,9 +86,12 @@ function membersByTopic(db, scope, visible) {
   return groups;
 }
 
-/** @param {Topic} topic @param {Topic[]} catalog @param {Map<string, Member[]>} groups */
-function topicMembers(topic, catalog, groups) {
-  if (topic.level === "L1") return groups.get(topic.id) ?? [];
+/** @param {Topic} topic @param {Topic[]} catalog @param {Map<string, Member[]>} groups @param {boolean} [hosted] */
+function topicMembers(topic, catalog, groups, hosted = false) {
+  if (topic.level === "L1") {
+    const direct = groups.get(topic.id) ?? [];
+    return hosted ? [...direct].sort(compareHostedTopicMembers) : direct;
+  }
   /** @type {Map<string, Member>} */
   const distinct = new Map();
   for (const { id, parentIds } of catalog) {
@@ -95,7 +101,8 @@ function topicMembers(topic, catalog, groups) {
       if (!prior || member.placedAtUs > prior.placedAtUs) distinct.set(member.id, member);
     }
   }
-  return [...distinct.values()].sort((a, b) => compareSortKey(b.placedAtUs, a.placedAtUs) || compareUtf8(b.id, a.id));
+  return [...distinct.values()].sort(hosted ? compareHostedTopicMembers
+    : (a, b) => compareSortKey(b.placedAtUs, a.placedAtUs) || compareUtf8(b.id, a.id));
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id */
@@ -118,6 +125,54 @@ function retireSource(db, scope, id) {
 export function createTopicStore(port, index, visibility, now, options, legacyFiling, cardVisibility) {
   const { topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 } = options;
   const access = placementPort(port);
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} callerScope @param {string} topicId @param {HostedTopicPage} query
+   * @returns {Promise<HostedTopicMemberPage>}
+   */
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} callerScope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} query @returns {Promise<TopicMemberPage>}
+   */
+  /** @param {Tx} tx @param {Scope} callerScope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} query */
+  async function members(tx, callerScope, topicId, query) {
+    const snapshot = await access(tx, callerScope, {}, (db, scope) => {
+      if (query.projection === "hosted") {
+        if (scope.namespace !== null) throw new CoreError("capability_unavailable");
+        if (!validHostedTopicId(topicId) || !db.prepare(`SELECT 1 FROM cairn_topics WHERE ${exactScope} AND id = ?`)
+          .get(...scopeKey(scope), topicId)) throw new CoreError("not_found");
+        const page = hostedTopicMemberPage(query, scope, topicId, index.start(db, tx));
+        const visible = visibility(db, scope);
+        const catalog = catalogTopics(db, scope, visible);
+        const topic = catalog.find(({ id }) => id === topicId);
+        if (!topic) throw new CoreError("internal_error");
+        const { id, level, title } = topic;
+        const rows = topicMembers(topic, catalog, membersByTopic(db, scope, visible), true);
+        const { items, nextCursor } = page.seek(rows);
+        return { hostedPage: { topic: { id, level, title }, items: items.map(member => ({
+          kind: /** @type {const} */ ("memory"), ...member,
+        })), nextCursor } };
+      }
+      const visible = visibility(db, scope);
+      const catalog = catalogTopics(db, scope, visible);
+      const topic = catalog.find(({ id }) => id === topicId);
+      const memories = topic ? topicMembers(topic, catalog, membersByTopic(db, scope, visible)) : [];
+      return { catalog, topic, memories, cards: topic && cardVisibility && cardTopicMembers(db, scope, cardVisibility),
+        scope, revision: index.start(db, tx) };
+    });
+    if (snapshot.hostedPage) return snapshot.hostedPage;
+    const { catalog, topic, memories, cards, scope, revision } = snapshot;
+    const cardMembers = cards && topic && cardVisibility
+      ? topicMembers(topic, catalog, await visibleCardTopicMembers(cards, cardVisibility)) : [];
+    const members = [...memories.map(member => ({ kind: /** @type {const} */ ("memory"), ...member })),
+      ...cardMembers.map(member => ({ kind: /** @type {const} */ ("card"), ...member }))];
+    if (cardMembers.length) members.sort((a, b) => compareSortKey(b.placedAtUs, a.placedAtUs) ||
+      compareUtf8(b.id, a.id) || compareUtf8(b.kind, a.kind));
+    return topicPage(members, query, scope, "members", topicId, revision);
+  }
+
   return {
     memoryCounts(tx, callerScope) {
       return access(tx, callerScope, {}, (db, scope) => {
@@ -333,40 +388,29 @@ export function createTopicStore(port, index, visibility, now, options, legacyFi
     },
 
     async list(tx, callerScope, query) {
-      const { catalog, groups, cards, scope, revision, level } = await access(tx, callerScope, {}, (db, scope) => {
-        const { level } = query;
+      const { catalog, groups, cards, scope, revision, level, seek } = await access(tx, callerScope, {}, (db, scope) => {
+        const { level, projection } = query;
+        if (projection === "hosted" && scope.namespace !== null) throw new CoreError("capability_unavailable");
         if (level !== undefined && level !== "L1" && level !== "L2") invalidInput();
         const visible = visibility(db, scope);
+        const seek = projection === "hosted" ? hostedTopicListPage(query, scope, level ?? null, index.start(db, tx)) : null;
         return { catalog: catalogTopics(db, scope, visible), groups: membersByTopic(db, scope, visible),
-          cards: cardVisibility && cardTopicMembers(db, scope, cardVisibility), scope, revision: index.start(db, tx), level };
+          cards: !seek && cardVisibility ? cardTopicMembers(db, scope, cardVisibility) : undefined,
+          scope, revision: index.start(db, tx), level, seek };
       });
       const cardGroups = cards && cardVisibility && await visibleCardTopicMembers(cards, cardVisibility);
       const rows = catalog.filter(topic => !level || topic.level === level).flatMap(topic => {
-        const members = topicMembers(topic, catalog, groups);
+        const members = topicMembers(topic, catalog, groups, seek !== null);
         const cardCount = cardGroups && topicMembers(topic, catalog, cardGroups).length;
+        if (seek) topic.parentIds.sort(compareHostedTopicIds);
         return members.length || cardCount ? [{ ...topic, memberCount: members.length,
           newestMemberIds: members.slice(0, 3).map(({ id }) => id), ...(cardCount !== undefined && { cardCount }) }] : [];
-      }).sort(compareCatalogTopics);
-      return topicPage(rows, query, scope, "list", level ?? null, revision);
+      });
+      return seek ? seek.seek(rows.sort(compareHostedTopics))
+        : topicPage(rows.sort(compareCatalogTopics), query, scope, "list", level ?? null, revision);
     },
 
-    async members(tx, callerScope, topicId, query) {
-      const { catalog, topic, memories, cards, scope, revision } = await access(tx, callerScope, {}, (db, scope) => {
-        const visible = visibility(db, scope);
-        const catalog = catalogTopics(db, scope, visible);
-        const topic = catalog.find(({ id }) => id === topicId);
-        const memories = topic ? topicMembers(topic, catalog, membersByTopic(db, scope, visible)) : [];
-        return { catalog, topic, memories, cards: topic && cardVisibility && cardTopicMembers(db, scope, cardVisibility),
-          scope, revision: index.start(db, tx) };
-      });
-      const cardMembers = cards && topic && cardVisibility
-        ? topicMembers(topic, catalog, await visibleCardTopicMembers(cards, cardVisibility)) : [];
-      const members = [...memories.map(member => ({ kind: /** @type {const} */ ("memory"), ...member })),
-        ...cardMembers.map(member => ({ kind: /** @type {const} */ ("card"), ...member }))];
-      if (cardMembers.length) members.sort((a, b) => compareSortKey(b.placedAtUs, a.placedAtUs) ||
-        compareUtf8(b.id, a.id) || compareUtf8(b.kind, a.kind));
-      return topicPage(members, query, scope, "members", topicId, revision);
-    },
+    members,
 
     forMemory(tx, callerScope, memoryId) {
       return access(tx, callerScope, {}, (db, scope) => topicMembershipReader(db, scope, visibility(db, scope))(memoryId) ?? []);

@@ -138,6 +138,7 @@
   "packages/core/src/topics/catalog.mjs",
   "packages/core/src/topics/classify.mjs",
   "packages/core/src/topics/generated/prompt.mjs",
+  "packages/core/src/topics/hosted-page.mjs",
   "packages/core/src/topics/index.mjs",
   "packages/core/src/topics/packing.mjs",
   "packages/core/src/topics/plan.mjs",

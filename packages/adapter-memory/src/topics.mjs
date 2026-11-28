@@ -1,6 +1,8 @@
 import {
-  CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
-  compareUnfiled, memoryGuards, placementProposal, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage, uniqueIds,
+  CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareHostedTopicIds, compareHostedTopics,
+  compareSortKey, compareUnfiled, compareUtf8, hostedTopicListPage, hostedTopicMemberPage, isErrorCode,
+  memoryGuards, placementProposal, readUnfiledCursor, titleKey, unfiledDigestInput, unfiledPage, uniqueIds,
+  validHostedTopicId,
 } from "@cairn-ink/core";
 import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 import { documentCardStaleness } from "@cairn-ink/core/routing";
@@ -11,7 +13,7 @@ import { dropMemoryPlacement } from "./unit-of-work.mjs";
 import { snapshotArray, validateCardId, validateLimit, validateMemoryId, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
-/** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore, Tx} from "@cairn-ink/core/ports" */
+/** @import {HostedTopicMemberPage, HostedTopicPage, Scope, StoredDocumentCardRecord, Topic, TopicPage, TopicStore, Tx} from "@cairn-ink/core/ports" */
 /** @import {DocumentCardMemoryState} from "@cairn-ink/core/routing" */
 /** @import {State} from "./unit-of-work.mjs" */
 /** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
@@ -53,8 +55,9 @@ function memberTopics(scoped, topic) {
 }
 
 /** @template {Outcome | CardOutcome} T
- * @param {Map<string, T>} outcomes @param {string[]} children @param {(id: string, outcome: T) => boolean} isVisible */
-function visibleMembers(outcomes, children, isVisible) {
+ * @param {Map<string, T>} outcomes @param {string[]} children @param {(id: string, outcome: T) => boolean} isVisible
+ * @param {(a: Member, b: Member) => number} [order] */
+function visibleMembers(outcomes, children, isVisible, order = newestFirst) {
   /** @type {Member[]} */
   const members = [];
   for (const [id, outcome] of outcomes) {
@@ -67,7 +70,12 @@ function visibleMembers(outcomes, children, isVisible) {
     }
     if (newest !== undefined) members.push({ id, updatedAtUs: newest });
   }
-  return members.sort(newestFirst);
+  return members.sort(order);
+}
+
+/** @param {Member} a @param {Member} b */
+function hostedNewestFirst(a, b) {
+  return compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareHostedTopicIds(b.id, a.id);
 }
 
 /**
@@ -194,6 +202,59 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       if (memberships.size && await visibleCardAt(tx, state, scope, id, contentHash, current)) ids.add(id);
     }
     return ids;
+  }
+
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} scope @param {string} topicId @param {HostedTopicPage} query
+   * @returns {Promise<HostedTopicMemberPage>}
+   */
+  /**
+   * @overload
+   * @param {Tx} tx @param {Scope} scope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} query
+   * @returns {Promise<import("@cairn-ink/core/ports").TopicMemberPage>}
+   */
+  /** @param {Tx} tx @param {Scope} scope @param {string} topicId
+   * @param {TopicPage & {projection?: "hosted"}} query */
+  async function members(tx, scope, topicId, query) {
+    return port.read(tx, scope, async (getState) => {
+      const namespace = writeNamespace(scope);
+      const hosted = query.projection === "hosted";
+      if (hosted && namespace !== null) throw new CoreError("capability_unavailable");
+      const state = getState();
+      const scoped = state.topics.get(namespace);
+      const topic = scoped?.topics.get(topicId);
+      if (hosted) {
+        if (!validHostedTopicId(topicId) || !scoped || !topic) throw new CoreError("not_found");
+        const page = hostedTopicMemberPage(query, { owner: tx.owner, namespace }, topicId, state.indexRevision);
+        const { current, topic: visibleTopic } = view(state, tx.owner, namespace);
+        const children = memberTopics(scoped, topic);
+        const rows = visibleMembers(scoped.outcomes, children,
+          (id, outcome) => current(id)?.revision === outcome.revision, hostedNewestFirst)
+          .map(({ id, updatedAtUs }) => ({ id, placedAtUs: updatedAtUs }));
+        const { id, level, title } = visibleTopic(topic);
+        const { items, nextCursor } = page.seek(rows);
+        return { topic: { id, level, title }, items: items.map(member => ({ kind: "memory", ...member })), nextCursor };
+      }
+      /** @type {Array<Member & {kind: "memory" | "card"}>} */
+      const rows = [];
+      if (scoped && topic) {
+        const { current } = view(state, tx.owner, namespace);
+        const children = memberTopics(scoped, topic);
+        const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
+        for (const memory of memories) rows.push({ ...memory, kind: "memory" });
+        if (flags.documentCards) {
+          const cards = await visibleFiledCards(tx, state, { owner: tx.owner, namespace }, scoped);
+          for (const card of visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id))) {
+            rows.push({ ...card, kind: "card" });
+          }
+          rows.sort((a, b) => newestFirst(a, b) || compareUtf8(b.kind, a.kind));
+        }
+      }
+      const result = page(rows, query, { owner: tx.owner, namespace }, "members", topicId, state.indexRevision);
+      return { ...result, items: result.items.map(({ kind, id, updatedAtUs }) => ({ kind, id, placedAtUs: updatedAtUs })) };
+    });
   }
 
   return {
@@ -513,51 +574,40 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     async list(tx, scope, query) {
       return port.read(tx, scope, async (getState) => {
         const namespace = writeNamespace(scope);
-        const { level } = query;
+        const { level, projection } = query;
+        const hosted = projection === "hosted";
+        if (hosted && namespace !== null) throw new CoreError("capability_unavailable");
         if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
         const state = getState();
         const scoped = state.topics.get(namespace);
         const { current, topic } = view(state, tx.owner, namespace);
-        const cards = flags.documentCards && scoped ? await visibleFiledCards(tx, state, { owner: tx.owner, namespace }, scoped) : null;
-        const rows = scoped ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
+        const selection = { owner: tx.owner, namespace };
+        const seek = hosted ? hostedTopicListPage(query, selection, level ?? null, state.indexRevision) : null;
+        const cards = !hosted && flags.documentCards && scoped ? await visibleFiledCards(tx, state, selection, scoped) : null;
+        /** @param {string} id @param {Outcome} outcome */
+        const isVisible = (id, outcome) => current(id)?.revision === outcome.revision;
+        const outcomes = hosted && scoped
+          ? new Map([...scoped.outcomes].filter(([id, outcome]) => isVisible(id, outcome))) : scoped?.outcomes;
+        const rows = scoped && outcomes ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
           .flatMap((row) => {
             const children = memberTopics(scoped, row);
-            const members = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
+            const members = visibleMembers(outcomes, children, hosted ? () => true : isVisible,
+              hosted ? hostedNewestFirst : newestFirst);
             const cardCount = cards ? visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id)).length : 0;
-            return members.length || cardCount ? [{
-              ...topic(row), memberCount: members.length, newestMemberIds: members.slice(0, 3).map(({ id }) => id),
-              ...(flags.documentCards && { cardCount }),
-            }] : [];
-          }).sort(compareCatalogTopics) : [];
-        return page(rows, query, { owner: tx.owner, namespace }, "list", level ?? null, state.indexRevision);
+            if (!members.length && !cardCount) return [];
+            const header = topic(row);
+            if (hosted) header.parentIds.sort(compareHostedTopicIds);
+            return [{
+              ...header, memberCount: members.length, newestMemberIds: members.slice(0, 3).map(({ id }) => id),
+              ...(!hosted && flags.documentCards && { cardCount }),
+            }];
+          }) : [];
+        return seek ? seek.seek(rows.sort(compareHostedTopics))
+          : page(rows.sort(compareCatalogTopics), query, selection, "list", level ?? null, state.indexRevision);
       });
     },
 
-    async members(tx, scope, topicId, query) {
-      return port.read(tx, scope, async (getState) => {
-        const namespace = writeNamespace(scope);
-        const state = getState();
-        const scoped = state.topics.get(namespace);
-        const topic = scoped?.topics.get(topicId);
-        /** @type {Array<Member & {kind: "memory" | "card"}>} */
-        const rows = [];
-        if (scoped && topic) {
-          const { current } = view(state, tx.owner, namespace);
-          const children = memberTopics(scoped, topic);
-          const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
-          for (const memory of memories) rows.push({ ...memory, kind: "memory" });
-          if (flags.documentCards) {
-            const cards = await visibleFiledCards(tx, state, { owner: tx.owner, namespace }, scoped);
-            for (const card of visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id))) {
-              rows.push({ ...card, kind: "card" });
-            }
-            rows.sort((a, b) => newestFirst(a, b) || compareUtf8(b.kind, a.kind));
-          }
-        }
-        const result = page(rows, query, { owner: tx.owner, namespace }, "members", topicId, state.indexRevision);
-        return { ...result, items: result.items.map(({ kind, id, updatedAtUs }) => ({ kind, id, placedAtUs: updatedAtUs })) };
-      });
-    },
+    members,
 
     async forCard(tx, scope, cardId) {
       return port.read(tx, scope, async (getState) => {

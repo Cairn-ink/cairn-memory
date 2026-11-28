@@ -28,9 +28,26 @@ export interface CardPlacementProposal {
   items: Array<{ cardId: string; parentIds: string[] }>;
 }
 
-interface TopicPage {
+export interface TopicPage {
   cursor: string | null;
   limit: number;
+}
+
+/** Hosted pages use opaque, scope-, view- and revision-bound seek cursors. */
+export interface HostedTopicPage extends TopicPage {
+  projection: "hosted";
+}
+
+export type HostedTopicListItem = Topic & { memberCount: number; newestMemberIds: string[] };
+
+export interface TopicMemberPage {
+  items: Array<{ kind: "memory" | "card"; id: string; placedAtUs: bigint }>;
+  nextCursor: string | null;
+}
+
+export interface HostedTopicMemberPage extends TopicMemberPage {
+  topic: Pick<Topic, "id" | "level" | "title">;
+  items: Array<{ kind: "memory"; id: string; placedAtUs: bigint }>;
 }
 
 /** Optional under the placement capability. Every operation is scoped to a live transaction. */
@@ -92,17 +109,27 @@ export interface TopicStore {
   >;
   /** Forget step. The host must drop memberships in the same transaction as every card hide or tombstone. */
   dropCard(tx: Tx, scope: Scope, cardId: string): Promise<{ dropped: number }>;
-  /** Topics with visible members. L2 counts distinct members across its L1 children.
-   * memberCount and newestMemberIds count only memories. cardCount is present only with documentCards. */
-  list(tx: Tx, scope: Scope, query: TopicPage & { level?: Topic["level"] }): Promise<{
-    items: Array<Topic & { memberCount: number; newestMemberIds: string[]; cardCount?: number }>;
+  /** Topics with visible members. L2 counts distinct members across its L1 children
+   * at their latest placement. newestMemberIds contains up to three memory IDs.
+   * The hosted projection omits cards and orders by memory count descending then
+   * topic ID ascending, using the hosted database collation in Postgres.
+   * The default includes cardCount when documentCards is enabled. */
+  list(tx: Tx, scope: Scope, query: HostedTopicPage & { level?: Topic["level"] }): Promise<{
+    items: HostedTopicListItem[];
     nextCursor: string | null;
   }>;
+  list(tx: Tx, scope: Scope, query: TopicPage & {
+    level?: Topic["level"]; projection?: "hosted";
+  }): Promise<{
+    items: Array<HostedTopicListItem & { cardCount?: number }>;
+    nextCursor: string | null;
+  }>;
+  /** The hosted projection returns the visible title and only memories. It checks
+   * topic existence in scope before decoding the cursor and throws not_found for
+   * unknown or invalid IDs. Members seek by placement microseconds and ID, both descending. */
+  members(tx: Tx, scope: Scope, topicId: string, query: HostedTopicPage): Promise<HostedTopicMemberPage>;
   /** Newest placement first, then descending UTF-8 id, with memory before card on an identical id and time. */
-  members(tx: Tx, scope: Scope, topicId: string, query: TopicPage): Promise<{
-    items: Array<{ kind: "memory" | "card"; id: string; placedAtUs: bigint }>;
-    nextCursor: string | null;
-  }>;
+  members(tx: Tx, scope: Scope, topicId: string, query: TopicPage & { projection?: "hosted" }): Promise<TopicMemberPage>;
   forMemory(tx: Tx, scope: Scope, memoryId: string): Promise<string[]>;
   /**
    * One batch query for L1 topic annotations. Callers skip annotations if this method is absent.

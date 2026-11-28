@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   RELATION_CASES, TOPIC_CARD_CASES, TOPIC_CASES, TOPIC_FOR_MEMORIES_CASES, TOPICS_FOR_CARDS_CASES, runCase,
 } from "@cairn-ink/conformance";
+import { HOSTED_TOPIC_CASES } from "@cairn-ink/conformance/topics-hosted";
 import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { PLACEMENT_RELATION_TABLES } from "../src/schema/placement-relations.mjs";
 import { scratch, seedFact } from "./storage-fixtures.mjs";
+import { withHostedTopicIds } from "../../conformance/test/hosted-topic-fixture.mjs";
 
 const factory = owner => ({
   name: "sqlite",
@@ -26,6 +28,7 @@ const factory = owner => ({
         sessionRefs: "hashed",
         harness: {
           advanceClock(ms) { now += ms; },
+          withHostedTopicIds,
           hashSessionKey: (client, sessionId) => adapter.hashSessionKey({ owner: owner(), namespace: null }, client, sessionId),
           seedFact(factOwner, fact) {
             assert.equal(factOwner, fact.owner);
@@ -50,7 +53,7 @@ const factory = owner => ({
 });
 
 for (const testCase of [
-  ...TOPIC_CASES, ...TOPIC_FOR_MEMORIES_CASES, ...RELATION_CASES, ...TOPIC_CARD_CASES, ...TOPICS_FOR_CARDS_CASES,
+  ...HOSTED_TOPIC_CASES, ...TOPIC_CASES, ...TOPIC_FOR_MEMORIES_CASES, ...RELATION_CASES, ...TOPIC_CARD_CASES, ...TOPICS_FOR_CARDS_CASES,
 ]) {
   test(`sqlite ${testCase.id} ${testCase.title}`, async t => {
     let owner;

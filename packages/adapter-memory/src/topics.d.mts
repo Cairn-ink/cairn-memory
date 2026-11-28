@@ -21,6 +21,7 @@ export function dropCardMemberships(state: State, namespace: import("@cairn-ink/
 export function dropCardPlacement(state: State, namespace: import("@cairn-ink/core/ports").Namespace,
   cardId: string): void;
 
+/** Returns the memory TopicStore with the default and hosted read overloads. */
 export function createTopicStore(port: ReturnType<typeof createUnitOfWork>["port"],
   flags: Capabilities, newId: () => string, now: () => number, matchFacts: ReturnType<typeof createFactMatcher>,
   options: Pick<MemoryAdapterOptions, "topicRetryAfterMs" | "topicMaxAttempts">,

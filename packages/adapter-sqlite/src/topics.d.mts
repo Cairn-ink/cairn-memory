@@ -6,9 +6,10 @@ import type { createTopicCardPlacement } from "./topic-card-placement.mjs";
 
 export type TopicOptions = { topicRetryAfterMs?: number; topicMaxAttempts?: number };
 
-export function topicMembershipReader(db: Connection, scope: Scope, visible: ScopedVisibility): (id: string) => string[] | null;
+export function createTopicStore(port: Port, index: ReturnType<typeof createIndexRevisions>,
+  visibility: PlacementVisibility, now: () => number, options: TopicOptions, legacyFiling: boolean,
+  cardVisibility?: Parameters<typeof createTopicCardPlacement>[2]): TopicStore & HostedTopicReads;
+export function topicMembershipReader(db: Connection, scope: Scope, visible: ScopedVisibility):
+  (id: string) => string[] | null;
 export function inspectTopics(db: Connection, scope: Scope, visible: ScopedVisibility, ids: string[]):
   Array<{ id: string; mocRevision: number; title: string | null }>;
-export function createTopicStore(port: Port, index: ReturnType<typeof createIndexRevisions>,
-  visibility: PlacementVisibility, now: () => number, options: TopicOptions,
-  legacyFiling: boolean, cardVisibility?: Parameters<typeof createTopicCardPlacement>[2]): TopicStore & HostedTopicReads;
