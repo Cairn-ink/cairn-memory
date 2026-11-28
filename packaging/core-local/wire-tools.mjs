@@ -179,8 +179,13 @@ export async function callTool(service, scope, handles, name, args, checkpointFo
       }
       case 'read_memory_context': {
         const { maxTokens, maxItems, ...query } = args;
-        const budget = { ...(maxTokens !== undefined && { maxTokens }), ...(maxItems !== undefined && { maxItems }) };
-        const { assembly, diagnostics, snapshot } = await service.readContext(readSet, { ...query, budget });
+        const compact = query.representation === undefined && query.intent === 'current' &&
+          query.types.length === 1 && query.types[0] === 'memory';
+        const budget = compact ? { maxTokens: maxTokens ?? 3_000, maxItems: maxItems ?? 64 }
+          : { ...(maxTokens !== undefined && { maxTokens }), ...(maxItems !== undefined && { maxItems }) };
+        const { assembly, diagnostics, snapshot } = await service.readContext(readSet, {
+          ...query, ...(compact && { representation: 'memory-compact-v1', raw: false }), budget,
+        });
         const items = diagnostics.items.map(item => ({ ...item, ref: legacyRef(item.ref) }));
         return response(name, ok(assembly), {
           [diagnosticsKey]: { ...diagnostics, items },

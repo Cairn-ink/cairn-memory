@@ -138,7 +138,7 @@ async function qualifyRaw(baseline, candidate, testClients) {
   assert.deepEqual(normalize(executeDelete(active, candidate, current.id)),
     normalize(executeDelete(reference, baseline, ref.id)));
 
-  const search = { query: token, types: ['memory'], intent: 'current' };
+  const search = { query: token, types: ['memory'], intent: 'current', representation: 'representation-v2-dated' };
   try {
     await tools(active, async call => {
       const before = await call('read_memory_context', search);
@@ -186,7 +186,7 @@ async function qualifyWindow(baseline, candidate, testClients) {
   ]);
   f.run(candidate, setup);
   f.run(candidate, ['local-cutover', '--confirm']);
-  const search = { query: token, types: ['memory'], intent: 'current' };
+  const search = { query: token, types: ['memory'], intent: 'current', representation: 'representation-v2-dated' };
   try {
     await tools(f, async call => {
       assert.ok(JSON.stringify((await call('read_memory_context', search)).items).includes(removed));
