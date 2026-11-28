@@ -991,12 +991,18 @@
       "packages/core/src/topics/wire.mjs"
     ],
     "packages/core/src/topics/generated/prompt.mjs": [],
+    "packages/core/src/topics/hosted-page.mjs": [
+      "packages/core/src/errors.mjs",
+      "packages/core/src/retrieval/hosted-paging.mjs",
+      "packages/core/src/utf8.mjs"
+    ],
     "packages/core/src/topics/index.mjs": [
       "packages/core/src/topics/batch.mjs",
       "packages/core/src/topics/cards.mjs",
       "packages/core/src/topics/catalog.mjs",
       "packages/core/src/topics/classify.mjs",
       "packages/core/src/topics/generated/prompt.mjs",
+      "packages/core/src/topics/hosted-page.mjs",
       "packages/core/src/topics/packing.mjs",
       "packages/core/src/topics/plan.mjs",
       "packages/core/src/topics/proposal.mjs",
@@ -1213,7 +1219,8 @@
     "packages/core/src/topics/catalog.mjs": "17c6ae6be8b575fee1efbc3df38ef34da1c8daccf249640a8a6a8ab8efc7c586",
     "packages/core/src/topics/classify.mjs": "32de2f62d5e593aee9fcf01aa4576046ed31fbc8f148078eeff7ff9ff94e37c0",
     "packages/core/src/topics/generated/prompt.mjs": "ffbddf98b4d1f600eff1a48faa5ff5c088c4b025267793de73cacf17c2b616cf",
-    "packages/core/src/topics/index.mjs": "299da09cd17153652768e530dfbd505af02d864ce1d4b2259ebf2604df366a81",
+    "packages/core/src/topics/hosted-page.mjs": "da019889bdf9083fc3f904fb1616842af05b799f0071d02d7ea1dcbf82df8e47",
+    "packages/core/src/topics/index.mjs": "5e229c709cd1d27d4c5cc54cb98be050bd2a680e5eae616b132eb08da22472c3",
     "packages/core/src/topics/packing.mjs": "4567762d379cda58a215881bdcb2098762178eb0498aa295ceccf6dcf72fa079",
     "packages/core/src/topics/plan.mjs": "fd6beb2b6af2326d199d7954c9fad124216f9623a90c61d6ce1f8a912c4e2f1a",
     "packages/core/src/topics/proposal.mjs": "493c7a9a26143b5ac8b006957f5f39d1f097bf67a3336d4084d526df0aa42bda",

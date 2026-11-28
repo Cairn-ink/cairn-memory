@@ -4,11 +4,11 @@
     "name": "cairn-memory-core-local-candidate",
     "version": "0.0.0"
   },
-  "engineId": "core-local-v1-95176f7968bdb4c66581f320c500a335dcb15d8d5885ce96da333e5d92cffc9d",
+  "engineId": "core-local-v1-726a3ef2c39f47b2c0780c38a2d8a5a3e36bd6c1060b20d40c2efd2020730a0c",
   "archive": {
     "filename": "cairn-memory-core-local-candidate-0.0.0.tgz",
-    "bytes": 2930117,
-    "sha256": "f6ed16f939e90b6097e7969eddc8aed90442d6f1832ec89f44a0048036b0a9cb"
+    "bytes": 2931950,
+    "sha256": "8e23c19b5b346851283ea1ac00c92dbcf4b0969b32e75d7e0c488afd25cfe4d5"
   },
   "files": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -43,7 +43,7 @@
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
-    "package.json": "3518308a390e5c41e672a0a1c19cc20c18ebe0706b4fca590568de819623fda4",
+    "package.json": "a00bacd9c907fe2c017cbdd28f7aa33f7628eded33d6afa41d5eb11ac787db13",
     "packages/adapter-sqlite/src/adapter.mjs": "c50ba00c7552cf833d79f1117b69e13fe8515a834b850f220e98a7abbf9e965b",
     "packages/adapter-sqlite/src/capture-finish.mjs": "e99b03f12d5a20fb92940304f2267ccf9d11ab9cc723d2296f302865ffb6faf8",
     "packages/adapter-sqlite/src/capture.mjs": "2c1dc512d62cf648c13639fe47bae292260fdb764da4515b210ba812d29a42af",
@@ -88,7 +88,7 @@
     "packages/adapter-sqlite/src/storage-values.mjs": "c9f6f628e737ad6456b97bce1fbf2d5937963193f8b76112cca2aacfda307a2a",
     "packages/adapter-sqlite/src/suppressions.mjs": "d80cf55a4f64de42a8b8225dbc5fc7af2406c1e197a4bcee55b4de035c4e29cf",
     "packages/adapter-sqlite/src/topic-card-placement.mjs": "9991f83c23649e140c619cd8e27ce8c154f245a1e2623d428a5755e24dac4a3d",
-    "packages/adapter-sqlite/src/topics.mjs": "7e27947744ca0e21b65b8394cb551fb7585c41d7107a3ab52ec9d105aa806a47",
+    "packages/adapter-sqlite/src/topics.mjs": "86489bfde559b37e91ffee79c17d17f71ea175daaf2345b569fc4be83a1dcfff",
     "packages/adapter-sqlite/src/uow.mjs": "6b27a2247f6c8ac020fc03d840e57ec2121e5f810bbebe19fa85a9d31002782a",
     "packages/core/package.json": "6c4003fb89631be2c61b2dfe26699ca9f653116ab59c1d062dd1979b914741b1",
     "packages/core/src/capabilities.mjs": "44837ac9b939d44f44bc4aeca7a8bb5c37a0bbeac52e4261625803c3015c52c6",
@@ -183,7 +183,8 @@
     "packages/core/src/topics/catalog.mjs": "17c6ae6be8b575fee1efbc3df38ef34da1c8daccf249640a8a6a8ab8efc7c586",
     "packages/core/src/topics/classify.mjs": "32de2f62d5e593aee9fcf01aa4576046ed31fbc8f148078eeff7ff9ff94e37c0",
     "packages/core/src/topics/generated/prompt.mjs": "ffbddf98b4d1f600eff1a48faa5ff5c088c4b025267793de73cacf17c2b616cf",
-    "packages/core/src/topics/index.mjs": "299da09cd17153652768e530dfbd505af02d864ce1d4b2259ebf2604df366a81",
+    "packages/core/src/topics/hosted-page.mjs": "da019889bdf9083fc3f904fb1616842af05b799f0071d02d7ea1dcbf82df8e47",
+    "packages/core/src/topics/index.mjs": "5e229c709cd1d27d4c5cc54cb98be050bd2a680e5eae616b132eb08da22472c3",
     "packages/core/src/topics/packing.mjs": "4567762d379cda58a215881bdcb2098762178eb0498aa295ceccf6dcf72fa079",
     "packages/core/src/topics/plan.mjs": "fd6beb2b6af2326d199d7954c9fad124216f9623a90c61d6ce1f8a912c4e2f1a",
     "packages/core/src/topics/proposal.mjs": "493c7a9a26143b5ac8b006957f5f39d1f097bf67a3336d4084d526df0aa42bda",
