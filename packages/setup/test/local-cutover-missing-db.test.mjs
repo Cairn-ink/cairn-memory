@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmod, cp, lstat, mkdir, readFile, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { initLocalRawStore } from '../../../integrations/client/raw/local-setup-init.mjs';
 import { captureSettings } from '../lib/local-capture.mjs';
 import { readDescriptor, withLocalLock, writeDescriptor } from '../lib/local-descriptor.mjs';
@@ -45,13 +45,36 @@ async function stageEngineForReuse(root) {
   return id;
 }
 
+async function assertPublishedDescriptorCompatibility(t, fixture, version, descriptor) {
+  const directory = join(fixture.parent, 'published-installer');
+  await mkdir(directory, { mode: 0o700 });
+  const env = { PATH: '/usr/bin:/bin', HOME: fixture.home };
+  const git = { cwd: fileURLToPath(new URL('../../../', import.meta.url)), env };
+  const tag = `installer-v${version}`;
+  const present = spawnSync('git', ['cat-file', '-e', `${tag}:packages/setup/lib/local-descriptor.mjs`], git);
+  assert.ifError(present.error);
+  if (present.status !== 0 && execFileSync('git', ['rev-parse', '--is-shallow-repository'], git).toString().trim() === 'true') {
+    t.skip(`${tag} is unavailable in the shallow checkout`);
+    return;
+  }
+  const archive = execFileSync('git', ['archive', tag, '--', 'packages/setup/lib'], git);
+  execFileSync('tar', ['-xf', '-', '-C', directory], { input: archive, env });
+  const published = await import(pathToFileURL(join(directory, 'packages/setup/lib/local-descriptor.mjs')));
+  const path = join(fixture.root, 'installation.json');
+  const before = await readFile(path);
+  assert.deepEqual(await published.readDescriptor(fixture.root), descriptor);
+  assert.deepEqual(await readFile(path), before);
+}
+
 for (const version of ['0.6.11', '0.6.12']) {
   test(`setup upgrades an unopened ${version} install and cuts over after its store exists`, linux, async t => {
     const fixture = await unopenedInstall(t, version);
+    const provenancePath = join(fixture.root, '.legacy-cutover.json');
 
     await withLocalLock(fixture.root, async () => {
       operator(fixture, setup, { code: 2 });
       assert.equal((await readDescriptor(fixture.root)).installerVersion, version);
+      await assert.rejects(lstat(provenancePath), { code: 'ENOENT' });
     });
 
     const engineId = await stageEngineForReuse(fixture.root);
@@ -65,6 +88,14 @@ for (const version of ['0.6.11', '0.6.12']) {
       assert.equal((await captureSettings(fixture.root)).clients.claude.enabled, false);
       await assert.rejects(lstat(fixture.database), { code: 'ENOENT' });
     }
+
+    const descriptor = await readDescriptor(fixture.root);
+    const provenance = await readFile(provenancePath);
+    assert.deepEqual(JSON.parse(provenance), { installerVersion: version, createdAt: descriptor.createdAt,
+      ownerId: descriptor.ownerId, databasePath: fixture.database });
+    await t.test(`published ${version} reader accepts the descriptor`,
+      child => assertPublishedDescriptorCompatibility(child, fixture, version, descriptor));
+    assert.deepEqual(await readFile(provenancePath), provenance);
 
     assert.equal((await initLocalRawStore({ databasePath: fixture.database })).status, 'initialized');
     await chmod(fixture.database, 0o600);

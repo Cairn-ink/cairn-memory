@@ -5,7 +5,7 @@ import { basename, dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { availableClient, codexHome, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
-import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
+import { localRoot, requestedRoot, canonicalPath, boundedJSON, readDescriptor, writeDescriptor, withLocalLock,
   engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree, localFilesystemError } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities, inspectLocalCodexServers } from './local-codex.mjs';
@@ -21,6 +21,18 @@ const controls = ['disable', 'pause', 'resume', 'prompt-recall-on', 'prompt-reca
 const yes = value => /^(?:y|yes)$/iu.test(value.trim());
 const exists = path => lstat(path).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
 const retryAsCutover = Symbol('retryAsCutover');
+// Published v1 installers validate an exact set of descriptor keys.
+const legacyProvenanceFile = '.legacy-cutover.json';
+async function hasDeferredCutover(root, descriptor) {
+  try {
+    const provenance = await boundedJSON(join(root, legacyProvenanceFile), 65536, { privateFile: true });
+    return isLegacyCutoverInstaller(provenance?.installerVersion) && provenance.createdAt === descriptor.createdAt &&
+      provenance.ownerId === descriptor.ownerId && provenance.databasePath === descriptor.database.path;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw localFilesystemError(error);
+  }
+}
 async function absentCutoverStore(path) {
   try {
     if (await exists(path) || /^\.cairn-(?:cutover|retired)-/u.test(basename(path))) return false;
@@ -291,10 +303,9 @@ export async function routeLocalMode(options, selection, context) {
   for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
     { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
-  // Ordinary setup records the current installer while still using the legacy engine.
   if (descriptor?.state === 'installed' && descriptor.version === 'cairn-local-installation-v1' &&
-      (isLegacyCutoverInstaller(descriptor.installerVersion) || descriptor.installerVersion === context.installerVersion) &&
-      (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform)) {
+      (context.platform ?? process.platform) === process.platform && ['linux', 'darwin'].includes(process.platform) &&
+      (isLegacyCutoverInstaller(descriptor.installerVersion) || await hasDeferredCutover(detection.root, descriptor))) {
     if (await absentCutoverStore(descriptor.database.path)) {
       const code = await setupLocal(options, selection, detection, context, { requireAbsentStore: true });
       if (code !== retryAsCutover) return { handled: true, code };
@@ -404,6 +415,13 @@ async function setupLocal(options, selection, detection, context, { requireAbsen
     for (const client of descriptor.operation.clients) {
       if (!detection.states[client].available) throw new SetupError('mode_unknown', 2, { client, probe: 'CLI' });
       if (descriptor.operation.checkpoints[client].destination !== detection.destinations[client]) throw new SetupError('local_client_home_changed', 2);
+    }
+    if (requireAbsentStore && isLegacyCutoverInstaller(descriptor.installerVersion)) {
+      const { privateWrite } = await cutoverImport('state');
+      if (!await absentCutoverStore(descriptor.database.path)) return retryAsCutover;
+      const provenance = { installerVersion: descriptor.installerVersion, createdAt: descriptor.createdAt,
+        ownerId: descriptor.ownerId, databasePath: descriptor.database.path };
+      await privateWrite(join(root, legacyProvenanceFile), JSON.stringify(provenance) + '\n');
     }
     descriptor.installerVersion = installerVersion;
     await writeDescriptor(root, descriptor);
